@@ -84,9 +84,9 @@ export default function StaffCheckinPage() {
 
     return () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error
         scannerRef.current?.clear();
-        // @ts-ignore
+        // @ts-expect-error
         scannerRef.current?.stop();
       } catch {}
     };
