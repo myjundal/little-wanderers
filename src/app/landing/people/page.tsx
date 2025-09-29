@@ -39,7 +39,7 @@ export default function PeoplePage() {
       .order('created_at', { ascending: true });
 
     setPeople((ppl ?? []) as Person[]);
-  });
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
