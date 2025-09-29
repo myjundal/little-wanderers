@@ -41,7 +41,7 @@ export default function PeoplePage() {
     setPeople((ppl ?? []) as Person[]);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const addPerson = async () => {
     if (!householdId || !form.first_name) return;

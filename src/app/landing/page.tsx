@@ -43,7 +43,7 @@ export default function AppHome() {
     return (
       <main style={{ padding: 24 }}>
         <h1>Please login</h1>
-        <p><a href="/">Back to Homepage</a></p>
+        <p><Link href="/">Back to Homepage</Link></p>
       </main>
     );
   }

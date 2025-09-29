@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import QRCode from 'qrcode';
+import Image from "next/image";
 
 type Person = { id: string; first_name: string; role: 'adult'|'child' };
 
@@ -42,18 +43,18 @@ export default function QRPage() {
       setQrMap(map);
     };
     load();
-  }, []);
+  }, [supabase]);
 
   return (
     <main style={{ padding: 24 }}>
       <h1>My QR Codes</h1>
-      <p>Please scan everyone's QR codes upon entrance, including child and adult.</p>
+      <p>Please scan QR codes for everyone upon entrance, including child and adult.</p>
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', marginTop: 16 
 }}>
         {people.map(p => (
           <div key={p.id} style={{ border: '1px solid #ddd', padding: 12, textAlign: 'center' }}>
             <h3 style={{ margin: '8px 0' }}>{p.first_name} ({p.role})</h3>
-            {qrMap[p.id] ? <img src={qrMap[p.id]} alt="qr" /> : <div>Creating…</div>}
+            {qrMap[p.id] ? <Image src={qrMap[p.id]} alt="qr" width={400} height={400} /> : <div>Creating…</div>}
             <p style={{ fontSize: 12, color: '#666', marginTop: 8 }}>lw://person/{p.id}</p>
           </div>
         ))}
