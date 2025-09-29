@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { useState } from 'react';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type Person = {
   id: string;
@@ -11,7 +11,7 @@ type Person = {
 };
 
 export default function PeoplePage() {
-  const supabase = supabaseBrowser;
+  const supabase = createBrowserSupabaseClient();
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [form, setForm] = useState({ role: 'child', first_name: '', last_name: '', birthdate: '' });
@@ -40,8 +40,6 @@ export default function PeoplePage() {
 
     setPeople((ppl ?? []) as Person[]);
   }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const addPerson = async () => {
     if (!householdId || !form.first_name) return;
@@ -94,7 +92,7 @@ export default function PeoplePage() {
               <span style={{ width: 64, textTransform: 'capitalize' }}>{p.role}</span>
               <span style={{ minWidth: 160 }}>{p.first_name} {p.last_name ?? ''}</span>
               <span style={{ color: '#666' }}>{p.birthdate ?? '-'}</span>
-              <button onClick={() => removePerson(p.id)} style={{ marginLeft: 'auto' }}>삭제</button>
+              <button onClick={() => removePerson(p.id)} style={{ marginLeft: 'auto' }}>Remove</button>
             </li>
           ))}
         </ul>

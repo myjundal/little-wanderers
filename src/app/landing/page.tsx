@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import Link from 'next/link';
 
 export default function AppHome() {
@@ -9,7 +9,7 @@ export default function AppHome() {
 
   useEffect(() => {
     const run = async () => {
-      const supabase = supabaseBrowser;
+      const supabase = createBrowserSupabaseClient();
 
       // 유저
       const { data: userData } = await supabase.auth.getUser();

@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 export default function Home() {
-  const supabase = supabaseBrowser;
+  const supabase = createBrowserSupabaseClient();
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export default function Home() {
   return (
     <main style={{ padding: 24, maxWidth: 520 }}>
       <h1>Little Wanderers</h1>
-      <p>West Hartford Sensory & Learning Play Café</p>
+      <p>West Hartford Sensory-filled Learning Play Adventure</p>
 
       <div style={{ marginTop: 24 }}>
         <input

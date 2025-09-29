@@ -1,13 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import QRCode from 'qrcode';
-import Image from "next/image";
+import Image from 'next/image';
 
 type Person = { id: string; first_name: string; role: 'adult'|'child' };
 
 export default function QRPage() {
-  const supabase = supabaseBrowser;
+  const supabase = createBrowserSupabaseClient();
   const [people, setPeople] = useState<Person[]>([]);
   const [qrMap, setQrMap] = useState<Record<string, string>>({}); // personId -> dataURL
 
@@ -54,7 +54,7 @@ export default function QRPage() {
         {people.map(p => (
           <div key={p.id} style={{ border: '1px solid #ddd', padding: 12, textAlign: 'center' }}>
             <h3 style={{ margin: '8px 0' }}>{p.first_name} ({p.role})</h3>
-            {qrMap[p.id] ? <Image src={qrMap[p.id]} alt="qr" width={400} height={400} /> : <div>Creating…</div>}
+            {qrMap[p.id] ? <Image src={qrMap[p.id]} alt="QR" width={300} height={300} /> : <div>Creating…</div>}
             <p style={{ fontSize: 12, color: '#666', marginTop: 8 }}>lw://person/{p.id}</p>
           </div>
         ))}
