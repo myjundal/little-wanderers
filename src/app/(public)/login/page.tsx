@@ -15,7 +15,7 @@ export default function Home() {
       email,
       options: {
         // 로그인 완료 후 이동할 페이지
-        emailRedirectTo: `${location.origin}/landing`,
+        emailRedirectTo: `${location.origin}/auth/callback`,
       },
     });
     setPending(false);

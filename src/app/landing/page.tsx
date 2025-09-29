@@ -11,11 +11,12 @@ export default function AppHome() {
     const run = async () => {
       const supabase = createBrowserSupabaseClient();
 
-      // 유저
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
+      // session
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       setEmail(user?.email ?? null);
-      if (!user) return setReady(true);
+      if (!user){setReady(true);
+	return;}
 
       // household 존재 확인
       const { data: hs } = await supabase
