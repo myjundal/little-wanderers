@@ -16,7 +16,7 @@ export default function PeoplePage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [form, setForm] = useState({ role: 'child', first_name: '', last_name: '', birthdate: '' });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id;
     if (!uid) return;
@@ -39,7 +39,7 @@ export default function PeoplePage() {
       .order('created_at', { ascending: true });
 
     setPeople((ppl ?? []) as Person[]);
-  };
+  });
 
   useEffect(() => { load(); }, [load]);
 
