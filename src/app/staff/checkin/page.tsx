@@ -74,7 +74,7 @@ export default function StaffCheckinPage() {
         } else {
           setServerMsg(`Check-in OK ✅ • Price: $${price}`);
         }
-      } catch (e: any) {
+      } catch (e: React.FormEvent<HTMLFormElement>) => {
         setServerMsg(`Network error`);
       }
     }, (errorMessage) => {
