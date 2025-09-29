@@ -156,7 +156,8 @@ export async function POST(req: NextRequest) {
     }), { status: 200 });
 
   } catch (e: unknown) {
-    return new Response(JSON.stringify({ ok: false, error: e?.message ?? 'unknown error' }), { status: 500 });
+    const message = e instanceof Error ? e.message: 'unknown error';
+    return new Response(JSON.stringify({ ok: false, error: message }), { status: 500 });
   }
 }
 
