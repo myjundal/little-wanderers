@@ -85,8 +85,9 @@ export default function StaffCheckinPage() {
     return () => {
       try {
         scannerRef.current?.clear();
-        scannerRef.current?.stop();
-      } catch {}
+      } catch (err) {
+	console.error('Failed to clear scanner:', err);
+	}
     };
   }, []);
 
