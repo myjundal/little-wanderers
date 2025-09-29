@@ -74,7 +74,7 @@ export default function StaffCheckinPage() {
         } else {
           setServerMsg(`Check-in OK ✅ • Price: $${price}`);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         setServerMsg(`Network error`);
       }
     }, (errorMessage) => {
@@ -84,10 +84,7 @@ export default function StaffCheckinPage() {
 
     return () => {
       try {
-        // @ts-ignore
         scannerRef.current?.clear();
-        // @ts-ignore
-        scannerRef.current?.stop();
       } catch {}
     };
   }, []);

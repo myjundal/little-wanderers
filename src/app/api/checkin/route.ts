@@ -155,8 +155,13 @@ export async function POST(req: NextRequest) {
       birthdate: person.birthdate
     }), { status: 200 });
 
-  } catch (e: any) {
-    return new Response(JSON.stringify({ ok: false, error: e?.message ?? 'unknown error' }), { status: 500 });
+  } catch (e: unknown) {
+	if (e instanceof Error) {
+    return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500 });
+  }
+
+    return new Response(
+	JSON.stringify({ ok: false, error: 'unknown error' }), {status: 500 });
   }
 }
 
