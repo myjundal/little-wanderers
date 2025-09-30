@@ -11,13 +11,13 @@ export const supabaseServer = () => {
       cookies: {
         get: (name: string) => {
           const cookie = cookieStore.get(name);
-          return cookie ? cookie.value : null; // 값만 반환
+          return cookie ? cookie.value : null;
         },
         set: (name: string, value: string, options) => {
           cookieStore.set({ name, value, ...options });
         },
-        delete: (name: string, options) => {
-          cookieStore.set({ name, value: '', ...options });
+        remove: (name: string, options) => {
+          cookieStore.delete(name, options);
         },
       },
     }
