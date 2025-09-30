@@ -1,30 +1,12 @@
-import type { ReactNode } from 'react';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { ReactNode } from 'react';
+import { supabaseServer } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
-export default async function LandingLayout({ children }: { children: ReactNode }) {
-  console.log('Supabase URL:', process.env.SUPABASE_URL);
-  console.log('Supabase KEY:', process.env.SUPABASE_ANON_KEY);
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  const supabase = supabaseServer();
+  const { data: { session } } = await supabase.auth.getSession();
 
-  const supabase = createServerClient({
-    cookies,
-    supabaseUrl: process.env.SUPABASE_URL ?? '',
-    supabaseKey: process.env.SUPABASE_ANON_KEY ?? '',
-  });
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    redirect('/login');
-  }
-
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
+  if (!session) redirect('/?signin=1'); // no session → send back to public page
+  return <>{children}</>;
 }
 

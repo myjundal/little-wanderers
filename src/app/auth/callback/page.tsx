@@ -7,26 +7,23 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const run = async () => {
-      try {
-        const supabase = supabaseBrowser();
+      const supabase = supabaseBrowser();
+      const {
+        data: { session },
+        error
+      } = await supabase.auth.getSession();
 
-        // Exchange the code/hash in the URL for a session
-        const { data, error } = await 
-supabase.auth.exchangeCodeForSession(window.location.href);
-        if (error) {
-          setMsg(`Sign-in failed: ${error.message}`);
-          return;
-        }
-
-        // Optional: you can also listen on onAuthStateChange, but this is enough
-        setMsg('Signed in! Redirecting...');
-        const next = sessionStorage.getItem('post_login_redirect') || '/app';
-        sessionStorage.removeItem('post_login_redirect');
-        window.location.replace(next);
-      } catch (e: any) {
-        setMsg(`Unexpected error: ${e?.message ?? 'unknown'}`);
+      if (error || !session) {
+        setMsg(`Sign-in failed: ${error?.message || 'No session'}`);
+        return;
       }
+
+      setMsg('Signed in! Redirecting...');
+      const next = sessionStorage.getItem('post_login_redirect') || '/landing';
+      sessionStorage.removeItem('post_login_redirect');
+      window.location.replace(next);
     };
+
     run();
   }, []);
 

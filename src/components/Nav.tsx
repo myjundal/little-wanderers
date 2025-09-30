@@ -22,7 +22,7 @@ export default function Nav() {
         <Link href="/pricing">Pricing</Link>
         <Link href="/faq">FAQ</Link>
         {loggedIn ? (
-          <Link href="/app">Go to App</Link>
+          <Link href="/landing">Go to App</Link>
         ) : (
           <Link href="/login">Log in</Link>
         )}

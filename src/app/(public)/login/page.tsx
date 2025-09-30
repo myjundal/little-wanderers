@@ -1,26 +1,29 @@
 'use client';
 import { useState } from 'react';
-import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { supabaseBrowser } from '@/lib/supabaseClient';
 
 export default function Home() {
-  const supabase = createBrowserSupabaseClient();
+  const supabase = supabaseBrowser();
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const sendMagicLink = async () => {
+    console.log('sendMagicLink called');
     setPending(true);
     setMsg(null);
     const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`;
-    const { error } = await supabase.auth.signInWithOtp({
+    console.log('redirectTo:', redirectTo);
+const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: redirectTo }
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`, 
+	},
     });
     setPending(false);
     if (error) setMsg(`Error: ${error.message}`);
     else setMsg('Email sent. Please check your inbox (including spam).');
-    sessionStorage.setItem('post_login_redirect', '/app'); 
+    sessionStorage.setItem('post_login_redirect', '/landing'); 
  };
 
   return (
