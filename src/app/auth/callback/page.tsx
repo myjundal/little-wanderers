@@ -1,29 +1,40 @@
-// src/app/auth/callback/page.tsx
 'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 
-export default function CallbackPage() {
-  const router = useRouter();
+export default function AuthCallback() {
+  const [msg, setMsg] = useState('Signing you in...');
 
   useEffect(() => {
-    const handleCallback = async () => {
-      const { data, error } = await supabaseBrowser.auth.getSession();
+    const run = async () => {
+      try {
+        const supabase = supabaseBrowser();
 
-      if (data.session) {
-        // ✅ 세션 있으면 로그인 성공
-        router.replace('/landing');
-      } else {
-        // ❌ 세션 없으면 로그인 페이지로
-        router.replace('/login');
+        // Exchange the code/hash in the URL for a session
+        const { data, error } = await 
+supabase.auth.exchangeCodeForSession(window.location.href);
+        if (error) {
+          setMsg(`Sign-in failed: ${error.message}`);
+          return;
+        }
+
+        // Optional: you can also listen on onAuthStateChange, but this is enough
+        setMsg('Signed in! Redirecting...');
+        const next = sessionStorage.getItem('post_login_redirect') || '/app';
+        sessionStorage.removeItem('post_login_redirect');
+        window.location.replace(next);
+      } catch (e: any) {
+        setMsg(`Unexpected error: ${e?.message ?? 'unknown'}`);
       }
     };
-
-    handleCallback();
+    run();
   }, []);
 
-  return <p>Logging in...</p>;
+  return (
+    <main style={{ padding: 24 }}>
+      <h1>Auth Callback</h1>
+      <p>{msg}</p>
+    </main>
+  );
 }
 

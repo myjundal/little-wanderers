@@ -11,17 +11,17 @@ export default function Home() {
   const sendMagicLink = async () => {
     setPending(true);
     setMsg(null);
+    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`;
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        // 로그인 완료 후 이동할 페이지
-        emailRedirectTo: `${location.origin}/auth/callback`,
-      },
+        emailRedirectTo: redirectTo }
     });
     setPending(false);
     if (error) setMsg(`Error: ${error.message}`);
     else setMsg('Email sent. Please check your inbox (including spam).');
-  };
+    sessionStorage.setItem('post_login_redirect', '/app'); 
+ };
 
   return (
     <main style={{ padding: 24, maxWidth: 520 }}>

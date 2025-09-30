@@ -1,15 +1,30 @@
-import { redirect } from 'next/navigation';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import type { ReactNode } from 'react';
 import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+import { redirect } from 'next/navigation';
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createServerSupabaseClient({ cookies }); // 꼭 cookies 넣어줘야 함
-  const { data: { session } } = await supabase.auth.getSession();
+export default async function LandingLayout({ children }: { children: ReactNode }) {
+  console.log('Supabase URL:', process.env.SUPABASE_URL);
+  console.log('Supabase KEY:', process.env.SUPABASE_ANON_KEY);
+
+  const supabase = createServerClient({
+    cookies,
+    supabaseUrl: process.env.SUPABASE_URL ?? '',
+    supabaseKey: process.env.SUPABASE_ANON_KEY ?? '',
+  });
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   if (!session) {
     redirect('/login');
   }
 
-  return <>{children}</>;
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
 }
 
