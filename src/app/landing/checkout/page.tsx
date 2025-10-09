@@ -91,6 +91,30 @@ export default function CheckoutPage() {
     setTotalCents(adultTotal + childTotal);
   }, [visit, rules]);
 
+ // Handle payment button click
+  const handlePayClick = async () => {
+    if (!visit || totalCents === null) {
+      alert('Visit info or total amount missing.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountCents: totalCents, visitId: visit.id }),
+      });
+
+      if (!response.ok) throw new Error('Failed to create checkout session');
+
+      const data = await response.json();
+      window.location.href = data.checkoutUrl;
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Payment initiation failed.');
+    }
+  };
+
   if (!visitId) return <p>Missing visit ID.</p>;
   if (!visit) return <p>Loading visit info...</p>;
 
