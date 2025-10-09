@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 
 export default function Home() {
@@ -7,6 +7,11 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    emailInputRef.current?.focus();
+  }, []);
 
   const sendMagicLink = async () => {
     console.log('sendMagicLink called');
@@ -34,6 +39,7 @@ const { error } = await supabase.auth.signInWithOtp({
       <div style={{ marginTop: 24 }}>
         <input
           type="email"
+	  ref={emailInputRef}
           placeholder="Please type your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
