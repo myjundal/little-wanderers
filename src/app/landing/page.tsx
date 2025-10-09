@@ -62,7 +62,7 @@ export default function AppHome() {
       <ul style={{ marginTop: 16 }}>
         <li><Link href="/landing/people">My People</Link></li>
         <li><Link href="/landing/qr">My QR Codes</Link></li>
-        <li><Link href="/landing/membership">My Membership (In progress)</Link></li>
+        <li><Link href="/landing/membership">My Membership</Link></li>
         <li><Link href="/landing/party">My Party Bookings (In progress)</Link></li>
       </ul>
     </main>
