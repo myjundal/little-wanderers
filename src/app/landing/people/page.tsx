@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type Person = {
@@ -14,7 +14,8 @@ export default function PeoplePage() {
   const supabase = createBrowserSupabaseClient();
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [form, setForm] = useState({ role: 'child', first_name: '', last_name: '', birthdate: '' });
+  const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', birthdate: '' 
+});
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -26,20 +27,28 @@ export default function PeoplePage() {
       .from('households')
       .select('id')
       .eq('owner_user_id', uid)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (!hs) return;
-    setHouseholdId(hs.id);
+	const hid = hs?.[0]?.id;
+	if (!hid) return; 
+
+	setHouseholdId(hid);
 
     // 해당 household 의 people 목록
     const { data: ppl } = await supabase
       .from('people')
       .select('id, role, first_name, last_name, birthdate')
-      .eq('household_id', hs.id)
+      .eq('household_id', hid)
       .order('created_at', { ascending: true });
 
     setPeople((ppl ?? []) as Person[]);
   }, []);
+
+
+   useEffect(() => {
+	load();
+	}, [load]);
 
   const addPerson = async () => {
     if (!householdId || !form.first_name) return;
@@ -79,7 +88,7 @@ export default function PeoplePage() {
           <input type="date"
                  value={form.birthdate}
                  onChange={e => setForm({ ...form, birthdate: e.target.value })}/>
-          <button onClick={addPerson}>Add</button>
+          <button type="button" onClick={addPerson}>Add</button>
         </div>
       </section>
 

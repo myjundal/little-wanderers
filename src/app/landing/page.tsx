@@ -19,18 +19,24 @@ export default function AppHome() {
 	return;}
 
       // household 존재 확인
-      const { data: hs } = await supabase
+      const { data: found, error } = await supabase
         .from('households')
         .select('id')
         .eq('owner_user_id', user.id)
-        .maybeSingle();
+	.order('created_at', {ascending: false })
+        .limit(1);
 
-      if (!hs) {
-        // 없으면 생성
-        await supabase.from('households').insert({
+	// if not existing, create
+      if (!found || found.length === 0) {
+        await supabase
+	  .from('households')
+	  .upsert(
+	    {
           owner_user_id: user.id,
           name: (user.email ?? 'My Household').split('@')[0],
-        });
+        },
+	{ onConflict: 'owner_user_id' }
+	);
       }
 
       setReady(true);

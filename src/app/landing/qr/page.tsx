@@ -10,25 +10,31 @@ export default function QRPage() {
   const supabase = createBrowserSupabaseClient();
   const [people, setPeople] = useState<Person[]>([]);
   const [qrMap, setQrMap] = useState<Record<string, string>>({}); // personId -> dataURL
+  const [version] = useState<string>(() => String(Date.now())); // refresh key
 
   useEffect(() => {
-    const load = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id;
+    setPeople([]); 
+    setQrMap({}); // refresh
+      
+     const load = async () => {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
       if (!uid) return;
 
       const { data: hs } = await supabase
         .from('households')
         .select('id')
         .eq('owner_user_id', uid)
-        .maybeSingle();
+	.order('created_at', { ascending: false })
+        .limit(1);
 
-      if (!hs) return;
+      const hid = hs?.[0]?.id;
+      if (!hid) return;
 
       const { data: ppl } = await supabase
         .from('people')
         .select('id, first_name, role')
-        .eq('household_id', hs.id)
+        .eq('household_id', hid)
         .order('created_at', { ascending: true });
 
       const arr = (ppl ?? []) as Person[];
@@ -43,7 +49,7 @@ export default function QRPage() {
       setQrMap(map);
     };
     load();
-  }, [supabase]);
+  }, []);
 
   return (
     <main style={{ padding: 24 }}>
