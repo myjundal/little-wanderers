@@ -38,8 +38,7 @@ function extractPersonId(text: string): string | null {
   // Accept "lw://person/<uuid>" OR just "<uuid>"
   const lw = text.match(/lw:\/\/person\/([0-9a-fA-F-]{36})/);
   if (lw?.[1]) return lw[1];
-  const uuid = 
-text.match(/[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[1-5][0-9a-fA-F-]{3}-[89abAB][0-9a-fA-F-]{3}-[0-9a-fA-F-]{12}/);
+  const uuid = text.match(/[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[1-5][0-9a-fA-F-]{3}-[89abAB][0-9a-fA-F-]{3}-[0-9a-fA-F-]{12}/);
   return uuid?.[0] ?? null;
 }
 
@@ -60,7 +59,6 @@ export default function StaffCheckinPage() {
 const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [reference, setReference] = useState<string>('');
   const [visits, setVisits] = useState<Visit[]>([]);
-  const [visitId] = useState<string>('');
 const [scannerRunning, setScannerRunning] = useState(false);
 
   const scannerRef = useRef<any>(null);
@@ -126,8 +124,8 @@ setLineItems(data.lineItems ?? []);
         ]);
 
         const price = ((data.price_cents ?? 0) / 100).toFixed(2);
-        if (data.membership_applied) {
-          setServerMsg(`Check-in OK ✅ (Membership covers it)`);
+        if (data.membership_applied || (data.price_cents ?? 0) === 0) {
+          setServerMsg(`Check-in OK ✅ (No payment required)`);
         } else {
           setServerMsg(`Check-in OK ✅ • Price: $${price}`);
         }
@@ -147,47 +145,56 @@ setLineItems(data.lineItems ?? []);
     };
   }, []);
 
-console.log('visits:', visits);
-visits.forEach((v, i) => {
-  console.log(`#${i + 1} - ${v.first_name}`, v.lineItems);
-});
+// 결제가 필요한 방문자만 필터링
+  const unpaidVisits = visits.filter(
+    (v) => !v.membership_applied && v.price_cents > 0
+  );
 
 
 // subtotal 계산
-const totalAll = visits.reduce((sum, visit) => {
-    return sum + visit.lineItems.reduce(
-	(s, item) => s + (item.price_cents ?? 0) * (item.quantity ?? 1), 0);
+const totalAll = unpaidVisits.reduce((sum, visit) => {
+    return sum + (visit.price_cents ?? 0);
   }, 0);
 
   // 버튼 핸들러들
   const handleMarkPaid = async () => {
+   for (const visit of unpaidVisits) {
     try {
-      const res = await fetch(`/api/visits/${visitId}/mark-paid`, { method: 'POST' });
-      if (!res.ok) throw new Error('Mark paid failed');
-      alert('Marked as paid (prepaid)');
-      setServerMsg('Marked as paid (prepaid)');
-    } catch {
-      alert('Failed to mark as paid');
-    }
+      const res = await fetch(`/api/visits/${visit.id}/mark-paid`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+	} catch {
+      alert(`Failed to mark visit ${visit.id} as paid`);
+	}
+     }
+      alert('All unpaid visits marked as paid');
+      setServerMsg('Marked as paid');
   };
 
   const handleCheckoutAtPOS = async () => {
+   for (const visit of unpaidVisits) {
     try {
-      const res = await fetch(`/api/visits/${visitId}/checkout-pos`, {
+      const res = await fetch(`/api/visits/${visit.id}/checkout-pos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reference }),
       });
-      if (!res.ok) throw new Error('Checkout at POS failed');
-      alert('Checkout at POS completed');
+      if (!res.ok) throw new Error();
+      } catch {
+      alert(`Failed to checkout visit ${visit.id} at POS`);
+      }
+     }
+     alert('Checkout at POS completed');
       setServerMsg('Checkout at POS completed');
-    } catch {
-      alert('Failed to checkout at POS');
-    }
   };
 
   const handleOpenOnlineCheckout = () => {
-    router.push(`/checkout?visit_id=${visitId}`);
+    if (unpaidVisits.length === 0) {
+	alert('No unpaid visits to checkout.');
+	return;
+	}
+     // if one visit is being taken care of
+     const visit = unpaidVisits[0];
+    router.push(`/checkout?visit_id=${visit.id}`);
   };
 
 const handleResetAll = () => {
@@ -206,9 +213,7 @@ return (
       <div id="qr-reader" style={{ width: 360, maxWidth: '100%', marginTop: 16 }} />
       <div style={{ marginTop: 16, padding: 12, border: '1px solid #ddd' }}>
         <strong>Last Scan:</strong>
-        <div style={{ wordBreak: 'break-all' }}>
-          {lastScan || '-'}
-</div>
+        <div style={{ wordBreak: 'break-all' }}>{lastScan || '-'}</div>
         <div style={{ marginTop: 8 }}>{serverMsg}</div>
       </div>
 
@@ -233,26 +238,21 @@ return (
                 </li>
               ))}
             </ul>
-            <p>
-              <strong>Subtotal:</strong> ${(subtotal / 100).toFixed(2)}
-            </p>
+            <p><strong>Subtotal:</strong> ${(visit.price_cents / 100).toFixed(2)}</p>
+	<p><strong>Membership:</strong> {visit.membership_applied ? '✅ Yes' : '❌ No'}</p>
 	</div>
 	);
 })}
 
 {/* 전체 총합 출력 */}
-      {visits.length > 0 && (
+      {unpaidVisits.length > 0 && (
         <div style={{ marginTop: 32, padding: 16, borderTop: '2px solid #555' }}>
           <h2>Total Summary</h2>
-          <p><strong>People Scanned:</strong> {visits.length}</p>
+          <p><strong>People Requiring Payment:</strong> {unpaidVisits.length}</p>
           <p><strong>Grand Total:</strong> ${(totalAll / 100).toFixed(2)}</p>
               
-          <button onClick={handleResetAll} style={{ marginTop: 12 }}>
-            Reset All
-          </button>
-        
       {/* 버튼들 */}
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 16 }}>
         <button onClick={handleMarkPaid} style={{ marginRight: 12 }}>
           Mark as Paid (Prepaid)
         </button>
@@ -272,6 +272,16 @@ return (
       </div>
     </div>
   )}
+
+{/* 리셋 버튼은 항상 노출 */}
+      {visits.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <button onClick={handleResetAll} style={{ background: '#eee', padding: '8px 12px' 
+}}>
+            ♻️ Reset All Scanned Data
+          </button>
+        </div>
+      )}
 
     </main>
   );
