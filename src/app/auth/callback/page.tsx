@@ -1,13 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 export default function AuthCallback() {
   const [msg, setMsg] = useState('Signing you in...');
 
   useEffect(() => {
     const run = async () => {
-      const supabase = supabaseBrowser();
+      const supabase = createBrowserSupabaseClient();
       const {
         data: { session },
         error

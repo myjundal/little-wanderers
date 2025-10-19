@@ -1,9 +1,9 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 export default function Home() {
-  const supabase = supabaseBrowser();
+  const supabase = createBrowserSupabaseClient();
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
