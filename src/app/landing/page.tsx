@@ -231,8 +231,7 @@ export default function AppHome() {
 
       {/* Membership badge + CTA */}
       <section style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', gap: 12, justifyContent: 
-'space-between', }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between', }}>
 	<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Badge status={membership.status} />
           {membership.status === 'active' && membership.renews_at && (
