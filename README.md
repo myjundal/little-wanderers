@@ -2,6 +2,13 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Environment setup
+This app expects Supabase and other secrets in a local env file. Copy the example file and fill in any missing values:
+
+```bash
+cp .env.example .env.local
+```
+
 First, run the development server:
 
 ```bash
@@ -40,7 +47,9 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 2) Build small scope; keep changes focused
 3) Test: `npm run build` locally + verify Vercel Preview
 4) `git commit -m "feat: <summary>"`
-5) `git push -u origin feat/<feature>`
-6) Open PR → checklist → merge to `main`
-7) Verify Vercel `main` deploy
-8) Tag checkpoint: `git tag -a m1-... && git push origin m1-...`
+5) Ensure a remote is configured (`git remote -v`) before pushing
+6) If push fails with "No configured push destination", add one: `git remote add origin <url>`
+7) `git push -u origin feat/<feature>` (first push may be slower for large repos or new remotes)
+8) Open PR → checklist → merge to `main`
+9) Verify Vercel `main` deploy
+10) Tag checkpoint: `git tag -a m1-... && git push origin m1-...`

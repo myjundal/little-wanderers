@@ -49,6 +49,7 @@ export const metadata = { title: 'Membership — Little Wanderers' };
 
 export default async function MembershipPage() {
   const supabase = createServerSupabaseClient();
+  const checkoutUrl = process.env.NEXT_PUBLIC_SQUARE_MEMBERSHIP_CHECKOUT_URL ?? null;
 
   // 1) who is logged in?
   const { data: { user } } = await supabase.auth.getUser();
@@ -140,10 +141,32 @@ nowISO));
         <section style={{ marginTop: 16 }}>
           <p>You don't have an active membership right now.</p>
           <div style={{ display:'grid', gap:8, maxWidth: 360 }}>
-            <button>Start Monthly Membership</button>
+            {checkoutUrl ? (
+              <Link
+                href={checkoutUrl}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  fontWeight: 600,
+                }}
+              >
+                Start Monthly Membership
+              </Link>
+            ) : (
+              <button disabled style={{ opacity: 0.6 }}>
+                Start Monthly Membership
+              </button>
+            )}
           </div>
           <p style={{ marginTop: 8, color:'#666' }}>
-            Checkout will be enabled soon. For now, ask staff at the front desk.
+            {checkoutUrl
+              ? 'You will be redirected to Square to complete your subscription.'
+              : 'Checkout will be enabled soon. For now, ask staff at the front desk.'}
           </p>
         </section>
       )}
@@ -168,4 +191,3 @@ people included in the membership).</li>
     </main>
   );
 }
-
