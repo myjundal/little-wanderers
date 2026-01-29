@@ -18,6 +18,7 @@ type Membership = {
 
 export default async function MembershipPage() {
   const supabase = createServerSupabaseClient();
+  const checkoutUrl = process.env.NEXT_PUBLIC_SQUARE_MEMBERSHIP_CHECKOUT_URL ?? null;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
