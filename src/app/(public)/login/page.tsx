@@ -14,22 +14,22 @@ export default function Home() {
   }, []);
 
   const sendMagicLink = async () => {
-    console.log('sendMagicLink called');
     setPending(true);
     setMsg(null);
-    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`;
-    console.log('redirectTo:', redirectTo);
-const { error } = await supabase.auth.signInWithOtp({
+    const redirectBase = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+    const resolvedBase = redirectBase ? redirectBase : window.location.origin;
+    const redirectTo = new URL('/auth/callback', resolvedBase).toString();
+    const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`, 
-	},
+        emailRedirectTo: redirectTo,
+      },
     });
     setPending(false);
     if (error) setMsg(`Error: ${error.message}`);
     else setMsg('Email sent. Please check your inbox (including spam).');
-    sessionStorage.setItem('post_login_redirect', '/landing'); 
- };
+    sessionStorage.setItem('post_login_redirect', '/landing');
+  };
 
   return (
     <main style={{ padding: 24, maxWidth: 520 }}>
@@ -39,7 +39,7 @@ const { error } = await supabase.auth.signInWithOtp({
       <div style={{ marginTop: 24 }}>
         <input
           type="email"
-	  ref={emailInputRef}
+          ref={emailInputRef}
           placeholder="Please type your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -57,4 +57,3 @@ const { error } = await supabase.auth.signInWithOtp({
     </main>
   );
 }
-

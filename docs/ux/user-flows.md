@@ -14,6 +14,10 @@
 - **Payment** (Square outcome, subscription id, invoices)
 - **Waiver** (versioned required agreement)
 
+## Implementation Notes
+- App home lives at `/landing` (membership status badge + recent activity).
+- Membership checkout currently routes to Square via a hosted checkout link when configured.
+
 ---
 
 ## Flow A. Subscribe / Manage Monthly Membership
@@ -51,4 +55,3 @@ flowchart TD
   Staff-->Roster[Load class roster]
   Roster-->Mark[Mark present/no-show/late]
   Mark-->Stats[Capacity & attendance tallies]
-

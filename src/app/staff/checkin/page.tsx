@@ -33,6 +33,15 @@ type Visit = {
   price_cents: number;
 };
 
+function getVisitSubtotal(visit: Visit): number {
+  if (visit.lineItems?.length) {
+    return visit.lineItems.reduce(
+      (sum, item) => sum + item.price_cents * item.quantity,
+      0
+    );
+  }
+  return visit.price_cents ?? 0;
+}
 
 function extractPersonId(text: string): string | null {
   // Accept "lw://person/<uuid>" OR just "<uuid>"
@@ -153,7 +162,7 @@ setLineItems(data.lineItems ?? []);
 
 // subtotal 계산
 const totalAll = unpaidVisits.reduce((sum, visit) => {
-    return sum + (visit.price_cents ?? 0);
+    return sum + getVisitSubtotal(visit);
   }, 0);
 
   // 버튼 핸들러들
@@ -219,8 +228,7 @@ return (
 
 {/* 방문자 리스트 */} 
 	{visits.map((visit, idx) => { 
-		const subtotal = visit.lineItems.reduce(
-		(sum, item) => sum + item.price_cents * item.quantity, 0);
+		const subtotal = getVisitSubtotal(visit);
 
 return (
           <div key={visit.id} style={{ marginTop: 24, padding: 12, border: '1px solid #aaa' }}>
@@ -238,7 +246,7 @@ return (
                 </li>
               ))}
             </ul>
-            <p><strong>Subtotal:</strong> ${(visit.price_cents / 100).toFixed(2)}</p>
+            <p><strong>Subtotal:</strong> ${(subtotal / 100).toFixed(2)}</p>
 	<p><strong>Membership:</strong> {visit.membership_applied ? '✅ Yes' : '❌ No'}</p>
 	</div>
 	);

@@ -4,7 +4,6 @@ export default async function sitemap() {
     { url: `${base}/`, changefreq: 'weekly', priority: 1.0 },
     { url: `${base}/pricing`, changefreq: 'monthly', priority: 0.8 },
     { url: `${base}/faq`, changefreq: 'monthly', priority: 0.6 },
-    { url: `${base}/app`, changefreq: 'weekly', priority: 0.5 },
+    { url: `${base}/landing`, changefreq: 'weekly', priority: 0.5 },
   ];
 }
-
