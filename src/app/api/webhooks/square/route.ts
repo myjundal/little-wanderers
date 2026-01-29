@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
   const raw = await req.text();
   const signature = req.headers.get('x-square-hmacsha1-signature');
 
+  const isProd = process.env.NODE_ENV === 'production';
   // Optional: temporarily allow without signature during local tests
-  const sigOk = signature ? verifySignature(raw, signature) : true;
+  const sigOk = signature ? verifySignature(raw, signature) : !isProd;
   if (!sigOk) return new Response('invalid signature', { status: 401 });
 
   const payload = JSON.parse(raw);
@@ -44,11 +45,21 @@ export async function POST(req: NextRequest) {
     payload?.data?.object?.subscription?.customer_id ??
     null;
 
-  // Membership activation example (subscription updated -> ACTIVE)
-  if (type.includes('subscription.updated')) {
-    const status: string | undefined = payload?.data?.object?.subscription?.status;
-    const renewsAt: string | undefined = 
-payload?.data?.object?.subscription?.charged_through_date;
+  const subscription = payload?.data?.object?.subscription;
+  const subscriptionStatus: string | undefined = subscription?.status;
+  const renewsAt: string | undefined =
+    subscription?.charged_through_date ?? subscription?.next_billing_date;
+
+  const statusMap = (status?: string) => {
+    if (!status) return 'paused';
+    if (status === 'ACTIVE') return 'active';
+    if (status === 'CANCELED' || status === 'DEACTIVATED') return 'canceled';
+    if (status === 'PAUSED') return 'paused';
+    return 'paused';
+  };
+
+  // Membership activation example (subscription updated/canceled)
+  if (type.includes('subscription.updated') || type.includes('subscription.canceled')) {
 
     if (customerId) {
       // Find household by your chosen mapping (e.g., pre-saved square_customer_id on memberships)
@@ -59,8 +70,7 @@ payload?.data?.object?.subscription?.charged_through_date;
           {
             square_customer_id: customerId,
             square_subscription_id: payload?.data?.object?.subscription?.id ?? null,
-            status: status === 'ACTIVE' ? 'active' : status === 'CANCELED' ? 'canceled' : 
-'paused',
+            status: statusMap(subscriptionStatus),
             renews_at: renewsAt ? new Date(renewsAt).toISOString() : null
           },
           { onConflict: 'square_subscription_id' }
@@ -72,11 +82,17 @@ payload?.data?.object?.subscription?.charged_through_date;
   if (type.includes('payment.updated')) {
     const status: string | undefined = payload?.data?.object?.payment?.status; // 'COMPLETED'
     if (status === 'COMPLETED') {
-      // TODO: parse line items from `order` -> if '5-Pack' -> insert/augment passes
-      // await supa.from('passes').insert(...);
+      const payment = payload?.data?.object?.payment;
+      const order = payload?.data?.object?.order ?? payment?.order;
+      const lineItems = order?.line_items ?? [];
+      const totalMoney = payment?.amount_money?.amount ?? null;
+      console.info('Square payment completed', {
+        paymentId: payment?.id ?? null,
+        totalMoney,
+        lineItemsCount: lineItems.length
+      });
     }
   }
 
   return new Response('ok', { status: 200 });
 }
-
