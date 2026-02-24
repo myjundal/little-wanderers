@@ -42,7 +42,6 @@ export default function AppHome() {
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -62,10 +61,7 @@ export default function AppHome() {
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (findErr) {
-      console.warn('households find error:', findErr);
-      setError('We had trouble loading your household. Please refresh or contact staff.');
-    }
+    if (findErr) console.warn('households find error:', findErr);
 
     let householdId: string | null = null;
 
@@ -82,10 +78,7 @@ export default function AppHome() {
         .select('id')
         .maybeSingle();
 
-      if (upErr) {
-        console.warn('households upsert error:', upErr);
-        setError('We could not create your household yet. Please refresh or contact staff.');
-      }
+      if (upErr) console.warn('households upsert error:', upErr);
       householdId = up?.id ?? null;
       setHouseholdId(householdId);
     } else {
@@ -107,7 +100,6 @@ export default function AppHome() {
       if (personErr) {
         // 두 명 이상 있거나 없을 때 single 에러가 날 수 있음 → 로그만 남기고 fallback 사용
         console.warn('people fetch error:', personErr);
-        setError('We could not load your profile name. Some info may be missing.');
       }
 
       const displayName =
@@ -236,20 +228,6 @@ export default function AppHome() {
   return (
     <main style={{ padding: 24, maxWidth: 920, margin: '0 auto' }}>
       <h1 style={{ marginBottom: 4 }}>Hello, {email} 👋</h1>
-      {error && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: 12,
-            borderRadius: 8,
-            border: '1px solid #f5c2c7',
-            background: '#fbecec',
-            color: '#7a1212',
-          }}
-        >
-          {error}
-        </div>
-      )}
 
       {/* Membership badge + CTA */}
       <section style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
@@ -339,3 +317,4 @@ export default function AppHome() {
     </main>
   );
 }
+

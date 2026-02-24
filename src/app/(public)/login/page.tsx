@@ -14,37 +14,22 @@ export default function Home() {
   }, []);
 
   const sendMagicLink = async () => {
+    console.log('sendMagicLink called');
     setPending(true);
     setMsg(null);
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setMsg('Please enter a valid email address.');
-      setPending(false);
-      return;
-    }
-
-    const redirectTo = new URL('/auth/callback', window.location.origin).toString();
-
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: trimmedEmail,
-        options: {
-          emailRedirectTo: redirectTo,
-        },
-      });
-
-      if (error) {
-        setMsg(`Error: ${error.message}`);
-      } else {
-        setMsg('Email sent. Please check your inbox (including spam).');
-        sessionStorage.setItem('post_login_redirect', '/landing');
-      }
-    } catch (err) {
-      setMsg(`Error: ${err instanceof Error ? err.message : 'Unexpected error'}`);
-    } finally {
-      setPending(false);
-    }
-  };
+    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`;
+    console.log('redirectTo:', redirectTo);
+const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`, 
+	},
+    });
+    setPending(false);
+    if (error) setMsg(`Error: ${error.message}`);
+    else setMsg('Email sent. Please check your inbox (including spam).');
+    sessionStorage.setItem('post_login_redirect', '/landing'); 
+ };
 
   return (
     <main style={{ padding: 24, maxWidth: 520 }}>
@@ -54,7 +39,7 @@ export default function Home() {
       <div style={{ marginTop: 24 }}>
         <input
           type="email"
-          ref={emailInputRef}
+	  ref={emailInputRef}
           placeholder="Please type your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -62,7 +47,7 @@ export default function Home() {
         />
         <button
           onClick={sendMagicLink}
-          disabled={!email.trim() || pending}
+          disabled={!email || pending}
           style={{ marginTop: 12, padding: '8px 12px' }}
         >
           {pending ? 'Sending...' : 'Send magic link'}
@@ -72,3 +57,4 @@ export default function Home() {
     </main>
   );
 }
+
