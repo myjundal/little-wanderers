@@ -16,34 +16,19 @@ export default function Home() {
   const sendMagicLink = async () => {
     setPending(true);
     setMsg(null);
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setMsg('Please enter a valid email address.');
-      setPending(false);
-      return;
-    }
-
-    const redirectTo = new URL('/auth/callback', window.location.origin).toString();
-
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: trimmedEmail,
-        options: {
-          emailRedirectTo: redirectTo,
-        },
-      });
-
-      if (error) {
-        setMsg(`Error: ${error.message}`);
-      } else {
-        setMsg('Email sent. Please check your inbox (including spam).');
-        sessionStorage.setItem('post_login_redirect', '/landing');
-      }
-    } catch (err) {
-      setMsg(`Error: ${err instanceof Error ? err.message : 'Unexpected error'}`);
-    } finally {
-      setPending(false);
-    }
+    const redirectBase = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+    const resolvedBase = redirectBase ? redirectBase : window.location.origin;
+    const redirectTo = new URL('auth/callback', resolvedBase).toString();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: redirectTo,
+      },
+    });
+    setPending(false);
+    if (error) setMsg(`Error: ${error.message}`);
+    else setMsg('Email sent. Please check your inbox (including spam).');
+    sessionStorage.setItem('post_login_redirect', '/landing');
   };
 
   return (
@@ -62,7 +47,7 @@ export default function Home() {
         />
         <button
           onClick={sendMagicLink}
-          disabled={!email.trim() || pending}
+          disabled={!email || pending}
           style={{ marginTop: 12, padding: '8px 12px' }}
         >
           {pending ? 'Sending...' : 'Send magic link'}
