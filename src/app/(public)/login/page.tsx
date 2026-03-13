@@ -17,12 +17,12 @@ export default function Home() {
     console.log('sendMagicLink called');
     setPending(true);
     setMsg(null);
-    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`;
+    const redirectTo = `${window.location.origin}/auth/callback`;
     console.log('redirectTo:', redirectTo);
 const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`, 
+        emailRedirectTo: redirectTo, 
 	},
     });
     setPending(false);

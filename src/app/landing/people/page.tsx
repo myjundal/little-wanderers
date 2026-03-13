@@ -50,18 +50,33 @@ export default function PeoplePage() {
 	load();
 	}, [load]);
 
-  const addPerson = async () => {
-    if (!householdId || !form.first_name) return;
-    await supabase.from('people').insert({
-      household_id: householdId,
-      role: form.role as 'adult' | 'child',
-      first_name: form.first_name,
-      last_name: form.last_name || null,
-      birthdate: form.birthdate || null,
-    });
-    setForm({ role: form.role, first_name: '', last_name: '', birthdate: '' });
-    await load();
-  };
+const addPerson = async () => {
+  console.log("householdId:", householdId);
+  console.log("form.first_name:", form.first_name);
+
+  if (!householdId || !form.first_name) {
+    alert(`missing value: householdId=${householdId}, 
+first_name=${form.first_name}`);
+    return;
+  }
+
+  const { error } = await supabase.from("people").insert({
+    household_id: householdId,
+    role: form.role as "adult" | "child",
+    first_name: form.first_name,
+    last_name: form.last_name || null,
+    birthdate: form.birthdate || null,
+  });
+
+  if (error) {
+    console.error("addPerson error:", error);
+    alert(error.message);
+    return;
+  }
+
+  setForm({ role: form.role, first_name: "", last_name: "", birthdate: "" });
+  await load();
+};
 
   const removePerson = async (id: string) => {
     await supabase.from('people').delete().eq('id', id);
