@@ -1,25 +1,88 @@
-<svg width="420" height="420" viewBox="0 0 420 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="900" height="900" viewBox="0 0 900 900" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#F6F1FF"/>
-      <stop offset="100%" stop-color="#E7DBFF"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FEFCFF"/>
+      <stop offset="100%" stop-color="#F7F4FF"/>
     </linearGradient>
     <linearGradient id="planet" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#D7C5FF"/>
-      <stop offset="100%" stop-color="#C2A9F5"/>
+      <stop offset="0%" stop-color="#DCCDF8"/>
+      <stop offset="100%" stop-color="#C8B1EE"/>
     </linearGradient>
+    <linearGradient id="fox" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFEECF"/>
+      <stop offset="100%" stop-color="#F6DEB8"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="200%" height="200%">
+      <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#BCAAE4" flood-opacity="0.22"/>
+    </filter>
   </defs>
-  <rect x="0" y="0" width="420" height="420" rx="40" fill="url(#bg)"/>
-  <circle cx="210" cy="250" r="86" fill="url(#planet)" stroke="#8D72C9" stroke-width="6"/>
-  <ellipse cx="210" cy="253" rx="145" ry="36" transform="rotate(-10 210 253)" fill="#EFE8FF" stroke="#8D72C9" stroke-width="6"/>
-  <path d="M161 186C174 148 246 148 259 186V241H161V186Z" fill="#FDEBCF" stroke="#8D72C9" stroke-width="6"/>
-  <path d="M177 156L157 118L196 137L177 156Z" fill="#FDEBCF" stroke="#8D72C9" stroke-width="6"/>
-  <path d="M243 156L263 118L224 137L243 156Z" fill="#FDEBCF" stroke="#8D72C9" stroke-width="6"/>
-  <ellipse cx="186" cy="180" rx="7" ry="5" fill="#8D72C9"/>
-  <ellipse cx="233" cy="180" rx="7" ry="5" fill="#8D72C9"/>
-  <path d="M193 198C201 205 219 205 227 198" stroke="#8D72C9" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="126" cy="104" r="16" fill="#D7ECF8"/>
-  <circle cx="312" cy="96" r="20" fill="#D7ECF8"/>
-  <circle cx="337" cy="144" r="10" fill="#E7DFFF"/>
-  <circle cx="88" cy="156" r="10" fill="#E7DFFF"/>
+
+  <rect width="900" height="900" rx="54" fill="url(#bg)"/>
+
+  <!-- dreamy clouds -->
+  <g fill="#DCECF6" opacity="0.95">
+    <path d="M105 210c0-31 24-56 55-56 20 0 37 10 47 26 7-3 15-5 24-5 31 0 56 25 56 56H105z"/>
+    <path d="M590 190c0-31 24-56 55-56 20 0 37 10 47 26 7-3 15-5 24-5 31 0 56 25 56 56H590z"/>
+    <path d="M86 612c0-30 24-55 55-55 20 0 36 10 47 25 7-3 15-5 24-5 31 0 56 25 56 56H86z"/>
+    <path d="M560 632c0-30 24-55 55-55 20 0 36 10 47 25 7-3 15-5 24-5 31 0 56 25 56 56H560z"/>
+    <path d="M278 744c0-27 22-49 49-49 18 0 32 8 41 21 6-3 13-4 21-4 27 0 49 22 49 49H278z" opacity="0.78"/>
+  </g>
+
+  <g fill="#DED7F3" opacity="0.95">
+    <path d="M170 338c0-30 24-54 54-54 19 0 34 9 44 24 7-3 15-5 23-5 30 0 54 24 54 54H170z"/>
+    <path d="M610 358c0-30 24-54 54-54 19 0 34 9 44 24 7-3 15-5 23-5 30 0 54 24 54 54H610z"/>
+    <path d="M486 760c0-26 21-47 47-47 16 0 30 7 38 19 6-2 12-4 19-4 26 0 47 21 47 47H486z" opacity="0.85"/>
+  </g>
+
+  <!-- stars and moon -->
+  <g fill="#D8D1F0">
+    <circle cx="250" cy="108" r="6"/>
+    <circle cx="320" cy="86" r="9"/>
+    <circle cx="518" cy="130" r="7"/>
+    <circle cx="718" cy="218" r="8"/>
+    <circle cx="142" cy="504" r="8"/>
+    <circle cx="760" cy="530" r="8"/>
+    <circle cx="364" cy="776" r="7"/>
+  </g>
+  <g fill="#EAF4FF">
+    <circle cx="208" cy="146" r="7"/>
+    <circle cx="664" cy="134" r="7"/>
+    <circle cx="780" cy="322" r="7"/>
+    <circle cx="84" cy="584" r="7"/>
+    <circle cx="216" cy="710" r="6"/>
+  </g>
+  <path d="M724 250c-41 0-74 33-74 74 0 37 27 68 62 73-15-11-25-29-25-49 0-33 27-60 60-60 20 0 38 10 49 25-5-35-36-63-72-63z" fill="#D9CFF2" stroke="#9F88D6" stroke-width="8"/>
+
+  <!-- planet and ring -->
+  <g filter="url(#shadow)">
+    <circle cx="460" cy="610" r="155" fill="url(#planet)"/>
+    <circle cx="460" cy="610" r="155" stroke="#9E85D5" stroke-width="8"/>
+    <ellipse cx="458" cy="614" rx="250" ry="66" transform="rotate(-14 458 614)" fill="#F6F1FF" stroke="#9E85D5" stroke-width="10"/>
+  </g>
+
+  <!-- fox tail behind -->
+  <path d="M330 580c-44 30-66 82-45 116 16 27 53 33 91 12 47-26 55-87 18-123-20-20-42-21-64-5z" fill="url(#fox)" stroke="#8D77C4" stroke-width="8"/>
+  <path d="M292 663c26 26 66 26 100 4-8 20-28 37-51 44-25 8-53 1-68-18-9-11-12-22-10-30 6 0 18 0 29 0z" fill="#FFF8E8" opacity="0.7"/>
+
+  <!-- fox body -->
+  <g>
+    <path d="M358 535c0-82 35-150 102-150 67 0 102 68 102 150v87H358v-87z" fill="url(#fox)" stroke="#8D77C4" stroke-width="8"/>
+    <path d="M401 395l-39-72 72 34-33 38z" fill="url(#fox)" stroke="#8D77C4" stroke-width="8"/>
+    <path d="M521 395l39-72-72 34 33 38z" fill="url(#fox)" stroke="#8D77C4" stroke-width="8"/>
+
+    <!-- scarf -->
+    <path d="M378 500c35-16 129-16 164 0-6 23-21 41-42 49h-80c-21-8-36-26-42-49z" fill="#D4C3F1" stroke="#8D77C4" stroke-width="8"/>
+    <path d="M372 520c34 8 143 8 182 0-22 24-50 39-90 39-38 0-69-14-92-39z" fill="#BFA9E8" opacity="0.45"/>
+
+    <!-- face -->
+    <ellipse cx="420" cy="470" rx="9" ry="6" fill="#8D77C4"/>
+    <ellipse cx="500" cy="470" rx="9" ry="6" fill="#8D77C4"/>
+    <path d="M438 494c15 16 39 16 54 0" stroke="#8D77C4" stroke-width="7" stroke-linecap="round"/>
+    <ellipse cx="398" cy="493" rx="12" ry="8" fill="#F9D5CD"/>
+    <ellipse cx="522" cy="493" rx="12" ry="8" fill="#F9D5CD"/>
+
+    <!-- legs -->
+    <path d="M418 585c0-20 11-36 24-36s24 16 24 36v45h-48v-45z" fill="url(#fox)" stroke="#8D77C4" stroke-width="7"/>
+    <path d="M485 585c0-20 11-36 24-36s24 16 24 36v45h-48v-45z" fill="url(#fox)" stroke="#8D77C4" stroke-width="7"/>
+  </g>
 </svg>
