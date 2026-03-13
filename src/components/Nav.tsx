@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
@@ -22,12 +23,16 @@ export default function Nav() {
         padding: '14px 18px',
         borderBottom: '1px solid #e4d8f8',
         alignItems: 'center',
-        background: 'rgba(255,255,255,0.8)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(255,255,255,0.85)',
+        backdropFilter: 'blur(6px)',
       }}
     >
-      <Link href="/" style={{ fontWeight: 800, color: '#5a4692' }}>
-        Little Wanderers ✨
+      <Link
+        href="/"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontWeight: 800, color: '#5a4692' }}
+      >
+        <Image src="/brand-mark.svg" alt="Little Wanderers logo" width={28} height={28} style={{ borderRadius: 8 }} />
+        <span>Little Wanderers</span>
       </Link>
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
         <Link href="/pricing">Pricing</Link>
