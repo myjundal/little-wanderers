@@ -38,7 +38,7 @@ export default function ClassSchedulePage() {
     const classRes = await fetch('/api/classes', { cache: 'no-store' });
     const classJson = await classRes.json();
     if (!classRes.ok || !classJson.ok) {
-      setMessage(classJson.error ?? 'Failed to load classes');
+      setMessage(classJson.error ?? 'Failed to load classes.');
       setLoading(false);
       return;
     }
@@ -87,14 +87,13 @@ export default function ClassSchedulePage() {
   }, [load]);
 
   const peopleNameMap = useMemo(
-    () =>
-      new Map(people.map((p) => [p.id, `${p.first_name} ${p.last_name ?? ''}`.trim()])),
+    () => new Map(people.map((p) => [p.id, `${p.first_name} ${p.last_name ?? ''}`.trim()])),
     [people]
   );
 
   const bookClass = async (classId: string) => {
     if (!selectedPersonId) {
-      alert('먼저 예약할 사람을 선택해 주세요.');
+      alert('Please select a person before booking.');
       return;
     }
 
@@ -109,14 +108,12 @@ export default function ClassSchedulePage() {
 
     const json = await res.json();
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? '예약에 실패했습니다.');
+      setMessage(json.error ?? 'Booking failed.');
       setBookingClassId(null);
       return;
     }
 
-    setMessage(
-      `${peopleNameMap.get(selectedPersonId) ?? '선택한 인원'} 예약 완료!`
-    );
+    setMessage(`${peopleNameMap.get(selectedPersonId) ?? 'Selected person'} was booked successfully.`);
     setBookingClassId(null);
     await load();
   };
@@ -124,16 +121,16 @@ export default function ClassSchedulePage() {
   return (
     <main style={{ padding: 24, maxWidth: 860, margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 600 }}>Class Schedule</h1>
-      <p style={{ color: '#555', marginTop: 8 }}>다가오는 클래스에 바로 예약할 수 있어요.</p>
+      <p style={{ color: '#555', marginTop: 8 }}>Browse upcoming classes and book instantly.</p>
 
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #ddd', borderRadius: 10 }}>
-        <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>예약할 사람 선택</label>
+        <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
         <select
           value={selectedPersonId}
           onChange={(e) => setSelectedPersonId(e.target.value)}
           style={{ minWidth: 280, padding: 6 }}
         >
-          {people.length === 0 && <option value="">등록된 사람이 없습니다</option>}
+          {people.length === 0 && <option value="">No people found</option>}
           {people.map((p) => (
             <option key={p.id} value={p.id}>
               {p.first_name} {p.last_name ?? ''}
@@ -148,7 +145,7 @@ export default function ClassSchedulePage() {
         {loading ? (
           <p>Loading…</p>
         ) : classes.length === 0 ? (
-          <p>예정된 클래스가 아직 없습니다.</p>
+          <p>No upcoming classes yet.</p>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             {classes.map((c) => {
@@ -159,16 +156,17 @@ export default function ClassSchedulePage() {
                   <p style={{ margin: '8px 0', color: '#666' }}>
                     {new Date(c.start_time).toLocaleString()} ~ {new Date(c.end_time).toLocaleTimeString()}
                   </p>
-                  <p style={{ margin: '6px 0' }}>카테고리: {c.category ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>가격: ${(c.price_cents / 100).toFixed(2)}</p>
+                  <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Price: ${(c.price_cents / 100).toFixed(2)}</p>
                   <p style={{ margin: '6px 0' }}>
-                    좌석: {c.capacity == null ? '무제한' : `${c.booked_count}/${c.capacity}`} {c.seats_left != null && `(남은 ${c.seats_left})`}
+                    Seats: {c.capacity == null ? 'Unlimited' : `${c.booked_count}/${c.capacity}`}{' '}
+                    {c.seats_left != null && `(Left: ${c.seats_left})`}
                   </p>
                   <button
                     onClick={() => bookClass(c.id)}
                     disabled={isFull || !selectedPersonId || bookingClassId === c.id}
                   >
-                    {bookingClassId === c.id ? '예약 중...' : isFull ? '마감' : '예약하기'}
+                    {bookingClassId === c.id ? 'Booking...' : isFull ? 'Full' : 'Book Now'}
                   </button>
                 </div>
               );
@@ -178,7 +176,10 @@ export default function ClassSchedulePage() {
       </section>
 
       <p style={{ marginTop: 20 }}>
-        <Link href="/landing/myclasses">내 클래스 예약 보기 →</Link>
+        <Link href="/landing/myclasses">View My Classes →</Link>
+      </p>
+      <p style={{ marginTop: 8 }}>
+        <Link href="/landing">← Back to Homepage</Link>
       </p>
     </main>
   );

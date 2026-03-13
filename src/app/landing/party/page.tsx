@@ -48,7 +48,7 @@ export default function PartyPage() {
     const json = await res.json();
 
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? '파티 예약 목록을 불러오지 못했습니다.');
+      setMessage(json.error ?? 'Could not load party bookings.');
       setLoading(false);
       return;
     }
@@ -79,12 +79,12 @@ export default function PartyPage() {
 
     const json = await res.json();
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? '예약 요청에 실패했습니다.');
+      setMessage(json.error ?? 'Request failed. Please try again.');
       setSubmitting(false);
       return;
     }
 
-    setMessage('파티 예약 요청이 등록되었습니다!');
+    setMessage('Your party booking request has been submitted.');
     setSubmitting(false);
     await load();
   };
@@ -92,14 +92,14 @@ export default function PartyPage() {
   return (
     <main style={{ padding: 24, maxWidth: 860, margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 600 }}>My Party Bookings</h1>
-      <p style={{ color: '#555', marginTop: 8 }}>원하는 시간대를 선택해 파티 예약 요청을 보낼 수 있어요.</p>
+      <p style={{ color: '#555', marginTop: 8 }}>Pick your preferred time and send a party booking request.</p>
 
       <section style={{ marginTop: 16, border: '1px solid #ddd', borderRadius: 12, padding: 14 }}>
-        <h3 style={{ marginTop: 0 }}>새 파티 예약 요청</h3>
+        <h3 style={{ marginTop: 0 }}>New party booking request</h3>
 
         <div style={{ display: 'grid', gap: 10 }}>
           <label>
-            시작 시간
+            Start time
             <br />
             <input
               type="datetime-local"
@@ -109,7 +109,7 @@ export default function PartyPage() {
           </label>
 
           <label>
-            종료 시간
+            End time
             <br />
             <input
               type="datetime-local"
@@ -125,7 +125,7 @@ export default function PartyPage() {
           </label>
 
           <label>
-            예상 인원 (optional)
+            Expected guests (optional)
             <br />
             <input
               type="number"
@@ -136,17 +136,13 @@ export default function PartyPage() {
           </label>
 
           <label>
-            요청 메모 (optional)
+            Notes (optional)
             <br />
-            <textarea
-              rows={3}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
+            <textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </label>
 
           <button onClick={submit} disabled={submitting}>
-            {submitting ? '요청 중...' : '파티 예약 요청하기'}
+            {submitting ? 'Submitting...' : 'Submit Party Request'}
           </button>
         </div>
       </section>
@@ -154,11 +150,11 @@ export default function PartyPage() {
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
 
       <section style={{ marginTop: 22 }}>
-        <h3>내 예약 요청 내역</h3>
+        <h3>My request history</h3>
         {loading ? (
           <p>Loading…</p>
         ) : items.length === 0 ? (
-          <p>아직 파티 예약 요청이 없습니다.</p>
+          <p>You do not have any party booking requests yet.</p>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             {items.map((item) => (
@@ -167,8 +163,11 @@ export default function PartyPage() {
                   {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
                 </p>
                 <p style={{ margin: '6px 0' }}>Room: {item.room ?? '-'}</p>
-                <p style={{ margin: '6px 0' }}>Expected headcount: {item.headcount_expected ?? '-'}</p>
-                <p style={{ margin: '6px 0' }}>Quoted price: {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}</p>
+                <p style={{ margin: '6px 0' }}>Expected guests: {item.headcount_expected ?? '-'}</p>
+                <p style={{ margin: '6px 0' }}>
+                  Quoted price:{' '}
+                  {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
+                </p>
                 <p style={{ margin: '6px 0', color: '#555' }}>Notes: {item.notes ?? '-'}</p>
               </div>
             ))}
@@ -177,7 +176,7 @@ export default function PartyPage() {
       </section>
 
       <p style={{ marginTop: 20 }}>
-        <Link href="/landing">← Back to App Home</Link>
+        <Link href="/landing">← Back to Homepage</Link>
       </p>
     </main>
   );
