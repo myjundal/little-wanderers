@@ -36,7 +36,7 @@ export async function GET() {
     const supa = admin();
     const { data, error } = await supa
       .from('party_bookings')
-      .select('id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,created_at')
+      .select('id,start_time,end_time,headcount_expected,price_quote_cents,notes,created_at')
       .eq('household_id', householdId)
       .order('start_time', { ascending: false });
 
@@ -54,7 +54,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const startTime = body?.start_time as string | undefined;
     const endTime = body?.end_time as string | undefined;
-    const room = (body?.room as string | null) ?? null;
     const headcountExpected = body?.headcount_expected == null ? null : Number(body.headcount_expected);
     const notes = (body?.notes as string | null) ?? null;
 
@@ -90,7 +89,6 @@ export async function POST(req: Request) {
         household_id: householdId,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
-        room,
         headcount_expected: headcountExpected,
         notes,
       })

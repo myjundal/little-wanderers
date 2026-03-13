@@ -7,7 +7,6 @@ type PartyBooking = {
   id: string;
   start_time: string;
   end_time: string;
-  room: string | null;
   headcount_expected: number | null;
   price_quote_cents: number | null;
   notes: string | null;
@@ -37,7 +36,6 @@ export default function PartyPage() {
   const [form, setForm] = useState({
     start_time: toLocalInputValue(defaultStart),
     end_time: toLocalInputValue(defaultEnd),
-    room: '',
     headcount_expected: '',
     notes: '',
   });
@@ -71,7 +69,6 @@ export default function PartyPage() {
       body: JSON.stringify({
         start_time: new Date(form.start_time).toISOString(),
         end_time: new Date(form.end_time).toISOString(),
-        room: form.room || null,
         headcount_expected: form.headcount_expected ? Number(form.headcount_expected) : null,
         notes: form.notes || null,
       }),
@@ -119,12 +116,6 @@ export default function PartyPage() {
           </label>
 
           <label>
-            Room (optional)
-            <br />
-            <input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} />
-          </label>
-
-          <label>
             Expected guests (optional)
             <br />
             <input
@@ -162,7 +153,6 @@ export default function PartyPage() {
                 <p style={{ margin: 0, fontWeight: 600 }}>
                   {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
                 </p>
-                <p style={{ margin: '6px 0' }}>Room: {item.room ?? '-'}</p>
                 <p style={{ margin: '6px 0' }}>Expected guests: {item.headcount_expected ?? '-'}</p>
                 <p style={{ margin: '6px 0' }}>
                   Quoted price:{' '}
