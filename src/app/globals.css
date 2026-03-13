@@ -1,26 +1,118 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f9f5ff;
+  --background-soft: #f3ecff;
+  --surface: #ffffff;
+  --foreground: #41375b;
+  --foreground-muted: #6c6189;
+  --primary: #9a7bd6;
+  --primary-strong: #7f5ec1;
+  --border: #e4d8f8;
+  --shadow: 0 10px 30px rgba(127, 94, 193, 0.14);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
+  margin: 0;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), 'Nunito', 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(191, 173, 233, 0.32), transparent 35%),
+    radial-gradient(circle at 85% 12%, rgba(184, 227, 243, 0.28), transparent 33%),
+    linear-gradient(180deg, var(--background) 0%, #fdfbff 100%);
+}
+
+main {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 24px;
+  margin-top: 18px;
+  margin-bottom: 24px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading), 'Quicksand', 'Nunito', sans-serif;
+  color: #4f3f74;
+  letter-spacing: -0.01em;
+}
+
+p,
+li,
+span,
+label,
+input,
+select,
+textarea,
+button,
+a,
+th,
+td {
+  font-family: var(--font-body), 'Nunito', 'Segoe UI', sans-serif;
+}
+
+a {
+  color: var(--primary-strong);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+a:hover {
+  color: #6649aa;
+}
+
+button {
+  border: 1px solid #bca5e8;
+  background: linear-gradient(180deg, #c8b4ee 0%, #a98be2 100%);
+  color: #fff;
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(143, 112, 207, 0.25);
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.02);
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid #d8caef;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--foreground);
+}
+
+table {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e4d8f8;
+  background: #fff;
+}
+
+section {
+  border-radius: 14px;
 }
