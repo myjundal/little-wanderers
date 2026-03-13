@@ -6,60 +6,76 @@ export const metadata = {
   description: 'Play, learn, and wander in West Hartford.',
 };
 
-const highlights = [
+const cards = [
   {
-    title: 'Sensory-Friendly Design',
-    body: 'A calm and beautiful environment with thoughtful lighting, flow, and activities for little ones.',
+    title: 'Designed for little nervous systems',
+    body: 'Soft colors, gentle transitions, and sensory-safe zones help children regulate and explore with confidence.',
   },
   {
-    title: 'Membership-First Experience',
-    body: 'Everything in one place: family profiles, QR check-ins, classes, and party requests.',
+    title: 'Built for real parent life',
+    body: 'Membership, classes, people profiles, and bookings are organized in one clear flow.',
   },
   {
-    title: 'Professional Care',
-    body: 'Warm, consistent operations and parent-friendly booking tools built for real daily routines.',
+    title: 'Warm brand, serious operations',
+    body: 'A dreamy experience on the surface with reliable systems behind the scenes.',
   },
 ];
 
 export default function HomePage() {
   return (
-    <main style={{ maxWidth: 1120, margin: '20px auto', padding: 28, borderRadius: 28 }}>
-      <section style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 26, alignItems: 'center' }}>
-        <div>
+    <main style={{ maxWidth: 1160, margin: '18px auto', padding: 30 }}>
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.05fr 0.95fr',
+          gap: 28,
+          alignItems: 'stretch',
+        }}
+      >
+        <div
+          style={{
+            border: '1px solid #e8dcfa',
+            borderRadius: 26,
+            background: 'linear-gradient(160deg, rgba(255,255,255,0.96), rgba(246,236,255,0.85))',
+            padding: 26,
+          }}
+        >
           <span
             style={{
-              display: 'inline-flex',
-              border: '1px solid #d8c7f4',
-              background: 'rgba(255, 255, 255, 0.9)',
-              padding: '6px 12px',
-              borderRadius: 999,
-              color: '#6c58a6',
-              fontWeight: 700,
+              display: 'inline-block',
               fontSize: 12,
-              letterSpacing: '0.02em',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              color: '#6b58a5',
+              border: '1px solid #d8c8f5',
+              borderRadius: 999,
+              padding: '6px 12px',
+              background: '#fff',
             }}
           >
-            West Hartford • Sensory Learning Play
+            WEST HARTFORD · SENSORY PLAY
           </span>
-          <h1 style={{ margin: '14px 0 12px', fontSize: 42, lineHeight: 1.13, color: '#4f3f74' }}>
-            Soft, magical play for children.
+
+          <h1 style={{ fontSize: 46, lineHeight: 1.1, margin: '14px 0 12px' }}>
+            Dreamy for kids.
             <br />
-            Clear, professional experience for parents.
+            Professional for families.
           </h1>
-          <p style={{ color: '#6f648d', fontSize: 18, margin: 0, maxWidth: 640 }}>
-            Little Wanderers brings together sensory exploration, movement, and imaginative play in a cozy
-            lavender-toned space inspired by calm wonder.
+
+          <p style={{ color: '#6d628a', fontSize: 18, margin: 0 }}>
+            We took your logo mood—soft clouds, moonlight lavender, and gentle wonder—and translated it into a
+            clean, premium parent-facing experience.
           </p>
 
-          <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
             <Link
               href="/login"
               style={{
-                padding: '11px 18px',
-                borderRadius: 14,
-                fontWeight: 800,
-                background: 'linear-gradient(180deg, #c7b0ef, #a684de)',
+                background: 'linear-gradient(180deg,#c9b2f1,#a885df)',
                 color: '#fff',
+                borderRadius: 14,
+                padding: '12px 18px',
+                fontWeight: 800,
               }}
             >
               Start Membership
@@ -67,74 +83,75 @@ export default function HomePage() {
             <Link
               href="/pricing"
               style={{
-                padding: '11px 18px',
+                border: '1px solid #cdb8ef',
                 borderRadius: 14,
-                border: '1px solid #ceb9f0',
+                padding: '12px 18px',
                 background: '#fff',
-                color: '#5f4c96',
+                color: '#5b4a94',
                 fontWeight: 800,
               }}
             >
-              See Pricing
+              View Pricing
             </Link>
           </div>
 
-          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(3,minmax(120px,1fr))', gap: 10 }}>
-            <article style={{ border: '1px solid #eadffd', background: '#fff', borderRadius: 14, padding: 12 }}>
-              <strong style={{ display: 'block', color: '#4f3f74', marginBottom: 6 }}>Sun–Thu</strong>
-              <span style={{ color: '#766b94', fontSize: 13 }}>9:00 AM – 6:00 PM</span>
-            </article>
-            <article style={{ border: '1px solid #eadffd', background: '#fff', borderRadius: 14, padding: 12 }}>
-              <strong style={{ display: 'block', color: '#4f3f74', marginBottom: 6 }}>Fri–Sat</strong>
-              <span style={{ color: '#766b94', fontSize: 13 }}>9:00 AM – 7:00 PM</span>
-            </article>
-            <article style={{ border: '1px solid #eadffd', background: '#fff', borderRadius: 14, padding: 12 }}>
-              <strong style={{ display: 'block', color: '#4f3f74', marginBottom: 6 }}>Location</strong>
-              <span style={{ color: '#766b94', fontSize: 13 }}>West Hartford, CT</span>
-            </article>
+          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+            <div style={{ border: '1px solid #e9defb', borderRadius: 14, background: '#fff', padding: 12 }}>
+              <strong>Hours</strong>
+              <p style={{ margin: '6px 0 0', color: '#786d96', fontSize: 13 }}>Sun–Thu 9–6 / Fri–Sat 9–7</p>
+            </div>
+            <div style={{ border: '1px solid #e9defb', borderRadius: 14, background: '#fff', padding: 12 }}>
+              <strong>Focus</strong>
+              <p style={{ margin: '6px 0 0', color: '#786d96', fontSize: 13 }}>Sensory + Learning Play</p>
+            </div>
+            <div style={{ border: '1px solid #e9defb', borderRadius: 14, background: '#fff', padding: 12 }}>
+              <strong>Location</strong>
+              <p style={{ margin: '6px 0 0', color: '#786d96', fontSize: 13 }}>West Hartford, CT</p>
+            </div>
           </div>
         </div>
 
-        <div style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              padding: 16,
-              borderRadius: 24,
-              border: '1px solid #e5d9f8',
-              background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 235, 255, 0.92))',
-              boxShadow: '0 22px 44px rgba(125, 95, 186, 0.16)',
-            }}
-          >
-            <Image
-              src="/brand-mark.svg"
-              alt="Little Wanderers dreamy fox logo"
-              width={520}
-              height={520}
-              priority
-              style={{ width: '100%', height: 'auto', borderRadius: 22 }}
-            />
-          </div>
-          <p style={{ marginTop: 10, color: '#6f648d', fontSize: 14 }}>
-            Your logo-led dreamy identity, elevated for a premium first impression.
+        <div
+          style={{
+            borderRadius: 26,
+            border: '1px solid #e6daf9',
+            background: 'linear-gradient(180deg, #ffffff, #f3eafe)',
+            boxShadow: '0 24px 46px rgba(124, 95, 183, 0.16)',
+            padding: 18,
+            display: 'grid',
+            alignContent: 'start',
+            gap: 10,
+          }}
+        >
+          <Image
+            src="/brand-mark.svg"
+            alt="Little Wanderers fox logo"
+            width={560}
+            height={560}
+            priority
+            style={{ width: '100%', height: 'auto', borderRadius: 20 }}
+          />
+          <p style={{ margin: 0, color: '#70658d', textAlign: 'center' }}>
+            This logo is now the core visual anchor across your homepage and navigation.
           </p>
         </div>
       </section>
 
-      <section style={{ marginTop: 30, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-        {highlights.map((item) => (
-          <article key={item.title} style={{ background: '#fff', border: '1px solid #e9dcfb', borderRadius: 18, padding: 16 }}>
-            <h3 style={{ margin: '0 0 8px' }}>{item.title}</h3>
-            <p style={{ margin: 0, color: '#6f648d' }}>{item.body}</p>
+      <section style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+        {cards.map((card) => (
+          <article key={card.title} style={{ border: '1px solid #eadffd', borderRadius: 18, background: '#fff', padding: 16 }}>
+            <h3 style={{ margin: 0 }}>{card.title}</h3>
+            <p style={{ color: '#6f648d', margin: '8px 0 0' }}>{card.body}</p>
           </article>
         ))}
       </section>
 
       <section
         style={{
-          marginTop: 22,
-          border: '1px solid #e8dbfb',
+          marginTop: 20,
           borderRadius: 18,
-          background: 'linear-gradient(120deg, #ffffff, #f4ecff)',
+          border: '1px solid #e8dbfb',
+          background: 'linear-gradient(120deg, #ffffff, #f4edff)',
           padding: 18,
           display: 'flex',
           justifyContent: 'space-between',
@@ -144,9 +161,9 @@ export default function HomePage() {
         }}
       >
         <div>
-          <h3 style={{ margin: 0 }}>Ready to begin your Little Wanderers journey?</h3>
+          <h3 style={{ margin: 0 }}>Ready to book your first visit?</h3>
           <p style={{ margin: '6px 0 0', color: '#6f648d' }}>
-            Explore pricing and sign in to manage classes, memberships, and family bookings.
+            Start with pricing, then log in to manage classes, memberships, and party requests.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
