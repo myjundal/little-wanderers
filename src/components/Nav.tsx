@@ -15,19 +15,25 @@ export default function Nav() {
   }, []);
 
   return (
-    <nav style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: '1px solid #eee', alignItems: 'center' 
-}}>
-      <Link href="/" style={{ fontWeight: 700 }}>Little Wanderers</Link>
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+    <nav
+      style={{
+        display: 'flex',
+        gap: 16,
+        padding: '14px 18px',
+        borderBottom: '1px solid #e4d8f8',
+        alignItems: 'center',
+        background: 'rgba(255,255,255,0.8)',
+        backdropFilter: 'blur(4px)',
+      }}
+    >
+      <Link href="/" style={{ fontWeight: 800, color: '#5a4692' }}>
+        Little Wanderers ✨
+      </Link>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
         <Link href="/pricing">Pricing</Link>
         <Link href="/faq">FAQ</Link>
-        {loggedIn ? (
-          <Link href="/landing">Go to App</Link>
-        ) : (
-          <Link href="/login">Log in</Link>
-        )}
+        {loggedIn ? <Link href="/landing">Go to App</Link> : <Link href="/login">Log in</Link>}
       </div>
     </nav>
   );
 }
-
