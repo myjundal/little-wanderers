@@ -124,7 +124,7 @@ export default function ClassSchedulePage() {
 
   const classSlots = useMemo<CalendarSlot[]>(
     () => [
-      ...classes.map((c) => ({
+      ...classes.map<CalendarSlot>((c) => ({
         id: `class-${c.id}`,
         start: c.start_time,
         end: c.end_time,
@@ -133,7 +133,7 @@ export default function ClassSchedulePage() {
       })),
       ...myItems
         .filter((item) => item.class?.start_time)
-        .map((item) => ({
+        .map<CalendarSlot>((item) => ({
           id: `mine-${item.id}`,
           start: item.class!.start_time,
           end: item.class!.end_time,
