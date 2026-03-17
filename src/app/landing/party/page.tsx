@@ -118,6 +118,14 @@ export default function PartyPage() {
       <h1 style={{ fontSize: 24, fontWeight: 600 }}>My Party Bookings</h1>
       <p style={{ color: '#555', marginTop: 8 }}>Pick your preferred time and send a party booking request.</p>
 
+      {message && <p style={{ marginTop: 12 }}>{message}</p>}
+
+      <AvailabilityCalendar
+        title="Party booking calendar"
+        subtitle="Pink slots are already booked, blue slots are your requests."
+        slots={slots}
+      />
+
       <section style={{ marginTop: 16, border: '1px solid #ddd', borderRadius: 12, padding: 14 }}>
         <h3 style={{ marginTop: 0 }}>New party booking request</h3>
 
@@ -164,14 +172,6 @@ export default function PartyPage() {
           </button>
         </div>
       </section>
-
-      {message && <p style={{ marginTop: 12 }}>{message}</p>}
-
-      <AvailabilityCalendar
-        title="Party booking calendar"
-        subtitle="Pink slots are already booked, blue slots are your requests."
-        slots={slots}
-      />
 
       <section style={{ marginTop: 22 }}>
         <h3>My request history</h3>
