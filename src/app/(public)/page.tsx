@@ -8,175 +8,182 @@ export const metadata = {
 
 const LOGO_SRC = '/brand-mark.svg';
 
-const featureCards = [
+const highlights = [
   {
-    title: 'Calm Sensory Environment',
-    body: 'Thoughtful lighting, open movement flow, and gentle transitions help children feel safe, curious, and confident.',
+    title: 'Sensory Exploration Zones',
+    body: 'Soft-light stations, tactile tables, and movement pathways support curiosity and confidence.',
   },
   {
-    title: 'Parent-Friendly Experience',
-    body: 'From first visit to memberships and classes, everything is clear, warm, and easy to manage.',
+    title: 'Professional Class & Booking System',
+    body: 'Class, membership, and party booking tools are designed to feel easy for families and reliable for staff.',
   },
   {
-    title: 'Beautiful + Reliable',
-    body: 'A dreamy visual identity supported by professional operations, check-ins, and booking systems.',
+    title: 'Indoor Play Studio + Café Mood',
+    body: 'A warm lavender atmosphere with cozy details, playful storytelling, and parent-friendly comfort.',
   },
 ];
 
 export default function HomePage() {
   return (
-    <main style={{ maxWidth: 1160, margin: '20px auto', padding: 28 }}>
-      <section style={{ display: 'grid', gap: 16 }}>
+    <main
+      style={{
+        maxWidth: 1180,
+        margin: '20px auto 40px',
+        padding: 26,
+        display: 'grid',
+        gap: 18,
+      }}
+    >
+      <section
+        style={{
+          borderRadius: 26,
+          border: '1px solid #e4d7f9',
+          background:
+            'radial-gradient(circle at top right, #ffffff 0%, #f7efff 45%, #f2e7ff 100%)',
+          boxShadow: '0 22px 45px rgba(119, 85, 172, 0.17)',
+          padding: 18,
+        }}
+      >
         <div
           style={{
-            padding: 12,
-            borderRadius: 18,
-            border: '1px solid #e7daf9',
-            background: 'linear-gradient(180deg, #ffffff, #f4ecff)',
+            display: 'grid',
+            gridTemplateColumns: 'minmax(340px, 1.1fr) minmax(260px, 0.9fr)',
+            alignItems: 'center',
+            gap: 16,
           }}
         >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(320px, 1.1fr) minmax(260px, 0.9fr)',
-              gap: 18,
-              alignItems: 'center',
-            }}
-          >
-            <div style={{ padding: 14 }}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  border: '1px solid #d7c6f4',
-                  borderRadius: 999,
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#66509d',
-                  background: '#fff',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                WEST HARTFORD · SENSORY LEARNING PLAY
-              </span>
-
-              <h1 style={{ fontSize: 44, lineHeight: 1.1, margin: '14px 0 10px', maxWidth: 620 }}>
-                Wonder-filled play for children,
-                <br />
-                beautifully organized for parents.
-              </h1>
-
-              <p style={{ margin: 0, color: '#6f628d', fontSize: 18, maxWidth: 620 }}>
-                Little Wanderers combines sensory play, imagination, and movement in a soft lavender space inspired by
-                your fox-and-planet brand world.
-              </p>
-
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
-                <Link
-                  href="/login"
-                  style={{
-                    background: 'linear-gradient(180deg,#c8b2ef,#a684de)',
-                    color: '#fff',
-                    borderRadius: 14,
-                    padding: '12px 18px',
-                    fontWeight: 800,
-                  }}
-                >
-                  Start Membership
-                </Link>
-                <Link
-                  href="/pricing"
-                  style={{
-                    background: '#fff',
-                    color: '#5b4a95',
-                    borderRadius: 14,
-                    padding: '12px 18px',
-                    fontWeight: 800,
-                    border: '1px solid #cfbbef',
-                  }}
-                >
-                  View Pricing
-                </Link>
-                <Link
-                  href="/faq"
-                  style={{
-                    background: '#fff',
-                    color: '#5b4a95',
-                    borderRadius: 14,
-                    padding: '12px 18px',
-                    fontWeight: 700,
-                    border: '1px solid #e0d0f6',
-                  }}
-                >
-                  Read FAQ
-                </Link>
-              </div>
-            </div>
-
-            <div style={{ padding: 8 }}>
-              <div
-                style={{
-                  borderRadius: 20,
-                  border: '1px solid #e4d7f9',
-                  background: '#fff',
-                  boxShadow: '0 20px 40px rgba(124, 95, 183, 0.16)',
-                  padding: 14,
-                }}
-              >
-                <Image
-                  src={LOGO_SRC}
-                  alt="Little Wanderers brand fox"
-                  width={620}
-                  height={620}
-                  priority
-                  style={{ width: '100%', height: 'auto', borderRadius: 16 }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12 }}>
-          {featureCards.map((card) => (
-            <article
-              key={card.title}
+          <div style={{ padding: 14 }}>
+            <span
               style={{
-                border: '1px solid #e8dbfb',
-                borderRadius: 16,
+                display: 'inline-block',
+                border: '1px solid #d8c5f4',
+                borderRadius: 999,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#6b56a3',
                 background: '#fff',
-                padding: 16,
-                minWidth: 0,
               }}
             >
-              <h3 style={{ margin: 0, fontSize: 20 }}>{card.title}</h3>
-              <p style={{ margin: '8px 0 0', color: '#6f648d' }}>{card.body}</p>
-            </article>
-          ))}
-        </div>
+              WEST HARTFORD · INDOOR PLAY STUDIO / CAFE
+            </span>
 
-        <div
-          style={{
-            border: '1px solid #e8dbfb',
-            borderRadius: 16,
-            background: 'linear-gradient(120deg,#ffffff,#f4ecff)',
-            padding: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 12,
-          }}
-        >
-          <div>
-            <h3 style={{ margin: 0 }}>Ready for your first visit?</h3>
-            <p style={{ margin: '6px 0 0', color: '#6f648d' }}>
-              Create your account and manage classes, memberships, and party booking requests in one place.
+            <h1 style={{ fontSize: 48, lineHeight: 1.08, margin: '14px 0 10px', color: '#4a397c' }}>
+              Tiny explorers,
+              <br />
+              big sensory adventures.
+            </h1>
+
+            <p style={{ margin: 0, color: '#6f628d', fontSize: 18, maxWidth: 640 }}>
+              Little Wanderers is a boutique indoor play studio where imagination, movement, and sensory play meet a
+              calm, premium family experience.
             </p>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
+              <Link
+                href="/login"
+                style={{
+                  background: 'linear-gradient(180deg,#c8b2ef,#9d7ada)',
+                  color: '#fff',
+                  borderRadius: 14,
+                  padding: '12px 18px',
+                  fontWeight: 800,
+                }}
+              >
+                Start Membership
+              </Link>
+              <Link
+                href="/pricing"
+                style={{
+                  background: '#fff',
+                  color: '#5b4a95',
+                  borderRadius: 14,
+                  padding: '12px 18px',
+                  fontWeight: 800,
+                  border: '1px solid #cfbbef',
+                }}
+              >
+                View Pricing
+              </Link>
+              <Link
+                href="/faq"
+                style={{
+                  background: '#fff',
+                  color: '#5b4a95',
+                  borderRadius: 14,
+                  padding: '12px 18px',
+                  fontWeight: 700,
+                  border: '1px solid #e0d0f6',
+                }}
+              >
+                Read FAQ
+              </Link>
+            </div>
           </div>
-          <Link href="/login" style={{ fontWeight: 800 }}>
-            Go to Login →
-          </Link>
+
+          <div style={{ padding: 10 }}>
+            <div
+              style={{
+                borderRadius: 22,
+                border: '1px solid #e2d3fb',
+                background: 'linear-gradient(180deg,#fff,#fbf8ff)',
+                boxShadow: '0 20px 36px rgba(122, 88, 180, 0.18)',
+                padding: 14,
+              }}
+            >
+              <Image
+                src={LOGO_SRC}
+                alt="Little Wanderers brand fox"
+                width={620}
+                height={620}
+                priority
+                style={{ width: '100%', height: 'auto', borderRadius: 16 }}
+              />
+            </div>
+          </div>
         </div>
+      </section>
+
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12 }}>
+        {highlights.map((item) => (
+          <article
+            key={item.title}
+            style={{
+              border: '1px solid #e8dbfb',
+              borderRadius: 18,
+              background: '#fff',
+              padding: 16,
+              boxShadow: '0 8px 20px rgba(129, 98, 186, 0.07)',
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: 19, color: '#4d3c80' }}>{item.title}</h3>
+            <p style={{ margin: '8px 0 0', color: '#6f648d' }}>{item.body}</p>
+          </article>
+        ))}
+      </section>
+
+      <section
+        style={{
+          border: '1px solid #e8dbfb',
+          borderRadius: 18,
+          background: 'linear-gradient(110deg,#ffffff,#f3e8ff)',
+          padding: 18,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+        }}
+      >
+        <div>
+          <h3 style={{ margin: 0, color: '#4f3e83' }}>Ready for your first indoor adventure?</h3>
+          <p style={{ margin: '6px 0 0', color: '#6f648d' }}>
+            Create your account and manage classes, memberships, and party booking requests in one beautiful place.
+          </p>
+        </div>
+        <Link href="/login" style={{ fontWeight: 800, color: '#4f3e83' }}>
+          Go to Login →
+        </Link>
       </section>
     </main>
   );

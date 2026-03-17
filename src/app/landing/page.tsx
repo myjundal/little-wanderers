@@ -268,8 +268,7 @@ export default function AppHome() {
     <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
     <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
     <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>
-    <Link href="/landing/myclasses" style={{ display: 'block' }}>My Classes</Link>
-    <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule</Link>
+    <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
     <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
     {/* 내부 운영/개발용 문서 미리보기 */}
     <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
