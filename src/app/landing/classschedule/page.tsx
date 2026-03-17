@@ -218,7 +218,6 @@ export default function ClassSchedulePage() {
 
       <AvailabilityCalendar
         title="Class calendar"
-        subtitle="Purple is available, gray is full, and blue shows your booked class slots."
         slots={classSlots}
       />
 

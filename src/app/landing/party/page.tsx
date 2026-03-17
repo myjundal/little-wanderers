@@ -27,6 +27,7 @@ export default function PartyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
+  const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
 
   const defaultStart = new Date();
   defaultStart.setDate(defaultStart.getDate() + 7);
@@ -96,6 +97,33 @@ export default function PartyPage() {
   };
 
 
+  const requestCancel = async (bookingId: string) => {
+    setRequestingCancelId(bookingId);
+    setMessage(null);
+
+    const res = await fetch('/api/party-bookings/request-cancel', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ booking_id: bookingId }),
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Failed to request cancellation.');
+      setRequestingCancelId(null);
+      return;
+    }
+
+    if (json.email_sent === false) {
+      setMessage('Cancellation requested. Booking updated, but email sending is not configured yet.');
+    } else {
+      setMessage('Cancellation requested. We sent a cancellation request email to the admin.');
+    }
+
+    setRequestingCancelId(null);
+    await load();
+  };
+
   const slots: CalendarSlot[] = [
     ...bookedSlots.map((slot) => ({
       id: `booked-${slot.id}`,
@@ -122,7 +150,6 @@ export default function PartyPage() {
 
       <AvailabilityCalendar
         title="Party booking calendar"
-        subtitle="Pink slots are already booked, blue slots are your requests."
         slots={slots}
       />
 
@@ -174,26 +201,39 @@ export default function PartyPage() {
       </section>
 
       <section style={{ marginTop: 22 }}>
-        <h3>My request history</h3>
+        <h3>My current booking/history</h3>
         {loading ? (
           <p>Loading…</p>
         ) : items.length === 0 ? (
           <p>You do not have any party booking requests yet.</p>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {items.map((item) => (
-              <div key={item.id} style={{ border: '1px solid #e2e2e2', borderRadius: 10, padding: 12 }}>
-                <p style={{ margin: 0, fontWeight: 600 }}>
-                  {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
-                </p>
-                <p style={{ margin: '6px 0' }}>Expected guests: {item.headcount_expected ?? '-'}</p>
-                <p style={{ margin: '6px 0' }}>
-                  Quoted price:{' '}
-                  {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
-                </p>
-                <p style={{ margin: '6px 0', color: '#555' }}>Notes: {item.notes ?? '-'}</p>
-              </div>
-            ))}
+            {items.map((item) => {
+              const isUpcoming = new Date(item.start_time).getTime() > Date.now();
+              const cancellationRequested = (item.notes ?? '').includes('[Cancellation requested');
+
+              return (
+                <div key={item.id} style={{ border: '1px solid #e2e2e2', borderRadius: 10, padding: 12 }}>
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
+                  </p>
+                  <p style={{ margin: '6px 0' }}>Expected guests: {item.headcount_expected ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>
+                    Quoted price:{' '}
+                    {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
+                  </p>
+                  <p style={{ margin: '6px 0', color: '#555' }}>Notes: {item.notes ?? '-'}</p>
+                  <p style={{ margin: '6px 0', color: cancellationRequested ? '#8a3f6b' : '#6a6082', fontWeight: 600 }}>
+                    Status: {cancellationRequested ? 'Cancellation requested' : isUpcoming ? 'Booked (upcoming)' : 'Completed'}
+                  </p>
+                  {isUpcoming && !cancellationRequested && (
+                    <button onClick={() => requestCancel(item.id)} disabled={requestingCancelId === item.id}>
+                      {requestingCancelId === item.id ? 'Requesting...' : 'Request to cancel'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
