@@ -30,7 +30,10 @@ async function sendCancellationEmail(input: {
   }
 
   const from = process.env.RESEND_FROM_EMAIL ?? 'Little Wanderers <onboarding@resend.dev>';
-  const to = 'myjundal11@gmail.com';
+  const to = process.env.OWNER_EMAIL;
+  if (!to) {
+    return { ok: false, reason: 'OWNER_EMAIL is not configured' };
+  }
 
   const html = `
     <h2>Party Booking Cancellation Requested</h2>
