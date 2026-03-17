@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+
+type ClassItem = {
+  id: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  seats_left: number | null;
+};
 
 type RegistrationItem = {
   id: string;
@@ -23,6 +32,7 @@ export default function MyClassesPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [upcomingClasses, setUpcomingClasses] = useState<ClassItem[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,6 +48,13 @@ export default function MyClassesPage() {
     }
 
     setItems((json.items ?? []) as RegistrationItem[]);
+
+    const classRes = await fetch('/api/classes', { cache: 'no-store' });
+    const classJson = await classRes.json();
+    if (classRes.ok && classJson.ok) {
+      setUpcomingClasses((classJson.items ?? []) as ClassItem[]);
+    }
+
     setLoading(false);
   }, []);
 
@@ -67,12 +84,38 @@ export default function MyClassesPage() {
     await load();
   };
 
+
+  const slots: CalendarSlot[] = [
+    ...upcomingClasses.map<CalendarSlot>((c) => ({
+      id: `available-${c.id}`,
+      start: c.start_time,
+      end: c.end_time,
+      label: c.title,
+      status: c.seats_left != null && c.seats_left <= 0 ? 'full' : 'available',
+    })),
+    ...items
+      .filter((item) => item.class?.start_time)
+      .map<CalendarSlot>((item) => ({
+        id: `mine-${item.id}`,
+        start: item.class!.start_time,
+        end: item.class!.end_time,
+        label: item.class?.title ?? 'My class',
+        status: item.status === 'cancelled' ? 'booked' : 'mine',
+      })),
+  ];
+
   return (
     <main style={{ padding: 24, maxWidth: 860, margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 600 }}>My Classes</h1>
       <p style={{ color: '#555', marginTop: 8 }}>See and manage your class bookings.</p>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
+
+      <AvailabilityCalendar
+        title="Class booking calendar"
+        subtitle="See open class dates and your booked class slots together."
+        slots={slots}
+      />
 
       <section style={{ marginTop: 16 }}>
         {loading ? (

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
 type PartyBooking = {
   id: string;
@@ -25,6 +26,7 @@ export default function PartyPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
 
   const defaultStart = new Date();
   defaultStart.setDate(defaultStart.getDate() + 7);
@@ -52,6 +54,13 @@ export default function PartyPage() {
     }
 
     setItems((json.items ?? []) as PartyBooking[]);
+
+    const calendarRes = await fetch('/api/party-bookings/calendar', { cache: 'no-store' });
+    const calendarJson = await calendarRes.json();
+    if (calendarRes.ok && calendarJson.ok) {
+      setBookedSlots(calendarJson.items ?? []);
+    }
+
     setLoading(false);
   }, []);
 
@@ -85,6 +94,24 @@ export default function PartyPage() {
     setSubmitting(false);
     await load();
   };
+
+
+  const slots: CalendarSlot[] = [
+    ...bookedSlots.map((slot) => ({
+      id: `booked-${slot.id}`,
+      start: slot.start_time,
+      end: slot.end_time,
+      label: 'Reserved slot',
+      status: 'booked' as const,
+    })),
+    ...items.map((item) => ({
+      id: `mine-${item.id}`,
+      start: item.start_time,
+      end: item.end_time,
+      label: 'My request',
+      status: 'mine' as const,
+    })),
+  ];
 
   return (
     <main style={{ padding: 24, maxWidth: 860, margin: '0 auto' }}>
@@ -139,6 +166,12 @@ export default function PartyPage() {
       </section>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
+
+      <AvailabilityCalendar
+        title="Party booking calendar"
+        subtitle="Pink slots are already booked, blue slots are your requests."
+        slots={slots}
+      />
 
       <section style={{ marginTop: 22 }}>
         <h3>My request history</h3>

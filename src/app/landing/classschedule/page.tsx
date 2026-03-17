@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
 type Person = {
   id: string;
@@ -91,6 +92,17 @@ export default function ClassSchedulePage() {
     [people]
   );
 
+  const classSlots = useMemo<CalendarSlot[]>(() =>
+    classes.map((c) => ({
+      id: c.id,
+      start: c.start_time,
+      end: c.end_time,
+      label: c.title,
+      status: c.seats_left != null && c.seats_left <= 0 ? 'full' : 'available',
+    })),
+  [classes]);
+
+
   const bookClass = async (classId: string) => {
     if (!selectedPersonId) {
       alert('Please select a person before booking.');
@@ -119,9 +131,9 @@ export default function ClassSchedulePage() {
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 860, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 600 }}>Class Schedule</h1>
-      <p style={{ color: '#555', marginTop: 8 }}>Browse upcoming classes and book instantly.</p>
+    <main style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
+      <h1 style={{ fontSize: 28, fontWeight: 700, color: '#4f3f82' }}>Class Adventure Schedule</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Browse upcoming classes and book instantly.</p>
 
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #ddd', borderRadius: 10 }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
@@ -139,7 +151,13 @@ export default function ClassSchedulePage() {
         </select>
       </section>
 
-      {message && <p style={{ marginTop: 12, color: '#333' }}>{message}</p>}
+      {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
+
+      <AvailabilityCalendar
+        title="Class calendar"
+        subtitle="Purple dates are available classes. Gray means full class slots."
+        slots={classSlots}
+      />
 
       <section style={{ marginTop: 18 }}>
         {loading ? (
