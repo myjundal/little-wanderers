@@ -194,11 +194,11 @@ export default function ClassSchedulePage() {
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, color: '#4f3f82' }}>View Class Schedule / My Classes</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Browse, book, and manage your class bookings in one place.</p>
+    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
+      <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / My Bookings</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Plan your little one’s week in our lavender universe — book classes and manage all bookings here.</p>
 
-      <section style={{ marginTop: 16, padding: 12, border: '1px solid #ddd', borderRadius: 10 }}>
+      <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
         <select
           value={selectedPersonId}
@@ -222,7 +222,7 @@ export default function ClassSchedulePage() {
       />
 
       <section style={{ marginTop: 18 }}>
-        <h2 style={{ fontSize: 21, margin: '0 0 10px' }}>Upcoming classes</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>✨ Upcoming classes</h2>
         {loading ? (
           <p>Loading…</p>
         ) : classes.length === 0 ? (
@@ -232,7 +232,7 @@ export default function ClassSchedulePage() {
             {classes.map((c) => {
               const isFull = c.seats_left != null && c.seats_left <= 0;
               return (
-                <div key={c.id} style={{ border: '1px solid #e2e2e2', borderRadius: 10, padding: 14 }}>
+                <div key={c.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <h3 style={{ margin: 0 }}>{c.title}</h3>
                   <p style={{ margin: '8px 0', color: '#666' }}>
                     {new Date(c.start_time).toLocaleString()} ~ {new Date(c.end_time).toLocaleTimeString()}
@@ -257,7 +257,7 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 21, margin: '0 0 10px' }}>My class bookings</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class bookings</h2>
         {loading ? (
           <p>Loading…</p>
         ) : myItems.length === 0 ? (
@@ -267,7 +267,7 @@ export default function ClassSchedulePage() {
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             {myItems.map((item) => (
-              <div key={item.id} style={{ border: '1px solid #e2e2e2', borderRadius: 10, padding: 14 }}>
+              <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status: <b style={{ textTransform: 'uppercase' }}>{item.status}</b>
