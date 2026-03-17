@@ -67,33 +67,101 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
   }, [slots, cursor]);
 
   return (
-    <section style={{ marginTop: 18, border: '1px solid #e7daf9', borderRadius: 16, padding: 14, background: '#fff' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+    <section
+      style={{
+        marginTop: 18,
+        border: '1px solid #dec7fb',
+        borderRadius: 28,
+        padding: 16,
+        background: 'linear-gradient(180deg,#ffffff,#f8f0ff)',
+        boxShadow: '0 16px 30px rgba(125, 93, 183, 0.14)',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
         <div>
-          <h3 style={{ margin: 0 }}>{title}</h3>
+          <h3 style={{ margin: 0, color: '#4f3f82', fontSize: 22 }}>🪐 {title}</h3>
           {subtitle && <p style={{ margin: '4px 0 0', color: '#6f628d', fontSize: 13 }}>{subtitle}</p>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>←</button>
-          <b>{cursor.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</b>
-          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>→</button>
+          <button
+            aria-label="Previous month"
+            style={{
+              borderRadius: 999,
+              border: '1px solid #d4b9fb',
+              background: '#fff',
+              width: 36,
+              height: 36,
+              color: '#5f4698',
+              fontWeight: 900,
+              fontSize: 18,
+              boxShadow: '0 4px 10px rgba(129, 95, 186, 0.16)',
+            }}
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+          >
+            ‹
+          </button>
+          <b style={{ color: '#4f3f82' }}>{cursor.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</b>
+          <button
+            aria-label="Next month"
+            style={{
+              borderRadius: 999,
+              border: '1px solid #d4b9fb',
+              background: '#fff',
+              width: 36,
+              height: 36,
+              color: '#5f4698',
+              fontWeight: 900,
+              fontSize: 18,
+              boxShadow: '0 4px 10px rgba(129, 95, 186, 0.16)',
+            }}
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+          >
+            ›
+          </button>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6, marginTop: 12 }}>
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: '#6f628d' }}>{d}</div>
+          <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: '#6f628d' }}>
+            {d}
+          </div>
         ))}
         {calendarDays.map((d) => {
           const key = ymd(d);
           const list = dayMap.get(key) ?? [];
           const inMonth = d.getMonth() === cursor.getMonth();
           return (
-            <div key={key} style={{ minHeight: 86, border: '1px solid #efe6fc', borderRadius: 10, padding: 6, background: inMonth ? '#fff' : '#faf7ff', opacity: inMonth ? 1 : 0.7 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#5d4f88' }}>{d.getDate()}</div>
+            <div
+              key={key}
+              style={{
+                minHeight: 88,
+                border: '1px solid #efe4ff',
+                borderRadius: 12,
+                padding: 6,
+                background: inMonth ? '#fff' : '#faf7ff',
+                opacity: inMonth ? 1 : 0.72,
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#5d4f88' }}>{d.getDate()}</div>
               <div style={{ display: 'grid', gap: 4, marginTop: 5 }}>
                 {list.slice(0, 2).map((slot) => (
-                  <div key={slot.id} title={`${slot.label} (${statusLabel[slot.status]})`} style={{ fontSize: 10, lineHeight: 1.2, borderRadius: 999, padding: '2px 6px', background: `${statusColor[slot.status]}22`, color: statusColor[slot.status], border: `1px solid ${statusColor[slot.status]}66`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div
+                    key={slot.id}
+                    title={`${slot.label} (${statusLabel[slot.status]})`}
+                    style={{
+                      fontSize: 10,
+                      lineHeight: 1.2,
+                      borderRadius: 999,
+                      padding: '2px 6px',
+                      background: `${statusColor[slot.status]}22`,
+                      color: statusColor[slot.status],
+                      border: `1px solid ${statusColor[slot.status]}66`,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {slot.label}
                   </div>
                 ))}
@@ -104,10 +172,19 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
         {Object.entries(statusLabel).map(([k, v]) => (
-          <span key={k} style={{ fontSize: 12, color: '#55417f' }}>
-            <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 99, marginRight: 6, background: statusColor[k as CalendarSlot['status']] }} />
+          <span key={k} style={{ fontSize: 12, color: '#55417f', fontWeight: 700 }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 10,
+                height: 10,
+                borderRadius: 99,
+                marginRight: 6,
+                background: statusColor[k as CalendarSlot['status']],
+              }}
+            />
             {v}
           </span>
         ))}
