@@ -194,9 +194,9 @@ export default function ClassSchedulePage() {
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#faf5ff)', border: '1px solid #eadbfb', borderRadius: 24 }}>
-      <h1 style={{ fontSize: 30, fontWeight: 800, color: '#4f3f82' }}>View Class Schedule / My Classes</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Browse, book, and manage your class bookings in one place.</p>
+    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
+      <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / My Bookings</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Plan your little one’s week in our lavender universe — book classes and manage all bookings here.</p>
 
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
@@ -222,7 +222,7 @@ export default function ClassSchedulePage() {
       />
 
       <section style={{ marginTop: 18 }}>
-        <h2 style={{ fontSize: 21, margin: '0 0 10px' }}>Upcoming classes</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>✨ Upcoming classes</h2>
         {loading ? (
           <p>Loading…</p>
         ) : classes.length === 0 ? (
@@ -257,7 +257,7 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 21, margin: '0 0 10px' }}>My class bookings</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class bookings</h2>
         {loading ? (
           <p>Loading…</p>
         ) : myItems.length === 0 ? (

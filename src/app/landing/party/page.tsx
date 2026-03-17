@@ -142,9 +142,9 @@ export default function PartyPage() {
   ];
 
   return (
-    <main style={{ padding: 24, maxWidth: 860, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#faf5ff)', border: '1px solid #eadbfb', borderRadius: 24 }}>
+    <main style={{ padding: 24, maxWidth: 860, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>🎉 My Party Bookings</h1>
-      <p style={{ color: '#555', marginTop: 8 }}>Pick your preferred time and send a party booking request.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Pick your dreamy party time, request booking, and manage cancellations from one cute dashboard.</p>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
 
@@ -154,7 +154,7 @@ export default function PartyPage() {
       />
 
       <section style={{ marginTop: 16, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff', padding: 14 }}>
-        <h3 style={{ marginTop: 0 }}>New party booking request</h3>
+        <h3 style={{ marginTop: 0, color: '#4f3f82' }}>🪐 New party booking request</h3>
 
         <div style={{ display: 'grid', gap: 10 }}>
           <label>
@@ -201,7 +201,7 @@ export default function PartyPage() {
       </section>
 
       <section style={{ marginTop: 22 }}>
-        <h3>My current booking/history</h3>
+        <h3 style={{ color: '#4f3f82' }}>📒 My current booking/history</h3>
         {loading ? (
           <p>Loading…</p>
         ) : items.length === 0 ? (
