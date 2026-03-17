@@ -10,41 +10,41 @@ export const metadata = {
 
 const LOGO_SRC = '/brand-mark.svg';
 
-const featureBubbles = [
+const highlights = [
   {
-    emoji: '🌙',
-    title: 'Moonlight Sensory Corners',
-    body: 'Glow blocks, tactile walls, and soft play islands that invite calm curiosity.',
+    label: '01',
+    title: 'Sensory Play Garden',
+    body: 'Soft textures, gentle lights, and toddler-safe play structures designed for calm exploration.',
   },
   {
-    emoji: '🛸',
-    title: 'Adventure Orbit Zones',
-    body: 'Mini town play scenes and story prompts that help toddlers explore with confidence.',
+    label: '02',
+    title: 'Imagination Studio',
+    body: 'Role play scenes and rotating activity stations that turn each visit into a tiny adventure.',
   },
   {
-    emoji: '☕',
-    title: 'Parent Cloud Lounge',
-    body: 'A comfy coffee nook with clear sightlines so caregivers can relax while little ones roam.',
+    label: '03',
+    title: 'Cozy Parent Lounge',
+    body: 'A warm café corner with comfortable seating and full visibility into every play zone.',
   },
   {
-    emoji: '🎂',
-    title: 'Starlight Party Days',
-    body: 'Birthday-ready packages, curated decor, and easy booking to make celebrations magical.',
+    label: '04',
+    title: 'Boutique Party Room',
+    body: 'Curated birthday setups with guided flow, custom themes, and easy online booking.',
   },
 ];
 
-const showcaseItems = [
+const offerings = [
   {
-    title: 'Tiny Explorer Class Passes',
-    body: 'Drop into music, art, and movement classes designed around early-childhood rhythms.',
+    title: 'Daily Open Play',
+    body: 'Flexible admission slots for babies and toddlers who thrive with free, sensory-led movement.',
   },
   {
-    title: 'Lavender Family Memberships',
-    body: 'Flexible plans for frequent visits, priority booking, and smooth check-ins.',
+    title: 'Creative Classes',
+    body: 'Music, art, and movement sessions crafted for early childhood attention spans and routines.',
   },
   {
-    title: 'Weekend Galaxy Events',
-    body: 'Story nights, sensory themes, and seasonal mini festivals to keep visits fresh.',
+    title: 'Membership Plans',
+    body: 'Consistent weekly fun, faster check-in, and preferred access for your family schedule.',
   },
 ];
 
@@ -52,81 +52,94 @@ export default function HomePage() {
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
-        <div className={styles.stars}>
-          <span className={styles.starA}>⭐</span>
-          <span className={styles.starB}>✨</span>
-          <span className={styles.starC}>🪐</span>
-          <div className={styles.cloud} />
-        </div>
+        <div className={styles.glowTop} />
+        <div className={styles.glowBottom} />
 
         <div className={styles.heroGrid}>
-          <div>
-            <span className={styles.badge}>💜 WEST HARTFORD · SPACE LAVENDER KIDS CAFE</span>
-            <h1 className={styles.title}>
-              Tiny Steps,
-              <br />
-              Cosmic Wonder
-            </h1>
+          <div className={styles.heroContent}>
+            <span className={styles.badge}>West Hartford · Lavender Space Kids Café</span>
+            <h1 className={styles.title}>A softer, sweeter space for little wanderers.</h1>
             <p className={styles.subtitle}>
-              A playful indoor kids café where babies and toddlers can safely wander, imagine, and learn through
-              sensory-rich activities in a dreamy purple universe.
+              Little Wanderers is a dreamy indoor kids café where tiny explorers can play, create, and grow in a
+              cozy lavender universe made for early childhood.
             </p>
 
             <div className={styles.ctaRow}>
               <Link href="/login" className={styles.primaryBtn}>
-                Start Membership
+                Join Membership
               </Link>
               <Link href="/pricing" className={styles.secondaryBtn}>
-                View Pricing
+                See Pricing
               </Link>
-              <Link href="/faq" className={styles.secondaryBtn}>
-                Read FAQ
+              <Link href="/faq" className={styles.ghostBtn}>
+                Visitor Guide
               </Link>
+            </div>
+
+            <div className={styles.heroStats}>
+              <article>
+                <strong>Toddler-first</strong>
+                <p>Designed for babies to age 5</p>
+              </article>
+              <article>
+                <strong>Comfort-focused</strong>
+                <p>Calm acoustics and padded zones</p>
+              </article>
+              <article>
+                <strong>Family-ready</strong>
+                <p>Classes, parties, and memberships</p>
+              </article>
             </div>
           </div>
 
-          <div className={styles.heroCard}>
-            <Image
-              src={LOGO_SRC}
-              alt="Little Wanderers brand fox"
-              width={620}
-              height={620}
-              priority
-              className={styles.heroImage}
-            />
-            <div className={styles.orbitTag}>✨ Soft Play · Creative Play · Calm Play</div>
-          </div>
+          <aside className={styles.visualCard}>
+            <div className={styles.windowFrame}>
+              <Image
+                src={LOGO_SRC}
+                alt="Little Wanderers brand fox"
+                width={620}
+                height={620}
+                priority
+                className={styles.heroImage}
+              />
+            </div>
+            <p className={styles.visualCaption}>Soft Play · Sensory Play · Story Play</p>
+          </aside>
         </div>
       </section>
 
-      <section className={styles.featureGrid}>
-        {featureBubbles.map((item) => (
-          <article key={item.title} className={styles.featureCard}>
-            <div className={styles.featureIcon}>{item.emoji}</div>
-            <h3 className={styles.featureTitle}>{item.title}</h3>
-            <p className={styles.featureBody}>{item.body}</p>
+      <section className={styles.highlights}>
+        {highlights.map((item) => (
+          <article key={item.title} className={styles.highlightCard}>
+            <span className={styles.highlightLabel}>{item.label}</span>
+            <h3>{item.title}</h3>
+            <p>{item.body}</p>
           </article>
         ))}
       </section>
 
-      <section className={styles.showcase}>
-        {showcaseItems.map((item) => (
-          <article key={item.title} className={styles.showcaseCard}>
-            <h3 className={styles.showcaseTitle}>{item.title}</h3>
-            <p className={styles.showcaseCopy}>{item.body}</p>
-          </article>
-        ))}
+      <section className={styles.offerings}>
+        <header>
+          <p className={styles.sectionEyebrow}>What families love most</p>
+          <h2>Built like a boutique kids café, not just a playroom.</h2>
+        </header>
+        <div className={styles.offeringsGrid}>
+          {offerings.map((item) => (
+            <article key={item.title} className={styles.offeringCard}>
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className={styles.ctaBanner}>
         <div>
-          <h3 className={styles.ctaTitle}>🚀 Ready for your family&apos;s next lavender-space adventure?</h3>
-          <p className={styles.ctaText}>
-            Create an account to manage memberships, classes, and party bookings in one easy dashboard.
-          </p>
+          <h3>Plan your next visit in one place.</h3>
+          <p>Create an account to manage open play, classes, memberships, and party bookings.</p>
         </div>
         <Link href="/login" className={styles.secondaryBtn}>
-          Go to Login →
+          Go to Login
         </Link>
       </section>
     </main>
