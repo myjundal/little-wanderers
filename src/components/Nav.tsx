@@ -4,13 +4,14 @@ import Link from 'next/link';
 import styles from './Nav.module.css';
 
 const LOGO_SRC = '/brand-mark.svg';
+const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 const navItems = [
-  { href: '/#space', label: 'Space' },
+  { href: '/space', label: 'Space' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/#classes', label: 'Classes' },
+  { href: '/classes', label: 'Classes' },
   { href: '/faq', label: 'FAQ' },
-  { href: '/#visit', label: 'Visit' },
+  { href: '/visit', label: 'Visit' },
   { href: '/login', label: 'Login' },
 ] as const;
 
@@ -24,7 +25,7 @@ export default function Nav() {
           </span>
           <span className={styles.brandCopy}>
             <strong>Little Wanderers</strong>
-            <span>Sensory Play Café</span>
+            <span>Sensory Studio and Cafe</span>
           </span>
         </Link>
 
@@ -36,7 +37,7 @@ export default function Nav() {
           ))}
         </div>
 
-        <Link href="/#waitlist" className={styles.cta}>
+        <Link href={WAITLIST_URL} className={styles.cta} target="_blank" rel="noreferrer">
           Join Waitlist
         </Link>
       </div>

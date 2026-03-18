@@ -78,9 +78,9 @@
 }
 
 .heroCopy h1 {
-  max-width: 660px;
-  font-size: clamp(3rem, 5.4vw, 5rem);
-  line-height: 0.98;
+  max-width: 620px;
+  font-size: clamp(2.55rem, 4.4vw, 4.15rem);
+  line-height: 1.02;
 }
 
 .subtitle {
@@ -154,35 +154,25 @@
   gap: 10px;
 }
 
-.chips span {
+.chips span,
+.tags span {
   color: #7e7695;
   font-size: 0.96rem;
   letter-spacing: 0.02em;
 }
 
-.chips span + span::before {
+.chips span + span::before,
+.tags span + span::before {
   content: '·';
   margin-right: 10px;
   color: rgba(123, 106, 168, 0.55);
 }
 
-.tags span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.74);
-  color: #4b4360;
-  font-size: 0.95rem;
-  box-shadow: 0 10px 24px rgba(123, 106, 168, 0.07);
-}
-
-
 .heroVisual {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   min-height: 530px;
   padding: 24px;
   border-radius: 36px;
@@ -233,15 +223,14 @@
 }
 
 .visualCard p {
-  max-width: 32ch;
+  max-width: 31ch;
   text-wrap: balance;
 }
 
 .visualBadge {
-  position: absolute;
-  left: 26px;
-  right: 26px;
-  bottom: 24px;
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
   padding: 20px 22px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.46);
@@ -456,11 +445,6 @@
     min-height: auto;
   }
 
-  .visualBadge {
-    position: static;
-    margin-top: 18px;
-  }
-
   .waitlistActions {
     justify-content: flex-start;
   }
@@ -490,7 +474,7 @@
   }
 
   .heroCopy h1 {
-    font-size: clamp(2.45rem, 10vw, 3.5rem);
+    font-size: clamp(2.2rem, 9vw, 3.15rem);
   }
 
   .subtitle,

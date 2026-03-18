@@ -9,6 +9,7 @@ export const metadata = {
 };
 
 const LOGO_SRC = '/brand-mark.svg';
+const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 const spaceCards = [
   {
@@ -63,7 +64,7 @@ export default function HomePage() {
             <p className={styles.subline}>Take a deep breath and a sip of your drink.</p>
 
             <div className={styles.ctaRow}>
-              <Link href="#waitlist" className={styles.primaryBtn}>
+              <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
                 Join Waitlist
               </Link>
               <Link href="/faq" className={styles.secondaryBtn}>
@@ -87,11 +88,16 @@ export default function HomePage() {
             </div>
 
             <div className={styles.visualCard}>
-              <Image src={LOGO_SRC} alt="Little Wanderers brand mark" width={110} height={110} className={styles.heroLogo} priority />
+              <Image
+                src={LOGO_SRC}
+                alt="Little Wanderers brand mark"
+                width={110}
+                height={110}
+                className={styles.heroLogo}
+                priority
+              />
               <h2>Soft play, beautifully slowed down.</h2>
-              <p>
-                Open play, classes, and a lounge-like atmosphere for babies, toddlers, and their grownups.
-              </p>
+              <p>Open play, classes, and a lounge-like atmosphere for babies, toddlers, and their grownups.</p>
             </div>
 
             <div className={styles.visualBadge}>
@@ -156,9 +162,7 @@ export default function HomePage() {
         <div className={styles.visitCopy}>
           <p className={styles.sectionEyebrow}>Visit</p>
           <h2>I want to sit here with my coffee while my child plays.</h2>
-          <p>
-            Calm within seconds, premium without feeling cold, and genuinely welcoming for modern family routines.
-          </p>
+          <p>Calm within seconds, premium without feeling cold, and genuinely welcoming for modern family routines.</p>
         </div>
 
         <div className={styles.visitList}>
@@ -175,13 +179,11 @@ export default function HomePage() {
         <div>
           <p className={styles.sectionEyebrow}>Join Waitlist</p>
           <h2>Be first to hear about openings, class releases, and soft-launch updates.</h2>
-          <p>
-            We’ll share gentle updates when new openings, class releases, and soft-launch moments are ready.
-          </p>
+          <p>We’ll share gentle updates when new openings, class releases, and soft-launch moments are ready.</p>
         </div>
 
         <div className={styles.waitlistActions}>
-          <Link href="/login" className={styles.primaryBtn}>
+          <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
             Join Waitlist
           </Link>
           <Link href="/pricing" className={styles.ghostBtn}>
