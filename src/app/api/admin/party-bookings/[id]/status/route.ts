@@ -9,7 +9,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   try {
     const body = await req.json();
     const nextStatus = typeof body?.status === 'string' ? body.status : '';
-    const notes = typeof body?.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
 
     if (!ALLOWED_STATUSES.has(nextStatus)) {
       return Response.json({ ok: false, error: 'invalid status' }, { status: 400 });
@@ -46,18 +45,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     if (updateErr) {
       return Response.json({ ok: false, error: updateErr.message }, { status: 500 });
-    }
-
-    const { error: eventErr } = await context.admin.from('party_booking_events').insert({
-      party_booking_id: params.id,
-      from_status: currentStatus,
-      to_status: nextStatus,
-      notes,
-      changed_by: context.user.id,
-    });
-
-    if (eventErr) {
-      return Response.json({ ok: false, error: eventErr.message }, { status: 500 });
     }
 
     return Response.json({ ok: true });

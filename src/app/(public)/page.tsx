@@ -79,12 +79,12 @@ export default function HomePage() {
               <span>♡ breathe</span>
             </div>
 
-            <div style={{ marginTop: 24 }}>
-              <CrowdLevelCard eyebrow="Today’s studio flow" compact />
-            </div>
           </div>
 
           <aside className={styles.heroVisual}>
+            <div style={{ marginBottom: 16 }}>
+              <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact />
+            </div>
             <div className={styles.heroVisualTop}>
               <span className={styles.visualEyebrow}>Today at Little Wanderers</span>
               <span className={styles.starA}>✦</span>

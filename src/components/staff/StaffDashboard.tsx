@@ -39,14 +39,6 @@ type ClassItem = {
   seats_left: number | null;
 };
 
-type PartyHistoryItem = {
-  id: string;
-  from_status: string | null;
-  to_status: string;
-  notes: string | null;
-  created_at: string;
-};
-
 type PartyBookingItem = {
   id: string;
   household_id: string;
@@ -59,7 +51,6 @@ type PartyBookingItem = {
   notes: string | null;
   status: 'pending' | 'confirmed' | 'cancelled';
   status_updated_at: string | null;
-  history: PartyHistoryItem[];
 };
 
 const sectionStyle: React.CSSProperties = {
@@ -323,16 +314,16 @@ export default function StaffDashboard() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 20 }}>
           {[
-            { label: '+1', action: () => mutateOccupancy('increment', 1) },
+            { label: '+2', action: () => mutateOccupancy('increment', 2) },
+            { label: '+3', action: () => mutateOccupancy('increment', 3) },
+            { label: '-1', action: () => mutateOccupancy('decrement', 1) },
             { label: '-2', action: () => mutateOccupancy('decrement', 2) },
             { label: '-3', action: () => mutateOccupancy('decrement', 3) },
-            { label: '-4', action: () => mutateOccupancy('decrement', 4) },
-            { label: 'Reset Today', action: () => mutateOccupancy('reset', 1, 'Daily reset from staff dashboard') },
           ].map((item) => (
             <button
               key={item.label}
               onClick={item.action}
-              style={{ ...buttonStyle, background: item.label === 'Reset Today' ? '#5f3da4' : '#f3ebff', color: item.label === 'Reset Today' ? '#fff' : '#5f3da4', minHeight: 62 }}
+              style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4', minHeight: 62 }}
             >
               {item.label}
             </button>
@@ -343,11 +334,12 @@ export default function StaffDashboard() {
           <input value={customAdjustment} onChange={(e) => setCustomAdjustment(e.target.value)} inputMode="numeric" style={{ ...inputStyle, maxWidth: 120 }} />
           <button style={{ ...buttonStyle, background: '#e8dcff', color: '#5f3da4' }} onClick={() => mutateOccupancy('increment', Math.max(Number(customAdjustment) || 1, 1), 'Manual increment from dashboard')}>Custom +</button>
           <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => mutateOccupancy('decrement', Math.max(Number(customAdjustment) || 1, 1), 'Manual decrement from dashboard')}>Custom -</button>
+          <button style={{ ...buttonStyle, background: '#5f3da4', color: '#fff' }} onClick={() => mutateOccupancy('reset', 1, 'Daily reset from staff dashboard')}>Reset Today</button>
         </div>
 
         <div style={{ marginTop: 18, padding: '12px 14px', borderRadius: 14, border: '1px solid #eadfff', background: '#fff' }}>
           <strong style={{ color: '#4f3f82' }}>Live update note</strong>
-          <div style={{ color: '#6d6480', marginTop: 6 }}>These buttons call the Supabase occupancy RPCs directly, so the homepage and login landing crowd level update from the same source of truth.</div>
+          <div style={{ color: '#6d6480', marginTop: 6 }}>These buttons call the Supabase occupancy RPCs directly, so the homepage, public login landing, and post-login landing page all update from the same source of truth.</div>
         </div>
       </section>
 
@@ -463,22 +455,6 @@ export default function StaffDashboard() {
                   {selectedBooking.status !== 'cancelled' && (
                     <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
                   )}
-                </div>
-                <div style={{ marginTop: 18 }}>
-                  <h4 style={{ color: '#4f3f82', marginBottom: 10 }}>Status history</h4>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    {selectedBooking.history.length === 0 ? (
-                      <p style={{ margin: 0, color: '#6d6480' }}>No staff changes recorded yet.</p>
-                    ) : (
-                      selectedBooking.history.map((item) => (
-                        <div key={item.id} style={{ borderRadius: 14, border: '1px solid #f0e7ff', background: '#faf7ff', padding: '10px 12px' }}>
-                          <div style={{ color: '#4f3f82', fontWeight: 700 }}>{item.from_status ?? 'pending'} → {item.to_status}</div>
-                          <div style={{ color: '#6d6480', marginTop: 4 }}>{new Date(item.created_at).toLocaleString()}</div>
-                          {item.notes && <div style={{ color: '#6d6480', marginTop: 4 }}>{item.notes}</div>}
-                        </div>
-                      ))
-                    )}
-                  </div>
                 </div>
               </>
             )}

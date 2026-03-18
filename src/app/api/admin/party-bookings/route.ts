@@ -13,17 +13,24 @@ export async function GET() {
 
   try {
     const primary = await context.admin.from('party_bookings').select(PARTY_SELECT).order('start_time', { ascending: true });
-    const data = !primary.error
-      ? primary.data ?? []
-      : isMissingColumnError(primary.error.message)
-        ? (await context.admin.from('party_bookings').select(PARTY_SELECT_FALLBACK).order('start_time', { ascending: true })).data?.map((item) => ({
-            ...item,
-            status: 'pending',
-            status_updated_at: item.created_at,
-          })) ?? []
-        : (() => {
-            throw new Error(primary.error.message);
-          })();
+
+    let data = primary.data ?? [];
+    if (primary.error) {
+      if (!isMissingColumnError(primary.error.message)) {
+        return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
+      }
+
+      const fallback = await context.admin.from('party_bookings').select(PARTY_SELECT_FALLBACK).order('start_time', { ascending: true });
+      if (fallback.error) {
+        return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
+      }
+
+      data = (fallback.data ?? []).map((item) => ({
+        ...item,
+        status: 'pending',
+        status_updated_at: item.created_at,
+      }));
+    }
 
     const householdIds = [...new Set(data.map((item) => item.household_id))];
     let householdNames = new Map<string, string>();
@@ -33,29 +40,9 @@ export async function GET() {
       householdNames = new Map((households ?? []).map((item) => [item.id, item.name ?? 'Household']));
     }
 
-    let historyByBooking = new Map<string, Array<Record<string, unknown>>>();
-    const ids = data.map((item) => item.id);
-    if (ids.length > 0) {
-      const events = await context.admin
-        .from('party_booking_events')
-        .select('id,party_booking_id,from_status,to_status,notes,created_at,changed_by')
-        .in('party_booking_id', ids)
-        .order('created_at', { ascending: false });
-
-      if (!events.error) {
-        historyByBooking = (events.data ?? []).reduce((map, item) => {
-          const list = map.get(item.party_booking_id) ?? [];
-          list.push(item as unknown as Record<string, unknown>);
-          map.set(item.party_booking_id, list);
-          return map;
-        }, new Map<string, Array<Record<string, unknown>>>());
-      }
-    }
-
     const items = data.map((item) => ({
       ...item,
       household_name: householdNames.get(item.household_id) ?? 'Household',
-      history: historyByBooking.get(item.id) ?? [],
     }));
 
     return Response.json({ ok: true, items });

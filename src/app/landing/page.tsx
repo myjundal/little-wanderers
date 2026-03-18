@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 
 type RecentItem = {
   id: string;
@@ -242,6 +243,10 @@ export default function AppHome() {
   return (
     <main style={{ padding: 24, maxWidth: 920, margin: '0 auto' }}>
       <h1 style={{ marginBottom: 4 }}>Hello, {email} 👋</h1>
+
+      <section style={{ marginTop: 16, marginBottom: 20 }}>
+        <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact />
+      </section>
 
       {/* Membership badge + CTA */}
       <section style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
