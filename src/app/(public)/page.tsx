@@ -21,17 +21,19 @@ export default function HomePage() {
 
         <div className={styles.heroGrid}>
           <div className={styles.heroCopy}>
-            <p className={styles.kicker}>☾ West Hartford Sensory Studio and Cafe</p>
             <div className={styles.titleLockup}>
               <Image
                 src={LOGO_SRC}
                 alt="Little Wanderers brand mark"
-                width={108}
-                height={108}
+                width={162}
+                height={162}
                 className={styles.titleLogo}
                 priority
               />
-              <h1>Take a breath while little wanderers explore a sensory adventure.</h1>
+              <div className={styles.titleCopy}>
+                <p className={styles.brandLine}>Little Wanderers: West Hartford</p>
+                <h1>Take a breath while little wanderers explore a sensory adventure.</h1>
+              </div>
             </div>
             <p className={styles.subtitle}>
               A calm, dreamy space for sensory exploration, a break in the day, and coffee-in-hand moments that feel
