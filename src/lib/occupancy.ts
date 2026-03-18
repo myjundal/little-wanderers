@@ -1,29 +1,47 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type CrowdLevel = 'light' | 'moderate' | 'busy' | 'near_capacity';
-export type OccupancyEventType = 'checkin_increment' | 'manual_increment' | 'manual_decrement' | 'reset';
 
-export type OccupancyEventRecord = {
-  id: string;
-  event_type: OccupancyEventType;
-  delta: number;
-  effective_date: string;
-  created_at: string;
-  notes: string | null;
-  metadata?: Record<string, unknown> | null;
-};
+const DEFAULT_OCCUPANCY_CAPACITY = 24;
 
-export const DEFAULT_OCCUPANCY_CAPACITY = 24;
+const OCCUPANCY_KEYS = ['current_occupancy', 'occupancy', 'current_headcount', 'headcount', 'guest_count'];
+const CAPACITY_KEYS = ['capacity', 'max_capacity', 'occupancy_capacity'];
+const LEVEL_KEYS = ['crowd_level', 'occupancy_level', 'level'];
+const UPDATED_AT_KEYS = ['updated_at', 'last_updated_at', 'calculated_at'];
+const DATE_KEYS = ['effective_date', 'business_date', 'date'];
 
-export function getOccupancyCapacity() {
-  const raw = Number(process.env.OCCUPANCY_CAPACITY ?? process.env.NEXT_PUBLIC_OCCUPANCY_CAPACITY ?? DEFAULT_OCCUPANCY_CAPACITY);
+type OccupancyStatusRow = Record<string, unknown>;
+
+export function getOccupancyCapacity(fallback?: number | null) {
+  const raw = Number(fallback ?? process.env.OCCUPANCY_CAPACITY ?? process.env.NEXT_PUBLIC_OCCUPANCY_CAPACITY ?? DEFAULT_OCCUPANCY_CAPACITY);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_OCCUPANCY_CAPACITY;
 }
 
-export function getCrowdLevel(occupancy: number, capacity = getOccupancyCapacity()): CrowdLevel {
-  const safeOccupancy = Math.max(occupancy, 0);
-  const ratio = capacity > 0 ? safeOccupancy / capacity : 0;
+function readNumber(row: OccupancyStatusRow | null, keys: string[], fallback: number) {
+  for (const key of keys) {
+    const value = row?.[key];
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
 
+function readString(row: OccupancyStatusRow | null, keys: string[]) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+export function normalizeCrowdLevel(level: string | null, occupancy: number, capacity: number): CrowdLevel {
+  const normalized = level?.trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_') ?? '';
+  if (normalized === 'light') return 'light';
+  if (normalized === 'moderate') return 'moderate';
+  if (normalized === 'busy') return 'busy';
+  if (normalized === 'near_capacity' || normalized === 'nearcapacity') return 'near_capacity';
+
+  const ratio = capacity > 0 ? Math.max(occupancy, 0) / capacity : 0;
   if (ratio >= 0.8) return 'near_capacity';
   if (ratio >= 0.5) return 'busy';
   if (ratio >= 0.25) return 'moderate';
@@ -63,37 +81,72 @@ export function getCrowdLevelMeta(level: CrowdLevel) {
   }
 }
 
-export function computeOccupancyFromEvents(events: Pick<OccupancyEventRecord, 'delta'>[]) {
-  return events.reduce((running, event) => Math.max(running + Number(event.delta ?? 0), 0), 0);
-}
+export async function getOccupancyStatus(admin: SupabaseClient) {
+  const { data, error } = await admin.from('occupancy_status').select('*').limit(1).maybeSingle();
+  if (error) throw new Error(error.message);
 
-export async function getOccupancySummary(admin: SupabaseClient) {
-  const effectiveDate = new Date().toISOString().slice(0, 10);
-
-  const { data, error } = await admin
-    .from('occupancy_events')
-    .select('id,event_type,delta,effective_date,created_at,notes,metadata')
-    .eq('effective_date', effectiveDate)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const events = (data ?? []) as OccupancyEventRecord[];
-  const occupancy = computeOccupancyFromEvents(events);
-  const capacity = getOccupancyCapacity();
-  const crowdLevel = getCrowdLevel(occupancy, capacity);
+  const row = (data ?? null) as OccupancyStatusRow | null;
+  const occupancy = Math.max(readNumber(row, OCCUPANCY_KEYS, 0), 0);
+  const capacity = getOccupancyCapacity(readNumber(row, CAPACITY_KEYS, DEFAULT_OCCUPANCY_CAPACITY));
+  const crowdLevel = normalizeCrowdLevel(readString(row, LEVEL_KEYS), occupancy, capacity);
   const crowdMeta = getCrowdLevelMeta(crowdLevel);
 
   return {
-    effectiveDate,
     occupancy,
     capacity,
     progress: Math.min(occupancy / capacity, 1),
     crowdLevel,
     crowdMeta,
-    events,
-    lastUpdatedAt: events.at(-1)?.created_at ?? null,
+    effectiveDate: readString(row, DATE_KEYS) ?? new Date().toISOString().slice(0, 10),
+    lastUpdatedAt: readString(row, UPDATED_AT_KEYS),
+    source: row,
   };
+}
+
+const RPC_VARIANTS: Record<string, Array<(amount?: number) => Record<string, unknown>>> = {
+  record_checkin: [
+    (amount = 1) => ({ p_group_size: amount }),
+    (amount = 1) => ({ group_size: amount }),
+    (amount = 1) => ({ p_amount: amount }),
+    (amount = 1) => ({ amount }),
+    () => ({}),
+  ],
+  record_manual_increment: [
+    (amount = 1) => ({ p_amount: amount }),
+    (amount = 1) => ({ amount }),
+    (amount = 1) => ({ increment_by: amount }),
+    (amount = 1) => ({ p_increment_by: amount }),
+  ],
+  record_manual_decrement: [
+    (amount = 1) => ({ p_amount: amount }),
+    (amount = 1) => ({ amount }),
+    (amount = 1) => ({ decrement_by: amount }),
+    (amount = 1) => ({ p_decrement_by: amount }),
+  ],
+  reset_occupancy: [
+    () => ({}),
+    () => ({ p_confirm: true }),
+  ],
+};
+
+function isSignatureError(message: string) {
+  return /Could not find the function|No function matches|PGRST202|PGRST203|schema cache/i.test(message);
+}
+
+export async function callOccupancyRpc(admin: SupabaseClient, rpcName: 'record_checkin' | 'record_manual_increment' | 'record_manual_decrement' | 'reset_occupancy', amount?: number) {
+  const variants = RPC_VARIANTS[rpcName] ?? [() => ({})];
+  let lastError: Error | null = null;
+
+  for (const buildArgs of variants) {
+    const payload = buildArgs(amount);
+    const { error } = await admin.rpc(rpcName, payload);
+    if (!error) return;
+
+    lastError = new Error(error.message);
+    if (!isSignatureError(error.message)) {
+      throw lastError;
+    }
+  }
+
+  throw lastError ?? new Error(`Failed to call ${rpcName}`);
 }

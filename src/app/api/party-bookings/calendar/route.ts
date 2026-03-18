@@ -4,6 +4,10 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 const admin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
+function isMissingColumnError(message: string) {
+  return /column .* does not exist|Could not find the '.*' column/i.test(message);
+}
+
 export async function GET() {
   try {
     const server = createServerSupabaseClient();
@@ -11,21 +15,27 @@ export async function GET() {
       data: { user },
     } = await server.auth.getUser();
 
-    if (!user) {
-      return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
-    }
+    if (!user) return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
 
     const supa = admin();
-    const { data, error } = await supa
+    const primary = await supa
       .from('party_bookings')
       .select('id,start_time,end_time,status')
       .gte('start_time', new Date().toISOString())
       .neq('status', 'cancelled')
       .order('start_time', { ascending: true });
 
-    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+    if (!primary.error) return Response.json({ ok: true, items: primary.data ?? [] });
+    if (!isMissingColumnError(primary.error.message)) return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
 
-    return Response.json({ ok: true, items: data ?? [] });
+    const fallback = await supa
+      .from('party_bookings')
+      .select('id,start_time,end_time')
+      .gte('start_time', new Date().toISOString())
+      .order('start_time', { ascending: true });
+
+    if (fallback.error) return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
+    return Response.json({ ok: true, items: fallback.data ?? [] });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

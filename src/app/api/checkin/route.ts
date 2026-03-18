@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getOccupancySummary } from '@/lib/occupancy';
+import { callOccupancyRpc } from '@/lib/occupancy';
 
 type PersonRow = {
   id: string;
@@ -132,21 +132,9 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ ok: false, error: 'insert failed' }), { status: 500 });
     }
 
-    const occupancySummary = await getOccupancySummary(supabaseAdmin);
-    const { error: occupancyErr } = await supabaseAdmin.from('occupancy_events').insert({
-      event_type: 'checkin_increment',
-      delta: occupancyDelta,
-      effective_date: occupancySummary.effectiveDate,
-      notes: source === 'qr' ? 'QR check-in' : `Check-in via ${source}`,
-      metadata: {
-        person_id,
-        checkin_id: inserted?.id ?? null,
-        source,
-        group_size: occupancyDelta,
-      },
-    });
-
-    if (occupancyErr) {
+    try {
+      await callOccupancyRpc(supabaseAdmin, 'record_checkin', occupancyDelta);
+    } catch {
       await supabaseAdmin.from('checkins').delete().eq('id', inserted?.id ?? '');
       return new Response(JSON.stringify({ ok: false, error: 'occupancy update failed' }), { status: 500 });
     }

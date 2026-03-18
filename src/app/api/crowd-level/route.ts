@@ -1,9 +1,9 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-import { getOccupancySummary } from '@/lib/occupancy';
+import { getOccupancyStatus } from '@/lib/occupancy';
 
 export async function GET() {
   try {
-    const summary = await getOccupancySummary(createAdminSupabaseClient());
+    const summary = await getOccupancyStatus(createAdminSupabaseClient());
 
     return Response.json({
       ok: true,

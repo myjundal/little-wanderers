@@ -1,8 +1,29 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireStaffContext } from '@/lib/authz';
 
+const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,capacity,price_cents,status,created_at,updated_at';
+const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status,created_at,updated_at';
+
+type ClassRow = {
+  id: string;
+  title: string;
+  category: string | null;
+  start_time: string;
+  end_time: string;
+  duration_minutes?: number | null;
+  instructor_name?: string | null;
+  description?: string | null;
+  capacity: number | null;
+  price_cents: number;
+  status: string;
+};
+
 function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function isMissingColumnError(message: string) {
+  return /column .* does not exist|Could not find the '.*' column/i.test(message);
 }
 
 function parseClassPayload(body: Record<string, unknown>) {
@@ -29,31 +50,40 @@ function parseClassPayload(body: Record<string, unknown>) {
     return { error: 'price must be greater than or equal to 0' } as const;
   }
 
+  const baseData = {
+    title,
+    category,
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    capacity,
+    price_cents: Math.round(price_cents),
+    status: 'scheduled',
+  };
+
   return {
     data: {
-      title,
-      category,
+      ...baseData,
+      duration_minutes: Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1),
       instructor_name,
       description,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      duration_minutes: Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1),
-      capacity,
-      price_cents: Math.round(price_cents),
-      status: 'scheduled',
     },
+    fallbackData: baseData,
   } as const;
 }
 
+async function selectClasses(admin: SupabaseClient) {
+  const primary = await admin.from('classes').select(CLASS_SELECT).order('start_time', { ascending: true });
+  if (!primary.error) return primary.data as ClassRow[];
+  if (!isMissingColumnError(primary.error.message)) throw new Error(primary.error.message);
+
+  const fallback = await admin.from('classes').select(CLASS_SELECT_FALLBACK).order('start_time', { ascending: true });
+  if (fallback.error) throw new Error(fallback.error.message);
+  return (fallback.data ?? []) as ClassRow[];
+}
+
 async function loadClasses(admin: SupabaseClient) {
-  const { data: classes, error: classErr } = await admin
-    .from('classes')
-    .select('id,title,category,start_time,end_time,duration_minutes,instructor_name,description,capacity,price_cents,status,created_at,updated_at')
-    .order('start_time', { ascending: true });
-
-  if (classErr) throw new Error(classErr.message);
-
-  const ids = (classes ?? []).map((item) => item.id);
+  const classes = await selectClasses(admin);
+  const ids = classes.map((item) => item.id);
   let countsByClass = new Map<string, number>();
 
   if (ids.length > 0) {
@@ -68,14 +98,26 @@ async function loadClasses(admin: SupabaseClient) {
     }, new Map<string, number>());
   }
 
-  return (classes ?? []).map((item) => {
+  return classes.map((item) => {
     const booked = countsByClass.get(item.id) ?? 0;
     return {
       ...item,
+      duration_minutes: item.duration_minutes ?? Math.max(Math.round((new Date(item.end_time).getTime() - new Date(item.start_time).getTime()) / 60_000), 1),
+      instructor_name: item.instructor_name ?? null,
+      description: item.description ?? null,
       booked_count: booked,
       seats_left: item.capacity == null ? null : Math.max(item.capacity - booked, 0),
     };
   });
+}
+
+async function insertClass(admin: SupabaseClient, payload: ReturnType<typeof parseClassPayload> & { error?: never }) {
+  const primary = await admin.from('classes').insert(payload.data);
+  if (!primary.error) return;
+  if (!isMissingColumnError(primary.error.message)) throw new Error(primary.error.message);
+
+  const fallback = await admin.from('classes').insert(payload.fallbackData);
+  if (fallback.error) throw new Error(fallback.error.message);
 }
 
 export async function GET() {
@@ -97,13 +139,9 @@ export async function POST(req: Request) {
 
   try {
     const parsed = parseClassPayload((await req.json()) as Record<string, unknown>);
-    if ('error' in parsed) {
-      return Response.json({ ok: false, error: parsed.error }, { status: 400 });
-    }
+    if ('error' in parsed) return Response.json({ ok: false, error: parsed.error }, { status: 400 });
 
-    const { error } = await context.admin.from('classes').insert(parsed.data);
-    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-
+    await insertClass(context.admin, parsed);
     const items = await loadClasses(context.admin);
     return Response.json({ ok: true, items });
   } catch (e: unknown) {

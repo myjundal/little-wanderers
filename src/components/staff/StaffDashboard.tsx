@@ -345,17 +345,9 @@ export default function StaffDashboard() {
           <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => mutateOccupancy('decrement', Math.max(Number(customAdjustment) || 1, 1), 'Manual decrement from dashboard')}>Custom -</button>
         </div>
 
-        <div style={{ marginTop: 18 }}>
-          <h3 style={{ marginBottom: 10, color: '#4f3f82' }}>Recent occupancy events</h3>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {(occupancy?.events ?? []).map((event) => (
-              <div key={event.id} style={{ padding: '12px 14px', borderRadius: 14, border: '1px solid #eadfff', background: '#fff' }}>
-                <strong style={{ textTransform: 'capitalize' }}>{event.event_type.replaceAll('_', ' ')}</strong>
-                <div style={{ color: '#6d6480', marginTop: 4 }}>Delta: {event.delta > 0 ? `+${event.delta}` : event.delta} · {new Date(event.created_at).toLocaleString()}</div>
-                {event.notes && <div style={{ color: '#6d6480', marginTop: 4 }}>{event.notes}</div>}
-              </div>
-            ))}
-          </div>
+        <div style={{ marginTop: 18, padding: '12px 14px', borderRadius: 14, border: '1px solid #eadfff', background: '#fff' }}>
+          <strong style={{ color: '#4f3f82' }}>Live update note</strong>
+          <div style={{ color: '#6d6480', marginTop: 6 }}>These buttons call the Supabase occupancy RPCs directly, so the homepage and login landing crowd level update from the same source of truth.</div>
         </div>
       </section>
 
