@@ -37,7 +37,7 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
     const load = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/crowd-level', { cache: 'no-store' });
+        const res = await fetch(`/api/crowd-level?ts=${Date.now()}`, { cache: 'no-store' });
         const json = (await res.json()) as CrowdPayload;
 
         if (!alive) return;
@@ -124,7 +124,6 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
       </div>
 
       <div className={styles.meta}>
-        <span>{loading ? 'Loading…' : `Capacity reference: ${data?.capacity ?? 24} guests`}</span>
         <span>{data?.last_updated_at ? `Updated ${new Date(data.last_updated_at).toLocaleTimeString()}` : 'Updates throughout the day'}</span>
       </div>
 

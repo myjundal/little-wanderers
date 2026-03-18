@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,capacity,price_cents,status';
 const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status';
@@ -59,7 +60,7 @@ async function selectClasses(limit: number) {
 
 export async function GET(req: NextRequest) {
   try {
-    const limit = toInt(req.nextUrl.searchParams.get('limit'), 20);
+    const limit = toInt(req.nextUrl.searchParams.get('limit'), 200);
     const supa = admin();
     const classes = await selectClasses(limit);
 
@@ -88,9 +89,9 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return Response.json({ ok: true, items });
+    return Response.json({ ok: true, items }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    return Response.json({ ok: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }

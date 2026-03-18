@@ -249,7 +249,7 @@ export default function AppHome() {
           <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Check your household details, classes, party bookings, and today’s approximate studio flow from one calm landing page.</p>
         </div>
 
-        <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact style={{ maxWidth: '100%', height: '100%' }} />
+        <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
       </section>
 
       {/* Membership badge + CTA */}

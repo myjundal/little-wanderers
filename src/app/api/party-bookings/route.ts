@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
+const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at';
 const PARTY_SELECT_FALLBACK = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,created_at';
@@ -48,16 +49,16 @@ export async function GET() {
       data: { user },
     } = await server.auth.getUser();
 
-    if (!user) return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+    if (!user) return Response.json({ ok: false, error: 'unauthorized' }, { status: 401, headers: NO_STORE_HEADERS });
 
     const householdId = await getHouseholdIdForUser(user.id);
-    if (!householdId) return Response.json({ ok: true, items: [] });
+    if (!householdId) return Response.json({ ok: true, items: [] }, { headers: NO_STORE_HEADERS });
 
     const items = await selectPartyBookings(householdId);
-    return Response.json({ ok: true, items });
+    return Response.json({ ok: true, items }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    return Response.json({ ok: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }
 

@@ -5,6 +5,9 @@
   box-shadow: 0 18px 32px rgba(120, 87, 177, 0.12);
   padding: 18px;
   max-width: 440px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .eyebrow {
@@ -104,9 +107,10 @@
 
 .meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: auto;
+  padding-top: 12px;
   font-size: 0.88rem;
   color: #6d6480;
 }

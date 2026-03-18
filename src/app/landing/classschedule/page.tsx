@@ -55,10 +55,11 @@ export default function ClassSchedulePage() {
   const load = useCallback(async () => {
     setLoading(true);
     setMessage(null);
+    const requestKey = Date.now();
 
     const [classRes, myRes] = await Promise.all([
-      fetch('/api/classes', { cache: 'no-store' }),
-      fetch('/api/classes/my', { cache: 'no-store' }),
+      fetch(`/api/classes?limit=200&ts=${requestKey}`, { cache: 'no-store' }),
+      fetch(`/api/classes/my?ts=${requestKey}`, { cache: 'no-store' }),
     ]);
 
     const classJson = await classRes.json();

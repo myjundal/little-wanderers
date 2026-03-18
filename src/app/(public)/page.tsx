@@ -86,13 +86,13 @@ export default function HomePage() {
               <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact style={{ maxWidth: '100%' }} />
             </div>
             <div className={styles.heroVisualTop}>
-              <span className={styles.visualEyebrow}>Today at Little Wanderers</span>
               <span className={styles.starA}>✦</span>
               <span className={styles.starB}>✦</span>
               <span className={styles.moon}>☾</span>
             </div>
 
             <div className={styles.visualCard}>
+              <span className={styles.visualEyebrow}>Today at Little Wanderers</span>
               <Image
                 src={LOGO_SRC}
                 alt="Little Wanderers brand mark"

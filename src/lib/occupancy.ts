@@ -2,19 +2,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type CrowdLevel = 'light' | 'moderate' | 'busy' | 'near_capacity';
 
-const DEFAULT_OCCUPANCY_CAPACITY = 24;
+const FIXED_OCCUPANCY_CAPACITY = 80;
 
 const OCCUPANCY_KEYS = ['current_occupancy', 'occupancy', 'current_headcount', 'headcount', 'guest_count'];
-const CAPACITY_KEYS = ['capacity', 'max_capacity', 'occupancy_capacity'];
 const LEVEL_KEYS = ['crowd_level', 'occupancy_level', 'level'];
 const UPDATED_AT_KEYS = ['updated_at', 'last_updated_at', 'calculated_at'];
 const DATE_KEYS = ['effective_date', 'business_date', 'date'];
 
 type OccupancyStatusRow = Record<string, unknown>;
 
-export function getOccupancyCapacity(fallback?: number | null) {
-  const raw = Number(fallback ?? process.env.OCCUPANCY_CAPACITY ?? process.env.NEXT_PUBLIC_OCCUPANCY_CAPACITY ?? DEFAULT_OCCUPANCY_CAPACITY);
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_OCCUPANCY_CAPACITY;
+export function getOccupancyCapacity() {
+  return FIXED_OCCUPANCY_CAPACITY;
 }
 
 function readNumber(row: OccupancyStatusRow | null, keys: string[], fallback: number) {
@@ -87,7 +85,7 @@ export async function getOccupancyStatus(admin: SupabaseClient) {
 
   const row = (data ?? null) as OccupancyStatusRow | null;
   const occupancy = Math.max(readNumber(row, OCCUPANCY_KEYS, 0), 0);
-  const capacity = getOccupancyCapacity(readNumber(row, CAPACITY_KEYS, DEFAULT_OCCUPANCY_CAPACITY));
+  const capacity = getOccupancyCapacity();
   const crowdLevel = normalizeCrowdLevel(readString(row, LEVEL_KEYS), occupancy, capacity);
   const crowdMeta = getCrowdLevelMeta(crowdLevel);
 

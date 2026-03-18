@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
+const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 const admin = () =>
   createClient(
@@ -29,12 +30,12 @@ export async function GET() {
     } = await server.auth.getUser();
 
     if (!user) {
-      return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+      return Response.json({ ok: false, error: 'unauthorized' }, { status: 401, headers: NO_STORE_HEADERS });
     }
 
     const householdId = await getHouseholdIdForUser(user.id);
     if (!householdId) {
-      return Response.json({ ok: true, items: [] });
+      return Response.json({ ok: true, items: [] }, { headers: NO_STORE_HEADERS });
     }
 
     const supa = admin();
@@ -44,7 +45,7 @@ export async function GET() {
       .eq('household_id', householdId);
 
     const personIds = (people ?? []).map((p) => p.id);
-    if (personIds.length === 0) return Response.json({ ok: true, items: [] });
+    if (personIds.length === 0) return Response.json({ ok: true, items: [] }, { headers: NO_STORE_HEADERS });
 
     const byPersonId = new Map(
       (people ?? []).map((p) => [p.id, `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()])
@@ -57,7 +58,7 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     if (regErr) {
-      return Response.json({ ok: false, error: regErr.message }, { status: 500 });
+      return Response.json({ ok: false, error: regErr.message }, { status: 500, headers: NO_STORE_HEADERS });
     }
 
     const classIds = [...new Set((regs ?? []).map((r) => r.class_id))];
@@ -89,9 +90,9 @@ export async function GET() {
       class: byClassId.get(r.class_id) ?? null,
     }));
 
-    return Response.json({ ok: true, items });
+    return Response.json({ ok: true, items }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    return Response.json({ ok: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }

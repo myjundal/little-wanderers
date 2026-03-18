@@ -2,6 +2,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getOccupancyStatus } from '@/lib/occupancy';
 
 export const dynamic = 'force-dynamic';
+const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 export async function GET() {
   try {
@@ -18,9 +19,9 @@ export async function GET() {
       accent: summary.crowdMeta.accent,
       accent_strong: summary.crowdMeta.accentStrong,
       last_updated_at: summary.lastUpdatedAt,
-    });
+    }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    return Response.json({ ok: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }

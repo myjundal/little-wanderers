@@ -47,7 +47,8 @@ export default function PartyPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/party-bookings', { cache: 'no-store' });
+    const requestKey = Date.now();
+    const res = await fetch(`/api/party-bookings?ts=${requestKey}`, { cache: 'no-store' });
     const json = await res.json();
 
     if (!res.ok || !json.ok) {
@@ -58,7 +59,7 @@ export default function PartyPage() {
 
     setItems((json.items ?? []) as PartyBooking[]);
 
-    const calendarRes = await fetch('/api/party-bookings/calendar', { cache: 'no-store' });
+    const calendarRes = await fetch(`/api/party-bookings/calendar?ts=${requestKey}`, { cache: 'no-store' });
     const calendarJson = await calendarRes.json();
     if (calendarRes.ok && calendarJson.ok) {
       setBookedSlots(calendarJson.items ?? []);
