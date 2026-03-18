@@ -83,7 +83,7 @@ export default function HomePage() {
 
           <aside className={styles.heroVisual}>
             <div style={{ marginBottom: 16 }}>
-              <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact />
+              <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact style={{ maxWidth: '100%' }} />
             </div>
             <div className={styles.heroVisualTop}>
               <span className={styles.visualEyebrow}>Today at Little Wanderers</span>

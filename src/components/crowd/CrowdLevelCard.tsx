@@ -1,5 +1,6 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import styles from './CrowdLevelCard.module.css';
 
@@ -25,7 +26,7 @@ const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
   near_capacity: 'Near Capacity',
 };
 
-export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = false }: { eyebrow?: string; compact?: boolean }) {
+export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = false, style }: { eyebrow?: string; compact?: boolean; style?: CSSProperties }) {
   const [data, setData] = useState<CrowdPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +68,7 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
   }, []);
 
   return (
-    <section className={styles.card} aria-live="polite" style={compact ? { padding: 16 } : undefined}>
+    <section className={styles.card} aria-live="polite" style={{ ...(compact ? { padding: 16 } : {}), ...(style ?? {}) }}>
       <p className={styles.eyebrow}>{eyebrow}</p>
       <div className={styles.titleRow}>
         <div>

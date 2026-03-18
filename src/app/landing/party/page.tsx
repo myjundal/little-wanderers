@@ -69,6 +69,11 @@ export default function PartyPage() {
 
   useEffect(() => {
     load();
+    const interval = window.setInterval(() => {
+      load();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
   }, [load]);
 
   const submit = async () => {
@@ -134,7 +139,7 @@ export default function PartyPage() {
       label: 'Reserved slot',
       status: 'booked' as const,
     })),
-    ...items.map((item) => ({
+    ...items.filter((item) => item.status !== 'cancelled').map((item) => ({
       id: `mine-${item.id}`,
       start: item.start_time,
       end: item.end_time,
@@ -225,6 +230,7 @@ export default function PartyPage() {
                     {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
                   </p>
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {item.notes ?? '-'}</p>
+                  <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
                   <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
                     Status: {item.status === 'confirmed' ? 'Confirmed' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending · cancellation requested' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
                   </p>

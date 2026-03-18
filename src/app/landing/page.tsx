@@ -241,11 +241,15 @@ export default function AppHome() {
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 920, margin: '0 auto' }}>
-      <h1 style={{ marginBottom: 4 }}>Hello, {email} 👋</h1>
+    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, alignItems: 'start', marginBottom: 20 }}>
+        <div style={{ padding: 20, borderRadius: 24, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 18px 30px rgba(120,87,177,0.08)' }}>
+          <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
+          <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {email} 👋</h1>
+          <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Check your household details, classes, party bookings, and today’s approximate studio flow from one calm landing page.</p>
+        </div>
 
-      <section style={{ marginTop: 16, marginBottom: 20 }}>
-        <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact />
+        <CrowdLevelCard eyebrow="Today’s flow occupancy status" compact style={{ maxWidth: '100%' }} />
       </section>
 
       {/* Membership badge + CTA */}

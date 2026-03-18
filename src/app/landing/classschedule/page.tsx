@@ -118,6 +118,11 @@ export default function ClassSchedulePage() {
 
   useEffect(() => {
     load();
+    const interval = window.setInterval(() => {
+      load();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
   }, [load]);
 
   const peopleNameMap = useMemo(
@@ -135,7 +140,7 @@ export default function ClassSchedulePage() {
         status: c.seats_left != null && c.seats_left <= 0 ? 'full' : 'available',
       })),
       ...myItems
-        .filter((item) => item.class?.start_time)
+        .filter((item) => item.class?.start_time && item.class?.status !== 'cancelled')
         .map<CalendarSlot>((item) => ({
           id: `mine-${item.id}`,
           start: item.class!.start_time,
