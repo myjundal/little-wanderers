@@ -34,7 +34,7 @@ const { error } = await supabase.auth.signInWithOtp({
   return (
     <main style={{ padding: 24, maxWidth: 520 }}>
       <h1>Little Wanderers</h1>
-      <p>West Hartford Sensory-filled Learning Play Adventure</p>
+      <p>West Hartford Sensory-filled Studio and Cafe</p>
 
       <div style={{ marginTop: 24 }}>
         <input
