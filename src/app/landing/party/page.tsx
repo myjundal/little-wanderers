@@ -11,6 +11,8 @@ type PartyBooking = {
   headcount_expected: number | null;
   price_quote_cents: number | null;
   notes: string | null;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  status_updated_at: string | null;
   created_at: string;
 };
 
@@ -223,10 +225,10 @@ export default function PartyPage() {
                     {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
                   </p>
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {item.notes ?? '-'}</p>
-                  <p style={{ margin: '6px 0', color: cancellationRequested ? '#8a3f6b' : '#6a6082', fontWeight: 600 }}>
-                    Status: {cancellationRequested ? 'Cancellation requested' : isUpcoming ? 'Booked (upcoming)' : 'Completed'}
+                  <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
+                    Status: {item.status === 'confirmed' ? 'Confirmed' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending · cancellation requested' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
                   </p>
-                  {isUpcoming && !cancellationRequested && (
+                  {item.status !== 'cancelled' && isUpcoming && !cancellationRequested && (
                     <button onClick={() => requestCancel(item.id)} disabled={requestingCancelId === item.id}>
                       {requestingCancelId === item.id ? 'Requesting...' : 'Request to cancel'}
                     </button>

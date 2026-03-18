@@ -36,7 +36,7 @@ export async function GET() {
     const supa = admin();
     const { data, error } = await supa
       .from('party_bookings')
-      .select('id,start_time,end_time,headcount_expected,price_quote_cents,notes,created_at')
+      .select('id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at')
       .eq('household_id', householdId)
       .order('start_time', { ascending: false });
 
@@ -91,6 +91,8 @@ export async function POST(req: Request) {
         end_time: end.toISOString(),
         headcount_expected: headcountExpected,
         notes,
+        status: 'pending',
+        status_updated_at: new Date().toISOString(),
       })
       .select('id')
       .maybeSingle();

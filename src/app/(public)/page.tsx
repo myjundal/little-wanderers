@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 import styles from './home.module.css';
+import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 
 export const metadata = {
   title: 'Little Wanderers — Sensory-filled Learning Play Adventure',
@@ -76,6 +77,10 @@ export default function HomePage() {
               <span>✦ sensory-led</span>
               <span>☾ calm</span>
               <span>♡ breathe</span>
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+              <CrowdLevelCard eyebrow="Today’s studio flow" compact />
             </div>
           </div>
 

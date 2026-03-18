@@ -18,8 +18,9 @@ export async function GET() {
     const supa = admin();
     const { data, error } = await supa
       .from('party_bookings')
-      .select('id,start_time,end_time')
+      .select('id,start_time,end_time,status')
       .gte('start_time', new Date().toISOString())
+      .neq('status', 'cancelled')
       .order('start_time', { ascending: true });
 
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });

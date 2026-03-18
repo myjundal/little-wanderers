@@ -17,6 +17,9 @@ type ClassItem = {
   category: string | null;
   start_time: string;
   end_time: string;
+  duration_minutes: number | null;
+  instructor_name: string | null;
+  description: string | null;
   capacity: number | null;
   price_cents: number;
   booked_count: number;
@@ -238,11 +241,14 @@ export default function ClassSchedulePage() {
                     {new Date(c.start_time).toLocaleString()} ~ {new Date(c.end_time).toLocaleTimeString()}
                   </p>
                   <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Instructor: {c.instructor_name ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Duration: {c.duration_minutes ?? Math.round((new Date(c.end_time).getTime() - new Date(c.start_time).getTime()) / 60000)} min</p>
                   <p style={{ margin: '6px 0' }}>Price: ${(c.price_cents / 100).toFixed(2)}</p>
                   <p style={{ margin: '6px 0' }}>
                     Seats: {c.capacity == null ? 'Unlimited' : `${c.booked_count}/${c.capacity}`}{' '}
                     {c.seats_left != null && `(Left: ${c.seats_left})`}
                   </p>
+                  {c.description && <p style={{ margin: '6px 0', color: '#666' }}>{c.description}</p>}
                   <button
                     onClick={() => bookClass(c.id)}
                     disabled={isFull || !selectedPersonId || bookingClassId === c.id}

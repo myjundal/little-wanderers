@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     const { data: classes, error: classErr } = await supa
       .from('classes')
-      .select('id,title,category,start_time,end_time,capacity,price_cents,status')
+      .select('id,title,category,start_time,end_time,duration_minutes,instructor_name,description,capacity,price_cents,status')
       .gte('start_time', new Date().toISOString())
       .eq('status', 'scheduled')
       .order('start_time', { ascending: true })
