@@ -54,27 +54,27 @@ export default function HomePage() {
 
         <div className={styles.heroGrid}>
           <div className={styles.heroCopy}>
-            <p className={styles.kicker}>☾ West Hartford Sensory Play Café</p>
-            <h1>A softer kind of play for little wanderers.</h1>
+            <p className={styles.kicker}>☾ West Hartford Sensory Studio and Cafe</p>
+            <h1>Take a breath while little wanderers explore a sensory adventure.</h1>
             <p className={styles.subtitle}>
-              A calm, boutique space for sensory exploration, slower mornings, and coffee-in-hand moments that feel
+              A calm, dreamy space for sensory exploration, a break in the day, and coffee-in-hand moments that feel
               restorative for parents too.
             </p>
-            <p className={styles.subline}>Made to feel like a deep breath — not a loud indoor playground.</p>
+            <p className={styles.subline}>Take a deep breath and a sip of your drink.</p>
 
             <div className={styles.ctaRow}>
               <Link href="#waitlist" className={styles.primaryBtn}>
                 Join Waitlist
               </Link>
-              <Link href="#space" className={styles.secondaryBtn}>
-                Explore Space
+              <Link href="/faq" className={styles.secondaryBtn}>
+                FAQ
               </Link>
             </div>
 
             <div className={styles.chips}>
               <span>✦ sensory-led</span>
               <span>☾ calm</span>
-              <span>♡ connection</span>
+              <span>♡ breathe</span>
             </div>
           </div>
 
@@ -90,8 +90,7 @@ export default function HomePage() {
               <Image src={LOGO_SRC} alt="Little Wanderers brand mark" width={110} height={110} className={styles.heroLogo} priority />
               <h2>Soft play, beautifully slowed down.</h2>
               <p>
-                Open play, class moments, and a lounge-like atmosphere designed for babies, toddlers, and the grownups
-                who come with them.
+                Open play, classes, and a lounge-like atmosphere for babies, toddlers, and their grownups.
               </p>
             </div>
 
@@ -121,7 +120,7 @@ export default function HomePage() {
           <div className={styles.tags}>
             <span>✦ sensory</span>
             <span>☾ calm</span>
-            <span>♡ connection</span>
+            <span>♡ breathe</span>
           </div>
         </div>
 
@@ -158,8 +157,7 @@ export default function HomePage() {
           <p className={styles.sectionEyebrow}>Visit</p>
           <h2>I want to sit here with my coffee while my child plays.</h2>
           <p>
-            That is the feeling this homepage now prioritizes: calm within seconds, premium without feeling cold, and
-            genuinely welcoming for modern family routines.
+            Calm within seconds, premium without feeling cold, and genuinely welcoming for modern family routines.
           </p>
         </div>
 
@@ -178,8 +176,7 @@ export default function HomePage() {
           <p className={styles.sectionEyebrow}>Join Waitlist</p>
           <h2>Be first to hear about openings, class releases, and soft-launch updates.</h2>
           <p>
-            Until a dedicated waitlist flow is built, this CTA routes families into the current login path so the
-            experience stays connected to the existing app structure.
+            We’ll share gentle updates when new openings, class releases, and soft-launch moments are ready.
           </p>
         </div>
 

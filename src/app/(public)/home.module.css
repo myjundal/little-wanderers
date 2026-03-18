@@ -154,7 +154,18 @@
   gap: 10px;
 }
 
-.chips span,
+.chips span {
+  color: #7e7695;
+  font-size: 0.96rem;
+  letter-spacing: 0.02em;
+}
+
+.chips span + span::before {
+  content: '·';
+  margin-right: 10px;
+  color: rgba(123, 106, 168, 0.55);
+}
+
 .tags span {
   display: inline-flex;
   align-items: center;
@@ -168,6 +179,7 @@
   font-size: 0.95rem;
   box-shadow: 0 10px 24px rgba(123, 106, 168, 0.07);
 }
+
 
 .heroVisual {
   position: relative;
@@ -218,6 +230,11 @@
   color: #7e7695;
   font-size: 1rem;
   line-height: 1.78;
+}
+
+.visualCard p {
+  max-width: 32ch;
+  text-wrap: balance;
 }
 
 .visualBadge {
