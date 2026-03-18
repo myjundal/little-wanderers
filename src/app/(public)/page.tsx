@@ -10,34 +10,39 @@ export const metadata = {
 
 const LOGO_SRC = '/brand-mark.svg';
 
-const playZones = [
+const spaceCards = [
   {
-    title: 'Sensory Forest Corner',
-    body: 'Soft textures, balancing toys, and calming lights for tiny explorers who learn through touch.',
+    title: 'For little ones',
+    body: 'Soft textures, role play, gentle movement, and sensory moments that feel exploratory without becoming overwhelming.',
   },
   {
-    title: 'Pretend Town Studio',
-    body: 'Mini markets, kitchen sets, and story props designed for playful role-switching and social growth.',
-  },
-  {
-    title: 'Baby Nest Area',
-    body: 'A gentle, padded nook for crawlers and early walkers with age-appropriate discovery toys.',
+    title: 'For parents',
+    body: 'A slower café rhythm with comfortable seating, warm light, and a design language that feels curated rather than chaotic.',
   },
 ];
 
-const cafeMoments = [
+const classCards = [
   {
-    title: 'Open Play Sessions',
-    body: 'Flexible daily spots that fit naps, meals, and real family rhythms.',
+    icon: '✦',
+    title: 'Curated play spaces',
+    body: 'Every zone is designed to feel edited, pastel-soft, and easy to settle into within a few seconds.',
   },
   {
-    title: 'Creative Class Days',
-    body: 'Music, movement, and art crafted for short attention spans and joyful repetition.',
+    icon: '☾',
+    title: 'Calm class moments',
+    body: 'Music, movement, and creative sessions are presented with a more boutique tone than a typical play venue.',
   },
   {
-    title: 'Birthday Celebrations',
-    body: 'Warm, curated party setups with room styling and seamless online scheduling.',
+    icon: '♡',
+    title: 'Parent-friendly visits',
+    body: 'The atmosphere is made for coffee, conversation, and the kind of outing you actually want to repeat.',
   },
+];
+
+const visitMoments = [
+  'Open play sessions in a softer, more intentional environment.',
+  'Class highlights and sensory-led programming for little wanderers.',
+  'A beautiful, easy outing that still feels practical for real family routines.',
 ];
 
 export default function HomePage() {
@@ -49,88 +54,143 @@ export default function HomePage() {
 
         <div className={styles.heroGrid}>
           <div className={styles.heroCopy}>
-            <p className={styles.kicker}>Little Wanderers Kids Café · West Hartford</p>
-            <h1>Where little days feel magical, cozy, and full of wonder.</h1>
+            <p className={styles.kicker}>☾ West Hartford Sensory Play Café</p>
+            <h1>A softer kind of play for little wanderers.</h1>
             <p className={styles.subtitle}>
-              A boutique kids café in soft lavender space tones, made for babies and toddlers to play safely while
-              families enjoy a calm, beautiful environment.
+              A calm, boutique space for sensory exploration, slower mornings, and coffee-in-hand moments that feel
+              restorative for parents too.
             </p>
+            <p className={styles.subline}>Made to feel like a deep breath — not a loud indoor playground.</p>
 
             <div className={styles.ctaRow}>
-              <Link href="/login" className={styles.primaryBtn}>
-                Start Membership
+              <Link href="#waitlist" className={styles.primaryBtn}>
+                Join Waitlist
               </Link>
-              <Link href="/pricing" className={styles.secondaryBtn}>
-                View Pricing
-              </Link>
-              <Link href="/faq" className={styles.linkBtn}>
-                Plan Your Visit
+              <Link href="#space" className={styles.secondaryBtn}>
+                Explore Space
               </Link>
             </div>
 
             <div className={styles.chips}>
-              <span>Soft play focused</span>
-              <span>Ages 0–5</span>
-              <span>Parent-friendly lounge</span>
+              <span>✦ sensory-led</span>
+              <span>☾ calm</span>
+              <span>♡ connection</span>
             </div>
           </div>
 
           <aside className={styles.heroVisual}>
-            <div className={styles.imageWrap}>
-              <Image
-                src={LOGO_SRC}
-                alt="Little Wanderers brand fox"
-                width={620}
-                height={620}
-                priority
-                className={styles.heroImage}
-              />
+            <div className={styles.heroVisualTop}>
+              <span className={styles.visualEyebrow}>Today at Little Wanderers</span>
+              <span className={styles.starA}>✦</span>
+              <span className={styles.starB}>✦</span>
+              <span className={styles.moon}>☾</span>
             </div>
-            <p className={styles.visualNote}>A gentle space for sensory play, imagination, and family moments.</p>
+
+            <div className={styles.visualCard}>
+              <Image src={LOGO_SRC} alt="Little Wanderers brand mark" width={110} height={110} className={styles.heroLogo} priority />
+              <h2>Soft play, beautifully slowed down.</h2>
+              <p>
+                Open play, class moments, and a lounge-like atmosphere designed for babies, toddlers, and the grownups
+                who come with them.
+              </p>
+            </div>
+
+            <div className={styles.visualBadge}>
+              <strong>Boutique atmosphere</strong>
+              <span>For babies, toddlers, and coffee-holding grownups.</span>
+            </div>
           </aside>
         </div>
       </section>
 
-      <section className={styles.zonesSection}>
-        <header className={styles.sectionHeader}>
-          <p>Play spaces designed with early childhood specialists in mind</p>
-          <h2>Every corner feels like a tiny world.</h2>
-        </header>
+      <div className={styles.waveWrap} aria-hidden="true">
+        <svg viewBox="0 0 1440 160" className={styles.wave} preserveAspectRatio="none">
+          <path d="M0 66C115 106 247 120 397 98C528 79 607 18 748 18C931 18 1036 116 1204 112C1301 110 1386 86 1440 66V160H0V66Z" fill="#F6F1FF" />
+        </svg>
+      </div>
 
-        <div className={styles.cardGrid}>
-          {playZones.map((zone) => (
-            <article key={zone.title} className={styles.zoneCard}>
-              <h3>{zone.title}</h3>
-              <p>{zone.body}</p>
+      <section id="space" className={styles.storySection}>
+        <div className={styles.storyCopy}>
+          <p className={styles.sectionEyebrow}>A place that holds both wonder and ease</p>
+          <h2>Designed for early curiosity, but styled for the parent who wants the outing to feel beautiful too.</h2>
+          <p>
+            Little Wanderers is imagined as a calm sensory play café where children can explore safely while parents
+            enjoy a more elevated, restorative environment.
+          </p>
+
+          <div className={styles.tags}>
+            <span>✦ sensory</span>
+            <span>☾ calm</span>
+            <span>♡ connection</span>
+          </div>
+        </div>
+
+        <div className={styles.storyCards}>
+          {spaceCards.map((card) => (
+            <article key={card.title} className={styles.softCard}>
+              <p className={styles.cardEyebrow}>{card.title}</p>
+              <h3>{card.title === 'For little ones' ? 'Soft discovery' : 'A calmer outing'}</h3>
+              <p>{card.body}</p>
             </article>
           ))}
         </div>
       </section>
 
-      <section className={styles.momentsSection}>
-        <header className={styles.sectionHeader}>
-          <p>Built for everyday visits and milestone memories</p>
-          <h2>A true kids café experience, not just a playroom.</h2>
-        </header>
+      <section id="classes" className={styles.featuresSection}>
+        <div className={styles.sectionHeadingCenter}>
+          <p className={styles.sectionEyebrow}>Why it feels different</p>
+          <h2>Premium, warm, and intentionally understated.</h2>
+        </div>
 
-        <div className={styles.cardGrid}>
-          {cafeMoments.map((item) => (
-            <article key={item.title} className={styles.momentCard}>
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
+        <div className={styles.featureGrid}>
+          {classCards.map((card) => (
+            <article key={card.title} className={styles.featureCard}>
+              <span className={styles.featureIcon}>{card.icon}</span>
+              <h3>{card.title}</h3>
+              <p>{card.body}</p>
             </article>
           ))}
         </div>
       </section>
 
-      <section className={styles.ctaBanner}>
+      <section id="visit" className={styles.visitSection}>
+        <div className={styles.visitCopy}>
+          <p className={styles.sectionEyebrow}>Visit</p>
+          <h2>I want to sit here with my coffee while my child plays.</h2>
+          <p>
+            That is the feeling this homepage now prioritizes: calm within seconds, premium without feeling cold, and
+            genuinely welcoming for modern family routines.
+          </p>
+        </div>
+
+        <div className={styles.visitList}>
+          {visitMoments.map((item) => (
+            <article key={item} className={styles.visitItem}>
+              <span>✦</span>
+              <p>{item}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="waitlist" className={styles.waitlistSection}>
         <div>
-          <h3>Ready for your family&apos;s first visit?</h3>
-          <p>Manage open play, classes, and party bookings in one easy dashboard.</p>
+          <p className={styles.sectionEyebrow}>Join Waitlist</p>
+          <h2>Be first to hear about openings, class releases, and soft-launch updates.</h2>
+          <p>
+            Until a dedicated waitlist flow is built, this CTA routes families into the current login path so the
+            experience stays connected to the existing app structure.
+          </p>
         </div>
-        <Link href="/login" className={styles.secondaryBtn}>
-          Go to Login
-        </Link>
+
+        <div className={styles.waitlistActions}>
+          <Link href="/login" className={styles.primaryBtn}>
+            Join Waitlist
+          </Link>
+          <Link href="/pricing" className={styles.ghostBtn}>
+            View Pricing
+          </Link>
+        </div>
       </section>
     </main>
   );

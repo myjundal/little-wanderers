@@ -5,7 +5,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <Nav />
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '16px' }}>{children}</div>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px 28px' }}>{children}</div>
     </>
   );
 }
