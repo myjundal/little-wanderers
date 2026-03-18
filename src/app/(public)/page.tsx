@@ -5,8 +5,8 @@ import styles from './home.module.css';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 
 export const metadata = {
-  title: 'Little Wanderers — Sensory-filled Learning Play Adventure',
-  description: 'Play, learn, and wander in West Hartford.',
+  title: 'Little Wanderers — Sensory-focused Studio and Cafe',
+  description: 'Wander, play, and grow in Little Wanderers',
 };
 
 const LOGO_SRC = '/brand-mark.svg';
