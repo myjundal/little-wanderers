@@ -78,18 +78,6 @@ const buttonStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const pillStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: '6px 10px',
-  borderRadius: 999,
-  background: '#f4ebff',
-  border: '1px solid #dfccfb',
-  color: '#5f3da4',
-  fontSize: 13,
-  fontWeight: 700,
-};
-
 function emptyClassForm() {
   const start = new Date();
   start.setHours(start.getHours() + 1, 0, 0, 0);
@@ -378,7 +366,19 @@ export default function StaffDashboard() {
           <input type="time" value={classForm.end_time} onChange={(e) => setClassForm((prev) => ({ ...prev, end_time: e.target.value }))} style={inputStyle} />
           <input placeholder="Instructor (optional)" value={classForm.instructor_name} onChange={(e) => setClassForm((prev) => ({ ...prev, instructor_name: e.target.value }))} style={inputStyle} />
           <input type="number" min={0} placeholder="Capacity" value={classForm.capacity} onChange={(e) => setClassForm((prev) => ({ ...prev, capacity: e.target.value }))} style={inputStyle} />
-          <input type="number" min={0} step="0.01" placeholder="Price (USD)" value={classForm.price_dollars} onChange={(e) => setClassForm((prev) => ({ ...prev, price_dollars: e.target.value }))} style={inputStyle} />
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: 8, color: '#9b90b6', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em' }}>Price</span>
+            <span style={{ position: 'absolute', left: 12, top: 28, color: '#6d6480', fontWeight: 700 }}>$</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="0.00"
+              value={classForm.price_dollars}
+              onChange={(e) => setClassForm((prev) => ({ ...prev, price_dollars: e.target.value }))}
+              style={{ ...inputStyle, paddingTop: 24, paddingLeft: 28 }}
+            />
+          </div>
           <select value={classForm.status} onChange={(e) => setClassForm((prev) => ({ ...prev, status: e.target.value }))} style={inputStyle}>
             <option value="scheduled">Scheduled</option>
             <option value="cancelled">Cancelled</option>
@@ -399,14 +399,8 @@ export default function StaffDashboard() {
                     {new Date(item.start_time).toLocaleString()} — {new Date(item.end_time).toLocaleTimeString()} · {item.duration_minutes ?? 0} min
                   </p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {item.instructor_name ?? '-'} · Category: {item.category ?? '-'}</p>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0' }}>
-                    <span style={pillStyle}>
-                      Capacity {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity}`}
-                    </span>
-                    <span style={pillStyle}>Price {dollars(item.price_cents)}</span>
-                    <span style={pillStyle}>{item.status === 'scheduled' ? 'Scheduled' : item.status === 'cancelled' ? 'Cancelled' : 'Completed'}</span>
-                  </div>
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Seats left: {item.seats_left ?? 'Unlimited'}</p>
+                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}</p>
+                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong> · Price: {dollars(item.price_cents)}</p>
                   {item.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{item.description}</p>}
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
