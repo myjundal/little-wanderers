@@ -49,7 +49,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(350px, 0.92fr);
   gap: 40px;
-  align-items: end;
+  align-items: start;
 }
 
 .kicker,
