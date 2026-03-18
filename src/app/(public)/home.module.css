@@ -15,7 +15,7 @@
 
 .hero {
   position: relative;
-  padding: 48px 70px 56px;
+  padding: 24px 70px 48px;
   overflow: hidden;
 }
 
@@ -79,25 +79,25 @@
 
 .heroCopy h1 {
   max-width: 620px;
-  font-size: clamp(2.05rem, 3.2vw, 3.1rem);
-  line-height: 1.08;
+  font-size: clamp(1.9rem, 2.9vw, 2.75rem);
+  line-height: 1.1;
 }
 
 .titleLockup {
   display: flex;
   align-items: flex-start;
   gap: 18px;
-  margin-top: 12px;
+  margin-top: 6px;
 }
 
 .titleLogo {
-  width: 76px;
-  height: 76px;
+  width: 108px;
+  height: 108px;
   flex: 0 0 auto;
-  border-radius: 24px;
+  border-radius: 30px;
   background: rgba(255, 255, 255, 0.68);
-  padding: 10px;
-  box-shadow: 0 14px 24px rgba(123, 106, 168, 0.16);
+  padding: 12px;
+  box-shadow: 0 18px 30px rgba(123, 106, 168, 0.18);
 }
 
 .subtitle {

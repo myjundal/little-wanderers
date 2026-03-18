@@ -26,8 +26,8 @@ export default function HomePage() {
               <Image
                 src={LOGO_SRC}
                 alt="Little Wanderers brand mark"
-                width={76}
-                height={76}
+                width={108}
+                height={108}
                 className={styles.titleLogo}
                 priority
               />

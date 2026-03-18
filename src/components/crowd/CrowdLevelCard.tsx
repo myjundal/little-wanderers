@@ -97,7 +97,7 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
 
       <div className={styles.metrics}>
         <div className={styles.metricCard}>
-          <span className={styles.metricLabel}>Actual occupancy now</span>
+          <span className={styles.metricLabel}>Current estimated occupancy</span>
           <strong className={styles.metricValue}>
             {loading ? '—' : `${data?.occupancy ?? 0} / ${data?.capacity ?? 24}`}
           </strong>

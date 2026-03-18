@@ -336,11 +336,6 @@ export default function StaffDashboard() {
           <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => mutateOccupancy('decrement', Math.max(Number(customAdjustment) || 1, 1), 'Manual decrement from dashboard')}>Custom -</button>
           <button style={{ ...buttonStyle, background: '#5f3da4', color: '#fff' }} onClick={() => mutateOccupancy('reset', 1, 'Daily reset from staff dashboard')}>Reset Today</button>
         </div>
-
-        <div style={{ marginTop: 18, padding: '12px 14px', borderRadius: 14, border: '1px solid #eadfff', background: '#fff' }}>
-          <strong style={{ color: '#4f3f82' }}>Live update note</strong>
-          <div style={{ color: '#6d6480', marginTop: 6 }}>These buttons call the Supabase occupancy RPCs directly, so the homepage and post-login landing page both refresh from the same source of truth, including the live occupancy count and crowd complexity level.</div>
-        </div>
       </section>
 
       <section style={sectionStyle}>
