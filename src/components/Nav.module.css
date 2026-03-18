@@ -2,7 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  padding: 18px 18px 0;
+  padding: 0 18px 0;
 }
 
 .navInner {
@@ -23,27 +23,12 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
   color: #4b4360;
   flex-shrink: 0;
 }
 
 .brand:hover {
   color: #4b4360;
-}
-
-.brandMarkWrap {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.brandMark {
-  border-radius: 12px;
 }
 
 .brandCopy {
@@ -120,7 +105,7 @@
 
 @media (max-width: 720px) {
   .navShell {
-    padding: 14px 14px 0;
+    padding: 0 14px 0;
   }
 
   .navInner {

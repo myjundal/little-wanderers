@@ -1,9 +1,7 @@
-import Image from 'next/image';
 import Link from 'next/link';
 
 import styles from './Nav.module.css';
 
-const LOGO_SRC = '/brand-mark.svg';
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 const navItems = [
@@ -20,9 +18,6 @@ export default function Nav() {
     <nav className={styles.navShell}>
       <div className={styles.navInner}>
         <Link href="/" className={styles.brand}>
-          <span className={styles.brandMarkWrap}>
-            <Image src={LOGO_SRC} alt="Little Wanderers logo" width={36} height={36} className={styles.brandMark} />
-          </span>
           <span className={styles.brandCopy}>
             <strong>Little Wanderers</strong>
             <span>Sensory Studio and Cafe</span>

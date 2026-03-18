@@ -17,6 +17,9 @@ type ClassItem = {
   category: string | null;
   start_time: string;
   end_time: string;
+  duration_minutes: number | null;
+  instructor_name: string | null;
+  description: string | null;
   capacity: number | null;
   price_cents: number;
   booked_count: number;
@@ -52,10 +55,11 @@ export default function ClassSchedulePage() {
   const load = useCallback(async () => {
     setLoading(true);
     setMessage(null);
+    const requestKey = Date.now();
 
     const [classRes, myRes] = await Promise.all([
-      fetch('/api/classes', { cache: 'no-store' }),
-      fetch('/api/classes/my', { cache: 'no-store' }),
+      fetch(`/api/classes?limit=200&ts=${requestKey}`, { cache: 'no-store' }),
+      fetch(`/api/classes/my?ts=${requestKey}`, { cache: 'no-store' }),
     ]);
 
     const classJson = await classRes.json();
@@ -115,6 +119,11 @@ export default function ClassSchedulePage() {
 
   useEffect(() => {
     load();
+    const interval = window.setInterval(() => {
+      load();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
   }, [load]);
 
   const peopleNameMap = useMemo(
@@ -132,7 +141,7 @@ export default function ClassSchedulePage() {
         status: c.seats_left != null && c.seats_left <= 0 ? 'full' : 'available',
       })),
       ...myItems
-        .filter((item) => item.class?.start_time)
+        .filter((item) => item.class?.start_time && item.class?.status !== 'cancelled')
         .map<CalendarSlot>((item) => ({
           id: `mine-${item.id}`,
           start: item.class!.start_time,
@@ -238,11 +247,14 @@ export default function ClassSchedulePage() {
                     {new Date(c.start_time).toLocaleString()} ~ {new Date(c.end_time).toLocaleTimeString()}
                   </p>
                   <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Instructor: {c.instructor_name ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Duration: {c.duration_minutes ?? Math.round((new Date(c.end_time).getTime() - new Date(c.start_time).getTime()) / 60000)} min</p>
                   <p style={{ margin: '6px 0' }}>Price: ${(c.price_cents / 100).toFixed(2)}</p>
                   <p style={{ margin: '6px 0' }}>
                     Seats: {c.capacity == null ? 'Unlimited' : `${c.booked_count}/${c.capacity}`}{' '}
                     {c.seats_left != null && `(Left: ${c.seats_left})`}
                   </p>
+                  {c.description && <p style={{ margin: '6px 0', color: '#666' }}>{c.description}</p>}
                   <button
                     onClick={() => bookClass(c.id)}
                     disabled={isFull || !selectedPersonId || bookingClassId === c.id}
@@ -270,13 +282,21 @@ export default function ClassSchedulePage() {
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
-                  Person: {item.person_name} · Status: <b style={{ textTransform: 'uppercase' }}>{item.status}</b>
+                  Person: {item.person_name} · Status:{' '}
+                  <b style={{ textTransform: 'uppercase' }}>
+                    {item.class?.status === 'cancelled' ? 'studio_cancelled' : item.status}
+                  </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>
                   Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}
                 </p>
                 <p style={{ margin: '6px 0' }}>Category: {item.class?.category ?? '-'}</p>
-                {item.status !== 'cancelled' && (
+                {item.class?.status === 'cancelled' && (
+                  <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 600 }}>
+                    This class was cancelled by the studio and has been removed from the customer calendar.
+                  </p>
+                )}
+                {item.status !== 'cancelled' && item.class?.status !== 'cancelled' && (
                   <button onClick={() => cancelRegistration(item.id)} disabled={cancellingId === item.id}>
                     {cancellingId === item.id ? 'Cancelling...' : 'Cancel Booking'}
                   </button>

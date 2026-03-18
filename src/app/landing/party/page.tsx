@@ -11,6 +11,8 @@ type PartyBooking = {
   headcount_expected: number | null;
   price_quote_cents: number | null;
   notes: string | null;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  status_updated_at: string | null;
   created_at: string;
 };
 
@@ -45,7 +47,8 @@ export default function PartyPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/party-bookings', { cache: 'no-store' });
+    const requestKey = Date.now();
+    const res = await fetch(`/api/party-bookings?ts=${requestKey}`, { cache: 'no-store' });
     const json = await res.json();
 
     if (!res.ok || !json.ok) {
@@ -56,7 +59,7 @@ export default function PartyPage() {
 
     setItems((json.items ?? []) as PartyBooking[]);
 
-    const calendarRes = await fetch('/api/party-bookings/calendar', { cache: 'no-store' });
+    const calendarRes = await fetch(`/api/party-bookings/calendar?ts=${requestKey}`, { cache: 'no-store' });
     const calendarJson = await calendarRes.json();
     if (calendarRes.ok && calendarJson.ok) {
       setBookedSlots(calendarJson.items ?? []);
@@ -67,6 +70,11 @@ export default function PartyPage() {
 
   useEffect(() => {
     load();
+    const interval = window.setInterval(() => {
+      load();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
   }, [load]);
 
   const submit = async () => {
@@ -132,7 +140,7 @@ export default function PartyPage() {
       label: 'Reserved slot',
       status: 'booked' as const,
     })),
-    ...items.map((item) => ({
+    ...items.filter((item) => item.status !== 'cancelled').map((item) => ({
       id: `mine-${item.id}`,
       start: item.start_time,
       end: item.end_time,
@@ -223,10 +231,11 @@ export default function PartyPage() {
                     {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
                   </p>
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {item.notes ?? '-'}</p>
-                  <p style={{ margin: '6px 0', color: cancellationRequested ? '#8a3f6b' : '#6a6082', fontWeight: 600 }}>
-                    Status: {cancellationRequested ? 'Cancellation requested' : isUpcoming ? 'Booked (upcoming)' : 'Completed'}
+                  <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
+                  <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
+                    Status: {item.status === 'confirmed' ? 'Confirmed' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending · cancellation requested' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
                   </p>
-                  {isUpcoming && !cancellationRequested && (
+                  {item.status !== 'cancelled' && isUpcoming && !cancellationRequested && (
                     <button onClick={() => requestCancel(item.id)} disabled={requestingCancelId === item.id}>
                       {requestingCancelId === item.id ? 'Requesting...' : 'Request to cancel'}
                     </button>

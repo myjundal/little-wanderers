@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { callOccupancyRpc } from '@/lib/occupancy';
 
 type PersonRow = {
   id: string;
@@ -34,29 +35,24 @@ function ruleApplies(rule: PricingRule, role: 'adult' | 'child', ageMonths: numb
   const af = rule.active_from ? new Date(rule.active_from) : null;
   const at = rule.active_to ? new Date(rule.active_to) : null;
   if (af && af > today) return false;
-  if (at && at < new Date(today.toDateString())) return false; // end date past
+  if (at && at < new Date(today.toDateString())) return false;
   if (rule.role && rule.role !== role) return false;
-  if (rule.min_months != null) {
-    if (ageMonths == null || ageMonths < rule.min_months) return false;
-  }
-  if (rule.max_months != null) {
-    if (ageMonths == null || ageMonths > rule.max_months) return false;
-  }
+  if (rule.min_months != null && (ageMonths == null || ageMonths < rule.min_months)) return false;
+  if (rule.max_months != null && (ageMonths == null || ageMonths > rule.max_months)) return false;
   return true;
 }
 
 function pickBestRule(rules: PricingRule[], role: 'adult' | 'child', ageMonths: number | null): PricingRule | null {
-  const candidates = rules.filter(r => ruleApplies(r, role, ageMonths));
+  const candidates = rules.filter((rule) => ruleApplies(rule, role, ageMonths));
   if (candidates.length === 0) return null;
 
-  // Priority: role-specific > narrower range > newer active_from
   return candidates.sort((a, b) => {
     const aRole = a.role ? 1 : 0;
     const bRole = b.role ? 1 : 0;
     if (bRole !== aRole) return bRole - aRole;
 
-    const aSpan = ( (a.max_months ?? 99999) - (a.min_months ?? 0) );
-    const bSpan = ( (b.max_months ?? 99999) - (b.min_months ?? 0) );
+    const aSpan = (a.max_months ?? 99999) - (a.min_months ?? 0);
+    const bSpan = (b.max_months ?? 99999) - (b.min_months ?? 0);
     if (aSpan !== bSpan) return aSpan - bSpan;
 
     const aFrom = a.active_from ? new Date(a.active_from).getTime() : 0;
@@ -67,18 +63,15 @@ function pickBestRule(rules: PricingRule[], role: 'adult' | 'child', ageMonths: 
 
 export async function POST(req: NextRequest) {
   try {
-    const { person_id, source = 'qr' } = await req.json();
+    const { person_id, source = 'qr', group_size } = await req.json();
 
     if (!person_id) {
       return new Response(JSON.stringify({ ok: false, error: 'person_id required' }), { status: 400 });
     }
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!  // server-only; bypasses RLS
-    );
+    const occupancyDelta = Math.max(1, Math.trunc(Number(group_size) || 1));
+    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-    // 1) Load person
     const { data: person, error: personErr } = await supabaseAdmin
       .from('people')
       .select('id, household_id, role, first_name, last_name, birthdate')
@@ -89,7 +82,6 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ ok: false, error: 'person not found' }), { status: 404 });
     }
 
-    // 2) Membership check (household OR person, status=active, renews_at null or future)
     const nowISO = new Date().toISOString();
     const { data: memberships, error: memErr } = await supabaseAdmin
       .from('memberships')
@@ -107,12 +99,8 @@ export async function POST(req: NextRequest) {
 
     if (memberships && memberships.length > 0) {
       membership_applied = true;
-      price_cents = 0;
     } else {
-      // 3) Load pricing rules and pick best
-      const { data: rules, error: rulesErr } = await supabaseAdmin
-        .from('pricing_rules')
-        .select('*');
+      const { data: rules, error: rulesErr } = await supabaseAdmin.from('pricing_rules').select('*');
 
       if (rulesErr) {
         return new Response(JSON.stringify({ ok: false, error: 'pricing rules load failed' }), { status: 500 });
@@ -128,7 +116,6 @@ export async function POST(req: NextRequest) {
       price_cents = best.price_cents;
     }
 
-    // 4) Insert checkin
     const { data: inserted, error: insErr } = await supabaseAdmin
       .from('checkins')
       .insert({
@@ -136,7 +123,7 @@ export async function POST(req: NextRequest) {
         source,
         price_cents,
         membership_applied,
-        notes: null
+        notes: null,
       })
       .select('id')
       .maybeSingle();
@@ -145,19 +132,27 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ ok: false, error: 'insert failed' }), { status: 500 });
     }
 
-    return new Response(JSON.stringify({
-      ok: true,
-      checkin_id: inserted?.id,
-      membership_applied,
-      price_cents,
-      first_name: person.first_name,
-      last_name: person.last_name,
-      birthdate: person.birthdate
-    }), { status: 200 });
+    try {
+      await callOccupancyRpc(supabaseAdmin, 'record_checkin', occupancyDelta);
+    } catch {
+      await supabaseAdmin.from('checkins').delete().eq('id', inserted?.id ?? '');
+      return new Response(JSON.stringify({ ok: false, error: 'occupancy update failed' }), { status: 500 });
+    }
 
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        checkin_id: inserted?.id,
+        membership_applied,
+        price_cents,
+        first_name: person.first_name,
+        last_name: person.last_name,
+        birthdate: person.birthdate,
+      }),
+      { status: 200 }
+    );
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message: 'unknown error';
+    const message = e instanceof Error ? e.message : 'unknown error';
     return new Response(JSON.stringify({ ok: false, error: message }), { status: 500 });
   }
 }
-
