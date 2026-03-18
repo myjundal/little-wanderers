@@ -99,11 +99,6 @@ export default function HomePage() {
               <h2>Soft play, beautifully slowed down.</h2>
               <p>Open play, classes, and a lounge-like atmosphere for babies, toddlers, and their grownups.</p>
             </div>
-
-            <div className={styles.visualBadge}>
-              <strong>Boutique atmosphere</strong>
-              <span>For babies, toddlers, and coffee-holding grownups.</span>
-            </div>
           </aside>
         </div>
       </section>
