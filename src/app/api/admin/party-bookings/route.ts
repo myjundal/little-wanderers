@@ -1,5 +1,7 @@
 import { requireStaffContext } from '@/lib/authz';
 
+export const dynamic = 'force-dynamic';
+
 const PARTY_SELECT = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at';
 const PARTY_SELECT_FALLBACK = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,created_at,updated_at';
 

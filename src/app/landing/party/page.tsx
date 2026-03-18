@@ -71,7 +71,7 @@ export default function PartyPage() {
     load();
     const interval = window.setInterval(() => {
       load();
-    }, 30000);
+    }, 10000);
 
     return () => window.clearInterval(interval);
   }, [load]);

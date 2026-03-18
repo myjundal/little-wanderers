@@ -1,5 +1,7 @@
 import { requireStaffContext } from '@/lib/authz';
 
+export const dynamic = 'force-dynamic';
+
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'cancelled']);
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {

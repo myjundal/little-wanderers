@@ -1,7 +1,7 @@
 .page {
   position: relative;
   max-width: 1280px;
-  margin: 22px auto 48px;
+  margin: 0 auto 48px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 40px;
@@ -15,7 +15,7 @@
 
 .hero {
   position: relative;
-  padding: 92px 70px 74px;
+  padding: 48px 70px 74px;
   overflow: hidden;
 }
 
@@ -49,7 +49,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(350px, 0.92fr);
   gap: 40px;
-  align-items: center;
+  align-items: start;
 }
 
 .kicker,

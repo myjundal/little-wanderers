@@ -1,6 +1,8 @@
 import { callOccupancyRpc, getOccupancyStatus } from '@/lib/occupancy';
 import { requireStaffContext } from '@/lib/authz';
 
+export const dynamic = 'force-dynamic';
+
 function toPositiveInt(value: unknown, fallback = 1) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;

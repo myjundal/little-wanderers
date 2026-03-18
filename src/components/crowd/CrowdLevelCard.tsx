@@ -59,7 +59,7 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
     };
 
     load();
-    const interval = window.setInterval(load, 60_000);
+    const interval = window.setInterval(load, 10_000);
 
     return () => {
       alive = false;
@@ -95,6 +95,19 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
         />
       </div>
 
+      <div className={styles.metrics}>
+        <div className={styles.metricCard}>
+          <span className={styles.metricLabel}>Actual occupancy now</span>
+          <strong className={styles.metricValue}>
+            {loading ? '—' : `${data?.occupancy ?? 0} / ${data?.capacity ?? 24}`}
+          </strong>
+        </div>
+        <div className={styles.metricCard}>
+          <span className={styles.metricLabel}>Flow complexity</span>
+          <strong className={styles.metricValue}>{loading ? 'Refreshing…' : data?.label ?? 'Loading'}</strong>
+        </div>
+      </div>
+
       <div className={styles.scale}>
         {LEVELS.map((level) => {
           const active = data?.crowd_level === level;
@@ -111,7 +124,7 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
       </div>
 
       <div className={styles.meta}>
-        <span>{loading ? 'Loading…' : `Approximate occupancy reference: ${data?.capacity ?? 24} guests`}</span>
+        <span>{loading ? 'Loading…' : `Capacity reference: ${data?.capacity ?? 24} guests`}</span>
         <span>{data?.last_updated_at ? `Updated ${new Date(data.last_updated_at).toLocaleTimeString()}` : 'Updates throughout the day'}</span>
       </div>
 

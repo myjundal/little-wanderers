@@ -1,6 +1,8 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getOccupancyStatus } from '@/lib/occupancy';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const summary = await getOccupancyStatus(createAdminSupabaseClient());

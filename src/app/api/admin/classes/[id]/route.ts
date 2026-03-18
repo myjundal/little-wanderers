@@ -1,5 +1,7 @@
 import { requireStaffContext } from '@/lib/authz';
 
+export const dynamic = 'force-dynamic';
+
 function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }

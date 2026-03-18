@@ -120,7 +120,7 @@ export default function ClassSchedulePage() {
     load();
     const interval = window.setInterval(() => {
       load();
-    }, 30000);
+    }, 10000);
 
     return () => window.clearInterval(interval);
   }, [load]);
@@ -281,13 +281,21 @@ export default function ClassSchedulePage() {
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
-                  Person: {item.person_name} · Status: <b style={{ textTransform: 'uppercase' }}>{item.status}</b>
+                  Person: {item.person_name} · Status:{' '}
+                  <b style={{ textTransform: 'uppercase' }}>
+                    {item.class?.status === 'cancelled' ? 'studio_cancelled' : item.status}
+                  </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>
                   Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}
                 </p>
                 <p style={{ margin: '6px 0' }}>Category: {item.class?.category ?? '-'}</p>
-                {item.status !== 'cancelled' && (
+                {item.class?.status === 'cancelled' && (
+                  <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 600 }}>
+                    This class was cancelled by the studio and has been removed from the customer calendar.
+                  </p>
+                )}
+                {item.status !== 'cancelled' && item.class?.status !== 'cancelled' && (
                   <button onClick={() => cancelRegistration(item.id)} disabled={cancellingId === item.id}>
                     {cancellingId === item.id ? 'Cancelling...' : 'Cancel Booking'}
                   </button>
