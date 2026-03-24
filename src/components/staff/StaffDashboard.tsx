@@ -472,10 +472,13 @@ export default function StaffDashboard() {
                 <p style={{ color: '#6d6480' }}><strong>Headcount:</strong> {selectedBooking.headcount_expected ?? '-'}</p>
                 <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
                 <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {selectedBooking.notes ?? '-'}</p>
-                <p style={{ color: '#6d6480' }}><strong>Last status change:</strong> {selectedBooking.status_updated_at ? new Date(selectedBooking.status_updated_at).toLocaleString() : '-'}</p>
+                <p style={{ color: '#6d6480' }}>
+                  <strong>{selectedBooking.status === 'cancelled' ? 'Cancelled on:' : 'Last status change:'}</strong>{' '}
+                  {selectedBooking.status_updated_at ? new Date(selectedBooking.status_updated_at).toLocaleString() : '-'}
+                </p>
                 <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
-                  {(() => {
+                  {selectedBooking.status !== 'cancelled' && (() => {
                     const headcountReceived = (selectedBooking.notes ?? '').includes('[Final headcount received');
                     const daysUntilParty = (new Date(selectedBooking.start_time).getTime() - Date.now()) / 86_400_000;
                     if (headcountReceived) {
@@ -490,7 +493,7 @@ export default function StaffDashboard() {
                         }}
                         onClick={() => markHeadcountReceived(selectedBooking.id)}
                       >
-                        Final headcount received? Yes
+                        Final headcount received
                       </button>
                     );
                   })()}
@@ -503,6 +506,11 @@ export default function StaffDashboard() {
           </div>
         </div>
       </section>
+      <div style={{ marginTop: 16 }}>
+        <a href="/landing" style={{ display: 'inline-block', padding: '10px 14px', borderRadius: 12, background: '#f3ebff', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>
+          Return to customer dashboard
+        </a>
+      </div>
     </>
   );
 }

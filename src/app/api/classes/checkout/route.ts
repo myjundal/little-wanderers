@@ -240,16 +240,8 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
 
   const referenceSuffix = crypto.createHash('sha1').update(`${context.householdId}:${Date.now()}`).digest('hex').slice(0, 20);
 
-  const squareBody = {
+  const commonBody = {
     idempotency_key: idempotencyKey,
-    quick_pay: {
-      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
-      price_money: {
-        amount: totalPriceCents,
-        currency: 'USD',
-      },
-      location_id: process.env.SQUARE_LOCATION_ID,
-    },
     checkout_options: {
       redirect_url: redirectUrl,
       ask_for_shipping_address: false,
@@ -261,26 +253,56 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
     description: `Class checkout (${context.requestedItems.length} line item(s), $${(totalPriceCents / 100).toFixed(2)})`,
   };
 
-  const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json',
-      'Square-Version': '2025-10-16',
+  const callSquare = async (body: Record<string, unknown>) => {
+    const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Square-Version': '2025-10-16',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) return { ok: false as const, error: await resp.text() };
+    const data = await resp.json();
+    const url: string | undefined = data?.payment_link?.url;
+    if (!url) return { ok: false as const, error: 'no_url_returned' };
+    return { ok: true as const, url };
+  };
+
+  const quickPayBody = {
+    ...commonBody,
+    quick_pay: {
+      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
+      price_money: {
+        amount: totalPriceCents,
+        currency: 'USD',
+      },
+      location_id: process.env.SQUARE_LOCATION_ID,
     },
-    body: JSON.stringify(squareBody),
-  });
+  };
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`square_error: ${text}`);
-  }
+  const quickPay = await callSquare(quickPayBody);
+  if (quickPay.ok) return { url: quickPay.url, total_price_cents: totalPriceCents };
 
-  const data = await resp.json();
-  const url: string | undefined = data?.payment_link?.url;
-  if (!url) throw new Error('no_url_returned');
+  const fallbackBody = {
+    ...commonBody,
+    order: {
+      location_id: process.env.SQUARE_LOCATION_ID,
+      line_items: context.requestedItems.map((item) => ({
+        name: context.classById.get(item.class_id)?.title ?? 'Class booking',
+        quantity: String(item.quantity),
+        base_price_money: {
+          amount: context.classById.get(item.class_id)?.price_cents ?? 0,
+          currency: 'USD',
+        },
+      })),
+    },
+  };
 
-  return { url, total_price_cents: totalPriceCents };
+  const fallback = await callSquare(fallbackBody);
+  if (fallback.ok) return { url: fallback.url, total_price_cents: totalPriceCents };
+  throw new Error(`square_error: quick_pay=${quickPay.error}; fallback=${fallback.error}`);
 }
 
 export async function POST(req: Request) {
