@@ -234,12 +234,23 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
   await buildAssignments(context);
 
   const totalPriceCents = computeTotalPriceCents(context);
+  if (totalPriceCents <= 0) {
+    throw new Error('total must be greater than 0 for Square checkout');
+  }
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
   const redirectUrl = `${base}/landing/classschedule?checkout=success&person_id=${context.personId}`;
 
   const referenceSuffix = crypto.createHash('sha1').update(`${context.householdId}:${Date.now()}`).digest('hex').slice(0, 20);
-
-  const commonBody = {
+  const squareBody = {
+    idempotency_key: crypto.randomUUID(),
+    quick_pay: {
+      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
+      price_money: {
+        amount: totalPriceCents,
+        currency: 'USD',
+      },
+      location_id: process.env.SQUARE_LOCATION_ID,
+    },
     checkout_options: {
       redirect_url: redirectUrl,
       ask_for_shipping_address: false,
@@ -248,61 +259,26 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
       buyer_email: userEmail ?? undefined,
     },
     reference_id: `cc_${referenceSuffix}`,
-    description: `Class checkout (${context.requestedItems.length} line item(s), $${(totalPriceCents / 100).toFixed(2)})`,
+    description: `Class checkout ($${(totalPriceCents / 100).toFixed(2)})`,
   };
 
-  const callSquare = async (body: Record<string, unknown>) => {
-    const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Square-Version': '2025-10-16',
-      },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) return { ok: false as const, error: await resp.text() };
-    const data = await resp.json();
-    const url: string | undefined = data?.payment_link?.url;
-    if (!url) return { ok: false as const, error: 'no_url_returned' };
-    return { ok: true as const, url };
-  };
-
-  const orderBody = {
-    ...commonBody,
-    idempotency_key: crypto.randomUUID(),
-    order: {
-      location_id: process.env.SQUARE_LOCATION_ID,
-      line_items: context.requestedItems.map((item) => ({
-        name: context.classById.get(item.class_id)?.title ?? 'Class booking',
-        quantity: String(item.quantity),
-        base_price_money: {
-          amount: context.classById.get(item.class_id)?.price_cents ?? 0,
-          currency: 'USD',
-        },
-      })),
+  const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+      'Square-Version': '2025-10-16',
     },
-  };
-
-  const order = await callSquare(orderBody);
-  if (order.ok) return { url: order.url, total_price_cents: totalPriceCents };
-
-  const fallbackBody = {
-    ...commonBody,
-    idempotency_key: crypto.randomUUID(),
-    quick_pay: {
-      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
-      price_money: {
-          amount: totalPriceCents,
-          currency: 'USD',
-      },
-      location_id: process.env.SQUARE_LOCATION_ID,
-    },
-  };
-
-  const fallback = await callSquare(fallbackBody);
-  if (fallback.ok) return { url: fallback.url, total_price_cents: totalPriceCents };
-  throw new Error(`square_error: order=${order.error}; fallback=${fallback.error}`);
+    body: JSON.stringify(squareBody),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`square_error: ${text}`);
+  }
+  const data = await resp.json();
+  const url: string | undefined = data?.payment_link?.url;
+  if (!url) throw new Error('no_url_returned');
+  return { url, total_price_cents: totalPriceCents };
 }
 
 export async function POST(req: Request) {
@@ -337,7 +313,7 @@ export async function POST(req: Request) {
           ? 401
           : message.includes('not found')
             ? 404
-            : message.includes('enough seats') || message.includes('eligible person') || message.includes('not open')
+            : message.includes('enough seats') || message.includes('eligible person') || message.includes('not open') || message.includes('total must be greater')
               ? 409
               : 500;
     return Response.json({ ok: false, error: message }, { status });
