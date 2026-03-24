@@ -132,10 +132,42 @@ export default function ClassSchedulePage() {
     return () => window.clearInterval(interval);
   }, [load]);
 
-  const peopleNameMap = useMemo(
-    () => new Map(people.map((p) => [p.id, `${p.first_name} ${p.last_name ?? ''}`.trim()])),
-    [people]
-  );
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get('checkout');
+    const personId = params.get('person_id');
+    const classIdsRaw = params.get('class_ids');
+
+    if (checkout !== 'success' || !personId || !classIdsRaw) return;
+    const classIds = classIdsRaw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (classIds.length === 0) return;
+
+    const finalize = async () => {
+      setCheckouting(true);
+      const res = await fetch('/api/classes/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode: 'finalize', class_ids: classIds, person_id: personId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setMessage(json.error ?? 'Could not finalize checkout after payment.');
+        setCheckouting(false);
+        return;
+      }
+
+      const total = Number(json.checkout_summary?.total_price_cents ?? 0);
+      setMessage(`Payment complete and classes booked: ${classIds.length} class(es), total $${(total / 100).toFixed(2)}.`);
+      setCheckouting(false);
+      await load();
+      window.history.replaceState({}, '', '/landing/classschedule');
+    };
+
+    void finalize();
+  }, [load]);
 
   const classById = useMemo(() => new Map(classes.map((item) => [item.id, item])), [classes]);
 
@@ -201,7 +233,7 @@ export default function ClassSchedulePage() {
     const res = await fetch('/api/classes/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ class_ids: cartClassIds, person_id: selectedPersonId }),
+      body: JSON.stringify({ mode: 'create_payment_link', class_ids: cartClassIds, person_id: selectedPersonId }),
     });
 
     const json = await res.json();
@@ -211,15 +243,12 @@ export default function ClassSchedulePage() {
       return;
     }
 
-    const total = Number(json.checkout_summary?.total_price_cents ?? 0);
-    setMessage(
-      `${peopleNameMap.get(selectedPersonId) ?? 'Selected person'} checkout complete: ${cartClassIds.length} class(es), total $${(
-        total / 100
-      ).toFixed(2)}.`
-    );
-    setCartClassIds([]);
-    setCheckouting(false);
-    await load();
+    if (!json.payment_url) {
+      setMessage('Payment URL was not returned.');
+      setCheckouting(false);
+      return;
+    }
+    window.location.assign(json.payment_url);
   };
 
   const cancelRegistration = async (registrationId: string) => {
@@ -247,7 +276,7 @@ export default function ClassSchedulePage() {
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>담고, 수정하고, 한 번에 결제하세요. 결제한 클래스도 취소할 수 있어요.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Add classes, edit your cart, and pay once with Square. You can also cancel booked classes.</p>
 
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
@@ -272,28 +301,28 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
         {cartItems.length === 0 ? (
-          <p>장바구니가 비어 있어요.</p>
+          <p>Your cart is empty.</p>
         ) : (
           <>
             <div style={{ display: 'grid', gap: 10 }}>
               {cartItems.map((item) => (
                 <div key={item.id} style={{ border: '1px solid #e9dcfb', borderRadius: 10, padding: 10 }}>
                   <strong>{item.title}</strong> · ${(item.price_cents / 100).toFixed(2)}
-                  <div style={{ color: '#6d6480', marginTop: 4 }}>남은 자리: {item.seats_left == null ? 'Unlimited' : item.seats_left}</div>
+                  <div style={{ color: '#6d6480', marginTop: 4 }}>Seats left: {item.seats_left == null ? 'Unlimited' : item.seats_left}</div>
                   <button onClick={() => removeFromCart(item.id)} style={{ marginTop: 6 }}>Remove</button>
                 </div>
               ))}
             </div>
             <p style={{ marginTop: 12, fontWeight: 700 }}>Total: ${(cartTotalCents / 100).toFixed(2)}</p>
             <button onClick={checkoutCart} disabled={!selectedPersonId || checkouting}>
-              {checkouting ? 'Processing...' : 'Checkout once'}
+              {checkouting ? 'Processing...' : 'Checkout all'}
             </button>
           </>
         )}
 
         {recommendedForCart.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            <h3 style={{ margin: '0 0 8px' }}>같이 많이 담는 클래스 추천</h3>
+            <h3 style={{ margin: '0 0 8px' }}>Frequently bundled class picks</h3>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {recommendedForCart.map((item) => (
                 <button key={item.id} onClick={() => addToCart(item.id)} style={{ borderRadius: 999, border: '1px solid #d7c5f8', background: '#f7f1ff', padding: '6px 10px' }}>
@@ -322,7 +351,7 @@ export default function ClassSchedulePage() {
                     {c.title}{' '}
                     {c.is_popular && (
                       <span style={{ fontSize: 12, padding: '3px 7px', borderRadius: 999, background: '#ffe4f1', color: '#9d2f65' }}>
-                        인기 클래스
+                        Popular
                       </span>
                     )}
                   </h3>

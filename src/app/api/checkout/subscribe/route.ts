@@ -43,23 +43,23 @@ export async function POST(req: Request) {
       quick_pay: {
         name: 'Little Wanderers Monthly Membership',
         price_money: {
-          // 금액은 반드시 variation 의 initial phase 가격과 일치해야 함 (다르면 override로 동작)
+          // Amount must match the variation initial phase price to avoid overrides.
           amount: 6000,
           currency: 'USD',
         },
         location_id: process.env.SQUARE_LOCATION_ID!,
       },
       checkout_options: {
-        // 중요: 여기 "subscription_plan_id" 필드에는 **플랜 variation ID** 를 넣습니다.
+        // Important: this field must use the plan variation ID.
         subscription_plan_id: process.env.SQUARE_PLAN_VARIATION_ID!,
         redirect_url: `${base}/landing/membership?success=1`,
         ask_for_shipping_address: false,
       },
-      // 선택: 사전 입력 데이터
+      // Optional: pre-filled buyer info
       pre_populated_data: {
         buyer_email: user.email ?? undefined,
       },
-      // 선택: 내부 식별자(웹훅에서 역참조에 도움)
+      // Optional: internal reference to help webhook reconciliation
       reference_id: `hh_${householdId}`,
     };
 
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       headers: {
         Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
-        // 최신 버전 사용. (Sandbox에서 2023-06-08 이후 구독 결제링크 지원)
+        // Use a recent Square API version.
         'Square-Version': '2025-10-16',
       },
       body: JSON.stringify(body),
@@ -94,4 +94,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'internal' }, { status: 500 });
   }
 }
-
