@@ -16,6 +16,7 @@ type PartyPayload = {
   end_time?: string;
   headcount_expected?: number | null;
   notes?: string | null;
+  slot?: '11:00' | '15:00';
   mode?: 'create_payment_link' | 'finalize';
 };
 
@@ -31,14 +32,12 @@ function getSquareBaseUrl() {
   return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
 }
 
-function isWeekendSlot(start: Date, end: Date) {
+function isWeekendSlot(start: Date, end: Date, slot?: string) {
   const day = start.getUTCDay();
   const isWeekend = day === 0 || day === 6;
-  const startHour = start.getUTCHours();
-  const endHour = end.getUTCHours();
-  const isMorningSlot = startHour === 11 && endHour === 14;
-  const isAfternoonSlot = startHour === 15 && endHour === 18;
-  return isWeekend && (isMorningSlot || isAfternoonSlot);
+  const durationHours = (end.getTime() - start.getTime()) / 3_600_000;
+  const validSlot = slot === '11:00' || slot === '15:00';
+  return isWeekend && validSlot && durationHours === 3;
 }
 
 async function getHouseholdIdForUser(userId: string) {
@@ -96,6 +95,7 @@ export async function POST(req: Request) {
     const endTime = body?.end_time;
     const headcountExpected = body?.headcount_expected == null ? null : Number(body.headcount_expected);
     const notes = (body?.notes as string | null) ?? null;
+    const slot = typeof body.slot === 'string' ? body.slot : undefined;
     const mode = body.mode ?? 'create_payment_link';
 
     if (!startTime || !endTime) {
@@ -108,8 +108,8 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
     }
 
-    if (!isWeekendSlot(start, end)) {
-      return Response.json({ ok: false, error: 'Party bookings are only available on Saturday/Sunday at 11:00 AM or 3:00 PM (UTC).' }, { status: 400 });
+    if (!isWeekendSlot(start, end, slot)) {
+      return Response.json({ ok: false, error: 'Party bookings are only available on Saturday/Sunday at 11:00 AM or 3:00 PM.' }, { status: 400 });
     }
 
     const server = createServerSupabaseClient();
@@ -162,7 +162,8 @@ export async function POST(req: Request) {
       const encodedEnd = encodeURIComponent(end.toISOString());
       const encodedHeadcount = encodeURIComponent(String(headcountExpected ?? ''));
       const encodedNotes = encodeURIComponent(notes ?? '');
-      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}`;
+      const encodedSlot = encodeURIComponent(slot ?? '');
+      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}`;
 
       const squareBody = {
         idempotency_key: idempotencyKey,
