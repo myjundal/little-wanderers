@@ -15,6 +15,7 @@ function parseClassPayload(body: Record<string, unknown>) {
   const category = normalizeOptionalText(body.category);
   const instructor_name = normalizeOptionalText(body.instructor_name);
   const description = normalizeOptionalText(body.description);
+  const age_range = normalizeOptionalText(body.age_range);
   const start_time = typeof body.start_time === 'string' ? body.start_time : '';
   const end_time = typeof body.end_time === 'string' ? body.end_time : '';
   const capacity = body.capacity == null || body.capacity === '' ? null : Number(body.capacity);
@@ -51,6 +52,7 @@ function parseClassPayload(body: Record<string, unknown>) {
       duration_minutes: Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1),
       instructor_name,
       description,
+      age_range,
     },
     fallbackData: baseData,
   } as const;

@@ -20,10 +20,13 @@ type ClassItem = {
   duration_minutes: number | null;
   instructor_name: string | null;
   description: string | null;
+  age_range: string | null;
   capacity: number | null;
   price_cents: number;
   booked_count: number;
   seats_left: number | null;
+  is_popular: boolean;
+  recommended_class_ids: string[];
 };
 
 type RegistrationItem = {
@@ -47,9 +50,10 @@ export default function ClassSchedulePage() {
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
+  const [cartClassIds, setCartClassIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
-  const [bookingClassId, setBookingClassId] = useState<string | null>(null);
+  const [checkouting, setCheckouting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -77,8 +81,10 @@ export default function ClassSchedulePage() {
       return;
     }
 
-    setClasses(classJson.items ?? []);
+    const loadedClasses = (classJson.items ?? []) as ClassItem[];
+    setClasses(loadedClasses);
     setMyItems(myJson.items ?? []);
+    setCartClassIds((prev) => prev.filter((classId) => loadedClasses.some((item) => item.id === classId)));
 
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id;
@@ -131,6 +137,8 @@ export default function ClassSchedulePage() {
     [people]
   );
 
+  const classById = useMemo(() => new Map(classes.map((item) => [item.id, item])), [classes]);
+
   const classSlots = useMemo<CalendarSlot[]>(
     () => [
       ...classes.map<CalendarSlot>((c) => ({
@@ -153,30 +161,64 @@ export default function ClassSchedulePage() {
     [classes, myItems]
   );
 
-  const bookClass = async (classId: string) => {
-    if (!selectedPersonId) {
-      alert('Please select a person before booking.');
-      return;
-    }
+  const cartItems = useMemo(
+    () => cartClassIds.map((id) => classById.get(id)).filter((item): item is ClassItem => Boolean(item)),
+    [cartClassIds, classById]
+  );
 
-    setBookingClassId(classId);
+  const cartTotalCents = useMemo(() => cartItems.reduce((sum, item) => sum + item.price_cents, 0), [cartItems]);
+
+  const recommendedForCart = useMemo(() => {
+    const scores = new Map<string, number>();
+    cartItems.forEach((item) => {
+      item.recommended_class_ids.forEach((id, index) => {
+        if (cartClassIds.includes(id)) return;
+        const weight = Math.max(3 - index, 1);
+        scores.set(id, (scores.get(id) ?? 0) + weight);
+      });
+    });
+
+    return [...scores.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([id]) => classById.get(id))
+      .filter((item): item is ClassItem => Boolean(item))
+      .slice(0, 4);
+  }, [cartItems, cartClassIds, classById]);
+
+  const addToCart = (classId: string) => {
+    setCartClassIds((prev) => (prev.includes(classId) ? prev : [...prev, classId]));
+  };
+
+  const removeFromCart = (classId: string) => {
+    setCartClassIds((prev) => prev.filter((id) => id !== classId));
+  };
+
+  const checkoutCart = async () => {
+    if (!selectedPersonId || cartClassIds.length === 0) return;
+    setCheckouting(true);
     setMessage(null);
 
-    const res = await fetch('/api/classes/register', {
+    const res = await fetch('/api/classes/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ class_id: classId, person_id: selectedPersonId }),
+      body: JSON.stringify({ class_ids: cartClassIds, person_id: selectedPersonId }),
     });
 
     const json = await res.json();
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Booking failed.');
-      setBookingClassId(null);
+      setMessage(json.error ?? 'Checkout failed.');
+      setCheckouting(false);
       return;
     }
 
-    setMessage(`${peopleNameMap.get(selectedPersonId) ?? 'Selected person'} was booked successfully.`);
-    setBookingClassId(null);
+    const total = Number(json.checkout_summary?.total_price_cents ?? 0);
+    setMessage(
+      `${peopleNameMap.get(selectedPersonId) ?? 'Selected person'} checkout complete: ${cartClassIds.length} class(es), total $${(
+        total / 100
+      ).toFixed(2)}.`
+    );
+    setCartClassIds([]);
+    setCheckouting(false);
     await load();
   };
 
@@ -197,15 +239,15 @@ export default function ClassSchedulePage() {
       return;
     }
 
-    setMessage('Your class booking has been cancelled.');
+    setMessage('Paid class booking has been cancelled.');
     setCancellingId(null);
     await load();
   };
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
-      <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / My Bookings</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Plan your little one’s week in our lavender universe — book classes and manage all bookings here.</p>
+      <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>담고, 수정하고, 한 번에 결제하세요. 결제한 클래스도 취소할 수 있어요.</p>
 
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
@@ -225,10 +267,43 @@ export default function ClassSchedulePage() {
 
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
 
-      <AvailabilityCalendar
-        title="Class calendar"
-        slots={classSlots}
-      />
+      <AvailabilityCalendar title="Class calendar" slots={classSlots} />
+
+      <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
+        {cartItems.length === 0 ? (
+          <p>장바구니가 비어 있어요.</p>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {cartItems.map((item) => (
+                <div key={item.id} style={{ border: '1px solid #e9dcfb', borderRadius: 10, padding: 10 }}>
+                  <strong>{item.title}</strong> · ${(item.price_cents / 100).toFixed(2)}
+                  <div style={{ color: '#6d6480', marginTop: 4 }}>남은 자리: {item.seats_left == null ? 'Unlimited' : item.seats_left}</div>
+                  <button onClick={() => removeFromCart(item.id)} style={{ marginTop: 6 }}>Remove</button>
+                </div>
+              ))}
+            </div>
+            <p style={{ marginTop: 12, fontWeight: 700 }}>Total: ${(cartTotalCents / 100).toFixed(2)}</p>
+            <button onClick={checkoutCart} disabled={!selectedPersonId || checkouting}>
+              {checkouting ? 'Processing...' : 'Checkout once'}
+            </button>
+          </>
+        )}
+
+        {recommendedForCart.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <h3 style={{ margin: '0 0 8px' }}>같이 많이 담는 클래스 추천</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {recommendedForCart.map((item) => (
+                <button key={item.id} onClick={() => addToCart(item.id)} style={{ borderRadius: 999, border: '1px solid #d7c5f8', background: '#f7f1ff', padding: '6px 10px' }}>
+                  + {item.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       <section style={{ marginTop: 18 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>✨ Upcoming classes</h2>
@@ -240,14 +315,23 @@ export default function ClassSchedulePage() {
           <div style={{ display: 'grid', gap: 12 }}>
             {classes.map((c) => {
               const isFull = c.seats_left != null && c.seats_left <= 0;
+              const inCart = cartClassIds.includes(c.id);
               return (
                 <div key={c.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
-                  <h3 style={{ margin: 0 }}>{c.title}</h3>
+                  <h3 style={{ margin: 0 }}>
+                    {c.title}{' '}
+                    {c.is_popular && (
+                      <span style={{ fontSize: 12, padding: '3px 7px', borderRadius: 999, background: '#ffe4f1', color: '#9d2f65' }}>
+                        인기 클래스
+                      </span>
+                    )}
+                  </h3>
                   <p style={{ margin: '8px 0', color: '#666' }}>
                     {new Date(c.start_time).toLocaleString()} ~ {new Date(c.end_time).toLocaleTimeString()}
                   </p>
                   <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Instructor: {c.instructor_name ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Age(s): {c.age_range ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Duration: {c.duration_minutes ?? Math.round((new Date(c.end_time).getTime() - new Date(c.start_time).getTime()) / 60000)} min</p>
                   <p style={{ margin: '6px 0' }}>Price: ${(c.price_cents / 100).toFixed(2)}</p>
                   <p style={{ margin: '6px 0' }}>
@@ -255,11 +339,8 @@ export default function ClassSchedulePage() {
                     {c.seats_left != null && `(Left: ${c.seats_left})`}
                   </p>
                   {c.description && <p style={{ margin: '6px 0', color: '#666' }}>{c.description}</p>}
-                  <button
-                    onClick={() => bookClass(c.id)}
-                    disabled={isFull || !selectedPersonId || bookingClassId === c.id}
-                  >
-                    {bookingClassId === c.id ? 'Booking...' : isFull ? 'Full' : 'Book Now'}
+                  <button onClick={() => addToCart(c.id)} disabled={isFull || inCart || !selectedPersonId}>
+                    {inCart ? 'Added' : isFull ? 'Full' : 'Add to cart'}
                   </button>
                 </div>
               );
@@ -269,7 +350,7 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class bookings</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 Paid / booked classes</h2>
         {loading ? (
           <p>Loading…</p>
         ) : myItems.length === 0 ? (

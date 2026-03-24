@@ -3,7 +3,7 @@ import { requireStaffContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
-const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,capacity,price_cents,status,created_at,updated_at';
+const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,capacity,price_cents,status,created_at,updated_at';
 const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status,created_at,updated_at';
 
 type ClassRow = {
@@ -15,6 +15,7 @@ type ClassRow = {
   duration_minutes?: number | null;
   instructor_name?: string | null;
   description?: string | null;
+  age_range?: string | null;
   capacity: number | null;
   price_cents: number;
   status: string;
@@ -33,6 +34,7 @@ function parseClassPayload(body: Record<string, unknown>) {
   const category = normalizeOptionalText(body.category);
   const instructor_name = normalizeOptionalText(body.instructor_name);
   const description = normalizeOptionalText(body.description);
+  const age_range = normalizeOptionalText(body.age_range);
   const start_time = typeof body.start_time === 'string' ? body.start_time : '';
   const end_time = typeof body.end_time === 'string' ? body.end_time : '';
   const capacity = body.capacity == null || body.capacity === '' ? null : Number(body.capacity);
@@ -68,6 +70,7 @@ function parseClassPayload(body: Record<string, unknown>) {
       duration_minutes: Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1),
       instructor_name,
       description,
+      age_range,
     },
     fallbackData: baseData,
   } as const;
@@ -107,6 +110,7 @@ async function loadClasses(admin: SupabaseClient) {
       duration_minutes: item.duration_minutes ?? Math.max(Math.round((new Date(item.end_time).getTime() - new Date(item.start_time).getTime()) / 60_000), 1),
       instructor_name: item.instructor_name ?? null,
       description: item.description ?? null,
+      age_range: item.age_range ?? null,
       booked_count: booked,
       seats_left: item.capacity == null ? null : Math.max(item.capacity - booked, 0),
     };

@@ -29,6 +29,7 @@ CREATE TABLE public.classes (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
     title text NOT NULL,
     category text,
+    age_range text,
     start_time timestamp with time zone NOT NULL,
     end_time timestamp with time zone NOT NULL,
     capacity integer,
@@ -361,6 +362,7 @@ alter table public.occupancy_events
 alter table public.classes add column if not exists duration_minutes integer;
 alter table public.classes add column if not exists instructor_name text;
 alter table public.classes add column if not exists description text;
+alter table public.classes add column if not exists age_range text;
 
 alter table public.classes
   add constraint classes_duration_minutes_check
@@ -392,4 +394,3 @@ drop trigger if exists set_updated_at_occupancy_events on public.occupancy_event
 create trigger set_updated_at_occupancy_events
 before update on public.occupancy_events
 for each row execute function public.set_updated_at();
-

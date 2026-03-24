@@ -32,6 +32,7 @@ type ClassItem = {
   duration_minutes: number | null;
   instructor_name: string | null;
   description: string | null;
+  age_range: string | null;
   capacity: number | null;
   price_cents: number;
   status: 'scheduled' | 'cancelled' | 'completed';
@@ -91,6 +92,7 @@ function emptyClassForm() {
     start_time: start.toISOString().slice(11, 16),
     end_time: end.toISOString().slice(11, 16),
     instructor_name: '',
+    age_range: '',
     capacity: '12',
     price_dollars: '0',
     description: '',
@@ -113,6 +115,7 @@ function fromClass(item: ClassItem) {
     start_time: start.toISOString().slice(11, 16),
     end_time: end.toISOString().slice(11, 16),
     instructor_name: item.instructor_name ?? '',
+    age_range: item.age_range ?? '',
     capacity: item.capacity == null ? '' : String(item.capacity),
     price_dollars: (item.price_cents / 100).toFixed(2),
     description: item.description ?? '',
@@ -220,6 +223,7 @@ export default function StaffDashboard() {
       start_time: toDateTimeISO(classForm.date, classForm.start_time),
       end_time: toDateTimeISO(classForm.date, classForm.end_time),
       instructor_name: classForm.instructor_name,
+      age_range: classForm.age_range,
       capacity: classForm.capacity,
       price_cents: Math.round(Number(classForm.price_dollars || '0') * 100),
       description: classForm.description,
@@ -360,6 +364,7 @@ export default function StaffDashboard() {
           <input type="time" value={classForm.start_time} onChange={(e) => setClassForm((prev) => ({ ...prev, start_time: e.target.value }))} style={inputStyle} />
           <input type="time" value={classForm.end_time} onChange={(e) => setClassForm((prev) => ({ ...prev, end_time: e.target.value }))} style={inputStyle} />
           <input placeholder="Instructor (optional)" value={classForm.instructor_name} onChange={(e) => setClassForm((prev) => ({ ...prev, instructor_name: e.target.value }))} style={inputStyle} />
+          <input placeholder="Age(s) (optional, e.g. 2-4 years)" value={classForm.age_range} onChange={(e) => setClassForm((prev) => ({ ...prev, age_range: e.target.value }))} style={inputStyle} />
           <input type="number" min={0} placeholder="Capacity" value={classForm.capacity} onChange={(e) => setClassForm((prev) => ({ ...prev, capacity: e.target.value }))} style={inputStyle} />
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 12, top: 8, color: '#9b90b6', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em' }}>Price</span>
@@ -394,6 +399,7 @@ export default function StaffDashboard() {
                     {new Date(item.start_time).toLocaleString()} — {new Date(item.end_time).toLocaleTimeString()} · {item.duration_minutes ?? 0} min
                   </p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {item.instructor_name ?? '-'} · Category: {item.category ?? '-'}</p>
+                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Age(s): {item.age_range ?? '-'}</p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}</p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong> · Price: {dollars(item.price_cents)}</p>
                   {item.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{item.description}</p>}
