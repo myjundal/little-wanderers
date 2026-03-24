@@ -235,19 +235,31 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
   if (totalPriceCents <= 0) {
     throw new Error('total must be greater than 0 for Square checkout');
   }
+
+  const lineItems = context.requestedItems.map((item) => {
+    const klass = context.classById.get(item.class_id);
+    if (!klass) {
+      throw new Error('one or more classes were not found');
+    }
+    return {
+      name: klass.title,
+      quantity: String(item.quantity),
+      base_price_money: {
+        amount: klass.price_cents,
+        currency: 'USD',
+      },
+    };
+  });
+
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
   const redirectUrl = `${base}/landing/classschedule?checkout=success&person_id=${context.personId}`;
 
   const referenceSuffix = crypto.createHash('sha1').update(`${context.householdId}:${Date.now()}`).digest('hex').slice(0, 20);
   const squareBody = {
     idempotency_key: crypto.randomUUID(),
-    quick_pay: {
-      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
-      price_money: {
-        amount: totalPriceCents,
-        currency: 'USD',
-      },
+    order: {
       location_id: process.env.SQUARE_LOCATION_ID,
+      line_items: lineItems,
     },
     checkout_options: {
       redirect_url: redirectUrl,
@@ -257,7 +269,7 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
       buyer_email: userEmail ?? undefined,
     },
     reference_id: `cc_${referenceSuffix}`,
-    description: `Class checkout ($${(totalPriceCents / 100).toFixed(2)})`,
+    description: `Class checkout (${context.requestedItems.reduce((sum, item) => sum + item.quantity, 0)} seat(s), $${(totalPriceCents / 100).toFixed(2)})`,
   };
 
   const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {

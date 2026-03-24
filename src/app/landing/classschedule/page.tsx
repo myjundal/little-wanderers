@@ -293,7 +293,7 @@ export default function ClassSchedulePage() {
 
   const addToCart = (classId: string) => {
     if (paidClassIds.has(classId)) {
-      setMessage('This class is already paid/booked and cannot be added to cart.');
+      setMessage("A class you've already registered for won't be added to the cart. To modify a booking, please cancel and rebook.");
       return;
     }
     setCartItems((prev) => {
@@ -319,7 +319,7 @@ export default function ClassSchedulePage() {
     setMessage(null);
     const filteredItems = cartItems.filter((item) => !paidClassIds.has(item.class_id));
     if (filteredItems.length === 0) {
-      setMessage('All cart items are already paid/booked.');
+      setMessage("A class you've already registered for won't be added to the cart. To modify a booking, please cancel and rebook.");
       setCheckouting(false);
       return;
     }
@@ -394,6 +394,9 @@ export default function ClassSchedulePage() {
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
+        <p style={{ marginTop: -2, color: '#6f628d', fontSize: 13 }}>
+          A class you&apos;ve already registered for won&apos;t be added to the cart. To modify a booking, please cancel and rebook.
+        </p>
         {cartClassDetails.length === 0 ? (
           <p>Your cart is empty.</p>
         ) : (
