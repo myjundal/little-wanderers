@@ -37,7 +37,7 @@ const WEEKLY_HOURS = [
   { label: 'Saturday', hours: '9am–7pm' },
 ];
 
-export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = false, style }: { eyebrow?: string; compact?: boolean; style?: CSSProperties }) {
+export default function CrowdLevelCard({ compact = false, style }: { compact?: boolean; style?: CSSProperties }) {
   const [data, setData] = useState<CrowdPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +100,6 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
 
   return (
     <section className={styles.card} aria-live="polite" style={{ ...(compact ? { padding: 16 } : {}), ...(style ?? {}) }}>
-      <p className={styles.eyebrow}>{eyebrow}</p>
       <div className={styles.hoursBlock}>
         <p className={styles.currentDateTime}>{currentDate} · {currentTime}</p>
         <p className={styles.openStatus}>
