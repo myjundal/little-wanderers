@@ -4,14 +4,7 @@ import styles from './Nav.module.css';
 
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
-const navItems = [
-  { href: '/space', label: 'Space' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/classes', label: 'Classes' },
-  { href: '/faq', label: 'FAQ' },
-  { href: '/visit', label: 'Visit' },
-  { href: '/login', label: 'Login' },
-] as const;
+const navItems = [{ href: '/faq', label: 'FAQ' }] as const;
 
 export default function Nav() {
   return (
