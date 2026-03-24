@@ -121,7 +121,7 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
       </div>
       <div className={styles.titleRow}>
         <div>
-          <h3 style={{ margin: 0, color: '#4f3f82', fontSize: compact ? '1.1rem' : '1.35rem' }}>Current estimated crowd level</h3>
+          <h3 style={{ margin: 0, color: '#4f3f82', fontSize: compact ? '1.1rem' : '1.35rem' }}>Current flow occupancy status</h3>
           <p className={styles.helper} style={{ marginTop: 8, marginBottom: 0 }}>
             {loading ? 'Refreshing today’s approximate studio flow…' : data?.description ?? 'A gentle estimate instead of an exact real-time headcount.'}
           </p>
