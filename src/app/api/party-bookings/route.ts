@@ -36,7 +36,7 @@ function isWeekendSlot(start: Date, end: Date) {
   const isWeekend = day === 0 || day === 6;
   const startHour = start.getUTCHours();
   const endHour = end.getUTCHours();
-  const isMorningSlot = startHour === 11 && endHour === 13;
+  const isMorningSlot = startHour === 11 && endHour === 14;
   const isAfternoonSlot = startHour === 15 && endHour === 18;
   return isWeekend && (isMorningSlot || isAfternoonSlot);
 }
@@ -123,6 +123,21 @@ export async function POST(req: Request) {
     if (!householdId) return Response.json({ ok: false, error: 'household not found' }, { status: 404 });
 
     const supa = admin();
+    const { data: existingSameSlot } = await supa
+      .from('party_bookings')
+      .select('id,status')
+      .eq('household_id', householdId)
+      .eq('start_time', start.toISOString())
+      .eq('end_time', end.toISOString())
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingSameSlot) {
+      return Response.json({ ok: true, id: existingSameSlot.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, deduplicated: true });
+    }
+
     const { data: conflicts, error: conflictErr } = await supa
       .from('party_bookings')
       .select('id,start_time,end_time,status')

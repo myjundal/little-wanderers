@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
@@ -46,6 +46,7 @@ export default function PartyPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
   const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
+  const finalizingPaymentRef = useRef(false);
 
   const [form, setForm] = useState({
     party_date: getDefaultWeekendDate(),
@@ -55,7 +56,7 @@ export default function PartyPage() {
   });
 
   const startIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 15 : 11), [form.party_date, form.slot]);
-  const endIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 18 : 13), [form.party_date, form.slot]);
+  const endIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 18 : 14), [form.party_date, form.slot]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,6 +93,7 @@ export default function PartyPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('party_checkout') !== 'success') return;
+    if (finalizingPaymentRef.current) return;
 
     const startTime = params.get('start_time');
     const endTime = params.get('end_time');
@@ -100,6 +102,7 @@ export default function PartyPage() {
     if (!startTime || !endTime) return;
 
     const finalize = async () => {
+      finalizingPaymentRef.current = true;
       setSubmitting(true);
       const res = await fetch('/api/party-bookings', {
         method: 'POST',
@@ -116,11 +119,13 @@ export default function PartyPage() {
       if (!res.ok || !json.ok) {
         setMessage(json.error ?? 'Could not finalize party booking after payment.');
         setSubmitting(false);
+        finalizingPaymentRef.current = false;
         return;
       }
 
       setMessage('Deposit paid. Your party is scheduled.');
       setSubmitting(false);
+      finalizingPaymentRef.current = false;
       await load();
       window.history.replaceState({}, '', '/landing/party');
     };
@@ -240,18 +245,12 @@ export default function PartyPage() {
           </label>
 
           <label>
-            Start time
+            Time
             <br />
             <select value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value }))}>
-              <option value="11:00">11:00 AM (ends at 1:00 PM)</option>
+              <option value="11:00">11:00 AM (ends at 2:00 PM)</option>
               <option value="15:00">3:00 PM (ends at 6:00 PM)</option>
             </select>
-          </label>
-
-          <label>
-            End time
-            <br />
-            <input value={new Date(endIso).toLocaleTimeString()} readOnly />
           </label>
 
           <label>
