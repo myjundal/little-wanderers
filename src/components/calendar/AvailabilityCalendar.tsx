@@ -39,6 +39,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
 
   const { dayMap, calendarDays } = useMemo(() => {
     const map = new Map<string, CalendarSlot[]>();
@@ -46,6 +47,11 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
       const key = ymd(new Date(slot.start));
       const existing = map.get(key) ?? [];
       existing.push(slot);
+      existing.sort((a, b) => {
+        if (a.status === 'mine' && b.status !== 'mine') return -1;
+        if (a.status !== 'mine' && b.status === 'mine') return 1;
+        return new Date(a.start).getTime() - new Date(b.start).getTime();
+      });
       map.set(key, existing);
     });
 
@@ -165,12 +171,35 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
                     {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {slot.label}
                   </div>
                 ))}
-                {list.length > 2 && <div style={{ fontSize: 10, color: '#7d709b' }}>+{list.length - 2} more</div>}
+                {list.length > 2 && (
+                  <button
+                    onClick={() => setExpandedDayKey(key)}
+                    style={{ fontSize: 10, color: '#7d709b', border: 'none', background: 'transparent', textAlign: 'left', padding: 0, cursor: 'pointer' }}
+                  >
+                    +{list.length - 2} more
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {expandedDayKey && (
+        <div style={{ marginTop: 12, border: '1px solid #e3d0fb', borderRadius: 12, padding: 10, background: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong style={{ color: '#4f3f82' }}>All bookings on {expandedDayKey}</strong>
+            <button onClick={() => setExpandedDayKey(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>✕</button>
+          </div>
+          <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+            {(dayMap.get(expandedDayKey) ?? []).map((slot) => (
+              <div key={slot.id} style={{ fontSize: 12, color: '#4f3f82' }}>
+                {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · {slot.label} ({statusLabel[slot.status]})
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
         {Object.entries(statusLabel).map(([k, v]) => (

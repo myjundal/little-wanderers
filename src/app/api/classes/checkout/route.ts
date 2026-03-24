@@ -233,18 +233,6 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
 
   await buildAssignments(context);
 
-  const lineItems = context.requestedItems.map((item) => {
-    const klass = context.classById.get(item.class_id)!;
-    return {
-      name: klass.title,
-      quantity: String(item.quantity),
-      base_price_money: {
-        amount: klass.price_cents,
-        currency: 'USD',
-      },
-    };
-  });
-
   const totalPriceCents = computeTotalPriceCents(context);
   const idempotencyKey = crypto.randomUUID();
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
@@ -255,9 +243,13 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
 
   const squareBody = {
     idempotency_key: idempotencyKey,
-    order: {
+    quick_pay: {
+      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
+      price_money: {
+        amount: totalPriceCents,
+        currency: 'USD',
+      },
       location_id: process.env.SQUARE_LOCATION_ID,
-      line_items: lineItems,
     },
     checkout_options: {
       redirect_url: redirectUrl,
