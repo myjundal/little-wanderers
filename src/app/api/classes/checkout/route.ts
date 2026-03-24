@@ -268,23 +268,7 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
     return { ok: true as const, url };
   };
 
-  const quickPayBody = {
-    ...commonBody,
-    idempotency_key: crypto.randomUUID(),
-    quick_pay: {
-      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
-      price_money: {
-        amount: totalPriceCents,
-        currency: 'USD',
-      },
-      location_id: process.env.SQUARE_LOCATION_ID,
-    },
-  };
-
-  const quickPay = await callSquare(quickPayBody);
-  if (quickPay.ok) return { url: quickPay.url, total_price_cents: totalPriceCents };
-
-  const fallbackBody = {
+  const orderBody = {
     ...commonBody,
     idempotency_key: crypto.randomUUID(),
     order: {
@@ -300,9 +284,25 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
     },
   };
 
+  const order = await callSquare(orderBody);
+  if (order.ok) return { url: order.url, total_price_cents: totalPriceCents };
+
+  const fallbackBody = {
+    ...commonBody,
+    idempotency_key: crypto.randomUUID(),
+    quick_pay: {
+      name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
+      price_money: {
+          amount: totalPriceCents,
+          currency: 'USD',
+      },
+      location_id: process.env.SQUARE_LOCATION_ID,
+    },
+  };
+
   const fallback = await callSquare(fallbackBody);
   if (fallback.ok) return { url: fallback.url, total_price_cents: totalPriceCents };
-  throw new Error(`square_error: quick_pay=${quickPay.error}; fallback=${fallback.error}`);
+  throw new Error(`square_error: order=${order.error}; fallback=${fallback.error}`);
 }
 
 export async function POST(req: Request) {

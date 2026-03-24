@@ -128,6 +128,13 @@ function dollars(cents: number | null) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function prettyNote(note: string | null) {
+  if (!note) return '-';
+  return note.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (iso) =>
+    new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
+}
+
 export default function StaffDashboard() {
   const [occupancy, setOccupancy] = useState<OccupancyState | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -471,7 +478,7 @@ export default function StaffDashboard() {
                 <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{selectedBooking.status}</span></p>
                 <p style={{ color: '#6d6480' }}><strong>Headcount:</strong> {selectedBooking.headcount_expected ?? '-'}</p>
                 <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
-                <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {selectedBooking.notes ?? '-'}</p>
+                <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {prettyNote(selectedBooking.notes)}</p>
                 <p style={{ color: '#6d6480' }}>
                   <strong>{selectedBooking.status === 'cancelled' ? 'Cancelled on:' : 'Last status change:'}</strong>{' '}
                   {selectedBooking.status_updated_at ? new Date(selectedBooking.status_updated_at).toLocaleString() : '-'}
