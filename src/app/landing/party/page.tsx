@@ -39,6 +39,13 @@ function isWeekendDate(date: string) {
   return day === 0 || day === 6;
 }
 
+function prettyNote(note: string | null) {
+  if (!note) return '-';
+  return note.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (iso) =>
+    new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
+}
+
 export default function PartyPage() {
   const [items, setItems] = useState<PartyBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -368,7 +375,7 @@ export default function PartyPage() {
                     Party fee:{' '}
                     {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
                   </p>
-                  <p style={{ margin: '6px 0', color: '#555' }}>Notes: {item.notes ?? '-'}</p>
+                  <p style={{ margin: '6px 0', color: '#555' }}>Notes: {prettyNote(item.notes)}</p>
                   <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
                   <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
                     Status: {item.status === 'confirmed' ? 'Party scheduled' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending cancel' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}

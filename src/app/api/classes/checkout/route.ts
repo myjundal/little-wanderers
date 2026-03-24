@@ -234,14 +234,12 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
   await buildAssignments(context);
 
   const totalPriceCents = computeTotalPriceCents(context);
-  const idempotencyKey = crypto.randomUUID();
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
   const redirectUrl = `${base}/landing/classschedule?checkout=success&person_id=${context.personId}`;
 
   const referenceSuffix = crypto.createHash('sha1').update(`${context.householdId}:${Date.now()}`).digest('hex').slice(0, 20);
 
   const commonBody = {
-    idempotency_key: idempotencyKey,
     checkout_options: {
       redirect_url: redirectUrl,
       ask_for_shipping_address: false,
@@ -272,6 +270,7 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
 
   const quickPayBody = {
     ...commonBody,
+    idempotency_key: crypto.randomUUID(),
     quick_pay: {
       name: `Little Wanderers Class Checkout (${context.requestedItems.length} classes)`,
       price_money: {
@@ -287,6 +286,7 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
 
   const fallbackBody = {
     ...commonBody,
+    idempotency_key: crypto.randomUUID(),
     order: {
       location_id: process.env.SQUARE_LOCATION_ID,
       line_items: context.requestedItems.map((item) => ({
