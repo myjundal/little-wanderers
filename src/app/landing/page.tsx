@@ -42,7 +42,7 @@ function Badge({ status }: { status: MembershipStatus }) {
     canceled: { background: '#ffeaea', border: '1px solid #ffb3b3', color: '#7a1212', padding: '2px 8px', borderRadius: 6, fontSize: 12 },
     none:     { background: '#f0f0f0', border: '1px solid #ddd',    color: '#444',    padding: '2px 8px', borderRadius: 6, fontSize: 12 },
   };
-  return <span style={styleMap[status]}>{status.toUpperCase()}</span>;
+  return <span style={styleMap[status]}>{status === 'none' ? 'No membership' : status.toUpperCase()}</span>;
 }
 
 export default function AppHome() {
