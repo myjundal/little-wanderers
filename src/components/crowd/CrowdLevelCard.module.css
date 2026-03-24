@@ -27,6 +27,60 @@
   flex-wrap: wrap;
 }
 
+.hoursBlock {
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(128, 92, 188, 0.18);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.currentDateTime {
+  margin: 0;
+  color: #5d4b86;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.openStatus {
+  margin: 6px 0 0;
+  color: #4f3f82;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.todayHours {
+  margin: 8px 0 0;
+  color: #6d6480;
+  font-size: 0.9rem;
+}
+
+.otherHours {
+  margin-top: 10px;
+}
+
+.otherHours summary {
+  cursor: pointer;
+  color: #684d94;
+  font-weight: 700;
+}
+
+.otherHours ul {
+  list-style: none;
+  padding: 8px 0 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.otherHours li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #5f5675;
+  font-size: 0.88rem;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

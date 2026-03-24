@@ -36,8 +36,8 @@ export default function HomePage() {
               </div>
             </div>
             <p className={styles.subtitle}>
-              A calm, dreamy space for sensory exploration, a break in the day, and coffee-in-hand moments that feel
-              restorative for parents too.
+              A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in
+              the day and coffee-in-hand moments that feel restorative for parents too.
             </p>
             <p className={styles.subline}>Take a deep breath and a sip of your drink.</p>
 

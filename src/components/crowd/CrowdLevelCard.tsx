@@ -26,6 +26,17 @@ const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
   near_capacity: 'Near Capacity',
 };
 
+const BUSINESS_TIME_ZONE = 'America/New_York';
+const WEEKLY_HOURS = [
+  { label: 'Sunday', hours: '9am–6pm' },
+  { label: 'Monday', hours: '9am–6pm' },
+  { label: 'Tuesday', hours: '9am–6pm' },
+  { label: 'Wednesday', hours: '9am–6pm' },
+  { label: 'Thursday', hours: '9am–6pm' },
+  { label: 'Friday', hours: '9am–7pm' },
+  { label: 'Saturday', hours: '9am–7pm' },
+];
+
 export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = false, style }: { eyebrow?: string; compact?: boolean; style?: CSSProperties }) {
   const [data, setData] = useState<CrowdPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,9 +78,47 @@ export default function CrowdLevelCard({ eyebrow = 'Current vibe', compact = fal
     };
   }, []);
 
+  const now = new Date();
+  const localNow = new Date(now.toLocaleString('en-US', { timeZone: BUSINESS_TIME_ZONE }));
+  const dayIndex = localNow.getDay();
+  const hour = localNow.getHours();
+  const todaysCloseHour = dayIndex === 5 || dayIndex === 6 ? 19 : 18;
+  const isOpenNow = hour >= 9 && hour < todaysCloseHour;
+  const todaysHours = WEEKLY_HOURS[dayIndex]?.hours ?? '9am–6pm';
+  const currentDate = localNow.toLocaleDateString('en-US', {
+    timeZone: BUSINESS_TIME_ZONE,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const currentTime = localNow.toLocaleTimeString('en-US', {
+    timeZone: BUSINESS_TIME_ZONE,
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
   return (
     <section className={styles.card} aria-live="polite" style={{ ...(compact ? { padding: 16 } : {}), ...(style ?? {}) }}>
       <p className={styles.eyebrow}>{eyebrow}</p>
+      <div className={styles.hoursBlock}>
+        <p className={styles.currentDateTime}>{currentDate} · {currentTime}</p>
+        <p className={styles.openStatus}>
+          {isOpenNow ? 'Come on in, we are open now!' : 'We are closed now, but see you soon!'}
+        </p>
+        <p className={styles.todayHours}>Today&apos;s operating hours: {todaysHours}</p>
+        <details className={styles.otherHours}>
+          <summary>Other operating hours</summary>
+          <ul>
+            {WEEKLY_HOURS.map((entry) => (
+              <li key={entry.label}>
+                <span>{entry.label}</span>
+                <strong>{entry.hours}</strong>
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
       <div className={styles.titleRow}>
         <div>
           <h3 style={{ margin: 0, color: '#4f3f82', fontSize: compact ? '1.1rem' : '1.35rem' }}>Current estimated crowd level</h3>
