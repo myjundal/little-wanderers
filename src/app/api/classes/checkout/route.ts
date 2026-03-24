@@ -2,10 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import crypto from 'crypto';
 
-const SQUARE_BASE = 'https://connect.squareupsandbox.com';
-
 const admin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+function getSquareBaseUrl() {
+  const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
+  return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
+}
 
 type CheckoutItem = { class_id: string; quantity?: number };
 
@@ -247,6 +250,8 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
   const encodedItems = encodeURIComponent(JSON.stringify(context.requestedItems));
   const redirectUrl = `${base}/landing/classschedule?checkout=success&person_id=${context.personId}&items=${encodedItems}`;
 
+  const referenceSuffix = crypto.createHash('sha1').update(`${context.householdId}:${Date.now()}`).digest('hex').slice(0, 20);
+
   const squareBody = {
     idempotency_key: idempotencyKey,
     order: {
@@ -260,11 +265,11 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
     pre_populated_data: {
       buyer_email: userEmail ?? undefined,
     },
-    reference_id: `class_checkout_${context.householdId}`,
+    reference_id: `cc_${referenceSuffix}`,
     description: `Class checkout (${context.requestedItems.length} line item(s), $${(totalPriceCents / 100).toFixed(2)})`,
   };
 
-  const resp = await fetch(`${SQUARE_BASE}/v2/online-checkout/payment-links`, {
+  const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
