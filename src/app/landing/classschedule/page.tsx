@@ -215,6 +215,20 @@ export default function ClassSchedulePage() {
   }, [cartItems, load]);
 
   const classById = useMemo(() => new Map(classes.map((item) => [item.id, item])), [classes]);
+  const paidClassIds = useMemo(
+    () =>
+      new Set(
+        myItems
+          .filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled')
+          .map((item) => item.class?.id)
+          .filter((id): id is string => Boolean(id))
+      ),
+    [myItems]
+  );
+
+  useEffect(() => {
+    setCartItems((prev) => prev.filter((item) => !paidClassIds.has(item.class_id)));
+  }, [paidClassIds]);
 
   const classSlots = useMemo<CalendarSlot[]>(
     () => [
@@ -278,6 +292,10 @@ export default function ClassSchedulePage() {
   }, [cartClassDetails, cartItems, classById]);
 
   const addToCart = (classId: string) => {
+    if (paidClassIds.has(classId)) {
+      setMessage('This class is already paid/booked and cannot be added to cart.');
+      return;
+    }
     setCartItems((prev) => {
       const found = prev.find((item) => item.class_id === classId);
       if (found) return prev;
@@ -299,11 +317,17 @@ export default function ClassSchedulePage() {
     if (!selectedPersonId || cartItems.length === 0) return;
     setCheckouting(true);
     setMessage(null);
+    const filteredItems = cartItems.filter((item) => !paidClassIds.has(item.class_id));
+    if (filteredItems.length === 0) {
+      setMessage('All cart items are already paid/booked.');
+      setCheckouting(false);
+      return;
+    }
 
     const res = await fetch('/api/classes/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mode: 'create_payment_link', items: cartItems, person_id: selectedPersonId }),
+      body: JSON.stringify({ mode: 'create_payment_link', items: filteredItems, person_id: selectedPersonId }),
     });
 
     const json = await res.json();
@@ -420,6 +444,7 @@ export default function ClassSchedulePage() {
             {classes.map((c) => {
               const isFull = c.seats_left != null && c.seats_left <= 0;
               const inCart = cartItems.some((item) => item.class_id === c.id);
+              const alreadyBooked = paidClassIds.has(c.id);
               return (
                 <div key={c.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <h3 style={{ margin: 0 }}>
@@ -443,8 +468,8 @@ export default function ClassSchedulePage() {
                     {c.seats_left != null && `(Left: ${c.seats_left})`}
                   </p>
                   {c.description && <p style={{ margin: '6px 0', color: '#666' }}>{c.description}</p>}
-                  <button onClick={() => addToCart(c.id)} disabled={isFull || inCart || !selectedPersonId}>
-                    {inCart ? 'Added' : isFull ? 'Full' : 'Add to cart'}
+                  <button onClick={() => addToCart(c.id)} disabled={isFull || inCart || alreadyBooked || !selectedPersonId}>
+                    {alreadyBooked ? 'Booked' : inCart ? 'Added' : isFull ? 'Full' : 'Add to cart'}
                   </button>
                 </div>
               );

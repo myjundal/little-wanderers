@@ -231,8 +231,6 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
     throw new Error('Square payment is not configured');
   }
 
-  await buildAssignments(context);
-
   const totalPriceCents = computeTotalPriceCents(context);
   if (totalPriceCents <= 0) {
     throw new Error('total must be greater than 0 for Square checkout');
