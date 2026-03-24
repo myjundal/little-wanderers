@@ -252,7 +252,13 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
   });
 
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const redirectUrl = `${base}/landing/classschedule?checkout=success&person_id=${context.personId}`;
+  const checkoutItemsToken = context.requestedItems.map((item) => `${item.class_id}:${item.quantity}`).join(',');
+  const redirectParams = new URLSearchParams({
+    checkout: 'success',
+    person_id: context.personId,
+    items: checkoutItemsToken,
+  });
+  const redirectUrl = `${base}/landing/classschedule?${redirectParams.toString()}`;
 
   const referenceSuffix = crypto.createHash('sha1').update(`${context.householdId}:${Date.now()}`).digest('hex').slice(0, 20);
   const squareBody = {

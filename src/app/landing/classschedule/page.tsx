@@ -171,7 +171,7 @@ export default function ClassSchedulePage() {
 
     if (checkout !== 'success' || !personId) return;
     const safeItems = (itemsRaw
-      ? decodeURIComponent(itemsRaw)
+      ? itemsRaw
           .split(',')
           .map((token) => token.trim())
           .filter(Boolean)
