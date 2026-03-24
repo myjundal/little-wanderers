@@ -61,6 +61,28 @@ export default function ClassSchedulePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [checkouting, setCheckouting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const CART_STORAGE_KEY = 'lw_class_cart_v1';
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CART_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as CartItemState[];
+      const safe = (parsed ?? [])
+        .filter((item) => item?.class_id)
+        .map((item) => ({
+          class_id: item.class_id,
+          quantity: Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
+        }));
+      setCartItems(safe);
+    } catch {
+      // ignore malformed saved cart
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+  }, [cartItems]);
 
   const load = useCallback(async () => {
     setLoading(true);

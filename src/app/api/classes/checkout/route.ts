@@ -6,6 +6,7 @@ const admin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 function getSquareBaseUrl() {
+  if (process.env.SQUARE_BASE_URL) return process.env.SQUARE_BASE_URL;
   const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
   return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
 }
