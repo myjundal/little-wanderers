@@ -170,18 +170,19 @@ export default function ClassSchedulePage() {
     const itemsRaw = params.get('items');
 
     if (checkout !== 'success' || !personId || !itemsRaw) return;
-    let parsedItems: CartItemState[] = [];
-    try {
-      parsedItems = JSON.parse(decodeURIComponent(itemsRaw)) as CartItemState[];
-    } catch {
-      return;
-    }
-    const safeItems = (parsedItems ?? [])
-      .filter((item) => item?.class_id)
-      .map((item) => ({
-        class_id: item.class_id,
-        quantity: Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
-      }));
+    const safeItems = decodeURIComponent(itemsRaw)
+      .split(',')
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .map((token) => {
+        const [classId, qtyRaw] = token.split(':');
+        const qty = Number(qtyRaw);
+        return {
+          class_id: classId,
+          quantity: Number.isInteger(qty) && qty > 0 ? qty : 1,
+        };
+      })
+      .filter((item) => item.class_id);
     if (safeItems.length === 0) return;
 
     const finalize = async () => {
@@ -222,16 +223,25 @@ export default function ClassSchedulePage() {
         status: c.seats_left != null && c.seats_left <= 0 ? 'full' : 'available',
       })),
       ...myItems
-        .filter((item) => item.class?.start_time && item.class?.status !== 'cancelled')
+        .filter((item) => item.class?.start_time && item.class?.status !== 'cancelled' && item.status !== 'cancelled')
         .map<CalendarSlot>((item) => ({
           id: `mine-${item.id}`,
           start: item.class!.start_time,
           end: item.class!.end_time,
           label: item.class?.title ?? 'My class',
-          status: item.status === 'cancelled' ? 'booked' : 'mine',
+          status: 'mine',
         })),
     ],
     [classes, myItems]
+  );
+
+  const cancelledItems = useMemo(
+    () => myItems.filter((item) => item.status === 'cancelled' || item.class?.status === 'cancelled'),
+    [myItems]
+  );
+  const activeItems = useMemo(
+    () => myItems.filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled'),
+    [myItems]
   );
 
   const cartClassDetails = useMemo(
@@ -444,13 +454,13 @@ export default function ClassSchedulePage() {
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 Paid / booked classes</h2>
         {loading ? (
           <p>Loading…</p>
-        ) : myItems.length === 0 ? (
+        ) : activeItems.length === 0 ? (
           <div style={{ border: '1px dashed #ccc', borderRadius: 12, padding: 16 }}>
             <p>You do not have any class bookings yet.</p>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {myItems.map((item) => (
+            {activeItems.map((item) => (
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
@@ -481,6 +491,22 @@ export default function ClassSchedulePage() {
           </div>
         )}
       </section>
+
+      {cancelledItems.length > 0 && (
+        <section style={{ marginTop: 20 }}>
+          <h2 style={{ fontSize: 20, margin: '0 0 10px', color: '#8a3f6b' }}>Cancelled bookings</h2>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {cancelledItems.map((item) => (
+              <div key={`cancelled-${item.id}`} style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 12, background: '#fff7fc' }}>
+                <strong>{item.class?.title ?? 'Removed class'}</strong>
+                <p style={{ margin: '6px 0' }}>Person: {item.person_name}</p>
+                <p style={{ margin: '6px 0' }}>Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}</p>
+                <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 700 }}>Cancelled</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <p style={{ marginTop: 20 }}>
         <Link href="/landing">← Back to Homepage</Link>

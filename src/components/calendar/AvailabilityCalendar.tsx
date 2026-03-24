@@ -189,7 +189,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
         <div style={{ marginTop: 12, border: '1px solid #e3d0fb', borderRadius: 12, padding: 10, background: '#fff' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <strong style={{ color: '#4f3f82' }}>All bookings on {expandedDayKey}</strong>
-            <button onClick={() => setExpandedDayKey(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>✕</button>
+            <button onClick={() => setExpandedDayKey(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>X</button>
           </div>
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
             {(dayMap.get(expandedDayKey) ?? []).map((slot) => (

@@ -185,6 +185,10 @@ function computeTotalPriceCents(context: LoadedContext) {
   }, 0);
 }
 
+function encodeItemsForRedirect(items: Array<{ class_id: string; quantity: number }>) {
+  return encodeURIComponent(items.map((item) => `${item.class_id}:${item.quantity}`).join(','));
+}
+
 async function finalizeCheckout(context: LoadedContext) {
   const supa = admin();
   const assignments = await buildAssignments(context);
@@ -236,7 +240,7 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
   const totalPriceCents = computeTotalPriceCents(context);
   const idempotencyKey = crypto.randomUUID();
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const encodedItems = encodeURIComponent(JSON.stringify(context.requestedItems));
+  const encodedItems = encodeItemsForRedirect(context.requestedItems);
   const redirectUrl = `${base}/landing/classschedule?checkout=success&person_id=${context.personId}&items=${encodedItems}`;
 
   const referenceSuffix = crypto.createHash('sha1').update(`${context.householdId}:${Date.now()}`).digest('hex').slice(0, 20);

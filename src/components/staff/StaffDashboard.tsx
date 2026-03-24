@@ -270,7 +270,7 @@ export default function StaffDashboard() {
     await load();
   };
 
-  const updatePartyStatus = async (bookingId: string, status: 'confirmed' | 'cancelled') => {
+  const updatePartyStatus = async (bookingId: string, status: 'cancelled') => {
     const res = await fetch(`/api/admin/party-bookings/${bookingId}/status`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -285,6 +285,19 @@ export default function StaffDashboard() {
 
     setMessage(`Party booking marked ${status}.`);
     setStatusNote((prev) => ({ ...prev, [bookingId]: '' }));
+    await load();
+  };
+
+  const markHeadcountReceived = async (bookingId: string) => {
+    const res = await fetch(`/api/admin/party-bookings/${bookingId}/headcount`, {
+      method: 'PATCH',
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Could not update headcount reminder.');
+      return;
+    }
+    setMessage('Final headcount marked as received.');
     await load();
   };
 
@@ -420,7 +433,7 @@ export default function StaffDashboard() {
 
       <section style={sectionStyle}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Party booking management</p>
-        <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Review, confirm, and cancel party requests</h2>
+        <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Review and manage scheduled party bookings</h2>
         <p style={{ margin: 0, color: '#6d6480' }}>Status changes are written back immediately so the customer view stays in sync.</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
@@ -462,9 +475,25 @@ export default function StaffDashboard() {
                 <p style={{ color: '#6d6480' }}><strong>Last status change:</strong> {selectedBooking.status_updated_at ? new Date(selectedBooking.status_updated_at).toLocaleString() : '-'}</p>
                 <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
-                  {selectedBooking.status === 'pending' && (
-                    <button style={{ ...buttonStyle, background: '#e5f6ea', color: '#2f7a47' }} onClick={() => updatePartyStatus(selectedBooking.id, 'confirmed')}>Confirm booking</button>
-                  )}
+                  {(() => {
+                    const headcountReceived = (selectedBooking.notes ?? '').includes('[Final headcount received');
+                    const daysUntilParty = (new Date(selectedBooking.start_time).getTime() - Date.now()) / 86_400_000;
+                    if (headcountReceived) {
+                      return <span style={{ ...buttonStyle, background: '#e5f6ea', color: '#2f7a47', display: 'inline-flex', alignItems: 'center' }}>✅ Final headcount received</span>;
+                    }
+                    return (
+                      <button
+                        style={{
+                          ...buttonStyle,
+                          background: daysUntilParty <= 3 ? '#ffe2e2' : '#f3ebff',
+                          color: daysUntilParty <= 3 ? '#b42318' : '#5f3da4',
+                        }}
+                        onClick={() => markHeadcountReceived(selectedBooking.id)}
+                      >
+                        Final headcount received? Yes
+                      </button>
+                    );
+                  })()}
                   {selectedBooking.status !== 'cancelled' && (
                     <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
                   )}

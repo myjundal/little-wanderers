@@ -240,13 +240,15 @@ export default function PartyPage() {
       }
       return generated;
     })(),
-    ...bookedSlots.map((slot) => ({
+    ...bookedSlots
+      .filter((slot) => !items.some((item) => item.status !== 'cancelled' && item.start_time === slot.start_time))
+      .map((slot) => ({
       id: `booked-${slot.id}`,
       start: slot.start_time,
       end: slot.end_time,
       label: 'Reserved slot',
       status: 'booked' as const,
-    })),
+      })),
     ...items.filter((item) => item.status !== 'cancelled').map((item) => ({
       id: `mine-${item.id}`,
       start: item.start_time,
