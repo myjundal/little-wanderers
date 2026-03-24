@@ -169,20 +169,23 @@ export default function ClassSchedulePage() {
     const personId = params.get('person_id');
     const itemsRaw = params.get('items');
 
-    if (checkout !== 'success' || !personId || !itemsRaw) return;
-    const safeItems = decodeURIComponent(itemsRaw)
-      .split(',')
-      .map((token) => token.trim())
-      .filter(Boolean)
-      .map((token) => {
-        const [classId, qtyRaw] = token.split(':');
-        const qty = Number(qtyRaw);
-        return {
-          class_id: classId,
-          quantity: Number.isInteger(qty) && qty > 0 ? qty : 1,
-        };
-      })
-      .filter((item) => item.class_id);
+    if (checkout !== 'success' || !personId) return;
+    const safeItems = (itemsRaw
+      ? decodeURIComponent(itemsRaw)
+          .split(',')
+          .map((token) => token.trim())
+          .filter(Boolean)
+          .map((token) => {
+            const [classId, qtyRaw] = token.split(':');
+            const qty = Number(qtyRaw);
+            return {
+              class_id: classId,
+              quantity: Number.isInteger(qty) && qty > 0 ? qty : 1,
+            };
+          })
+          .filter((item) => item.class_id)
+      : cartItems
+    );
     if (safeItems.length === 0) return;
 
     const finalize = async () => {
@@ -209,7 +212,7 @@ export default function ClassSchedulePage() {
     };
 
     void finalize();
-  }, [load]);
+  }, [cartItems, load]);
 
   const classById = useMemo(() => new Map(classes.map((item) => [item.id, item])), [classes]);
 

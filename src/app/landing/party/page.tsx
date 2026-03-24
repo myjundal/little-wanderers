@@ -217,9 +217,11 @@ export default function PartyPage() {
         const start11 = toIsoUtc(dayStr, 11);
         const start15 = toIsoUtc(dayStr, 15);
         const blockedStarts = new Set(
-          [...bookedSlots, ...items.filter((item) => item.status !== 'cancelled')].map((item) => item.start_time)
+          [...bookedSlots, ...items.filter((item) => item.status !== 'cancelled')].map((item) =>
+            new Date(item.start_time).getTime()
+          )
         );
-        if (!blockedStarts.has(start11)) {
+        if (!blockedStarts.has(new Date(start11).getTime())) {
           generated.push({
             id: `avail-${dayStr}-11`,
             start: start11,
@@ -228,7 +230,7 @@ export default function PartyPage() {
             status: 'available',
           });
         }
-        if (!blockedStarts.has(start15)) {
+        if (!blockedStarts.has(new Date(start15).getTime())) {
           generated.push({
             id: `avail-${dayStr}-15`,
             start: start15,
@@ -241,7 +243,14 @@ export default function PartyPage() {
       return generated;
     })(),
     ...bookedSlots
-      .filter((slot) => !items.some((item) => item.status !== 'cancelled' && item.start_time === slot.start_time))
+      .filter(
+        (slot) =>
+          !items.some(
+            (item) =>
+              item.status !== 'cancelled' &&
+              Math.abs(new Date(item.start_time).getTime() - new Date(slot.start_time).getTime()) < 60_000
+          )
+      )
       .map((slot) => ({
       id: `booked-${slot.id}`,
       start: slot.start_time,
