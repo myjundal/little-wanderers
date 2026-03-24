@@ -44,13 +44,19 @@ type RegistrationItem = {
   } | null;
 };
 
+type CartItemState = {
+  class_id: string;
+  quantity: number;
+};
+
 export default function ClassSchedulePage() {
   const supabase = createBrowserSupabaseClient();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
-  const [cartClassIds, setCartClassIds] = useState<string[]>([]);
+  const [cartItems, setCartItems] = useState<CartItemState[]>([]);
+  const [recentlyPaidRegistrationIds, setRecentlyPaidRegistrationIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [checkouting, setCheckouting] = useState(false);
@@ -84,7 +90,7 @@ export default function ClassSchedulePage() {
     const loadedClasses = (classJson.items ?? []) as ClassItem[];
     setClasses(loadedClasses);
     setMyItems(myJson.items ?? []);
-    setCartClassIds((prev) => prev.filter((classId) => loadedClasses.some((item) => item.id === classId)));
+    setCartItems((prev) => prev.filter((item) => loadedClasses.some((loaded) => loaded.id === item.class_id)));
 
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id;
@@ -136,21 +142,29 @@ export default function ClassSchedulePage() {
     const params = new URLSearchParams(window.location.search);
     const checkout = params.get('checkout');
     const personId = params.get('person_id');
-    const classIdsRaw = params.get('class_ids');
+    const itemsRaw = params.get('items');
 
-    if (checkout !== 'success' || !personId || !classIdsRaw) return;
-    const classIds = classIdsRaw
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (classIds.length === 0) return;
+    if (checkout !== 'success' || !personId || !itemsRaw) return;
+    let parsedItems: CartItemState[] = [];
+    try {
+      parsedItems = JSON.parse(decodeURIComponent(itemsRaw)) as CartItemState[];
+    } catch {
+      return;
+    }
+    const safeItems = (parsedItems ?? [])
+      .filter((item) => item?.class_id)
+      .map((item) => ({
+        class_id: item.class_id,
+        quantity: Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
+      }));
+    if (safeItems.length === 0) return;
 
     const finalize = async () => {
       setCheckouting(true);
       const res = await fetch('/api/classes/checkout', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode: 'finalize', class_ids: classIds, person_id: personId }),
+        body: JSON.stringify({ mode: 'finalize', items: safeItems, person_id: personId }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -160,7 +174,9 @@ export default function ClassSchedulePage() {
       }
 
       const total = Number(json.checkout_summary?.total_price_cents ?? 0);
-      setMessage(`Payment complete and classes booked: ${classIds.length} class(es), total $${(total / 100).toFixed(2)}.`);
+      setMessage(`Payment complete and classes booked: ${safeItems.reduce((sum, item) => sum + item.quantity, 0)} seat(s), total $${(total / 100).toFixed(2)}.`);
+      setRecentlyPaidRegistrationIds((json.checkout_summary?.registration_ids ?? []) as string[]);
+      setCartItems([]);
       setCheckouting(false);
       await load();
       window.history.replaceState({}, '', '/landing/classschedule');
@@ -193,18 +209,24 @@ export default function ClassSchedulePage() {
     [classes, myItems]
   );
 
-  const cartItems = useMemo(
-    () => cartClassIds.map((id) => classById.get(id)).filter((item): item is ClassItem => Boolean(item)),
-    [cartClassIds, classById]
+  const cartClassDetails = useMemo(
+    () =>
+      cartItems
+        .map((item) => ({ ...item, classInfo: classById.get(item.class_id) }))
+        .filter((item): item is CartItemState & { classInfo: ClassItem } => Boolean(item.classInfo)),
+    [cartItems, classById]
   );
 
-  const cartTotalCents = useMemo(() => cartItems.reduce((sum, item) => sum + item.price_cents, 0), [cartItems]);
+  const cartTotalCents = useMemo(
+    () => cartClassDetails.reduce((sum, item) => sum + item.classInfo.price_cents * item.quantity, 0),
+    [cartClassDetails]
+  );
 
   const recommendedForCart = useMemo(() => {
     const scores = new Map<string, number>();
-    cartItems.forEach((item) => {
-      item.recommended_class_ids.forEach((id, index) => {
-        if (cartClassIds.includes(id)) return;
+    cartClassDetails.forEach((item) => {
+      item.classInfo.recommended_class_ids.forEach((id, index) => {
+        if (cartItems.some((cartItem) => cartItem.class_id === id)) return;
         const weight = Math.max(3 - index, 1);
         scores.set(id, (scores.get(id) ?? 0) + weight);
       });
@@ -215,25 +237,35 @@ export default function ClassSchedulePage() {
       .map(([id]) => classById.get(id))
       .filter((item): item is ClassItem => Boolean(item))
       .slice(0, 4);
-  }, [cartItems, cartClassIds, classById]);
+  }, [cartClassDetails, cartItems, classById]);
 
   const addToCart = (classId: string) => {
-    setCartClassIds((prev) => (prev.includes(classId) ? prev : [...prev, classId]));
+    setCartItems((prev) => {
+      const found = prev.find((item) => item.class_id === classId);
+      if (found) return prev;
+      return [...prev, { class_id: classId, quantity: 1 }];
+    });
   };
 
-  const removeFromCart = (classId: string) => {
-    setCartClassIds((prev) => prev.filter((id) => id !== classId));
+  const updateCartQuantity = (classId: string, nextQty: number) => {
+    if (nextQty <= 0) {
+      setCartItems((prev) => prev.filter((item) => item.class_id !== classId));
+      return;
+    }
+    setCartItems((prev) =>
+      prev.map((item) => (item.class_id === classId ? { ...item, quantity: Math.max(nextQty, 1) } : item))
+    );
   };
 
   const checkoutCart = async () => {
-    if (!selectedPersonId || cartClassIds.length === 0) return;
+    if (!selectedPersonId || cartItems.length === 0) return;
     setCheckouting(true);
     setMessage(null);
 
     const res = await fetch('/api/classes/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mode: 'create_payment_link', class_ids: cartClassIds, person_id: selectedPersonId }),
+      body: JSON.stringify({ mode: 'create_payment_link', items: cartItems, person_id: selectedPersonId }),
     });
 
     const json = await res.json();
@@ -300,16 +332,21 @@ export default function ClassSchedulePage() {
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
-        {cartItems.length === 0 ? (
+        {cartClassDetails.length === 0 ? (
           <p>Your cart is empty.</p>
         ) : (
           <>
             <div style={{ display: 'grid', gap: 10 }}>
-              {cartItems.map((item) => (
-                <div key={item.id} style={{ border: '1px solid #e9dcfb', borderRadius: 10, padding: 10 }}>
-                  <strong>{item.title}</strong> · ${(item.price_cents / 100).toFixed(2)}
-                  <div style={{ color: '#6d6480', marginTop: 4 }}>Seats left: {item.seats_left == null ? 'Unlimited' : item.seats_left}</div>
-                  <button onClick={() => removeFromCart(item.id)} style={{ marginTop: 6 }}>Remove</button>
+              {cartClassDetails.map((item) => (
+                <div key={item.class_id} style={{ border: '1px solid #e9dcfb', borderRadius: 10, padding: 10 }}>
+                  <strong>{item.classInfo.title}</strong> · ${(item.classInfo.price_cents / 100).toFixed(2)} each
+                  <div style={{ color: '#6d6480', marginTop: 4 }}>Seats left: {item.classInfo.seats_left == null ? 'Unlimited' : item.classInfo.seats_left}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                    <button onClick={() => updateCartQuantity(item.class_id, item.quantity - 1)}>-</button>
+                    <span>Qty: {item.quantity}</span>
+                    <button onClick={() => updateCartQuantity(item.class_id, item.quantity + 1)}>+</button>
+                    <button onClick={() => updateCartQuantity(item.class_id, 0)} style={{ marginLeft: 8 }}>Remove</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -344,7 +381,7 @@ export default function ClassSchedulePage() {
           <div style={{ display: 'grid', gap: 12 }}>
             {classes.map((c) => {
               const isFull = c.seats_left != null && c.seats_left <= 0;
-              const inCart = cartClassIds.includes(c.id);
+              const inCart = cartItems.some((item) => item.class_id === c.id);
               return (
                 <div key={c.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <h3 style={{ margin: 0 }}>
@@ -397,6 +434,9 @@ export default function ClassSchedulePage() {
                     {item.class?.status === 'cancelled' ? 'studio_cancelled' : item.status}
                   </b>
                 </p>
+                {recentlyPaidRegistrationIds.includes(item.id) && (
+                  <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Payment completed</p>
+                )}
                 <p style={{ margin: '6px 0' }}>
                   Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}
                 </p>
