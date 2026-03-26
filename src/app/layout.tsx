@@ -1,6 +1,6 @@
 import { Quicksand, Nunito } from 'next/font/google';
 import Script from 'next/script';
-import { Analytics } from '@vercel/analytics/next';
+import { Analytics } from '@vercel/analytics/react';
 import './globals.css';
 
 const GOOGLE_TAG_ID = 'G-RHZ3580FJ8';
