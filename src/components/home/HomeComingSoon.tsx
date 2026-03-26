@@ -8,9 +8,12 @@ const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 export default function HomeComingSoon() {
   const parentLovePoints = [
-    'Created with toddlers in mind, from pace to play.',
+    'Designed and crafted for toddlers, not just toddler-friendly.',
     'Gentle, safe, and intentionally never chaotic.',
-    'Sensory-rich stations that hold little ones’ attention.',
+    'Rotating diverse sensory-rich stations that keep little ones deeply engaged.',
+    'Every visit brings something new to explore and discover.',
+    'The first and only dedicated toddler sensory play space in West Hartford.',
+    'Built and operated by a local mom who truly understands family rhythms.',
     'A cozy rhythm where parents can truly exhale.',
   ];
 
