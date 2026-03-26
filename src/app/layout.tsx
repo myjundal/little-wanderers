@@ -1,7 +1,7 @@
 import { Quicksand, Nunito } from 'next/font/google';
 import Script from 'next/script';
-import { Analytics } from '@vercel/analytics/react';
 import './globals.css';
+import AnalyticsBoot from '@/components/AnalyticsBoot';
 
 const GOOGLE_TAG_ID = 'G-RHZ3580FJ8';
 
@@ -54,7 +54,7 @@ gtag('js', new Date());
 gtag('config', '${GOOGLE_TAG_ID}');`}
         </Script>
         {children}
-        <Analytics />
+        <AnalyticsBoot />
       </body>
     </html>
   );
