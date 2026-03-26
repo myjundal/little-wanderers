@@ -206,12 +206,17 @@
 }
 
 .parentsLoveSection {
-  margin-top: 34px;
+  margin-top: 0;
   padding: 26px;
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 16px 34px rgba(123, 106, 168, 0.1);
+}
+
+.parentsLoveAside {
+  align-self: stretch;
+  min-width: 0;
 }
 
 .parentsLoveSection h2 {
@@ -480,6 +485,10 @@
 
   .waitlistActions {
     justify-content: flex-start;
+  }
+
+  .parentsLoveSection {
+    margin-top: 8px;
   }
 }
 
