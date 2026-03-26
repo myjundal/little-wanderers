@@ -150,9 +150,17 @@
 }
 
 .primaryBtn {
+  flex-direction: column;
   color: #fbf8ff;
   background: linear-gradient(180deg, #8a79b7 0%, #6f5f99 100%);
   box-shadow: 0 16px 30px rgba(123, 106, 168, 0.22);
+}
+
+.primaryBtnSubtext {
+  margin-top: 2px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  opacity: 0.94;
 }
 
 .primaryBtn:hover {
@@ -195,6 +203,46 @@
   content: '·';
   margin-right: 10px;
   color: rgba(123, 106, 168, 0.55);
+}
+
+.parentsLoveSection {
+  margin-top: 34px;
+  padding: 26px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 16px 34px rgba(123, 106, 168, 0.1);
+}
+
+.parentsLoveSection h2 {
+  margin: 10px 0 0;
+  color: #4b4360;
+  font-size: clamp(1.25rem, 2.2vw, 1.7rem);
+  line-height: 1.32;
+  letter-spacing: -0.02em;
+}
+
+.parentsLoveList {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+.parentsLoveList li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #706a83;
+  line-height: 1.65;
+}
+
+.parentsLoveList li::before {
+  content: '✽';
+  color: #7b6aa8;
+  font-size: 0.95rem;
+  line-height: 1.7;
 }
 
 .heroVisual {
@@ -487,6 +535,11 @@
   .heroVisual {
     padding: 18px;
     border-radius: 28px;
+  }
+
+  .parentsLoveSection {
+    padding: 20px;
+    border-radius: 24px;
   }
 
   .visualCard,

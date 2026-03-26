@@ -7,6 +7,13 @@ const LOGO_SRC = '/brand-mark.svg';
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 export default function HomeComingSoon() {
+  const parentLovePoints = [
+    'Created with toddlers in mind, from pace to play.',
+    'Gentle, safe, and intentionally never chaotic.',
+    'Sensory-rich stations that hold little ones’ attention.',
+    'A cozy rhythm where parents can truly exhale.',
+  ];
+
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
@@ -37,7 +44,8 @@ export default function HomeComingSoon() {
 
             <div className={styles.ctaRow}>
               <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
-                Join Waitlist
+                <span>Join Waitlist</span>
+                <span className={styles.primaryBtnSubtext}>(over 130+ local families already signed up)</span>
               </Link>
               <Link href="/faq" className={styles.secondaryBtn}>
                 FAQ
@@ -49,6 +57,16 @@ export default function HomeComingSoon() {
               <span>☾ calm</span>
               <span>♡ breathe</span>
             </div>
+
+            <section className={styles.parentsLoveSection} aria-labelledby="parents-love-heading">
+              <p className={styles.sectionEyebrow}>Why parents love Little Wanderers</p>
+              <h2 id="parents-love-heading">Soft playtime for kids, softer days for families.</h2>
+              <ul className={styles.parentsLoveList}>
+                {parentLovePoints.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+            </section>
           </div>
         </div>
       </section>
