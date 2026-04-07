@@ -35,6 +35,32 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+## Auth setup (Phone OTP primary + Email OTP fallback)
+
+### Required env vars
+
+Current OTP implementation only needs existing public Supabase client vars:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SITE_URL`
+
+No service-role key is used in client auth flows.
+
+### Supabase dashboard setup (manual)
+
+1. Go to **Authentication → Providers → Phone** and enable phone sign-in.
+2. Configure your SMS provider in Supabase (Twilio, MessageBird, or another supported provider).
+3. Set production SMS sender + verify destination country support.
+4. Go to **Authentication → Providers → Email** and keep Email OTP enabled.
+5. In **Authentication → URL Configuration**, ensure these URLs are set:
+   - Site URL: your Vercel production domain
+   - Additional Redirect URLs: include local + preview domains if needed
+6. In **Authentication → Rate Limits**, keep OTP limits at safe defaults or tighten for abuse prevention.
+7. Test both cases:
+   - existing user sign-in (`shouldCreateUser = false`)
+   - new user onboarding (`shouldCreateUser = true`)
+
 ## Workflow
 1) `git checkout -b feat/<feature>`
 2) Build small scope; keep changes focused
