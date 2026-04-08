@@ -14,7 +14,20 @@ export async function getLatestHouseholdIdForUser(supabase: any, userId: string)
 }
 
 export async function ensureHouseholdForUser(supabase: any, userId: string, fallbackName = 'My Household') {
-  const existingHouseholdId = await getLatestHouseholdIdForUser(supabase, userId);
+  const authResponse = typeof supabase?.auth?.getUser === 'function'
+    ? await supabase.auth.getUser()
+    : null;
+
+  const authenticatedUserId = authResponse?.data?.user?.id ?? null;
+  if (!authenticatedUserId) {
+    throw new Error('No authenticated user found. Skipping household bootstrap.');
+  }
+
+  if (authenticatedUserId !== userId) {
+    throw new Error('Authenticated user id mismatch. Refusing household bootstrap.');
+  }
+
+  const existingHouseholdId = await getLatestHouseholdIdForUser(supabase, authenticatedUserId);
   if (existingHouseholdId) {
     return existingHouseholdId;
   }
@@ -29,12 +42,17 @@ export async function ensureHouseholdForUser(supabase: any, userId: string, fall
     throw householdError;
   }
 
+  console.debug('[household-bootstrap] inserting household_member', {
+    householdId: household.id,
+    userId: authenticatedUserId,
+  });
+
   const { error: membershipError } = await supabase
     .from('household_members')
     .upsert(
       {
         household_id: household.id,
-        user_id: userId,
+        user_id: authenticatedUserId,
         role: 'owner',
       },
       { onConflict: 'household_id,user_id' }

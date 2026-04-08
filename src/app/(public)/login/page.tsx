@@ -21,7 +21,7 @@ const normalizeUsPhone = (input: string) => {
 
 export default function LoginPage() {
   const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
-  const [journeyMode, setJourneyMode] = useState<JourneyMode>('existing');
+  const [journeyMode, setJourneyMode] = useState<JourneyMode>('new');
   const [phoneInput, setPhoneInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [step, setStep] = useState<Step>('collect');
@@ -34,6 +34,11 @@ export default function LoginPage() {
 
   const [pendingPhone, setPendingPhone] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [debugInfo, setDebugInfo] = useState<{
+    signInOtpSucceeded: boolean;
+    verifyOtpSucceeded: boolean;
+    authUserId: string | null;
+  }>({ signInOtpSucceeded: false, verifyOtpSucceeded: false, authUserId: null });
 
   const firstInputRef = useRef<HTMLInputElement>(null);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -99,6 +104,7 @@ export default function LoginPage() {
     setPending(false);
 
     if (response.error) {
+      setDebugInfo((prev) => ({ ...prev, signInOtpSucceeded: false, verifyOtpSucceeded: false, authUserId: null }));
       const safeError = response.error.message.toLowerCase();
       if (!shouldCreateUser && safeError.includes('not found')) {
         setError('No account found. Try "I am new" or switch sign-in method.');
@@ -108,12 +114,15 @@ export default function LoginPage() {
       return;
     }
 
+    setDebugInfo((prev) => ({ ...prev, signInOtpSucceeded: true }));
+    console.debug('[auth] signInWithOtp succeeded', { authMethod, shouldCreateUser });
+
     if (authMethod === 'phone') {
       setPendingPhone(normalizedPhone);
-      setMessage(reason === 'send' ? 'We sent a 6-digit code by text.' : 'We sent a new code.');
+      setMessage(reason === 'send' ? 'We sent a 6-digit code by text. Debug: signInWithOtp succeeded.' : 'We sent a new code.');
     } else {
       setPendingEmail(normalizedEmail);
-      setMessage(reason === 'send' ? 'We sent a 6-digit code by email.' : 'We sent a new code.');
+      setMessage(reason === 'send' ? 'We sent a 6-digit code by email. Debug: signInWithOtp succeeded.' : 'We sent a new code.');
     }
 
     // Always reset OTP input and resend timer on verify step entry.
@@ -146,6 +155,7 @@ export default function LoginPage() {
     setPending(false);
 
     if (response.error) {
+      setDebugInfo((prev) => ({ ...prev, verifyOtpSucceeded: false, authUserId: null }));
       const safeError = response.error.message.toLowerCase();
       if (safeError.includes('expired')) {
         setError('That code expired. Please request a new one.');
@@ -154,6 +164,20 @@ export default function LoginPage() {
       setError('That code is invalid. Please try again.');
       return;
     }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setDebugInfo((prev) => ({ ...prev, verifyOtpSucceeded: false, authUserId: null }));
+      setError(`OTP verified but authenticated user is missing: ${userError?.message ?? 'no user'}`);
+      return;
+    }
+
+    setDebugInfo({ signInOtpSucceeded: true, verifyOtpSucceeded: true, authUserId: user.id });
+    console.debug('[auth] verifyOtp succeeded', { authMethod, authUserId: user.id });
 
     const next = sessionStorage.getItem('post_login_redirect') || '/landing';
     sessionStorage.removeItem('post_login_redirect');
@@ -281,6 +305,14 @@ export default function LoginPage() {
             </button>
           </div>
         )}
+
+
+        <div style={{ marginTop: 12, borderRadius: 12, border: '1px dashed #d8c5f6', padding: 10, color: '#5f3da4', fontSize: 12 }}>
+          <strong>Debug</strong>
+          <div>signInWithOtp succeeded: {String(debugInfo.signInOtpSucceeded)}</div>
+          <div>verifyOtp succeeded: {String(debugInfo.verifyOtpSucceeded)}</div>
+          <div>authenticated user id: {debugInfo.authUserId ?? '-'}</div>
+        </div>
 
         {message && <p style={{ marginTop: 14, color: '#5f3da4' }}>{message}</p>}
         {error && <p style={{ marginTop: 14, color: '#8a3f6b' }}>{error}</p>}

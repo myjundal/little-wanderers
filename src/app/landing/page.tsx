@@ -64,9 +64,10 @@ export default function AppHome() {
     const run = async () => {
       const supabase = createBrowserSupabaseClient();
 
-      // session
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
+      // session (server-validated user payload from Supabase Auth)
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) console.warn('auth getUser error:', authError);
+      const user = authData?.user ?? null;
       setEmail(user?.email ?? null);
       if (!user) { setReady(true); return; }
 
