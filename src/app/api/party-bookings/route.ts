@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
+import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
@@ -172,11 +173,11 @@ export async function POST(req: Request) {
           redirect_url: redirectUrl,
           ask_for_shipping_address: false,
         },
-        pre_populated_data: {
-          buyer_email: user.email ?? undefined,
-        },
+        ...(buildPrePopulatedData(user.email) ? { pre_populated_data: buildPrePopulatedData(user.email) } : {}),
         reference_id: `pb_${reference}`,
       };
+
+      logSquarePayload('party checkout payload', squareBody as Record<string, unknown>);
 
       const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
         method: 'POST',

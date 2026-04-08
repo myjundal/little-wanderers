@@ -19,7 +19,7 @@ type PartyBooking = {
 const PARTY_DEPOSIT_DOLLARS = 150;
 
 function toIsoUtc(date: string, hourUtc: number) {
-  return new Date(`${date}T${String(hourUtc).padStart(2, '0')}:00:00`).toISOString();
+  return new Date(`${date}T${String(hourUtc).padStart(2, '0')}:00:00.000Z`).toISOString();
 }
 
 function getDefaultWeekendDate() {
@@ -216,9 +216,8 @@ export default function PartyPage() {
       const generated: CalendarSlot[] = [];
       const now = new Date();
       for (let i = 0; i < 84; i += 1) {
-        const d = new Date(now);
-        d.setDate(now.getDate() + i);
-        const day = d.getDay();
+        const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
+        const day = d.getUTCDay();
         if (day !== 0 && day !== 6) continue;
         const dayStr = d.toISOString().slice(0, 10);
         const start11 = toIsoUtc(dayStr, 11);

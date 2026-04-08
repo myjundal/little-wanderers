@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
+import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 
 const SQUARE_BASE = 'https://connect.squareupsandbox.com';
 
@@ -49,13 +50,13 @@ export async function POST(req: Request) {
         redirect_url: `${base}/landing/membership?success=1`,
         ask_for_shipping_address: false,
       },
-      // Optional: pre-filled buyer info
-      pre_populated_data: {
-        buyer_email: user.email ?? undefined,
-      },
+      // Optional: pre-filled buyer info (only include valid non-empty email)
+      ...(buildPrePopulatedData(user.email) ? { pre_populated_data: buildPrePopulatedData(user.email) } : {}),
       // Optional: internal reference to help webhook reconciliation
       reference_id: `hh_${householdId}`,
     };
+
+    logSquarePayload('membership checkout payload', body as Record<string, unknown>);
 
     const resp = await fetch(`${SQUARE_BASE}/v2/online-checkout/payment-links`, {
       method: 'POST',

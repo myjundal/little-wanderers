@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
+import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 
 const admin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -264,12 +265,12 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
       redirect_url: redirectUrl,
       ask_for_shipping_address: false,
     },
-    pre_populated_data: {
-      buyer_email: userEmail ?? undefined,
-    },
+    ...(buildPrePopulatedData(userEmail) ? { pre_populated_data: buildPrePopulatedData(userEmail) } : {}),
     reference_id: `cc_${referenceSuffix}`,
     description: `Class checkout (${context.requestedItems.reduce((sum, item) => sum + item.quantity, 0)} seat(s), $${(totalPriceCents / 100).toFixed(2)})`,
   };
+
+  logSquarePayload('class checkout payload', squareBody as Record<string, unknown>);
 
   const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
     method: 'POST',
