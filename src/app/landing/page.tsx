@@ -48,7 +48,10 @@ function Badge({ status }: { status: MembershipStatus }) {
 
 export default function AppHome() {
   const [ready, setReady] = useState(false);
-  const [email, setEmail] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authDebug, setAuthDebug] = useState<string>('pending');
+  const [householdDebug, setHouseholdDebug] = useState<string>('pending');
   const [appRole, setAppRole] = useState<string | null>(null);
 
 
@@ -65,10 +68,21 @@ export default function AppHome() {
       const supabase = createBrowserSupabaseClient();
 
       // session (server-validated user payload from Supabase Auth)
+      const { data: sessionData } = await supabase.auth.getSession();
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) console.warn('auth getUser error:', authError);
       const user = authData?.user ?? null;
-      setEmail(user?.email ?? null);
+
+      if (!sessionData?.session) {
+        setAuthDebug('no auth session');
+      } else if (!user) {
+        setAuthDebug('no authenticated user');
+      } else {
+        setAuthDebug('session + user ok');
+      }
+
+      setDisplayName(user?.email ?? user?.phone ?? null);
+      setIsAuthenticated(Boolean(user));
       if (!user) { setReady(true); return; }
 
       const { data: roleRow } = await supabase.from('roles').select('role').eq('id', user.id).maybeSingle();
@@ -77,8 +91,10 @@ export default function AppHome() {
       // 2) Ensure household + owner membership row
       let householdId: string | null = null;
       try {
-        householdId = await ensureHouseholdForUser(supabase, user.id, (user.email ?? 'My Household').split('@')[0]);
+        householdId = await ensureHouseholdForUser(supabase, user.id, (user.email ?? user.phone ?? 'My Household').split('@')[0]);
+        setHouseholdDebug(householdId ? 'household membership found/created' : 'no household membership');
       } catch (householdErr) {
+        setHouseholdDebug(`household/RLS error: ${householdErr instanceof Error ? householdErr.message : 'unknown'}`);
         console.warn('household bootstrap error:', householdErr);
       }
       setHouseholdId(householdId);
@@ -103,7 +119,7 @@ export default function AppHome() {
         user.email?.split('@')[0] ||
         'there';
 
-      setEmail(displayName);
+      setDisplayName(displayName);
     }
 
       setReady(true);
@@ -208,11 +224,13 @@ export default function AppHome() {
 
   if (!ready) return <main style={{ padding: 24 }}>Loading…</main>;
 
-  if (!email) {
+  if (!isAuthenticated) {
     return (
       <main style={{ padding: 24 }}>
         <h1>Please login</h1>
         <p><Link href="/">Back to Homepage</Link></p>
+        <p style={{ color: '#6d6480' }}>Debug: {authDebug}</p>
+        <p style={{ color: '#6d6480' }}>Debug: {householdDebug}</p>
       </main>
     );
   }
@@ -222,7 +240,7 @@ export default function AppHome() {
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, alignItems: 'stretch', marginBottom: 20 }}>
         <div style={{ padding: 20, borderRadius: 24, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 18px 30px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
-          <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {email} 👋</h1>
+          <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
           <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Check your household details, classes, party bookings, and today’s approximate studio flow from one calm landing page.</p>
         </div>
 

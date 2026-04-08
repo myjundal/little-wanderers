@@ -21,7 +21,7 @@ const normalizeUsPhone = (input: string) => {
 
 export default function LoginPage() {
   const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
-  const [journeyMode, setJourneyMode] = useState<JourneyMode>('new');
+  const [journeyMode, setJourneyMode] = useState<JourneyMode>('existing');
   const [phoneInput, setPhoneInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [step, setStep] = useState<Step>('collect');
@@ -34,6 +34,7 @@ export default function LoginPage() {
 
   const [pendingPhone, setPendingPhone] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [lastAutoSubmitToken, setLastAutoSubmitToken] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<{
     signInOtpSucceeded: boolean;
     verifyOtpSucceeded: boolean;
@@ -128,6 +129,7 @@ export default function LoginPage() {
     // Always reset OTP input and resend timer on verify step entry.
     setStep('verify');
     setOtpDigits(Array(OTP_LENGTH).fill(''));
+    setLastAutoSubmitToken(null);
     setResendIn(RESEND_SECONDS);
   };
 
@@ -159,9 +161,11 @@ export default function LoginPage() {
       const safeError = response.error.message.toLowerCase();
       if (safeError.includes('expired')) {
         setError('That code expired. Please request a new one.');
+        setLastAutoSubmitToken(null);
         return;
       }
       setError('That code is invalid. Please try again.');
+      setLastAutoSubmitToken(null);
       return;
     }
 
@@ -200,6 +204,17 @@ export default function LoginPage() {
       otpRefs.current[index - 1]?.focus();
     }
   };
+
+
+  useEffect(() => {
+    if (step !== 'verify') return;
+    if (otpToken.length !== OTP_LENGTH) return;
+    if (pending) return;
+    if (lastAutoSubmitToken === otpToken) return;
+
+    setLastAutoSubmitToken(otpToken);
+    void verifyOtp();
+  }, [step, otpToken, pending, lastAutoSubmitToken]);
 
   const switchToEmailFallback = () => {
     setAuthMethod('email');
@@ -287,7 +302,7 @@ export default function LoginPage() {
             </div>
 
             <button type="button" onClick={verifyOtp} disabled={pending || otpToken.length !== OTP_LENGTH} style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
-              {pending ? 'Checking…' : 'Verify code'}
+              {pending ? 'Checking…' : 'Verify code (auto)'}
             </button>
 
             <button type="button" disabled={resendIn > 0 || pending} onClick={() => requestOtp('resend')} style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>
