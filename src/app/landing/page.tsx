@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
-import { ensureHouseholdForUser } from '@/lib/households';
+import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
 
 type RecentItem = {
   id: string;
@@ -52,6 +52,9 @@ export default function AppHome() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authDebug, setAuthDebug] = useState<string>('pending');
   const [householdDebug, setHouseholdDebug] = useState<string>('pending');
+  const [authUserIdDebug, setAuthUserIdDebug] = useState<string | null>(null);
+  const [membershipHouseholdIdDebug, setMembershipHouseholdIdDebug] = useState<string | null>(null);
+  const [chosenHouseholdSourceDebug, setChosenHouseholdSourceDebug] = useState<string>('none');
   const [appRole, setAppRole] = useState<string | null>(null);
 
 
@@ -88,15 +91,36 @@ export default function AppHome() {
       const { data: roleRow } = await supabase.from('roles').select('role').eq('id', user.id).maybeSingle();
       setAppRole(roleRow?.role ?? null);
 
-      // 2) Ensure household + owner membership row
+      // 2) Resolve household from household_members first (source of truth)
+      setAuthUserIdDebug(user.id);
       let householdId: string | null = null;
+      let householdSource = 'membership';
+
       try {
-        householdId = await ensureHouseholdForUser(supabase, user.id, (user.email ?? user.phone ?? 'My Household').split('@')[0]);
+        const membershipHouseholdId = await getLatestHouseholdIdForUser(supabase, user.id);
+        setMembershipHouseholdIdDebug(membershipHouseholdId);
+        householdId = membershipHouseholdId;
+
+        if (!householdId) {
+          householdSource = 'fallback-created';
+          householdId = await ensureHouseholdForUser(supabase, user.id, (user.email ?? user.phone ?? 'My Household').split('@')[0]);
+          setMembershipHouseholdIdDebug(householdId);
+        }
+
         setHouseholdDebug(householdId ? 'household membership found/created' : 'no household membership');
+        setChosenHouseholdSourceDebug(householdSource);
+        console.debug('[household-selection]', {
+          authUserId: user.id,
+          membershipHouseholdId,
+          chosenCurrentHouseholdId: householdId,
+          source: householdSource,
+        });
       } catch (householdErr) {
         setHouseholdDebug(`household/RLS error: ${householdErr instanceof Error ? householdErr.message : 'unknown'}`);
+        setChosenHouseholdSourceDebug('error');
         console.warn('household bootstrap error:', householdErr);
       }
+
       setHouseholdId(householdId);
 
       // 3) Fetch adult's first_name in that household → use as greeting
@@ -231,6 +255,9 @@ export default function AppHome() {
         <p><Link href="/">Back to Homepage</Link></p>
         <p style={{ color: '#6d6480' }}>Debug: {authDebug}</p>
         <p style={{ color: '#6d6480' }}>Debug: {householdDebug}</p>
+        <p style={{ color: '#6d6480' }}>Debug user id: {authUserIdDebug ?? '-'}</p>
+        <p style={{ color: '#6d6480' }}>Debug membership household id: {membershipHouseholdIdDebug ?? '-'}</p>
+        <p style={{ color: '#6d6480' }}>Debug chosen source: {chosenHouseholdSourceDebug}</p>
       </main>
     );
   }
@@ -242,6 +269,7 @@ export default function AppHome() {
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
           <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Check your household details, classes, party bookings, and today’s approximate studio flow from one calm landing page.</p>
+          <p style={{ margin: '8px 0 0', color: '#7a63a5', fontSize: 12 }}>Debug user={authUserIdDebug ?? '-'} membership={membershipHouseholdIdDebug ?? '-'} chosen={householdId ?? '-'} source={chosenHouseholdSourceDebug}</p>
         </div>
 
         <CrowdLevelCard compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
