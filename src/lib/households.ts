@@ -7,7 +7,8 @@ export async function getLatestHouseholdIdForUser(supabase: any, userId: string)
     .limit(1);
 
   if (error) {
-    throw error;
+    console.error('[households] getLatestHouseholdIdForUser error', error);
+    throw new Error(`household_members lookup failed: ${error.message} (${error.code ?? 'no-code'})`);
   }
 
   return data?.[0]?.household_id ?? null;
