@@ -40,10 +40,20 @@ CREATE TABLE public.classes (
 
 CREATE TABLE public.households (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    owner_user_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    role text NOT NULL DEFAULT 'owner'::text,
     name text,
     phone text,
     created_at timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE public.household_members (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    household_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    role text NOT NULL DEFAULT 'owner'::text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
 );
 
 CREATE TABLE public.memberships (
@@ -110,6 +120,7 @@ alter table public.checkins add primary key (id);
 alter table public.class_registrations add primary key (id);
 alter table public.classes add primary key (id);
 alter table public.households add primary key (id);
+alter table public.household_members add primary key (id);
 alter table public.memberships add primary key (id);
 alter table public.party_bookings add primary key (id);
 alter table public.people add primary key (id);
@@ -121,8 +132,16 @@ alter table public.webhook_log add primary key (id);
 -- FOREIGN KEYS
 -- =========================================
 alter table public.households
-  add constraint households_owner_user_id_fkey
-  foreign key (owner_user_id) references auth.users(id) on delete cascade;
+  add constraint households_user_id_fkey
+  foreign key (user_id) references auth.users(id) on delete cascade;
+
+alter table public.household_members
+  add constraint household_members_household_id_fkey
+  foreign key (household_id) references public.households(id) on delete cascade;
+
+alter table public.household_members
+  add constraint household_members_user_id_fkey
+  foreign key (user_id) references auth.users(id) on delete cascade;
 
 alter table public.people
   add constraint people_household_id_fkey
@@ -171,6 +190,9 @@ alter table public.roles
 alter table public.memberships
   add constraint memberships_square_subscription_id_key unique (square_subscription_id);
 
+alter table public.household_members
+  add constraint household_members_household_id_user_id_key unique (household_id, user_id);
+
 -- household membership only 1 active row idea (optional if historical rows not needed)
 -- alter table public.memberships
 --   add constraint memberships_household_id_key unique (household_id);
@@ -203,6 +225,12 @@ alter table public.pricing_rules
   ),
   add constraint pricing_rules_price_check check (price_cents >= 0);
 
+alter table public.households
+  add constraint households_role_check check (role in ('owner','admin','member'));
+
+alter table public.household_members
+  add constraint household_members_role_check check (role in ('owner','admin','member'));
+
 alter table public.memberships
   drop constraint if exists memberships_check;
 
@@ -220,6 +248,7 @@ alter table public.checkins add column if not exists updated_at timestamptz defa
 alter table public.class_registrations add column if not exists updated_at timestamptz default now();
 alter table public.classes add column if not exists updated_at timestamptz default now();
 alter table public.households add column if not exists updated_at timestamptz default now();
+alter table public.household_members add column if not exists updated_at timestamptz default now();
 alter table public.memberships add column if not exists updated_at timestamptz default now();
 alter table public.party_bookings add column if not exists updated_at timestamptz default now();
 alter table public.people add column if not exists updated_at timestamptz default now();
@@ -231,6 +260,8 @@ create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
 as $$
+declare
+  _household_id uuid;
 begin
   new.updated_at = now();
   return new;
@@ -260,6 +291,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists set_updated_at_households on public.households;
 create trigger set_updated_at_households
 before update on public.households
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_updated_at_household_members on public.household_members;
+create trigger set_updated_at_household_members
+before update on public.household_members
 for each row execute function public.set_updated_at();
 
 drop trigger if exists set_updated_at_memberships on public.memberships;
@@ -301,6 +337,8 @@ create index if not exists idx_checkins_checked_in_at on public.checkins(checked
 create index if not exists idx_class_registrations_class_id on public.class_registrations(class_id);
 create index if not exists idx_class_registrations_person_id on public.class_registrations(person_id);
 create index if not exists idx_classes_start_time on public.classes(start_time);
+create index if not exists idx_household_members_household_id on public.household_members(household_id);
+create index if not exists idx_household_members_user_id on public.household_members(user_id);
 create index if not exists idx_memberships_household_id on public.memberships(household_id);
 create index if not exists idx_memberships_person_id on public.memberships(person_id);
 create index if not exists idx_party_bookings_household_id on public.party_bookings(household_id);
@@ -320,9 +358,15 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  _household_id uuid;
 begin
-  insert into public.households (owner_user_id, name)
-  values (new.id, 'My Household');
+  insert into public.households (user_id, role, name)
+  values (new.id, 'owner', 'My Household')
+  returning id into _household_id;
+
+  insert into public.household_members (household_id, user_id, role)
+  values (_household_id, new.id, 'owner');
 
   insert into public.roles (id, role)
   values (new.id, 'owner');

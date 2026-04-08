@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 import QRCode from 'qrcode';
 import Image from 'next/image';
 
@@ -21,14 +22,7 @@ export default function QRPage() {
       const uid = u.user?.id;
       if (!uid) return;
 
-      const { data: hs } = await supabase
-        .from('households')
-        .select('id')
-        .eq('owner_user_id', uid)
-	.order('created_at', { ascending: false })
-        .limit(1);
-
-      const hid = hs?.[0]?.id;
+      const hid = await getLatestHouseholdIdForUser(supabase, uid);
       if (!hid) return;
 
       const { data: ppl } = await supabase

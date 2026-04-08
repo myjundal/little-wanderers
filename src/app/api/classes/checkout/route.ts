@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
 
 const admin = () =>
@@ -63,15 +64,7 @@ function normalizeRequestedItems(body: CheckoutBody) {
 }
 
 async function getHouseholdIdForUser(userId: string) {
-  const supa = admin();
-  const { data } = await supa
-    .from('households')
-    .select('id')
-    .eq('owner_user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  return data?.[0]?.id ?? null;
+  return getLatestHouseholdIdForUser(admin(), userId);
 }
 
 async function buildAssignments(context: LoadedContext) {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
+import { ensureHouseholdForUser } from '@/lib/households';
 
 type RecentItem = {
   id: string;
@@ -72,41 +73,16 @@ export default function AppHome() {
       const { data: roleRow } = await supabase.from('roles').select('role').eq('id', user.id).maybeSingle();
       setAppRole(roleRow?.role ?? null);
 
-	// 2) Ensure household (by owner_user_id)
-    const { data: found, error: findErr } = await supabase
-      .from('households')
-      .select('id')
-      .eq('owner_user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (findErr) console.warn('households find error:', findErr);
-
-    let householdId: string | null = null;
-
-    if (!found || found.length === 0) {
-      const { data: up, error: upErr } = await supabase
-        .from('households')
-        .upsert(
-          {
-            owner_user_id: user.id,
-            name: (user.email ?? 'My Household').split('@')[0],
-          },
-          { onConflict: 'owner_user_id' }
-        )
-        .select('id')
-        .maybeSingle();
-
-      if (upErr) console.warn('households upsert error:', upErr);
-      householdId = up?.id ?? null;
+      // 2) Ensure household + owner membership row
+      let householdId: string | null = null;
+      try {
+        householdId = await ensureHouseholdForUser(supabase, user.id, (user.email ?? 'My Household').split('@')[0]);
+      } catch (householdErr) {
+        console.warn('household bootstrap error:', householdErr);
+      }
       setHouseholdId(householdId);
-    } else {
-      householdId = found[0].id;
-      setHouseholdId(householdId);
-    }
 
-
-	 // 3) Fetch adult's first_name in that household → use as greeting
+      // 3) Fetch adult's first_name in that household → use as greeting
     if (householdId) {
       const { data: person, error: personErr } = await supabase
         .from('people')

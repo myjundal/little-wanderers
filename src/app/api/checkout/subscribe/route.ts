@@ -4,6 +4,7 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
 
 const SQUARE_BASE = 'https://connect.squareupsandbox.com';
@@ -20,15 +21,8 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-    // 1) Resolve latest household for this user
-    const { data: households } = await supabase
-      .from('households')
-      .select('id')
-      .eq('owner_user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    const householdId = households?.[0]?.id ?? null;
+    // 1) Resolve latest household membership for this user
+    const householdId = await getLatestHouseholdIdForUser(supabase, user.id);
     if (!householdId) {
       return NextResponse.json({ error: 'no household' }, { status: 400 });
     }

@@ -5,6 +5,7 @@ export const revalidate = 0;
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import StartSubscriptionButton from '@/components/membership/StartSubscriptionButton';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 
 export const metadata = { title: 'Membership — Little Wanderers' };
 
@@ -29,14 +30,7 @@ export default async function MembershipPage() {
     );
   }
 
-  const { data: households } = await supabase
-    .from('households')
-    .select('id')
-    .eq('owner_user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  const householdId = households?.[0]?.id ?? null;
+  const householdId = await getLatestHouseholdIdForUser(supabase, user.id);
   if (!householdId) {
     return (
       <main style={{ padding: 24 }}>

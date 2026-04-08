@@ -1,6 +1,7 @@
 'use client';
 import { useState, useCallback, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 
 type Person = {
   id: string;
@@ -22,15 +23,7 @@ export default function PeoplePage() {
     const uid = userData.user?.id;
     if (!uid) return;
 
-    // 내 household 찾기
-    const { data: hs } = await supabase
-      .from('households')
-      .select('id')
-      .eq('owner_user_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-	const hid = hs?.[0]?.id;
+    const hid = await getLatestHouseholdIdForUser(supabase, uid);
 	if (!hid) return; 
 
 	setHouseholdId(hid);

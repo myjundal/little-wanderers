@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
 type Person = {
@@ -126,14 +127,7 @@ export default function ClassSchedulePage() {
       return;
     }
 
-    const { data: households } = await supabase
-      .from('households')
-      .select('id')
-      .eq('owner_user_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    const householdId = households?.[0]?.id;
+    const householdId = await getLatestHouseholdIdForUser(supabase, uid);
     if (!householdId) {
       setPeople([]);
       setSelectedPersonId('');
