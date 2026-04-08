@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
+import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
 
 type RecentItem = {
   id: string;
@@ -14,7 +15,7 @@ type RecentItem = {
   price_cents: number;
 };
 
-type MembershipStatus = 'active' | 'paused' | 'canceled' | 'none';
+type MembershipStatus = 'active' | 'none';
 
 type HouseholdPersonRow = {
   id: string;
@@ -38,8 +39,6 @@ function dollars(cents: number) {
 function Badge({ status }: { status: MembershipStatus }) {
   const styleMap: Record<MembershipStatus, CSSProperties> = {
     active:   { background: '#e6ffed', border: '1px solid #abf5c0', color: '#137333', padding: '2px 8px', borderRadius: 6, fontSize: 12 },
-    paused:   { background: '#fffbe6', border: '1px solid #ffe58f', color: '#614700', padding: '2px 8px', borderRadius: 6, fontSize: 12 },
-    canceled: { background: '#ffeaea', border: '1px solid #ffb3b3', color: '#7a1212', padding: '2px 8px', borderRadius: 6, fontSize: 12 },
     none:     { background: '#f0f0f0', border: '1px solid #ddd',    color: '#444',    padding: '2px 8px', borderRadius: 6, fontSize: 12 },
   };
   return <span style={styleMap[status]}>{status === 'none' ? 'No membership' : status.toUpperCase()}</span>;
@@ -47,7 +46,8 @@ function Badge({ status }: { status: MembershipStatus }) {
 
 export default function AppHome() {
   const [ready, setReady] = useState(false);
-  const [email, setEmail] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [appRole, setAppRole] = useState<string | null>(null);
 
 
@@ -63,52 +63,37 @@ export default function AppHome() {
     const run = async () => {
       const supabase = createBrowserSupabaseClient();
 
-      // session
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
-      setEmail(user?.email ?? null);
+      // session (server-validated user payload from Supabase Auth)
+      await supabase.auth.getSession();
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user ?? null;
+
+      setDisplayName(user?.email ?? user?.phone ?? null);
+      setIsAuthenticated(Boolean(user));
       if (!user) { setReady(true); return; }
 
       const { data: roleRow } = await supabase.from('roles').select('role').eq('id', user.id).maybeSingle();
       setAppRole(roleRow?.role ?? null);
 
-	// 2) Ensure household (by owner_user_id)
-    const { data: found, error: findErr } = await supabase
-      .from('households')
-      .select('id')
-      .eq('owner_user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
+      // 2) Resolve household from household_members first (source of truth)
+      let householdId: string | null = null;
 
-    if (findErr) console.warn('households find error:', findErr);
+      try {
+        const membershipHouseholdId = await getLatestHouseholdIdForUser(supabase, user.id);
+        householdId = membershipHouseholdId;
 
-    let householdId: string | null = null;
+        if (!householdId) {
+          householdId = await ensureHouseholdForUser(supabase, user.id, (user.email ?? user.phone ?? 'My Household').split('@')[0]);
+        }
 
-    if (!found || found.length === 0) {
-      const { data: up, error: upErr } = await supabase
-        .from('households')
-        .upsert(
-          {
-            owner_user_id: user.id,
-            name: (user.email ?? 'My Household').split('@')[0],
-          },
-          { onConflict: 'owner_user_id' }
-        )
-        .select('id')
-        .maybeSingle();
+      } catch {
+      }
 
-      if (upErr) console.warn('households upsert error:', upErr);
-      householdId = up?.id ?? null;
       setHouseholdId(householdId);
-    } else {
-      householdId = found[0].id;
-      setHouseholdId(householdId);
-    }
 
-
-	 // 3) Fetch adult's first_name in that household → use as greeting
+      // 3) Fetch adult's first_name in that household → use as greeting
     if (householdId) {
-      const { data: person, error: personErr } = await supabase
+      const { data: person } = await supabase
         .from('people')
         .select('first_name, role')
         .eq('household_id', householdId)
@@ -116,17 +101,13 @@ export default function AppHome() {
         .limit(1)
         .single();
 
-      if (personErr) {
-        // 두 명 이상 있거나 없을 때 single 에러가 날 수 있음 → 로그만 남기고 fallback 사용
-        console.warn('people fetch error:', personErr);
-      }
 
       const displayName =
         person?.first_name ||
         user.email?.split('@')[0] ||
         'there';
 
-      setEmail(displayName);
+      setDisplayName(displayName);
     }
 
       setReady(true);
@@ -141,30 +122,26 @@ export default function AppHome() {
       const supabase = createBrowserSupabaseClient();
       const nowISO = new Date().toISOString();
 
-      const { data: mH } = await supabase
+      const { data: mH, error: mErr } = await supabase
         .from('memberships')
-        .select('id,status,renews_at')
-        .eq('household_id', householdId);
+        .select('id,renews_at')
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      const all = (mH ?? []) as { id: string; status: 'active' | 'paused' | 'canceled'; renews_at: string | null }[];
-      const active = all.filter(m => m.status === 'active' && (!m.renews_at || m.renews_at > nowISO));
-      const paused = all.filter(m => m.status === 'paused');
-      const canceled = all.filter(m => m.status === 'canceled');
-
-      let s: MembershipStatus = 'none';
-      let r: string | null = null;
-      if (active.length) {
-        s = 'active';
-        const dates = active.map(m => m.renews_at).filter(Boolean) as string[];
-        if (dates.length) r = dates.sort()[0];
-      } else if (paused.length) {
-        s = 'paused';
-        r = paused[0].renews_at;
-      } else if (canceled.length) {
-        s = 'canceled';
-        r = canceled[0].renews_at;
+      if (mErr) {
+        setMembership({ status: 'none', renews_at: null });
+        return;
       }
-      setMembership({ status: s, renews_at: r });
+
+      const row = (mH ?? [])[0] as { id: string; renews_at: string | null } | undefined;
+      if (!row) {
+        setMembership({ status: 'none', renews_at: null });
+        return;
+      }
+
+      const isActive = !row.renews_at || row.renews_at > nowISO;
+      setMembership({ status: isActive ? 'active' : 'none', renews_at: row.renews_at });
     })();
   }, [householdId]);
 
@@ -231,7 +208,7 @@ export default function AppHome() {
 
   if (!ready) return <main style={{ padding: 24 }}>Loading…</main>;
 
-  if (!email) {
+  if (!isAuthenticated) {
     return (
       <main style={{ padding: 24 }}>
         <h1>Please login</h1>
@@ -245,7 +222,7 @@ export default function AppHome() {
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, alignItems: 'stretch', marginBottom: 20 }}>
         <div style={{ padding: 20, borderRadius: 24, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 18px 30px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
-          <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {email} 👋</h1>
+          <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
           <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Check your household details, classes, party bookings, and today’s approximate studio flow from one calm landing page.</p>
         </div>
 

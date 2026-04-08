@@ -5,6 +5,7 @@ export const runtime = 'nodejs';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 
 const SUPA = () =>
   createClient(
@@ -110,31 +111,19 @@ export async function POST(req: NextRequest) {
 
       const userId = users?.[0]?.id ?? null;
       if (userId) {
-        const { data: hh } = await supa
-          .from('households')
-          .select('id')
-          .eq('owner_user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        householdId = hh?.[0]?.id ?? null;
+        householdId = await getLatestHouseholdIdForUser(supa, userId);
       }
     }
   }
 
-  // ---- subscription updates → membership status upsert (household-level) ----
+  // ---- subscription updates → household-level membership upsert ----
   if (type.includes('subscription.updated') && householdId) {
-    const sqStatus: string | undefined = sub?.status;
     const renewsAt: string | undefined = sub?.charged_through_date;
-
-    const status =
-      sqStatus === 'ACTIVE' ? 'active' :
-      sqStatus === 'CANCELED' ? 'canceled' :
-      'paused';
 
     await supa.from('memberships').upsert(
       {
         household_id: householdId,
-        status,
+        square_subscription_id: sub?.id ?? null,
         renews_at: renewsAt ? new Date(renewsAt).toISOString() : null,
       },
       { onConflict: 'household_id' }

@@ -1,41 +1,33 @@
 'use client';
 import { useState, useCallback, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { getLatestHouseholdIdForUser } from '@/lib/households';
 
 type Person = {
   id: string;
   role: 'adult' | 'child';
   first_name: string;
   last_name: string | null;
-  birthdate: string | null; // ISO
+  birthdate: string | null;
 };
 
 export default function PeoplePage() {
   const supabase = createBrowserSupabaseClient();
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', birthdate: '' 
-});
+  const [uiError, setUiError] = useState<string | null>(null);
+  const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', birthdate: '' });
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id;
     if (!uid) return;
 
-    // 내 household 찾기
-    const { data: hs } = await supabase
-      .from('households')
-      .select('id')
-      .eq('owner_user_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(1);
+    const hid = await getLatestHouseholdIdForUser(supabase, uid);
+    if (!hid) return;
 
-	const hid = hs?.[0]?.id;
-	if (!hid) return; 
+    setHouseholdId(hid);
 
-	setHouseholdId(hid);
-
-    // 해당 household 의 people 목록
     const { data: ppl } = await supabase
       .from('people')
       .select('id, role, first_name, last_name, birthdate')
@@ -43,40 +35,36 @@ export default function PeoplePage() {
       .order('created_at', { ascending: true });
 
     setPeople((ppl ?? []) as Person[]);
-  }, []);
+  }, [supabase]);
 
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-   useEffect(() => {
-	load();
-	}, [load]);
+  const addPerson = async () => {
+    setUiError(null);
 
-const addPerson = async () => {
-  console.log("householdId:", householdId);
-  console.log("form.first_name:", form.first_name);
+    if (!householdId || !form.first_name) {
+      setUiError('Something went wrong');
+      return;
+    }
 
-  if (!householdId || !form.first_name) {
-    alert(`missing value: householdId=${householdId}, 
-first_name=${form.first_name}`);
-    return;
-  }
+    const { error } = await supabase.from('people').insert({
+      household_id: householdId,
+      role: form.role as 'adult' | 'child',
+      first_name: form.first_name,
+      last_name: form.last_name || null,
+      birthdate: form.birthdate || null,
+    });
 
-  const { error } = await supabase.from("people").insert({
-    household_id: householdId,
-    role: form.role as "adult" | "child",
-    first_name: form.first_name,
-    last_name: form.last_name || null,
-    birthdate: form.birthdate || null,
-  });
+    if (error) {
+      setUiError('Something went wrong');
+      return;
+    }
 
-  if (error) {
-    console.error("addPerson error:", error);
-    alert(error.message);
-    return;
-  }
-
-  setForm({ role: form.role, first_name: "", last_name: "", birthdate: "" });
-  await load();
-};
+    setForm({ role: form.role, first_name: '', last_name: '', birthdate: '' });
+    await load();
+  };
 
   const removePerson = async (id: string) => {
     await supabase.from('people').delete().eq('id', id);
@@ -94,17 +82,12 @@ first_name=${form.first_name}`);
             <option value="adult">Adult</option>
             <option value="child">Child</option>
           </select>
-          <input placeholder="First name"
-                 value={form.first_name}
-                 onChange={e => setForm({ ...form, first_name: e.target.value })}/>
-          <input placeholder="Last name (optional)"
-                 value={form.last_name}
-                 onChange={e => setForm({ ...form, last_name: e.target.value })}/>
-          <input type="date"
-                 value={form.birthdate}
-                 onChange={e => setForm({ ...form, birthdate: e.target.value })}/>
+          <input placeholder="First name" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
+          <input placeholder="Last name (optional)" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} />
+          <input type="date" value={form.birthdate} onChange={e => setForm({ ...form, birthdate: e.target.value })} />
           <button type="button" onClick={addPerson}>Add</button>
         </div>
+        {uiError && <p style={{ color: '#8a3f6b', marginTop: 10 }}>{uiError}</p>}
       </section>
 
       <section style={{ marginTop: 24 }}>
@@ -124,4 +107,3 @@ first_name=${form.first_name}`);
     </main>
   );
 }
-
