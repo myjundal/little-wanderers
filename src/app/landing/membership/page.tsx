@@ -12,7 +12,6 @@ type Membership = {
   id: string;
   status: 'active' | 'paused' | 'canceled';
   renews_at: string | null;
-  person_id: string | null;
   household_id: string | null;
 };
 
@@ -44,106 +43,60 @@ export default async function MembershipPage() {
       return renderError('no household membership', `No household_id found for auth user ${user.id}`);
     }
 
-    const { data: householdRow, error: householdError } = await supabase
-      .from('households')
-      .select('id,name')
-      .eq('id', householdId)
-      .maybeSingle();
+    const { data: membershipRow, error: membershipError } = await supabase
+      .from('memberships')
+      .select('id,status,renews_at,household_id')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<Membership>();
 
-    if (householdError) {
-      console.error('[membership] households query error', householdError);
-      return renderError('households query failed', householdError.message, {
+    if (membershipError) {
+      console.error('[membership] memberships query error', membershipError);
+      return renderError('memberships by household_id failed', membershipError.message, {
         authUserId: user.id,
-        membershipHouseholdId: householdId,
+        householdId,
       });
+    }
+
+    // No membership row is a normal empty state.
+    if (!membershipRow) {
+      return (
+        <main style={{ padding: 24, maxWidth: 640 }}>
+          <h1>Membership</h1>
+          <p style={{ color: '#6d6480', fontSize: 12 }}>
+            Debug: authUserId={user.id} householdId={householdId} membershipRow=none
+          </p>
+          <section style={{ marginTop: 16 }}>
+            <p>You don't have an active membership right now.</p>
+            <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
+              <StartSubscriptionButton plan="monthly" />
+            </div>
+          </section>
+          <section style={{ marginTop: 24 }}>
+            <Link href="/landing">Back to App Home</Link>
+          </section>
+        </main>
+      );
     }
 
     const nowISO = new Date().toISOString();
-
-    const { data: householdMemberships, error: householdMembershipsError } = await supabase
-      .from('memberships')
-      .select('id,status,renews_at,person_id,household_id')
-      .eq('household_id', householdId);
-
-    if (householdMembershipsError) {
-      console.error('[membership] memberships by household query error', householdMembershipsError);
-      return renderError('memberships by household_id failed', householdMembershipsError.message, {
-        authUserId: user.id,
-        membershipHouseholdId: householdId,
-      });
-    }
-
-    const { data: peopleRows, error: peopleError } = await supabase
-      .from('people')
-      .select('id')
-      .eq('household_id', householdId);
-
-    if (peopleError) {
-      console.error('[membership] people query error', peopleError);
-      return renderError('people by household_id failed', peopleError.message, {
-        authUserId: user.id,
-        membershipHouseholdId: householdId,
-      });
-    }
-
-    const personIds = (peopleRows ?? []).map((p) => p.id);
-    let personMemberships: Membership[] = [];
-
-    if (personIds.length > 0) {
-      const { data: personMembershipRows, error: personMembershipsError } = await supabase
-        .from('memberships')
-        .select('id,status,renews_at,person_id,household_id')
-        .in('person_id', personIds);
-
-      if (personMembershipsError) {
-        console.error('[membership] memberships by person query error', personMembershipsError);
-        return renderError('memberships by person_id failed', personMembershipsError.message, {
-          authUserId: user.id,
-          membershipHouseholdId: householdId,
-        });
-      }
-
-      personMemberships = (personMembershipRows ?? []) as Membership[];
-    }
-
-    const all: Membership[] = [
-      ...((householdMemberships ?? []) as Membership[]),
-      ...personMemberships,
-    ];
-
-    const active = all.filter((m) => m.status === 'active' && (!m.renews_at || m.renews_at > nowISO));
-    const paused = all.filter((m) => m.status === 'paused');
-    const canceled = all.filter((m) => m.status === 'canceled');
-
-    let status: 'active' | 'paused' | 'canceled' | 'none' = 'none';
-    let renewsAt: string | null = null;
-
-    if (active.length) {
-      status = 'active';
-      const dates = active.map((m) => m.renews_at).filter(Boolean) as string[];
-      if (dates.length) renewsAt = dates.sort()[0];
-    } else if (paused.length) {
-      status = 'paused';
-      renewsAt = paused[0].renews_at;
-    } else if (canceled.length) {
-      status = 'canceled';
-      renewsAt = canceled[0].renews_at;
-    }
+    const isActive = membershipRow.status === 'active' && (!membershipRow.renews_at || membershipRow.renews_at > nowISO);
 
     return (
       <main style={{ padding: 24, maxWidth: 640 }}>
         <h1>Membership</h1>
 
         <p style={{ color: '#6d6480', fontSize: 12 }}>
-          Debug: authUserId={user.id} membershipHouseholdId={householdId} householdRowId={householdRow?.id ?? '-'}
+          Debug: authUserId={user.id} householdId={householdId} membershipRow={membershipRow.id}
         </p>
 
         <div style={{ marginTop: 8 }}>
           <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 12, border: '1px solid #ddd' }}>
-            {status.toUpperCase()}
+            {(isActive ? 'active' : membershipRow.status).toUpperCase()}
           </span>{' '}
 
-          {status !== 'active' && (
+          {!isActive && (
             <section style={{ marginTop: 16 }}>
               <p>You don't have an active membership right now.</p>
               <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
@@ -152,8 +105,8 @@ export default async function MembershipPage() {
             </section>
           )}
 
-          {status === 'active' && <span>Renews on {formatDate(renewsAt)}</span>}
-          {status !== 'active' && renewsAt && <span>Ends on {formatDate(renewsAt)}</span>}
+          {isActive && <span>Renews on {formatDate(membershipRow.renews_at)}</span>}
+          {!isActive && membershipRow.renews_at && <span>Ends on {formatDate(membershipRow.renews_at)}</span>}
         </div>
 
         <section style={{ marginTop: 24 }}>
