@@ -3,9 +3,11 @@ import { useState } from 'react';
 
 export default function StartSubscriptionButton({ plan = 'monthly' }: { plan?: string }) {
   const [loading, setLoading] = useState(false);
+  const [uiError, setUiError] = useState<string | null>(null);
 
   async function handleClick() {
     if (loading) return;
+    setUiError(null);
     setLoading(true);
     try {
       const res = await fetch('/api/checkout/subscribe', {
@@ -16,14 +18,15 @@ export default function StartSubscriptionButton({ plan = 'monthly' }: { plan?: s
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.url) throw new Error(json?.error || 'Checkout init failed');
       window.location.assign(json.url); // Square hosted checkout로 이동
-    } catch (err: any) {
-      alert(err?.message || 'Failed to start checkout. Please try again.');
+    } catch {
+      setUiError('Payment failed, please try again');
     } finally {
       setLoading(false);
     }
   }
 
 return (
+  <>
     <button
       onClick={handleClick}
       disabled={loading}
@@ -62,5 +65,7 @@ return (
     >
       {loading ? 'Starting…' : 'Start Monthly Membership'}
     </button>
+    {uiError && <p style={{ marginTop: 8, color: '#8a3f6b' }}>{uiError}</p>}
+  </>
   );
 }

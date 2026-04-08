@@ -48,11 +48,6 @@ export default function AppHome() {
   const [ready, setReady] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authDebug, setAuthDebug] = useState<string>('pending');
-  const [householdDebug, setHouseholdDebug] = useState<string>('pending');
-  const [authUserIdDebug, setAuthUserIdDebug] = useState<string | null>(null);
-  const [membershipHouseholdIdDebug, setMembershipHouseholdIdDebug] = useState<string | null>(null);
-  const [chosenHouseholdSourceDebug, setChosenHouseholdSourceDebug] = useState<string>('none');
   const [appRole, setAppRole] = useState<string | null>(null);
 
 
@@ -69,18 +64,9 @@ export default function AppHome() {
       const supabase = createBrowserSupabaseClient();
 
       // session (server-validated user payload from Supabase Auth)
-      const { data: sessionData } = await supabase.auth.getSession();
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) console.warn('auth getUser error:', authError);
+      await supabase.auth.getSession();
+      const { data: authData } = await supabase.auth.getUser();
       const user = authData?.user ?? null;
-
-      if (!sessionData?.session) {
-        setAuthDebug('no auth session');
-      } else if (!user) {
-        setAuthDebug('no authenticated user');
-      } else {
-        setAuthDebug('session + user ok');
-      }
 
       setDisplayName(user?.email ?? user?.phone ?? null);
       setIsAuthenticated(Boolean(user));
@@ -90,40 +76,24 @@ export default function AppHome() {
       setAppRole(roleRow?.role ?? null);
 
       // 2) Resolve household from household_members first (source of truth)
-      setAuthUserIdDebug(user.id);
       let householdId: string | null = null;
-      let householdSource = 'membership';
 
       try {
         const membershipHouseholdId = await getLatestHouseholdIdForUser(supabase, user.id);
-        setMembershipHouseholdIdDebug(membershipHouseholdId);
         householdId = membershipHouseholdId;
 
         if (!householdId) {
-          householdSource = 'fallback-created';
           householdId = await ensureHouseholdForUser(supabase, user.id, (user.email ?? user.phone ?? 'My Household').split('@')[0]);
-          setMembershipHouseholdIdDebug(householdId);
         }
 
-        setHouseholdDebug(householdId ? 'household membership found/created' : 'no household membership');
-        setChosenHouseholdSourceDebug(householdSource);
-        console.debug('[household-selection]', {
-          authUserId: user.id,
-          membershipHouseholdId,
-          chosenCurrentHouseholdId: householdId,
-          source: householdSource,
-        });
-      } catch (householdErr) {
-        setHouseholdDebug(`household/RLS error: ${householdErr instanceof Error ? householdErr.message : 'unknown'}`);
-        setChosenHouseholdSourceDebug('error');
-        console.warn('household bootstrap error:', householdErr);
+      } catch {
       }
 
       setHouseholdId(householdId);
 
       // 3) Fetch adult's first_name in that household → use as greeting
     if (householdId) {
-      const { data: person, error: personErr } = await supabase
+      const { data: person } = await supabase
         .from('people')
         .select('first_name, role')
         .eq('household_id', householdId)
@@ -131,10 +101,6 @@ export default function AppHome() {
         .limit(1)
         .single();
 
-      if (personErr) {
-        // 두 명 이상 있거나 없을 때 single 에러가 날 수 있음 → 로그만 남기고 fallback 사용
-        console.warn('people fetch error:', personErr);
-      }
 
       const displayName =
         person?.first_name ||
@@ -164,7 +130,6 @@ export default function AppHome() {
         .limit(1);
 
       if (mErr) {
-        console.error('[landing] memberships widget error', mErr);
         setMembership({ status: 'none', renews_at: null });
         return;
       }
@@ -248,11 +213,6 @@ export default function AppHome() {
       <main style={{ padding: 24 }}>
         <h1>Please login</h1>
         <p><Link href="/">Back to Homepage</Link></p>
-        <p style={{ color: '#6d6480' }}>Debug: {authDebug}</p>
-        <p style={{ color: '#6d6480' }}>Debug: {householdDebug}</p>
-        <p style={{ color: '#6d6480' }}>Debug user id: {authUserIdDebug ?? '-'}</p>
-        <p style={{ color: '#6d6480' }}>Debug membership household id: {membershipHouseholdIdDebug ?? '-'}</p>
-        <p style={{ color: '#6d6480' }}>Debug chosen source: {chosenHouseholdSourceDebug}</p>
       </main>
     );
   }
@@ -264,7 +224,6 @@ export default function AppHome() {
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
           <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Check your household details, classes, party bookings, and today’s approximate studio flow from one calm landing page.</p>
-          <p style={{ margin: '8px 0 0', color: '#7a63a5', fontSize: 12 }}>Debug user={authUserIdDebug ?? '-'} membership={membershipHouseholdIdDebug ?? '-'} chosen={householdId ?? '-'} source={chosenHouseholdSourceDebug}</p>
         </div>
 
         <CrowdLevelCard compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />

@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger';
+
 export async function getLatestHouseholdIdForUser(supabase: any, userId: string) {
   const { data, error } = await supabase
     .from('household_members')
@@ -7,11 +9,13 @@ export async function getLatestHouseholdIdForUser(supabase: any, userId: string)
     .limit(1);
 
   if (error) {
-    console.error('[households] getLatestHouseholdIdForUser error', error);
+    logger.error({ action: 'household.lookup_failed', userId }, error);
     throw new Error(`household_members lookup failed: ${error.message} (${error.code ?? 'no-code'})`);
   }
 
-  return data?.[0]?.household_id ?? null;
+  const householdId = data?.[0]?.household_id ?? null;
+  logger.debug({ action: 'household.lookup_succeeded', userId, householdId });
+  return householdId;
 }
 
 export async function ensureHouseholdForUser(supabase: any, userId: string, fallbackName = 'My Household') {
@@ -30,6 +34,7 @@ export async function ensureHouseholdForUser(supabase: any, userId: string, fall
 
   const existingHouseholdId = await getLatestHouseholdIdForUser(supabase, authenticatedUserId);
   if (existingHouseholdId) {
+    logger.info({ action: 'household.bootstrap_skipped_existing', userId: authenticatedUserId, householdId: existingHouseholdId });
     return existingHouseholdId;
   }
 
@@ -40,10 +45,12 @@ export async function ensureHouseholdForUser(supabase: any, userId: string, fall
     .single();
 
   if (householdError) {
+    logger.error({ action: 'household.create_failed', userId: authenticatedUserId }, householdError);
     throw householdError;
   }
 
-  console.debug('[household-bootstrap] inserting household_member', {
+  logger.info({
+    action: 'household.bootstrap_member_upsert_start',
     householdId: household.id,
     userId: authenticatedUserId,
   });
@@ -60,8 +67,10 @@ export async function ensureHouseholdForUser(supabase: any, userId: string, fall
     );
 
   if (membershipError) {
+    logger.error({ action: 'household.bootstrap_member_upsert_failed', householdId: household.id, userId: authenticatedUserId }, membershipError);
     throw membershipError;
   }
 
+  logger.info({ action: 'household.bootstrap_completed', householdId: household.id, userId: authenticatedUserId });
   return household.id;
 }

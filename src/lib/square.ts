@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger';
+
 const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function normalizeEmail(input: string | null | undefined) {
@@ -13,7 +15,7 @@ export function buildPrePopulatedData(inputEmail: string | null | undefined) {
   return { buyer_email: email };
 }
 
-export function logSquarePayload(label: string, payload: Record<string, unknown>) {
+export function logSquarePayload(label: string, payload: Record<string, unknown>, context?: { userId?: string | null; householdId?: string | null }) {
   const copy: Record<string, unknown> = { ...payload };
   if (typeof copy.idempotency_key === 'string') {
     copy.idempotency_key = '[redacted]';
@@ -26,5 +28,11 @@ export function logSquarePayload(label: string, payload: Record<string, unknown>
     copy.pre_populated_data = { buyer_email: `${masked}@${domain}` };
   }
 
-  console.info(`[square] ${label}`, copy);
+  logger.info({
+    action: 'square.payload_prepared',
+    squareLabel: label,
+    userId: context?.userId ?? null,
+    householdId: context?.householdId ?? null,
+    payload: copy,
+  });
 }

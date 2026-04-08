@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import StartSubscriptionButton from '@/components/membership/StartSubscriptionButton';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import { logger } from '@/lib/logger';
 
 export const metadata = { title: 'Membership — Little Wanderers' };
 
@@ -24,8 +25,8 @@ export default async function MembershipPage() {
     } = await supabase.auth.getUser();
 
     if (userError) {
-      console.error('[membership] auth.getUser error', userError);
-      return renderError('auth.getUser failed', userError.message);
+      logger.error({ action: 'auth.membership_get_user_failed' }, userError);
+      return renderError();
     }
 
     if (!user) {
@@ -39,7 +40,8 @@ export default async function MembershipPage() {
 
     const householdId = await getLatestHouseholdIdForUser(supabase, user.id);
     if (!householdId) {
-      return renderError('no household membership', `No household_id found for auth user ${user.id}`);
+      logger.warn({ action: 'membership.household_missing', userId: user.id });
+      return renderError();
     }
 
     const { data: membershipRow, error: membershipError } = await supabase
@@ -51,21 +53,15 @@ export default async function MembershipPage() {
       .maybeSingle<Membership>();
 
     if (membershipError) {
-      console.error('[membership] memberships query error', membershipError);
-      return renderError('memberships by household_id failed', membershipError.message, {
-        authUserId: user.id,
-        householdId,
-      });
+      logger.error({ action: 'membership.lookup_failed', userId: user.id, householdId }, membershipError);
+      return renderError();
     }
 
-    // No membership row is a normal empty state.
     if (!membershipRow) {
+      logger.info({ action: 'membership.lookup_empty', userId: user.id, householdId });
       return (
         <main style={{ padding: 24, maxWidth: 640 }}>
           <h1>Membership</h1>
-          <p style={{ color: '#6d6480', fontSize: 12 }}>
-            Debug: authUserId={user.id} householdId={householdId} membershipRow=none
-          </p>
           <section style={{ marginTop: 16 }}>
             <p>You don't have an active membership right now.</p>
             <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
@@ -85,10 +81,6 @@ export default async function MembershipPage() {
     return (
       <main style={{ padding: 24, maxWidth: 640 }}>
         <h1>Membership</h1>
-
-        <p style={{ color: '#6d6480', fontSize: 12 }}>
-          Debug: authUserId={user.id} householdId={householdId} membershipRow={membershipRow.id}
-        </p>
 
         <div style={{ marginTop: 8 }}>
           <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 12, border: '1px solid #ddd' }}>
@@ -114,24 +106,16 @@ export default async function MembershipPage() {
       </main>
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'unknown error';
-    console.error('[membership] unexpected error', error);
-    return renderError('unexpected error', message);
+    logger.error({ action: 'membership.unexpected_error' }, error);
+    return renderError();
   }
 }
 
-function renderError(kind: string, message: string, context?: Record<string, string | null | undefined>) {
+function renderError() {
   return (
     <main style={{ padding: 24, maxWidth: 720 }}>
       <h1>Membership Error</h1>
-      <p>Failed to load My Membership.</p>
-      <p><strong>Kind:</strong> {kind}</p>
-      <p><strong>Message:</strong> {message}</p>
-      {context && (
-        <pre style={{ whiteSpace: 'pre-wrap', background: '#f7f7f7', padding: 12, borderRadius: 8 }}>
-          {JSON.stringify(context, null, 2)}
-        </pre>
-      )}
+      <p>Unable to load membership</p>
       <p><Link href="/landing">Back to App Home</Link></p>
     </main>
   );
