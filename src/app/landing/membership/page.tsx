@@ -10,7 +10,6 @@ export const metadata = { title: 'Membership — Little Wanderers' };
 
 type Membership = {
   id: string;
-  status: 'active' | 'paused' | 'canceled';
   renews_at: string | null;
   household_id: string | null;
 };
@@ -45,7 +44,7 @@ export default async function MembershipPage() {
 
     const { data: membershipRow, error: membershipError } = await supabase
       .from('memberships')
-      .select('id,status,renews_at,household_id')
+      .select('id,renews_at,household_id')
       .eq('household_id', householdId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -81,7 +80,7 @@ export default async function MembershipPage() {
     }
 
     const nowISO = new Date().toISOString();
-    const isActive = membershipRow.status === 'active' && (!membershipRow.renews_at || membershipRow.renews_at > nowISO);
+    const isActive = !membershipRow.renews_at || membershipRow.renews_at > nowISO;
 
     return (
       <main style={{ padding: 24, maxWidth: 640 }}>
@@ -93,7 +92,7 @@ export default async function MembershipPage() {
 
         <div style={{ marginTop: 8 }}>
           <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 12, border: '1px solid #ddd' }}>
-            {(isActive ? 'active' : membershipRow.status).toUpperCase()}
+            {(isActive ? 'ACTIVE' : 'NONE')}
           </span>{' '}
 
           {!isActive && (

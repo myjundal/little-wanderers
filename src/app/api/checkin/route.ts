@@ -85,9 +85,8 @@ export async function POST(req: NextRequest) {
     const nowISO = new Date().toISOString();
     const { data: memberships, error: memErr } = await supabaseAdmin
       .from('memberships')
-      .select('id')
+      .select('id,renews_at')
       .or(`household_id.eq.${(person as PersonRow).household_id},person_id.eq.${person_id}`)
-      .eq('status', 'active')
       .or(`renews_at.is.null,renews_at.gt.${nowISO}`);
 
     if (memErr) {

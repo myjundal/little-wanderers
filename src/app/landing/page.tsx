@@ -15,7 +15,7 @@ type RecentItem = {
   price_cents: number;
 };
 
-type MembershipStatus = 'active' | 'paused' | 'canceled' | 'none';
+type MembershipStatus = 'active' | 'none';
 
 type HouseholdPersonRow = {
   id: string;
@@ -39,8 +39,6 @@ function dollars(cents: number) {
 function Badge({ status }: { status: MembershipStatus }) {
   const styleMap: Record<MembershipStatus, CSSProperties> = {
     active:   { background: '#e6ffed', border: '1px solid #abf5c0', color: '#137333', padding: '2px 8px', borderRadius: 6, fontSize: 12 },
-    paused:   { background: '#fffbe6', border: '1px solid #ffe58f', color: '#614700', padding: '2px 8px', borderRadius: 6, fontSize: 12 },
-    canceled: { background: '#ffeaea', border: '1px solid #ffb3b3', color: '#7a1212', padding: '2px 8px', borderRadius: 6, fontSize: 12 },
     none:     { background: '#f0f0f0', border: '1px solid #ddd',    color: '#444',    padding: '2px 8px', borderRadius: 6, fontSize: 12 },
   };
   return <span style={styleMap[status]}>{status === 'none' ? 'No membership' : status.toUpperCase()}</span>;
@@ -158,30 +156,27 @@ export default function AppHome() {
       const supabase = createBrowserSupabaseClient();
       const nowISO = new Date().toISOString();
 
-      const { data: mH } = await supabase
+      const { data: mH, error: mErr } = await supabase
         .from('memberships')
-        .select('id,status,renews_at')
-        .eq('household_id', householdId);
+        .select('id,renews_at')
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      const all = (mH ?? []) as { id: string; status: 'active' | 'paused' | 'canceled'; renews_at: string | null }[];
-      const active = all.filter(m => m.status === 'active' && (!m.renews_at || m.renews_at > nowISO));
-      const paused = all.filter(m => m.status === 'paused');
-      const canceled = all.filter(m => m.status === 'canceled');
-
-      let s: MembershipStatus = 'none';
-      let r: string | null = null;
-      if (active.length) {
-        s = 'active';
-        const dates = active.map(m => m.renews_at).filter(Boolean) as string[];
-        if (dates.length) r = dates.sort()[0];
-      } else if (paused.length) {
-        s = 'paused';
-        r = paused[0].renews_at;
-      } else if (canceled.length) {
-        s = 'canceled';
-        r = canceled[0].renews_at;
+      if (mErr) {
+        console.error('[landing] memberships widget error', mErr);
+        setMembership({ status: 'none', renews_at: null });
+        return;
       }
-      setMembership({ status: s, renews_at: r });
+
+      const row = (mH ?? [])[0] as { id: string; renews_at: string | null } | undefined;
+      if (!row) {
+        setMembership({ status: 'none', renews_at: null });
+        return;
+      }
+
+      const isActive = !row.renews_at || row.renews_at > nowISO;
+      setMembership({ status: isActive ? 'active' : 'none', renews_at: row.renews_at });
     })();
   }, [householdId]);
 

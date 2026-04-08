@@ -11,7 +11,7 @@ export async function POST() {
   const householdId = await getLatestHouseholdIdForUser(supa, user.id);
   if (!householdId) return NextResponse.redirect('/landing/membership?error=no-household');
 
-  await supa.from('memberships').upsert({ household_id: householdId, status: 'canceled' }, { 
+  await supa.from('memberships').upsert({ household_id: householdId, renews_at: new Date().toISOString() }, { 
 onConflict: 'household_id' });
 
   return NextResponse.redirect('/landing/membership?success=1');

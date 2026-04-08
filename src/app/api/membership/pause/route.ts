@@ -12,7 +12,7 @@ export async function POST() {
   if (!householdId) return NextResponse.redirect('/landing/membership?error=no-household');
 
   // TEMP local update (simulate Square pause)
-  await supa.from('memberships').upsert({ household_id: householdId, status: 'paused' }, { 
+  await supa.from('memberships').upsert({ household_id: householdId, renews_at: new Date().toISOString() }, { 
 onConflict: 'household_id' });
 
   return NextResponse.redirect('/landing/membership?success=1');

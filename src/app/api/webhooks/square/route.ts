@@ -116,20 +116,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ---- subscription updates → membership status upsert (household-level) ----
+  // ---- subscription updates → household-level membership upsert ----
   if (type.includes('subscription.updated') && householdId) {
-    const sqStatus: string | undefined = sub?.status;
     const renewsAt: string | undefined = sub?.charged_through_date;
-
-    const status =
-      sqStatus === 'ACTIVE' ? 'active' :
-      sqStatus === 'CANCELED' ? 'canceled' :
-      'paused';
 
     await supa.from('memberships').upsert(
       {
         household_id: householdId,
-        status,
+        square_subscription_id: sub?.id ?? null,
         renews_at: renewsAt ? new Date(renewsAt).toISOString() : null,
       },
       { onConflict: 'household_id' }
