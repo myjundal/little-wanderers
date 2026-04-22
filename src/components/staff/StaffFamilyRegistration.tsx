@@ -90,7 +90,11 @@ export default function StaffFamilyRegistration({ onSaved }: { onSaved: () => Pr
       </div>
 
       <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" onClick={addMember} style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', background: '#fff' }}>
+        <button
+          type="button"
+          onClick={addMember}
+          style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', background: '#fff', color: '#5f3da4', fontWeight: 700 }}
+        >
           Add Another Member
         </button>
         <button type="button" onClick={saveFamily} disabled={saving} style={{ borderRadius: 12, border: 'none', padding: '10px 14px', background: '#6d4bb7', color: '#fff', fontWeight: 700 }}>
