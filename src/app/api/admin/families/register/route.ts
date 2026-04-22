@@ -1,4 +1,6 @@
 import { requireStaffContext } from '@/lib/authz';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 type MemberInput = {
   full_name?: string;
@@ -13,6 +15,12 @@ function splitName(fullName: string) {
     first_name: firstName,
     last_name: rest.length ? rest.join(' ') : null,
   };
+}
+
+function formatDbError(prefix: string, error: { message: string; code?: string | null; details?: string | null }) {
+  const code = error.code ? ` (${error.code})` : '';
+  const details = error.details ? ` - ${error.details}` : '';
+  return `${prefix}${code}: ${error.message}${details}`;
 }
 
 export async function POST(req: Request) {
@@ -41,7 +49,10 @@ export async function POST(req: Request) {
   const primaryAdult = cleanedMembers.find((item) => item.role === 'adult') ?? cleanedMembers[0];
   const householdName = String(body.household_name ?? '').trim() || `${primaryAdult.full_name} Family`;
 
-  const { data: household, error: householdError } = await context.admin
+  // Use user-scoped server client for RLS-safe inserts.
+  const server = createServerSupabaseClient();
+
+  const { data: household, error: householdError } = await server
     .from('households')
     .insert({
       user_id: context.user.id,
@@ -52,7 +63,36 @@ export async function POST(req: Request) {
     .single();
 
   if (householdError || !household) {
+    if (householdError) {
+      logger.error({ action: 'staff.family_registration.household_insert_failed', userId: context.user.id }, householdError);
+      return Response.json(
+        { ok: false, error: formatDbError('Unable to create household', householdError) },
+        { status: 500 }
+      );
+    }
+
     return Response.json({ ok: false, error: 'Unable to create household.' }, { status: 500 });
+  }
+
+  const { error: memberError } = await server.from('household_members').upsert(
+    {
+      household_id: household.id,
+      user_id: context.user.id,
+      role: 'owner',
+    },
+    { onConflict: 'household_id,user_id' }
+  );
+
+  if (memberError) {
+    logger.error(
+      { action: 'staff.family_registration.household_member_upsert_failed', userId: context.user.id, householdId: household.id },
+      memberError
+    );
+    await server.from('households').delete().eq('id', household.id);
+    return Response.json(
+      { ok: false, error: formatDbError('Unable to link household owner', memberError) },
+      { status: 500 }
+    );
   }
 
   const peopleRows = cleanedMembers.map((item) => {
@@ -66,11 +106,18 @@ export async function POST(req: Request) {
     };
   });
 
-  const { error: peopleError } = await context.admin.from('people').insert(peopleRows);
+  const { error: peopleError } = await server.from('people').insert(peopleRows);
 
   if (peopleError) {
-    await context.admin.from('households').delete().eq('id', household.id);
-    return Response.json({ ok: false, error: 'Unable to save family members.' }, { status: 500 });
+    logger.error(
+      { action: 'staff.family_registration.people_insert_failed', userId: context.user.id, householdId: household.id },
+      peopleError
+    );
+    await server.from('households').delete().eq('id', household.id);
+    return Response.json(
+      { ok: false, error: formatDbError('Unable to save family members', peopleError) },
+      { status: 500 }
+    );
   }
 
   return Response.json({ ok: true, household_id: household.id, household_name: household.name });
