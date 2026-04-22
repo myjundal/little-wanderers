@@ -49,13 +49,12 @@ export async function POST(req: Request) {
   const primaryAdult = cleanedMembers.find((item) => item.role === 'adult') ?? cleanedMembers[0];
   const householdName = String(body.household_name ?? '').trim() || `${primaryAdult.full_name} Family`;
 
-  // Use user-scoped server client for RLS-safe inserts.
   const server = createServerSupabaseClient();
 
+  // 1) Create household (no households.user_id usage).
   const { data: household, error: householdError } = await server
     .from('households')
     .insert({
-      user_id: context.user.id,
       role: 'owner',
       name: householdName,
     })
@@ -74,27 +73,56 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: 'Unable to create household.' }, { status: 500 });
   }
 
-  const { error: memberError } = await server.from('household_members').upsert(
+  // 2) Link current owner/admin user to this household for ownership + RLS access.
+  const { error: ownerMemberError } = await server.from('household_members').upsert(
     {
       household_id: household.id,
       user_id: context.user.id,
       role: 'owner',
+      full_name: null,
+      birth_date: null,
+      member_role: null,
     },
     { onConflict: 'household_id,user_id' }
   );
 
-  if (memberError) {
+  if (ownerMemberError) {
     logger.error(
-      { action: 'staff.family_registration.household_member_upsert_failed', userId: context.user.id, householdId: household.id },
-      memberError
+      { action: 'staff.family_registration.owner_membership_upsert_failed', userId: context.user.id, householdId: household.id },
+      ownerMemberError
     );
     await server.from('households').delete().eq('id', household.id);
     return Response.json(
-      { ok: false, error: formatDbError('Unable to link household owner', memberError) },
+      { ok: false, error: formatDbError('Unable to link household owner', ownerMemberError) },
       { status: 500 }
     );
   }
 
+  // 3) Store manually registered family members in household_members (walk-in rows without auth user_id).
+  const walkInMemberRows = cleanedMembers.map((item) => ({
+    household_id: household.id,
+    user_id: null,
+    role: 'member' as const,
+    full_name: item.full_name,
+    birth_date: item.birthdate,
+    member_role: item.role,
+  }));
+
+  const { error: householdMembersError } = await server.from('household_members').insert(walkInMemberRows);
+
+  if (householdMembersError) {
+    logger.error(
+      { action: 'staff.family_registration.walkin_members_insert_failed', userId: context.user.id, householdId: household.id },
+      householdMembersError
+    );
+    await server.from('households').delete().eq('id', household.id);
+    return Response.json(
+      { ok: false, error: formatDbError('Unable to save family members', householdMembersError) },
+      { status: 500 }
+    );
+  }
+
+  // Keep existing people-based flows working.
   const peopleRows = cleanedMembers.map((item) => {
     const names = splitName(item.full_name);
     return {
