@@ -1,8 +1,21 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { callOccupancyRpc, getOccupancyStatus } from '@/lib/occupancy';
 import { requireStaffContext } from '@/lib/authz';
 import { sendPushBatch } from '@/lib/push';
 
 export const dynamic = 'force-dynamic';
+
+type PushPreferenceRow = {
+  id: string;
+  endpoint: string;
+  p256dh_key: string;
+  auth_key: string;
+  notify_when_level_at_or_below: string | null;
+  quiet_hours_enabled: boolean | null;
+  quiet_start_hour: number | null;
+  quiet_end_hour: number | null;
+  timezone_offset_minutes: number | null;
+};
 
 function toPositiveInt(value: unknown, fallback = 1) {
   const parsed = Number(value);
@@ -27,33 +40,70 @@ function formatResponse(summary: Awaited<ReturnType<typeof getOccupancyStatus>>)
   };
 }
 
+function crowdLevelScore(level: string) {
+  return ({ light: 1, moderate: 2, busy: 3, near_capacity: 4 }[level] ?? 99);
+}
 
+function isWithinQuietHours(nowUtc: Date, offsetMinutes: number, startHour: number | null, endHour: number | null) {
+  if (startHour == null || endHour == null) return false;
+  const localMs = nowUtc.getTime() - offsetMinutes * 60_000;
+  const localHour = new Date(localMs).getUTCHours();
 
-async function notifyIfLessCrowded(context: Awaited<ReturnType<typeof requireStaffContext>> & { ok: true }, beforeLevel: string, afterLevel: string) {
-  const score = (level: string) => ({ light: 1, moderate: 2, busy: 3, near_capacity: 4 }[level] ?? 99);
-  if (score(afterLevel) >= score(beforeLevel)) return;
+  if (startHour === endHour) return true;
+  if (startHour < endHour) {
+    return localHour >= startHour && localHour < endHour;
+  }
+
+  return localHour >= startHour || localHour < endHour;
+}
+
+async function notifyIfLessCrowded(admin: SupabaseClient, beforeLevel: string, afterLevel: string) {
+  const beforeScore = crowdLevelScore(beforeLevel);
+  const afterScore = crowdLevelScore(afterLevel);
+  if (afterScore >= beforeScore) return;
 
   const now = new Date();
   const cooldownStart = new Date(now.getTime() - 45 * 60 * 1000).toISOString();
 
-  const { data: subscriptions, error } = await context.admin
+  const { data, error } = await admin
     .from('push_subscriptions')
-    .select('id,endpoint,p256dh_key,auth_key,last_notified_at,enabled')
+    .select('id,endpoint,p256dh_key,auth_key,last_notified_at,enabled,less_crowded_enabled,notify_when_level_at_or_below,quiet_hours_enabled,quiet_start_hour,quiet_end_hour,timezone_offset_minutes')
     .eq('enabled', true)
+    .eq('less_crowded_enabled', true)
     .or(`last_notified_at.is.null,last_notified_at.lt.${cooldownStart}`);
 
-  if (error || !subscriptions?.length) return;
+  if (error) return;
 
-  const { sent } = await sendPushBatch(subscriptions, {
+  const subscriptions = (data ?? []) as PushPreferenceRow[];
+  if (subscriptions.length === 0) return;
+
+  const filtered = subscriptions.filter((item) => {
+    const thresholdScore = crowdLevelScore(item.notify_when_level_at_or_below ?? 'moderate');
+    if (afterScore > thresholdScore) return false;
+
+    const quietEnabled = Boolean(item.quiet_hours_enabled);
+    if (!quietEnabled) return true;
+
+    return !isWithinQuietHours(
+      now,
+      Number(item.timezone_offset_minutes ?? 0),
+      item.quiet_start_hour,
+      item.quiet_end_hour
+    );
+  });
+
+  if (filtered.length === 0) return;
+
+  const { sent } = await sendPushBatch(filtered, {
     title: 'Little Wanderers',
     body: 'It’s quieter now — a great time to stop by!',
     url: '/landing/visit',
   });
 
   if (sent > 0) {
-    const ids = subscriptions.slice(0, sent).map((item) => item.id);
+    const ids = filtered.slice(0, sent).map((item) => item.id);
     if (ids.length > 0) {
-      await context.admin.from('push_subscriptions').update({ last_notified_at: now.toISOString() }).in('id', ids);
+      await admin.from('push_subscriptions').update({ last_notified_at: now.toISOString() }).in('id', ids);
     }
   }
 }
@@ -95,7 +145,7 @@ export async function POST(req: Request) {
     }
 
     const updated = await getOccupancyStatus(context.admin);
-    await notifyIfLessCrowded(context, before.crowdLevel, updated.crowdLevel);
+    await notifyIfLessCrowded(context.admin, before.crowdLevel, updated.crowdLevel);
     return Response.json(formatResponse(updated));
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';

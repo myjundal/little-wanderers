@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import NotificationPreferences from '@/components/pwa/NotificationPreferences';
 
 type Person = {
   id: string;
@@ -161,6 +162,8 @@ export default function PeoplePage() {
           <button type="button" onClick={addPerson}>Add Family Member</button>
         </div>
       </section>
+
+      <NotificationPreferences />
 
       {(uiError || uiMessage) && (
         <p style={{ color: uiError ? '#8a3f6b' : '#2f7a44', marginTop: 10 }}>{uiError ?? uiMessage}</p>

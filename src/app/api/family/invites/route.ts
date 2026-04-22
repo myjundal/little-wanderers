@@ -6,6 +6,43 @@ function normalizeRole(input: unknown): 'admin' | 'member' {
   return input === 'admin' ? 'admin' : 'member';
 }
 
+async function sendInviteEmail(input: { email: string; role: 'admin' | 'member'; inviteToken: string }) {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return { ok: false, reason: 'RESEND_API_KEY is not configured' };
+
+  const from = process.env.RESEND_FROM_EMAIL ?? 'Little Wanderers <onboarding@resend.dev>';
+  const appBase = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  const inviteUrl = `${appBase}/invite?token=${encodeURIComponent(input.inviteToken)}`;
+
+  const html = `
+    <h2>You’re invited to join a Little Wanderers family account</h2>
+    <p>Your family invited you as a <b>${input.role === 'admin' ? 'co-admin caregiver' : 'caregiver'}</b>.</p>
+    <p><a href="${inviteUrl}">Accept Invite</a></p>
+    <p>If you already have an account, sign in and open the link again to accept.</p>
+  `;
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [input.email],
+      subject: 'You’re invited to Little Wanderers',
+      html,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return { ok: false, reason: text || 'Failed to send invite email' };
+  }
+
+  return { ok: true as const };
+}
+
 export async function GET() {
   const supabase = createServerSupabaseClient();
   const {
@@ -68,20 +105,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'This action is not allowed.' }, { status: 403 });
   }
 
-  const { error } = await supabase.from('household_invites').insert({
-    household_id: householdId,
-    email,
-    role,
-    invited_by: user.id,
-    status: 'pending',
-  });
+  const { data: invite, error } = await supabase
+    .from('household_invites')
+    .insert({
+      household_id: householdId,
+      email,
+      role,
+      invited_by: user.id,
+      status: 'pending',
+    })
+    .select('invite_token')
+    .single();
 
-  if (error) {
-    const message = /duplicate key|unique/i.test(error.message)
+  if (error || !invite?.invite_token) {
+    const message = error && /duplicate key|unique/i.test(error.message)
       ? 'An invite is already pending for this email.'
       : 'Unable to send invite right now.';
     return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true });
+  const mail = await sendInviteEmail({ email, role, inviteToken: invite.invite_token as string });
+  return NextResponse.json({ ok: true, email_sent: mail.ok, email_error: mail.ok ? null : mail.reason });
 }

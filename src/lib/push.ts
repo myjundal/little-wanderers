@@ -1,4 +1,3 @@
-import webpush from 'web-push';
 import { logger } from '@/lib/logger';
 
 type PushSubscriptionRow = {
@@ -8,10 +7,33 @@ type PushSubscriptionRow = {
   auth_key: string;
 };
 
+type WebPushModule = {
+  setVapidDetails: (subject: string, publicKey: string, privateKey: string) => void;
+  sendNotification: (subscription: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: string) => Promise<unknown>;
+};
+
 let configured = false;
+let webpushModule: WebPushModule | null = null;
+
+function loadWebPush(): WebPushModule | null {
+  if (webpushModule) return webpushModule;
+
+  try {
+    const req = eval('require') as (moduleName: string) => unknown;
+    const loaded = req('web-push') as { default?: WebPushModule } | WebPushModule;
+    webpushModule = (loaded as { default?: WebPushModule }).default ?? (loaded as WebPushModule);
+    return webpushModule;
+  } catch (error) {
+    logger.warn({ action: 'push.webpush_module_missing' }, error);
+    return null;
+  }
+}
 
 function ensureConfigured() {
   if (configured) return true;
+  const webpush = loadWebPush();
+  if (!webpush) return false;
+
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const contact = process.env.VAPID_SUBJECT || 'mailto:support@littlewanderersplay.com';
@@ -26,8 +48,9 @@ function ensureConfigured() {
 }
 
 export async function sendPushBatch(items: PushSubscriptionRow[], payload: Record<string, unknown>) {
-  if (!ensureConfigured()) {
-    logger.warn({ action: 'push.missing_vapid_keys' });
+  const webpush = loadWebPush();
+  if (!webpush || !ensureConfigured()) {
+    logger.warn({ action: 'push.missing_vapid_keys_or_module' });
     return { sent: 0, failed: 0 };
   }
 

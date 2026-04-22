@@ -55,13 +55,13 @@ export async function POST(req: NextRequest) {
         event_id: eventId,
         payload,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const errStr = typeof e === 'string' ? e : e instanceof Error ? e.message : 'insert error';
       // duplicate key → already processed
-      if ((e?.message || '').toLowerCase().includes('duplicate')) {
+      if (errStr.toLowerCase().includes('duplicate')) {
         return new Response('duplicate', { status: 200 });
       }
       // if PostgREST error
-      const errStr = typeof e === 'string' ? e : e?.message || 'insert error';
       return new Response(errStr, { status: 500 });
     }
   } else {
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         .from('auth.users') /* only works with service role + PG schema exposed */
         .select('id')
         .ilike('email', email)
-        .limit(1) as any;
+        .limit(1);
 
       const userId = users?.[0]?.id ?? null;
       if (userId) {

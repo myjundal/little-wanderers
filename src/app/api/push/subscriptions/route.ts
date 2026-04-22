@@ -16,11 +16,21 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     endpoint?: string;
     keys?: { p256dh?: string; auth?: string };
+    less_crowded_enabled?: boolean;
+    notify_when_level_at_or_below?: 'light' | 'moderate' | 'busy' | 'near_capacity';
+    quiet_hours_enabled?: boolean;
+    quiet_start_hour?: number | null;
+    quiet_end_hour?: number | null;
+    timezone_offset_minutes?: number;
   };
 
   const endpoint = String(body?.endpoint ?? '').trim();
   const p256dh = String(body?.keys?.p256dh ?? '').trim();
   const auth = String(body?.keys?.auth ?? '').trim();
+
+  const notifyLevel = ['light', 'moderate', 'busy', 'near_capacity'].includes(String(body.notify_when_level_at_or_below))
+    ? String(body.notify_when_level_at_or_below)
+    : 'moderate';
 
   if (!endpoint || !p256dh || !auth) {
     return NextResponse.json({ ok: false, error: 'Invalid subscription payload.' }, { status: 400 });
@@ -34,6 +44,12 @@ export async function POST(req: Request) {
       p256dh_key: p256dh,
       auth_key: auth,
       enabled: true,
+      less_crowded_enabled: body.less_crowded_enabled !== false,
+      notify_when_level_at_or_below: notifyLevel,
+      quiet_hours_enabled: Boolean(body.quiet_hours_enabled),
+      quiet_start_hour: body.quiet_start_hour == null ? null : Number(body.quiet_start_hour),
+      quiet_end_hour: body.quiet_end_hour == null ? null : Number(body.quiet_end_hour),
+      timezone_offset_minutes: Number.isFinite(Number(body.timezone_offset_minutes)) ? Math.trunc(Number(body.timezone_offset_minutes)) : 0,
     },
     { onConflict: 'endpoint' }
   );

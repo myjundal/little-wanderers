@@ -51,7 +51,13 @@ export default function NotificationPrompt() {
     const res = await fetch('/api/push/subscriptions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(subscription),
+      body: JSON.stringify({
+        ...subscription,
+        less_crowded_enabled: true,
+        notify_when_level_at_or_below: 'moderate',
+        quiet_hours_enabled: false,
+        timezone_offset_minutes: new Date().getTimezoneOffset(),
+      }),
     });
 
     const json = await res.json();
