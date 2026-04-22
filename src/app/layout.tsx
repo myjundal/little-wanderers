@@ -2,6 +2,9 @@ import { Quicksand, Nunito } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
 import AnalyticsBoot from '@/components/AnalyticsBoot';
+import PwaBoot from '@/components/pwa/PwaBoot';
+import AddToHomeScreenPrompt from '@/components/pwa/AddToHomeScreenPrompt';
+import NotificationPrompt from '@/components/pwa/NotificationPrompt';
 
 const GOOGLE_TAG_ID = 'G-RHZ3580FJ8';
 
@@ -54,6 +57,9 @@ gtag('js', new Date());
 gtag('config', '${GOOGLE_TAG_ID}');`}
         </Script>
         {children}
+        <PwaBoot />
+        <AddToHomeScreenPrompt />
+        <NotificationPrompt />
         <AnalyticsBoot />
       </body>
     </html>
