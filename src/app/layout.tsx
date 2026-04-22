@@ -2,8 +2,12 @@ import { Quicksand, Nunito } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
 import AnalyticsBoot from '@/components/AnalyticsBoot';
+import PwaBoot from '@/components/pwa/PwaBoot';
+import AddToHomeScreenPrompt from '@/components/pwa/AddToHomeScreenPrompt';
+import NotificationPrompt from '@/components/pwa/NotificationPrompt';
 
 const GOOGLE_TAG_ID = 'G-RHZ3580FJ8';
+const SHOW_INSTALL_AND_PUSH_PROMPTS = false;
 
 const headingFont = Quicksand({
   variable: '--font-heading',
@@ -54,6 +58,9 @@ gtag('js', new Date());
 gtag('config', '${GOOGLE_TAG_ID}');`}
         </Script>
         {children}
+        <PwaBoot />
+        {SHOW_INSTALL_AND_PUSH_PROMPTS && <AddToHomeScreenPrompt />}
+        {SHOW_INSTALL_AND_PUSH_PROMPTS && <NotificationPrompt />}
         <AnalyticsBoot />
       </body>
     </html>

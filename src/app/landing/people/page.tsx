@@ -1,7 +1,9 @@
 'use client';
+
 import { useState, useCallback, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import NotificationPreferences from '@/components/pwa/NotificationPreferences';
 
 type Person = {
   id: string;
@@ -11,12 +13,25 @@ type Person = {
   birthdate: string | null;
 };
 
+type Invite = {
+  id: string;
+  email: string;
+  role: 'admin' | 'member';
+  status: 'pending' | 'accepted' | 'cancelled' | 'expired';
+  created_at: string;
+  expires_at: string;
+};
+
 export default function PeoplePage() {
   const supabase = createBrowserSupabaseClient();
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
   const [uiError, setUiError] = useState<string | null>(null);
+  const [uiMessage, setUiMessage] = useState<string | null>(null);
+  const [sendingInvite, setSendingInvite] = useState(false);
   const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', birthdate: '' });
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'member' as 'admin' | 'member' });
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -28,13 +43,17 @@ export default function PeoplePage() {
 
     setHouseholdId(hid);
 
-    const { data: ppl } = await supabase
-      .from('people')
-      .select('id, role, first_name, last_name, birthdate')
-      .eq('household_id', hid)
-      .order('created_at', { ascending: true });
+    const [{ data: ppl }, invitesRes] = await Promise.all([
+      supabase.from('people').select('id, role, first_name, last_name, birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
+      fetch('/api/family/invites', { cache: 'no-store' }),
+    ]);
 
     setPeople((ppl ?? []) as Person[]);
+
+    const invitesJson = await invitesRes.json();
+    if (invitesRes.ok && invitesJson.ok) {
+      setInvites((invitesJson.items ?? []) as Invite[]);
+    }
   }, [supabase]);
 
   useEffect(() => {
@@ -43,9 +62,10 @@ export default function PeoplePage() {
 
   const addPerson = async () => {
     setUiError(null);
+    setUiMessage(null);
 
     if (!householdId || !form.first_name) {
-      setUiError('Something went wrong');
+      setUiError('Please add at least a first name.');
       return;
     }
 
@@ -58,11 +78,36 @@ export default function PeoplePage() {
     });
 
     if (error) {
-      setUiError('Something went wrong');
+      setUiError('Something went wrong while saving your family member.');
       return;
     }
 
     setForm({ role: form.role, first_name: '', last_name: '', birthdate: '' });
+    setUiMessage('Family member added.');
+    await load();
+  };
+
+  const sendInvite = async () => {
+    setUiError(null);
+    setUiMessage(null);
+    setSendingInvite(true);
+
+    const res = await fetch('/api/family/invites', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(inviteForm),
+    });
+    const json = await res.json();
+
+    setSendingInvite(false);
+
+    if (!res.ok || !json.ok) {
+      setUiError(json.error ?? 'Unable to send invite right now.');
+      return;
+    }
+
+    setInviteForm({ email: '', role: 'member' });
+    setUiMessage('Invite sent.');
     await load();
   };
 
@@ -72,29 +117,63 @@ export default function PeoplePage() {
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 640 }}>
-      <h1>My People</h1>
+    <main style={{ padding: 24, maxWidth: 760 }}>
+      <h1>Family & Household</h1>
+      <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
 
-      <section style={{ marginTop: 16, padding: 12, border: '1px solid #ddd' }}>
-        <h3>Add New Person</h3>
+      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
+        <h3>Invite Family Member</h3>
+        <p style={{ color: '#6d6480' }}>Add Caregiver access for another adult in your household.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+          <input
+            placeholder="Email"
+            value={inviteForm.email}
+            onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
+            style={{ minWidth: 240 }}
+          />
+          <select value={inviteForm.role} onChange={(e) => setInviteForm((prev) => ({ ...prev, role: e.target.value as 'admin' | 'member' }))}>
+            <option value="member">Caregiver</option>
+            <option value="admin">Co-admin</option>
+          </select>
+          <button type="button" onClick={sendInvite} disabled={sendingInvite}>{sendingInvite ? 'Sending…' : 'Send Invite'}</button>
+        </div>
+
+        <h4 style={{ marginTop: 14 }}>Pending Invites</h4>
+        {invites.filter((i) => i.status === 'pending').length === 0 && <p style={{ color: '#6d6480' }}>No pending invites right now.</p>}
+        <ul>
+          {invites
+            .filter((i) => i.status === 'pending')
+            .map((invite) => (
+              <li key={invite.id}>{invite.email} · {invite.role} · expires {new Date(invite.expires_at).toLocaleDateString()}</li>
+            ))}
+        </ul>
+      </section>
+
+      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
+        <h3>Add Family Member</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             <option value="adult">Adult</option>
             <option value="child">Child</option>
           </select>
-          <input placeholder="First name" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
-          <input placeholder="Last name (optional)" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} />
-          <input type="date" value={form.birthdate} onChange={e => setForm({ ...form, birthdate: e.target.value })} />
-          <button type="button" onClick={addPerson}>Add</button>
+          <input placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+          <input placeholder="Last name (optional)" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          <input type="date" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: e.target.value })} />
+          <button type="button" onClick={addPerson}>Add Family Member</button>
         </div>
-        {uiError && <p style={{ color: '#8a3f6b', marginTop: 10 }}>{uiError}</p>}
       </section>
 
+      <NotificationPreferences />
+
+      {(uiError || uiMessage) && (
+        <p style={{ color: uiError ? '#8a3f6b' : '#2f7a44', marginTop: 10 }}>{uiError ?? uiMessage}</p>
+      )}
+
       <section style={{ marginTop: 24 }}>
-        <h3>My People</h3>
+        <h3>Family Members</h3>
         {people.length === 0 && <p>No one is registered yet.</p>}
         <ul>
-          {people.map(p => (
+          {people.map((p) => (
             <li key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
               <span style={{ width: 64, textTransform: 'capitalize' }}>{p.role}</span>
               <span style={{ minWidth: 160 }}>{p.first_name} {p.last_name ?? ''}</span>

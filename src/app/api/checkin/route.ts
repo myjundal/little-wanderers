@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callOccupancyRpc } from '@/lib/occupancy';
+import { requireStaffContext } from '@/lib/authz';
 
 type PersonRow = {
   id: string;
@@ -62,6 +63,9 @@ function pickBestRule(rules: PricingRule[], role: 'adult' | 'child', ageMonths: 
 }
 
 export async function POST(req: NextRequest) {
+  const context = await requireStaffContext();
+  if (!context.ok) return context.response;
+
   try {
     const { person_id, source = 'qr', group_size } = await req.json();
 

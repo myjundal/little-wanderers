@@ -1,6 +1,11 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 
-export async function getLatestHouseholdIdForUser(supabase: any, userId: string) {
+type HouseholdMemberRow = { household_id: string; created_at: string };
+
+type HouseholdClient = SupabaseClient;
+
+export async function getLatestHouseholdIdForUser(supabase: HouseholdClient, userId: string) {
   const { data, error } = await supabase
     .from('household_members')
     .select('household_id,created_at')
@@ -13,12 +18,13 @@ export async function getLatestHouseholdIdForUser(supabase: any, userId: string)
     throw new Error(`household_members lookup failed: ${error.message} (${error.code ?? 'no-code'})`);
   }
 
-  const householdId = data?.[0]?.household_id ?? null;
+  const typedData = (data ?? []) as HouseholdMemberRow[];
+  const householdId = typedData[0]?.household_id ?? null;
   logger.debug({ action: 'household.lookup_succeeded', userId, householdId });
   return householdId;
 }
 
-export async function ensureHouseholdForUser(supabase: any, userId: string, fallbackName = 'My Household') {
+export async function ensureHouseholdForUser(supabase: HouseholdClient, userId: string, fallbackName = 'My Household') {
   const authResponse = typeof supabase?.auth?.getUser === 'function'
     ? await supabase.auth.getUser()
     : null;

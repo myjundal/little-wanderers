@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 
 type OccupancyEvent = {
   id: string;
@@ -319,6 +320,8 @@ export default function StaffDashboard() {
           {message}
         </div>
       )}
+
+      <StaffFamilyRegistration onSaved={load} />
 
       <section style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>

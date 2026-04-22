@@ -61,7 +61,7 @@ const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
 const [scannerRunning, setScannerRunning] = useState(false);
 
-  const scannerRef = useRef<any>(null);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const lastScanTimeRef = useRef<number>(0);
   const startedRef = useRef(false);
   const router = useRouter();
