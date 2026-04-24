@@ -58,9 +58,6 @@ export default function StaffFamiliesPage() {
             <p style={{ margin: '6px 0', color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {item.waiver_status}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               <Link href={`/staff/families/${item.household_id}`} style={{ borderRadius: 10, padding: '8px 10px', border: '1px solid #d9c8f7', textDecoration: 'none' }}>View</Link>
-              <Link href={`/staff/families/${item.household_id}`} style={{ borderRadius: 10, padding: '8px 10px', border: '1px solid #d9c8f7', textDecoration: 'none' }}>Check in</Link>
-              <Link href={`/staff/families/${item.household_id}`} style={{ borderRadius: 10, padding: '8px 10px', border: '1px solid #d9c8f7', textDecoration: 'none' }}>Register class</Link>
-              <Link href={`/staff/families/${item.household_id}`} style={{ borderRadius: 10, padding: '8px 10px', border: '1px solid #d9c8f7', textDecoration: 'none' }}>Book party</Link>
             </div>
           </article>
         ))}

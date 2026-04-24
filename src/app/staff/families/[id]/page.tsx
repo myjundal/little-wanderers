@@ -1,9 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import QRCode from 'qrcode';
+import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
-type Person = { id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null };
+type Person = { id: string; first_name: string | null; last_name: string | null; birthdate?: string | null; role: 'adult' | 'child' | null };
 type FamilyDetail = {
   household: { id: string; name: string | null; phone: string | null };
   guardians: Person[];
@@ -11,123 +15,277 @@ type FamilyDetail = {
   membership_status: string;
   waiver_status: string;
   qr_status: string;
-  upcoming_classes: Array<{ id: string; person_id: string; person_name: string; class: { title: string; start_time: string } | null }>;
+  upcoming_classes: Array<{ id: string; person_id: string; person_name: string; class: { id?: string; title: string; start_time: string } | null }>;
   upcoming_parties: Array<{ id: string; start_time: string; end_time: string; status: string }>;
   visit_history: Array<{ id: string; person_id: string; person_name: string; checked_in_at: string }>;
 };
 
+type MemberForm = { id?: string; first_name: string; last_name: string; birthdate: string; role: 'adult' | 'child' };
+
+function toIsoUtc(date: string, hourUtc: number) {
+  return new Date(`${date}T${String(hourUtc).padStart(2, '0')}:00:00.000Z`).toISOString();
+}
+
 export default function StaffFamilyDetailPage({ params }: { params: { id: string } }) {
   const familyId = params.id;
+  const searchParams = useSearchParams();
   const [item, setItem] = useState<FamilyDetail | null>(null);
-  const [classes, setClasses] = useState<Array<{ id: string; title: string; start_time: string }>>([]);
+  const [classes, setClasses] = useState<Array<{ id: string; title: string; start_time: string; price_cents: number }>>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
-  const [partyDateTime, setPartyDateTime] = useState('');
+  const [classCart, setClassCart] = useState<Array<{ class_id: string; quantity: number }>>([]);
+  const [partyForm, setPartyForm] = useState({ party_date: new Date().toISOString().slice(0, 10), slot: '11:00', headcount_expected: '', notes: '' });
+  const [bookedSlots, setBookedSlots] = useState<Array<{ id: string; start_time: string; end_time: string }>>([]);
+  const [editableMembers, setEditableMembers] = useState<MemberForm[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [qrMap, setQrMap] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
-    if (!familyId) return;
-    const [detailRes, classesRes] = await Promise.all([
+    const [detailRes, classesRes, calendarRes] = await Promise.all([
       fetch(`/api/admin/families/${familyId}`, { cache: 'no-store' }),
       fetch('/api/classes?limit=200', { cache: 'no-store' }),
+      fetch('/api/party-bookings/calendar', { cache: 'no-store' }),
     ]);
 
     const detailJson = await detailRes.json();
     const classJson = await classesRes.json();
+    const calendarJson = await calendarRes.json();
+
     setItem(detailJson.item ?? null);
     setClasses(classJson.items ?? []);
+    setBookedSlots(calendarJson.items ?? []);
   }, [familyId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const memberOptions = useMemo(() => ([...(item?.guardians ?? []), ...(item?.children ?? [])]), [item]);
+  useEffect(() => {
+    if (!item) return;
+    const members = [...item.guardians, ...item.children].map((person) => ({
+      id: person.id,
+      first_name: person.first_name ?? '',
+      last_name: person.last_name ?? '',
+      birthdate: person.birthdate ?? '',
+      role: (person.role === 'child' ? 'child' : 'adult') as 'adult' | 'child',
+    }));
+    setEditableMembers(members);
+  }, [item]);
 
-  const registerClass = async () => {
-    if (!familyId || !selectedPersonId || !selectedClassId) return;
-    const res = await fetch(`/api/admin/families/${familyId}/class-registrations`, {
-      method: 'POST',
+  useEffect(() => {
+    if (!item) return;
+    const run = async () => {
+      const map: Record<string, string> = {};
+      for (const p of [...item.guardians, ...item.children]) {
+        map[p.id] = await QRCode.toDataURL(`lw://person/${p.id}`, { width: 180, margin: 1 });
+      }
+      setQrMap(map);
+    };
+    void run();
+  }, [item]);
+
+  useEffect(() => {
+    const checkout = searchParams.get('class_checkout');
+    const personId = searchParams.get('person_id');
+    const items = searchParams.get('items');
+    if (checkout !== 'success' || !personId || !items) return;
+
+    const parsed = items
+      .split(',')
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .map((token) => {
+        const [class_id, qtyRaw] = token.split(':');
+        return { class_id, quantity: Math.max(1, Number(qtyRaw || 1)) };
+      });
+
+    const finalize = async () => {
+      const res = await fetch(`/api/admin/families/${familyId}/classes/checkout`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode: 'finalize', person_id: personId, items: parsed }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setClassCart([]);
+        setMessage('Class checkout finalized and registrations created.');
+        await load();
+      }
+      window.history.replaceState({}, '', `/staff/families/${familyId}`);
+    };
+
+    void finalize();
+  }, [familyId, load, searchParams]);
+
+  const memberOptions = useMemo(() => ([...(item?.guardians ?? []), ...(item?.children ?? [])]), [item]);
+  const classById = useMemo(() => new Map(classes.map((klass) => [klass.id, klass])), [classes]);
+
+  const addMemberRow = () => {
+    setEditableMembers((prev) => [...prev, { first_name: '', last_name: '', birthdate: '', role: 'child' }]);
+  };
+
+  const saveMembers = async () => {
+    const res = await fetch(`/api/admin/families/${familyId}/members`, {
+      method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ class_id: selectedClassId, person_id: selectedPersonId }),
+      body: JSON.stringify({ members: editableMembers }),
     });
     const json = await res.json();
-    setMessage(json.ok ? 'Class registration completed.' : json.error ?? 'Failed to register class.');
+    setMessage(json.ok ? 'Family members saved.' : json.error ?? 'Failed to save family members.');
     await load();
   };
 
-  const bookParty = async () => {
-    if (!familyId || !partyDateTime) return;
-    const start = new Date(partyDateTime);
-    const end = new Date(start);
-    end.setHours(end.getHours() + 3);
+  const runMembershipAction = async (action: 'start' | 'pause' | 'end') => {
+    const res = await fetch(`/api/admin/families/${familyId}/membership`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    const json = await res.json();
+    setMessage(json.ok ? `Membership ${action} completed.` : json.error ?? `Membership ${action} failed.`);
+    await load();
+  };
+
+  const addClassToCart = () => {
+    if (!selectedClassId) return;
+    setClassCart((prev) => {
+      const existing = prev.find((entry) => entry.class_id === selectedClassId);
+      if (existing) return prev.map((entry) => (entry.class_id === selectedClassId ? { ...entry, quantity: entry.quantity + 1 } : entry));
+      return [...prev, { class_id: selectedClassId, quantity: 1 }];
+    });
+  };
+
+  const checkoutClasses = async () => {
+    if (!selectedPersonId || classCart.length === 0) return;
+    const res = await fetch(`/api/admin/families/${familyId}/classes/checkout`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'create_payment_link', person_id: selectedPersonId, items: classCart }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Could not start class checkout.');
+      return;
+    }
+    window.location.assign(json.payment_url);
+  };
+
+  const submitParty = async () => {
+    const startIso = toIsoUtc(partyForm.party_date, partyForm.slot === '15:00' ? 15 : 11);
+    const endIso = toIsoUtc(partyForm.party_date, partyForm.slot === '15:00' ? 18 : 14);
 
     const res = await fetch(`/api/admin/families/${familyId}/party-bookings`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ start_time: start.toISOString(), end_time: end.toISOString(), notes: 'Staff booking' }),
+      body: JSON.stringify({
+        start_time: startIso,
+        end_time: endIso,
+        headcount_expected: partyForm.headcount_expected ? Number(partyForm.headcount_expected) : null,
+        notes: partyForm.notes || null,
+      }),
     });
+
     const json = await res.json();
-    setMessage(json.ok ? 'Party booking created.' : json.error ?? 'Failed to book party.');
+    setMessage(json.ok ? 'Party booking created.' : json.error ?? 'Party booking failed.');
     await load();
   };
 
-  const checkinNow = async () => {
-    if (!familyId || !selectedPersonId) return;
-    const res = await fetch(`/api/admin/families/${familyId}/checkin`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ person_id: selectedPersonId }),
-    });
-    const json = await res.json();
-    setMessage(json.ok ? 'Checked in successfully.' : json.error ?? 'Check-in failed.');
-    await load();
-  };
+  const partySlots: CalendarSlot[] = [
+    ...bookedSlots.map((slot) => ({ id: slot.id, start: slot.start_time, end: slot.end_time, label: 'Reserved slot', status: 'booked' as const })),
+    ...(item?.upcoming_parties ?? []).map((party) => ({ id: party.id, start: party.start_time, end: party.end_time, label: 'This family party', status: 'mine' as const })),
+  ];
 
   if (!item) return <main style={{ padding: 24 }}>Loading family…</main>;
 
   return (
     <main style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
-      <p style={{ margin: 0 }}><Link href="/staff/families">← Back to Family Management</Link></p>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <p style={{ margin: 0 }}><Link href="/staff/families">← Back to Family Management</Link></p>
+        <p style={{ margin: 0 }}><Link href="/staff">← Back to Staff Dashboard</Link></p>
+      </div>
       <h1 style={{ color: '#4f3f82' }}>{item.household.name ?? 'Family detail'}</h1>
       <p style={{ color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {item.waiver_status} · QR: {item.qr_status}</p>
       {message && <p style={{ color: '#5f3da4' }}>{message}</p>}
 
       <section style={{ border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
-        <h3 style={{ marginTop: 0 }}>Guardian info</h3>
-        <p>{item.guardians.map((p) => `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()).join(', ') || '-'}</p>
-        <h3>Children</h3>
-        <p>{item.children.map((p) => `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()).join(', ') || '-'}</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <button type="button">Edit family</button>
-          <button type="button">Add member</button>
-          <button type="button">Generate / View QR</button>
+        <h3 style={{ marginTop: 0 }}>Edit / Add family members</h3>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {editableMembers.map((member, idx) => (
+            <div key={`${member.id ?? 'new'}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 120px', gap: 8 }}>
+              <input value={member.first_name} placeholder="First name" onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, first_name: e.target.value } : m)))} />
+              <input value={member.last_name} placeholder="Last name" onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, last_name: e.target.value } : m)))} />
+              <input type="date" value={member.birthdate} onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, birthdate: e.target.value } : m)))} />
+              <select value={member.role} onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, role: e.target.value as 'adult' | 'child' } : m)))}>
+                <option value="adult">Adult</option>
+                <option value="child">Child</option>
+              </select>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          <button type="button" onClick={addMemberRow}>Add member</button>
+          <button type="button" onClick={saveMembers}>Save family</button>
           <button type="button">Manage waiver</button>
-          <button type="button">Manage membership</button>
+          <button type="button" onClick={() => runMembershipAction('start')}>Start membership</button>
+          <button type="button" onClick={() => runMembershipAction('pause')}>Pause membership</button>
+          <button type="button" onClick={() => runMembershipAction('end')}>End membership</button>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
+        <h3 style={{ marginTop: 0 }}>Generate / View QR</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
+          {[...item.guardians, ...item.children].map((person) => (
+            <div key={person.id} style={{ border: '1px solid #eee', borderRadius: 10, padding: 8 }}>
+              <p style={{ margin: 0 }}>{person.first_name} {person.last_name ?? ''} ({person.role ?? 'member'})</p>
+              {qrMap[person.id] ? <Image src={qrMap[person.id]} alt={`QR for ${person.first_name ?? 'member'}`} width={150} height={150} /> : <p>Generating...</p>}
+            </div>
+          ))}
         </div>
       </section>
 
       <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
         <h3 style={{ marginTop: 0 }}>Owner actions</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, alignItems: 'center' }}>
           <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)}>
-            <option value="">Select member</option>
+            <option value="">Select member for class registration</option>
             {memberOptions.map((person) => (
               <option key={person.id} value={person.id}>{person.first_name} {person.last_name ?? ''} ({person.role ?? 'member'})</option>
             ))}
           </select>
-          <button onClick={checkinNow}>Check in now</button>
-
           <select value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)}>
             <option value="">Select class</option>
             {classes.map((klass) => (
               <option key={klass.id} value={klass.id}>{klass.title} ({new Date(klass.start_time).toLocaleString()})</option>
             ))}
           </select>
-          <button onClick={registerClass}>Register for class</button>
+          <button type="button" onClick={addClassToCart}>Register for class (add to cart)</button>
+        </div>
 
-          <input type="datetime-local" value={partyDateTime} onChange={(e) => setPartyDateTime(e.target.value)} />
-          <button onClick={bookParty}>Book party</button>
+        <div style={{ marginTop: 12 }}>
+          <h4 style={{ marginBottom: 6 }}>Class cart</h4>
+          {classCart.length === 0 ? <p style={{ margin: 0 }}>Cart is empty.</p> : classCart.map((entry) => (
+            <div key={entry.class_id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span>{classById.get(entry.class_id)?.title ?? entry.class_id} × {entry.quantity}</span>
+              <button type="button" onClick={() => setClassCart((prev) => prev.filter((i) => i.class_id !== entry.class_id))}>Remove</button>
+            </div>
+          ))}
+          <button type="button" onClick={checkoutClasses} disabled={!selectedPersonId || classCart.length === 0}>Checkout class cart</button>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <h4 style={{ marginBottom: 6 }}>Book party</h4>
+          <AvailabilityCalendar title="Party calendar" slots={partySlots} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+            <input type="date" value={partyForm.party_date} onChange={(e) => setPartyForm((prev) => ({ ...prev, party_date: e.target.value }))} />
+            <select value={partyForm.slot} onChange={(e) => setPartyForm((prev) => ({ ...prev, slot: e.target.value }))}>
+              <option value="11:00">11:00 AM - 2:00 PM</option>
+              <option value="15:00">3:00 PM - 6:00 PM</option>
+            </select>
+            <input type="number" min={0} value={partyForm.headcount_expected} placeholder="Headcount" onChange={(e) => setPartyForm((prev) => ({ ...prev, headcount_expected: e.target.value }))} />
+            <input value={partyForm.notes} placeholder="Notes" onChange={(e) => setPartyForm((prev) => ({ ...prev, notes: e.target.value }))} />
+          </div>
+          <button style={{ marginTop: 8 }} type="button" onClick={submitParty}>Book party</button>
         </div>
       </section>
 

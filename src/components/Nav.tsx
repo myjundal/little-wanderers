@@ -4,11 +4,7 @@ import styles from './Nav.module.css';
 
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
-const navItems = [
-  { href: '/classes', label: 'Classes' },
-  { href: '/party', label: 'Party Booking' },
-  { href: '/faq', label: 'FAQ' },
-] as const;
+const navItems = [{ href: '/faq', label: 'FAQ' }] as const;
 
 export default function Nav() {
   return (
@@ -30,7 +26,8 @@ export default function Nav() {
         </div>
 
         <Link href={WAITLIST_URL} className={styles.cta} target="_blank" rel="noreferrer">
-          Join Waitlist
+          <span>Join Waitlist</span>
+          <span className={styles.ctaSubtext}>Over 240+ local families already signed up</span>
         </Link>
       </div>
     </nav>
