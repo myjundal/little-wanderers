@@ -271,7 +271,7 @@ export default function AppHome() {
     <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
     <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
     {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && (
-      <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Operator Dashboard</Link>
+      <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
     )}
     {/* 내부 운영/개발용 문서 미리보기 */}
     <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>

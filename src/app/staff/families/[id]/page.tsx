@@ -135,17 +135,6 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
     await load();
   };
 
-  const runMembershipAction = async (action: 'start' | 'pause' | 'end') => {
-    const res = await fetch(`/api/admin/families/${familyId}/membership`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action }),
-    });
-    const json = await res.json();
-    setMessage(json.ok ? `Membership ${action} completed.` : json.error ?? `Membership ${action} failed.`);
-    await load();
-  };
-
   const addClassToCart = () => {
     if (!selectedClassId) return;
     setClassCart((prev) => {
@@ -191,8 +180,31 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   };
 
   const partySlots: CalendarSlot[] = [
-    ...bookedSlots.map((slot) => ({ id: slot.id, start: slot.start_time, end: slot.end_time, label: 'Reserved slot', status: 'booked' as const })),
-    ...(item?.upcoming_parties ?? []).map((party) => ({ id: party.id, start: party.start_time, end: party.end_time, label: 'This family party', status: 'mine' as const })),
+    ...(() => {
+      const generated: CalendarSlot[] = [];
+      const now = new Date();
+      const blockedStarts = new Set(
+        [...bookedSlots, ...(item?.upcoming_parties ?? [])].map((slot) => new Date(slot.start_time).getTime())
+      );
+
+      for (let i = 0; i < 84; i += 1) {
+        const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
+        const day = d.getUTCDay();
+        if (day !== 0 && day !== 6) continue;
+        const dayStr = d.toISOString().slice(0, 10);
+        const start11 = toIsoUtc(dayStr, 11);
+        const start15 = toIsoUtc(dayStr, 15);
+        if (!blockedStarts.has(new Date(start11).getTime())) {
+          generated.push({ id: `avail-${dayStr}-11`, start: start11, end: toIsoUtc(dayStr, 14), label: 'Available party slot', status: 'available' });
+        }
+        if (!blockedStarts.has(new Date(start15).getTime())) {
+          generated.push({ id: `avail-${dayStr}-15`, start: start15, end: toIsoUtc(dayStr, 18), label: 'Available party slot', status: 'available' });
+        }
+      }
+      return generated;
+    })(),
+    ...bookedSlots.map((slot) => ({ id: `booked-${slot.id}`, start: slot.start_time, end: slot.end_time, label: 'Reserved slot', status: 'booked' as const })),
+    ...(item?.upcoming_parties ?? []).map((party) => ({ id: `mine-${party.id}`, start: party.start_time, end: party.end_time, label: 'This family party', status: 'mine' as const })),
   ];
 
   if (!item) return <main style={{ padding: 24 }}>Loading family…</main>;
@@ -226,9 +238,9 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
           <button type="button" onClick={addMemberRow}>Add member</button>
           <button type="button" onClick={saveMembers}>Save family</button>
           <button type="button">Manage waiver</button>
-          <button type="button" onClick={() => runMembershipAction('start')}>Start membership</button>
-          <button type="button" onClick={() => runMembershipAction('pause')}>Pause membership</button>
-          <button type="button" onClick={() => runMembershipAction('end')}>End membership</button>
+          <Link href={`/staff/families/${familyId}/membership`} style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #ddd', borderRadius: 8, padding: '6px 10px', textDecoration: 'none', color: '#111' }}>
+            Manage membership
+          </Link>
         </div>
       </section>
 
