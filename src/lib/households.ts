@@ -5,6 +5,10 @@ type HouseholdMemberRow = { household_id: string; created_at: string };
 
 type HouseholdClient = SupabaseClient;
 
+function isMissingColumnError(message: string) {
+  return /column .* does not exist|Could not find the '.*' column/i.test(message);
+}
+
 export async function getLatestHouseholdIdForUser(supabase: HouseholdClient, userId: string) {
   // Prefer a direct household owned by this auth user (customer context),
   // so operator-created manual households do not hijack landing/dashboard context.
@@ -16,8 +20,11 @@ export async function getLatestHouseholdIdForUser(supabase: HouseholdClient, use
     .limit(1);
 
   if (directHouseholdError) {
-    logger.error({ action: 'household.direct_lookup_failed', userId }, directHouseholdError);
-    throw new Error(`households direct lookup failed: ${directHouseholdError.message} (${directHouseholdError.code ?? 'no-code'})`);
+    if (!isMissingColumnError(directHouseholdError.message)) {
+      logger.error({ action: 'household.direct_lookup_failed', userId }, directHouseholdError);
+      throw new Error(`households direct lookup failed: ${directHouseholdError.message} (${directHouseholdError.code ?? 'no-code'})`);
+    }
+    logger.warn({ action: 'household.direct_lookup_missing_column_fallback', userId, message: directHouseholdError.message });
   }
 
   const directHouseholdId = (directHouseholdRows ?? [])[0]?.id ?? null;
