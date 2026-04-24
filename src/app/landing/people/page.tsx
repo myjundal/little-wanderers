@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import NotificationPreferences from '@/components/pwa/NotificationPreferences';
@@ -31,7 +32,7 @@ export default function PeoplePage() {
   const [uiMessage, setUiMessage] = useState<string | null>(null);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', birthdate: '' });
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'member' as 'admin' | 'member' });
+  const [inviteForm, setInviteForm] = useState({ email: '' });
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -95,7 +96,7 @@ export default function PeoplePage() {
     const res = await fetch('/api/family/invites', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(inviteForm),
+      body: JSON.stringify({ email: inviteForm.email, role: 'member' }),
     });
     const json = await res.json();
 
@@ -106,7 +107,7 @@ export default function PeoplePage() {
       return;
     }
 
-    setInviteForm({ email: '', role: 'member' });
+    setInviteForm({ email: '' });
     setUiMessage('Invite sent.');
     await load();
   };
@@ -120,34 +121,6 @@ export default function PeoplePage() {
     <main style={{ padding: 24, maxWidth: 760 }}>
       <h1>Family & Household</h1>
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
-
-      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
-        <h3>Invite Family Member</h3>
-        <p style={{ color: '#6d6480' }}>Add Caregiver access for another adult in your household.</p>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <input
-            placeholder="Email"
-            value={inviteForm.email}
-            onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
-            style={{ minWidth: 240 }}
-          />
-          <select value={inviteForm.role} onChange={(e) => setInviteForm((prev) => ({ ...prev, role: e.target.value as 'admin' | 'member' }))}>
-            <option value="member">Caregiver</option>
-            <option value="admin">Co-admin</option>
-          </select>
-          <button type="button" onClick={sendInvite} disabled={sendingInvite}>{sendingInvite ? 'Sending…' : 'Send Invite'}</button>
-        </div>
-
-        <h4 style={{ marginTop: 14 }}>Pending Invites</h4>
-        {invites.filter((i) => i.status === 'pending').length === 0 && <p style={{ color: '#6d6480' }}>No pending invites right now.</p>}
-        <ul>
-          {invites
-            .filter((i) => i.status === 'pending')
-            .map((invite) => (
-              <li key={invite.id}>{invite.email} · {invite.role} · expires {new Date(invite.expires_at).toLocaleDateString()}</li>
-            ))}
-        </ul>
-      </section>
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
         <h3>Add Family Member</h3>
@@ -183,6 +156,36 @@ export default function PeoplePage() {
           ))}
         </ul>
       </section>
+
+      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
+        <h3>Invite Family Member</h3>
+        <p style={{ color: '#6d6480' }}>Invite another family member by email.</p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <input
+            placeholder="Email"
+            value={inviteForm.email}
+            onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
+            style={{ minWidth: 240 }}
+          />
+          <button type="button" onClick={sendInvite} disabled={sendingInvite}>{sendingInvite ? 'Sending…' : 'Send Invite'}</button>
+        </div>
+
+        <h4 style={{ marginTop: 14 }}>Pending Invites</h4>
+        {invites.filter((i) => i.status === 'pending').length === 0 && <p style={{ color: '#6d6480' }}>No pending invites right now.</p>}
+        <ul>
+          {invites
+            .filter((i) => i.status === 'pending')
+            .map((invite) => (
+              <li key={invite.id}>{invite.email} · expires {new Date(invite.expires_at).toLocaleDateString()}</li>
+            ))}
+        </ul>
+      </section>
+
+      <div style={{ marginTop: 18 }}>
+        <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+          ← Back to my dashboard
+        </Link>
+      </div>
     </main>
   );
 }

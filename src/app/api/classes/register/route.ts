@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     const { data: person } = await supa
       .from('people')
-      .select('id')
+      .select('id,role')
       .eq('id', personId)
       .eq('household_id', householdId)
       .maybeSingle();
@@ -95,7 +95,15 @@ export async function POST(req: Request) {
 
     const { data: inserted, error: insertErr } = await supa
       .from('class_registrations')
-      .insert({ class_id: classId, person_id: personId, status: 'scheduled' })
+      .insert({
+        class_id: classId,
+        person_id: personId,
+        status: 'scheduled',
+        household_id: householdId,
+        child_id: person.role === 'child' ? person.id : null,
+        created_by_user_id: user.id,
+        created_by_role: 'customer',
+      })
       .select('id')
       .maybeSingle();
 

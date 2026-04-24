@@ -73,32 +73,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: 'Unable to create household.' }, { status: 500 });
   }
 
-  // 2) Link current owner/admin user to this household for ownership + RLS access.
-  const { error: ownerMemberError } = await server.from('household_members').upsert(
-    {
-      household_id: household.id,
-      user_id: context.user.id,
-      role: 'owner',
-      full_name: null,
-      birth_date: null,
-      member_role: null,
-    },
-    { onConflict: 'household_id,user_id' }
-  );
-
-  if (ownerMemberError) {
-    logger.error(
-      { action: 'staff.family_registration.owner_membership_upsert_failed', userId: context.user.id, householdId: household.id },
-      ownerMemberError
-    );
-    await server.from('households').delete().eq('id', household.id);
-    return Response.json(
-      { ok: false, error: formatDbError('Unable to link household owner', ownerMemberError) },
-      { status: 500 }
-    );
-  }
-
-  // 3) Store manually registered family members in household_members (walk-in rows without auth user_id).
+  // 2) Store manually registered family members in household_members (walk-in rows without auth user_id).
   const walkInMemberRows = cleanedMembers.map((item) => ({
     household_id: household.id,
     user_id: null,

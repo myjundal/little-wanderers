@@ -26,7 +26,8 @@ export default function Nav() {
         </div>
 
         <Link href={WAITLIST_URL} className={styles.cta} target="_blank" rel="noreferrer">
-          Join Waitlist
+          <span>Join Waitlist</span>
+          <span className={styles.ctaSubtext}>Over 240+ local families already signed up</span>
         </Link>
       </div>
     </nav>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 type MemberForm = {
   full_name: string;
@@ -16,11 +17,12 @@ const inputStyle: React.CSSProperties = {
   background: '#fff',
 };
 
-export default function StaffFamilyRegistration({ onSaved }: { onSaved: () => Promise<void> }) {
+export default function StaffFamilyRegistration({ onSaved }: { onSaved: (householdId?: string) => Promise<void> }) {
   const [householdName, setHouseholdName] = useState('');
   const [members, setMembers] = useState<MemberForm[]>([{ full_name: '', birthdate: '', role: 'adult' }]);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savedHouseholdId, setSavedHouseholdId] = useState<string | null>(null);
 
   const updateMember = (index: number, patch: Partial<MemberForm>) => {
     setMembers((prev) => prev.map((member, i) => (i === index ? { ...member, ...patch } : member)));
@@ -50,8 +52,9 @@ export default function StaffFamilyRegistration({ onSaved }: { onSaved: () => Pr
     setHouseholdName('');
     setMembers([{ full_name: '', birthdate: '', role: 'adult' }]);
     setSaving(false);
+    setSavedHouseholdId(json.household_id ?? null);
     setMessage('Family saved successfully.');
-    await onSaved();
+    await onSaved(json.household_id);
   };
 
   return (
@@ -103,6 +106,14 @@ export default function StaffFamilyRegistration({ onSaved }: { onSaved: () => Pr
       </div>
 
       {message && <p style={{ marginTop: 10, color: '#5f3da4' }}>{message}</p>}
+      {savedHouseholdId && (
+        <Link
+          href={`/staff/families/${savedHouseholdId}`}
+          style={{ display: 'inline-flex', marginTop: 8, borderRadius: 12, border: '1px solid #d9c8f7', padding: '8px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}
+        >
+          View this family
+        </Link>
+      )}
     </section>
   );
 }

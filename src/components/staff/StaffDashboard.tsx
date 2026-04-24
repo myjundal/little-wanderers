@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
+import Link from 'next/link';
 
 type OccupancyEvent = {
   id: string;
@@ -321,9 +322,22 @@ export default function StaffDashboard() {
         </div>
       )}
 
-      <StaffFamilyRegistration onSaved={load} />
+      <section style={{ ...sectionStyle, marginTop: 16 }}>
+        <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner tools</p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+          <Link href="/owner/families" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Family Management</Link>
+          <a href="#manual-family-registration" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Manual family registration</a>
+          <a href="#occupancy-management" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Occupancy</a>
+          <a href="#class-management" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Class management</a>
+          <a href="#party-management" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Party management</a>
+        </div>
+      </section>
 
-      <section style={sectionStyle}>
+      <div id="manual-family-registration">
+        <StaffFamilyRegistration onSaved={load} />
+      </div>
+
+      <section id="occupancy-management" style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Occupancy control</p>
@@ -365,7 +379,7 @@ export default function StaffDashboard() {
         </div>
       </section>
 
-      <section style={sectionStyle}>
+      <section id="class-management" style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Class schedule management</p>
@@ -441,7 +455,7 @@ export default function StaffDashboard() {
         </div>
       </section>
 
-      <section style={sectionStyle}>
+      <section id="party-management" style={sectionStyle}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Party booking management</p>
         <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Review and manage scheduled party bookings</h2>
         <p style={{ margin: 0, color: '#6d6480' }}>Status changes are written back immediately so the customer view stays in sync.</p>

@@ -69,7 +69,9 @@ export default async function MembershipPage() {
             </div>
           </section>
           <section style={{ marginTop: 24 }}>
-            <Link href="/landing">Back to App Home</Link>
+            <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+              ← Back to my dashboard
+            </Link>
           </section>
         </main>
       );
@@ -101,7 +103,9 @@ export default async function MembershipPage() {
         </div>
 
         <section style={{ marginTop: 24 }}>
-          <Link href="/landing">Back to App Home</Link>
+          <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+            ← Back to my dashboard
+          </Link>
         </section>
       </main>
     );
@@ -116,7 +120,7 @@ function renderError() {
     <main style={{ padding: 24, maxWidth: 720 }}>
       <h1>Membership Error</h1>
       <p>Unable to load membership</p>
-      <p><Link href="/landing">Back to App Home</Link></p>
+      <p><Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>← Back to my dashboard</Link></p>
     </main>
   );
 }

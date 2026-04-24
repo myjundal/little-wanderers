@@ -5,7 +5,34 @@ type HouseholdMemberRow = { household_id: string; created_at: string };
 
 type HouseholdClient = SupabaseClient;
 
+function isMissingColumnError(message: string) {
+  return /column .* does not exist|Could not find the '.*' column/i.test(message);
+}
+
 export async function getLatestHouseholdIdForUser(supabase: HouseholdClient, userId: string) {
+  // Prefer a direct household owned by this auth user (customer context),
+  // so operator-created manual households do not hijack landing/dashboard context.
+  const { data: directHouseholdRows, error: directHouseholdError } = await supabase
+    .from('households')
+    .select('id,created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (directHouseholdError) {
+    if (!isMissingColumnError(directHouseholdError.message)) {
+      logger.error({ action: 'household.direct_lookup_failed', userId }, directHouseholdError);
+      throw new Error(`households direct lookup failed: ${directHouseholdError.message} (${directHouseholdError.code ?? 'no-code'})`);
+    }
+    logger.warn({ action: 'household.direct_lookup_missing_column_fallback', userId, message: directHouseholdError.message });
+  }
+
+  const directHouseholdId = (directHouseholdRows ?? [])[0]?.id ?? null;
+  if (directHouseholdId) {
+    logger.debug({ action: 'household.direct_lookup_succeeded', userId, householdId: directHouseholdId });
+    return directHouseholdId;
+  }
+
   const { data, error } = await supabase
     .from('household_members')
     .select('household_id,created_at')

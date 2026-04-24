@@ -14,7 +14,7 @@ export default async function StaffPage() {
           <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Signed in with role: <strong>{role ?? 'unknown'}</strong></p>
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link href="/staff/checkin" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #d7c1f7', background: '#fff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Open QR Check-in</Link>
+          <Link href="/staff/checkin" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #d7c1f7', background: '#fff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Open staff QR check-in</Link>
           <Link href="/landing" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #e4dbf5', background: '#f8f3ff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Customer Dashboard</Link>
         </div>
       </div>

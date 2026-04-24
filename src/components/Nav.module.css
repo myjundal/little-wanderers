@@ -71,6 +71,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
   min-height: 52px;
   padding: 0 24px;
   border-radius: 999px;
@@ -79,6 +80,13 @@
   box-shadow: 0 14px 24px rgba(123, 106, 168, 0.22);
   transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
   flex-shrink: 0;
+}
+
+.ctaSubtext {
+  font-size: 0.67rem;
+  font-weight: 700;
+  line-height: 1.15;
+  opacity: 0.95;
 }
 
 .cta:hover {

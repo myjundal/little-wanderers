@@ -203,6 +203,7 @@ export async function POST(req: Request) {
 
     const insertPayload = {
       household_id: householdId,
+      child_id: null,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       headcount_expected: headcountExpected,
@@ -210,6 +211,8 @@ export async function POST(req: Request) {
       status: 'confirmed',
       status_updated_at: new Date().toISOString(),
       price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+      created_by_user_id: user.id,
+      created_by_role: 'customer',
     };
 
     const primary = await supa.from('party_bookings').insert(insertPayload).select('id').maybeSingle();
@@ -223,11 +226,14 @@ export async function POST(req: Request) {
         .from('party_bookings')
         .insert({
           household_id: householdId,
+          child_id: null,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           headcount_expected: headcountExpected,
           notes,
           price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+          created_by_user_id: user.id,
+          created_by_role: 'customer',
         })
         .select('id')
         .maybeSingle();
