@@ -16,18 +16,14 @@ type FamilyDetail = {
   visit_history: Array<{ id: string; person_id: string; person_name: string; checked_in_at: string }>;
 };
 
-export default function StaffFamilyDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const [familyId, setFamilyId] = useState('');
+export default function StaffFamilyDetailPage({ params }: { params: { id: string } }) {
+  const familyId = params.id;
   const [item, setItem] = useState<FamilyDetail | null>(null);
   const [classes, setClasses] = useState<Array<{ id: string; title: string; start_time: string }>>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
   const [partyDateTime, setPartyDateTime] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    params.then((p) => setFamilyId(p.id));
-  }, [params]);
 
   const load = useCallback(async () => {
     if (!familyId) return;

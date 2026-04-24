@@ -1,12 +1,12 @@
 import { requireStaffContext } from '@/lib/authz';
 
-type Params = { params: Promise<{ id: string }> };
+type Params = { params: { id: string } };
 
 export async function POST(req: Request, { params }: Params) {
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
 
-  const { id: householdId } = await params;
+  const { id: householdId } = params;
   const body = await req.json();
   const start = new Date(body.start_time);
   const end = new Date(body.end_time);

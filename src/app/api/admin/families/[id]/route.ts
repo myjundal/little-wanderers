@@ -1,12 +1,12 @@
 import { requireStaffContext } from '@/lib/authz';
 
-type Params = { params: Promise<{ id: string }> };
+type Params = { params: { id: string } };
 
 export async function GET(_: Request, { params }: Params) {
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
 
-  const { id } = await params;
+  const { id } = params;
   const admin = context.admin;
 
   const [{ data: household }, { data: people }, { data: memberships }, { data: waivers }, { data: parties }] = await Promise.all([
