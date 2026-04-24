@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: Params) {
   };
 
   if (action === 'create_payment_link') {
-    if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID || !process.env.SQUARE_PLAN_VARIATION_ID) {
+    if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) {
       return Response.json({ ok: false, error: 'Square membership payment is not configured' }, { status: 500 });
     }
 
@@ -55,7 +55,6 @@ export async function POST(req: Request, { params }: Params) {
         location_id: process.env.SQUARE_LOCATION_ID,
       },
       checkout_options: {
-        subscription_plan_id: process.env.SQUARE_PLAN_VARIATION_ID,
         redirect_url: redirectUrl,
         ask_for_shipping_address: false,
       },

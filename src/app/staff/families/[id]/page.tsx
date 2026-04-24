@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
@@ -22,13 +22,14 @@ type FamilyDetail = {
 
 type MemberForm = { id?: string; first_name: string; last_name: string; birthdate: string; role: 'adult' | 'child' };
 
-function toIsoUtc(date: string, hourUtc: number) {
-  return new Date(`${date}T${String(hourUtc).padStart(2, '0')}:00:00.000Z`).toISOString();
+function toIsoLocal(date: string, hourLocal: number) {
+  return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
 
 export default function StaffFamilyDetailPage({ params }: { params: { id: string } }) {
   const familyId = params.id;
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [item, setItem] = useState<FamilyDetail | null>(null);
   const [classes, setClasses] = useState<Array<{ id: string; title: string; start_time: string; price_cents: number }>>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
@@ -160,8 +161,8 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   };
 
   const submitParty = async () => {
-    const startIso = toIsoUtc(partyForm.party_date, partyForm.slot === '15:00' ? 15 : 11);
-    const endIso = toIsoUtc(partyForm.party_date, partyForm.slot === '15:00' ? 18 : 14);
+    const startIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 15 : 11);
+    const endIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 18 : 14);
 
     const res = await fetch(`/api/admin/families/${familyId}/party-bookings`, {
       method: 'POST',
@@ -192,13 +193,13 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         const day = d.getUTCDay();
         if (day !== 0 && day !== 6) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const start11 = toIsoUtc(dayStr, 11);
-        const start15 = toIsoUtc(dayStr, 15);
+        const start11 = toIsoLocal(dayStr, 11);
+        const start15 = toIsoLocal(dayStr, 15);
         if (!blockedStarts.has(new Date(start11).getTime())) {
-          generated.push({ id: `avail-${dayStr}-11`, start: start11, end: toIsoUtc(dayStr, 14), label: 'Available party slot', status: 'available' });
+          generated.push({ id: `avail-${dayStr}-11`, start: start11, end: toIsoLocal(dayStr, 14), label: 'Available party slot', status: 'available' });
         }
         if (!blockedStarts.has(new Date(start15).getTime())) {
-          generated.push({ id: `avail-${dayStr}-15`, start: start15, end: toIsoUtc(dayStr, 18), label: 'Available party slot', status: 'available' });
+          generated.push({ id: `avail-${dayStr}-15`, start: start15, end: toIsoLocal(dayStr, 18), label: 'Available party slot', status: 'available' });
         }
       }
       return generated;
@@ -238,9 +239,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
           <button type="button" onClick={addMemberRow}>Add member</button>
           <button type="button" onClick={saveMembers}>Save family</button>
           <button type="button">Manage waiver</button>
-          <Link href={`/staff/families/${familyId}/membership`} style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #ddd', borderRadius: 8, padding: '6px 10px', textDecoration: 'none', color: '#111' }}>
-            Manage membership
-          </Link>
+          <button type="button" onClick={() => router.push(`/staff/families/${familyId}/membership`)}>Manage membership</button>
         </div>
       </section>
 

@@ -443,7 +443,9 @@ export default function PartyPage() {
       </section>
 
       <p style={{ marginTop: 20 }}>
-        <Link href="/landing">← Back to Homepage</Link>
+        <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+          ← Back to my dashboard
+        </Link>
       </p>
     </main>
   );

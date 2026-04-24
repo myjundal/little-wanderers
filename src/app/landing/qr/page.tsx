@@ -4,6 +4,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import QRCode from 'qrcode';
 import Image from 'next/image';
+import Link from 'next/link';
 
 type Person = { id: string; first_name: string; role: 'adult'|'child' };
 
@@ -11,8 +12,6 @@ export default function QRPage() {
   const supabase = createBrowserSupabaseClient();
   const [people, setPeople] = useState<Person[]>([]);
   const [qrMap, setQrMap] = useState<Record<string, string>>({}); // personId -> dataURL
-  const [version] = useState<string>(() => String(Date.now())); // refresh key
-
   useEffect(() => {
     setPeople([]); 
     setQrMap({}); // refresh
@@ -59,7 +58,11 @@ export default function QRPage() {
           </div>
         ))}
       </div>
+      <div style={{ marginTop: 18 }}>
+        <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+          ← Back to my dashboard
+        </Link>
+      </div>
     </main>
   );
 }
-
