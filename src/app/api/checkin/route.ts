@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   if (!context.ok) return context.response;
 
   try {
-    const { person_id, source = 'qr', group_size } = await req.json();
+    const { person_id, source = 'qr', group_size, created_by_user_id, created_by_role } = await req.json();
 
     if (!person_id) {
       return new Response(JSON.stringify({ ok: false, error: 'person_id required' }), { status: 400 });
@@ -123,6 +123,10 @@ export async function POST(req: NextRequest) {
       .from('checkins')
       .insert({
         person_id,
+        household_id: person.household_id,
+        child_id: person.role === 'child' ? person.id : null,
+        created_by_user_id: created_by_user_id ?? context.user.id,
+        created_by_role: created_by_role ?? 'owner',
         source,
         price_cents,
         membership_applied,

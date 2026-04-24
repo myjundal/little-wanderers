@@ -4,7 +4,11 @@ import styles from './Nav.module.css';
 
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
-const navItems = [{ href: '/faq', label: 'FAQ' }] as const;
+const navItems = [
+  { href: '/classes', label: 'Classes' },
+  { href: '/party', label: 'Party Booking' },
+  { href: '/faq', label: 'FAQ' },
+] as const;
 
 export default function Nav() {
   return (

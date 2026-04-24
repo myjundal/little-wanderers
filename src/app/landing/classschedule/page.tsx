@@ -51,7 +51,7 @@ type CartItemState = {
 };
 
 export default function ClassSchedulePage() {
-  const supabase = createBrowserSupabaseClient();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -108,9 +108,13 @@ export default function ClassSchedulePage() {
     }
 
     if (!myRes.ok || !myJson.ok) {
-      setMessage(myJson.error ?? 'Failed to load my classes.');
-      setLoading(false);
-      return;
+      if (myRes.status === 401) {
+        setMyItems([]);
+      } else {
+        setMessage(myJson.error ?? 'Failed to load my classes.');
+        setLoading(false);
+        return;
+      }
     }
 
     const loadedClasses = (classJson.items ?? []) as ClassItem[];
@@ -118,8 +122,10 @@ export default function ClassSchedulePage() {
     setMyItems(myJson.items ?? []);
     setCartItems((prev) => prev.filter((item) => loadedClasses.some((loaded) => loaded.id === item.class_id)));
 
+    const supabase = createBrowserSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id;
+    setIsAuthenticated(Boolean(uid));
     if (!uid) {
       setPeople([]);
       setSelectedPersonId('');
@@ -146,7 +152,7 @@ export default function ClassSchedulePage() {
     if (casted[0]?.id) setSelectedPersonId((prev) => prev || casted[0].id);
 
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -308,6 +314,11 @@ export default function ClassSchedulePage() {
   };
 
   const checkoutCart = async () => {
+    if (!isAuthenticated) {
+      sessionStorage.setItem('post_login_redirect', '/classes');
+      window.location.assign('/login');
+      return;
+    }
     if (!selectedPersonId || cartItems.length === 0) return;
     setCheckouting(true);
     setMessage(null);
@@ -380,6 +391,11 @@ export default function ClassSchedulePage() {
             </option>
           ))}
         </select>
+        {!isAuthenticated && (
+          <p style={{ marginBottom: 0, marginTop: 8, color: '#6f628d' }}>
+            Browse classes freely. Sign in is required at checkout.
+          </p>
+        )}
       </section>
 
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
@@ -534,7 +550,7 @@ export default function ClassSchedulePage() {
       )}
 
       <p style={{ marginTop: 20 }}>
-        <Link href="/landing">← Back to Homepage</Link>
+        <Link href="/">← Back to Homepage</Link>
       </p>
     </main>
   );

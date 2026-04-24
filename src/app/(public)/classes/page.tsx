@@ -1,7 +1,7 @@
-import ComingSoonPage from '@/components/ComingSoonPage';
+import ClassSchedulePage from '@/app/landing/classschedule/page';
 
 export const metadata = { title: 'Classes — Little Wanderers' };
 
 export default function ClassesPage() {
-  return <ComingSoonPage title="Classes" eyebrow="Little Wanderers" />;
+  return <ClassSchedulePage />;
 }

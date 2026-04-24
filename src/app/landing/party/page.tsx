@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type PartyBooking = {
   id: string;
@@ -47,6 +48,7 @@ function prettyNote(note: string | null) {
 }
 
 export default function PartyPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [items, setItems] = useState<PartyBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -71,16 +73,25 @@ export default function PartyPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const requestKey = Date.now();
-    const res = await fetch(`/api/party-bookings?ts=${requestKey}`, { cache: 'no-store' });
-    const json = await res.json();
+    const supabase = createBrowserSupabaseClient();
+    const [bookingsRes, authRes] = await Promise.all([
+      fetch(`/api/party-bookings?ts=${requestKey}`, { cache: 'no-store' }),
+      supabase.auth.getUser(),
+    ]);
+    const bookingsJson = await bookingsRes.json();
+    setIsAuthenticated(Boolean(authRes.data.user?.id));
 
-    if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Could not load party bookings.');
-      setLoading(false);
-      return;
+    if (!bookingsRes.ok || !bookingsJson.ok) {
+      if (bookingsRes.status === 401) {
+        setItems([]);
+      } else {
+        setMessage(bookingsJson.error ?? 'Could not load party bookings.');
+        setLoading(false);
+        return;
+      }
+    } else {
+      setItems((bookingsJson.items ?? []) as PartyBooking[]);
     }
-
-    setItems((json.items ?? []) as PartyBooking[]);
 
     const calendarRes = await fetch(`/api/party-bookings/calendar?ts=${requestKey}`, { cache: 'no-store' });
     const calendarJson = await calendarRes.json();
@@ -146,6 +157,11 @@ export default function PartyPage() {
   }, [load]);
 
   const submit = async () => {
+    if (!isAuthenticated) {
+      sessionStorage.setItem('post_login_redirect', '/party');
+      window.location.assign('/login');
+      return;
+    }
     setSubmitting(true);
     setMessage(null);
 

@@ -179,7 +179,7 @@ function computeTotalPriceCents(context: LoadedContext) {
   }, 0);
 }
 
-async function finalizeCheckout(context: LoadedContext) {
+async function finalizeCheckout(context: LoadedContext, createdByUserId: string, createdByRole: 'owner' | 'customer' = 'customer') {
   const supa = admin();
   const assignments = await buildAssignments(context);
 
@@ -193,7 +193,13 @@ async function finalizeCheckout(context: LoadedContext) {
       if (assignment.existing?.status === 'cancelled') {
         const { error } = await supa
           .from('class_registrations')
-          .update({ status: 'scheduled' })
+          .update({
+            status: 'scheduled',
+            household_id: context.householdId,
+            child_id: assignment.person_id,
+            created_by_user_id: createdByUserId,
+            created_by_role: createdByRole,
+          })
           .eq('id', assignment.existing.id);
         if (error) throw new Error(error.message);
         restoredIds.push(assignment.existing.id);
@@ -202,7 +208,15 @@ async function finalizeCheckout(context: LoadedContext) {
 
       const { data, error } = await supa
         .from('class_registrations')
-        .insert({ class_id: item.class_id, person_id: assignment.person_id, status: 'scheduled' })
+        .insert({
+          class_id: item.class_id,
+          person_id: assignment.person_id,
+          status: 'scheduled',
+          household_id: context.householdId,
+          child_id: assignment.person_id,
+          created_by_user_id: createdByUserId,
+          created_by_role: createdByRole,
+        })
         .select('id')
         .maybeSingle();
 
@@ -308,7 +322,7 @@ export async function POST(req: Request) {
     const context = await loadAndValidate(body, user.id);
 
     if (mode === 'finalize') {
-      const checkout_summary = await finalizeCheckout(context);
+      const checkout_summary = await finalizeCheckout(context, user.id, 'customer');
       return Response.json({ ok: true, checkout_summary });
     }
 

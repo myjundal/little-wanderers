@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
@@ -13,13 +12,6 @@ function isMissingColumnError(message: string) {
 
 export async function GET() {
   try {
-    const server = createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await server.auth.getUser();
-
-    if (!user) return Response.json({ ok: false, error: 'unauthorized' }, { status: 401, headers: NO_STORE_HEADERS });
-
     const supa = admin();
     const primary = await supa
       .from('party_bookings')
