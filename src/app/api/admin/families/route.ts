@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { getWaiverStatus } from '@/lib/waivers';
 
 type HouseholdRow = { id: string; name: string | null; phone: string | null };
 type PersonRow = { household_id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null };
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
     admin.from('households').select('id,name,phone').order('created_at', { ascending: false }).limit(400),
     admin.from('people').select('household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
     admin.from('memberships').select('household_id,renews_at').limit(2000),
-    admin.from('waivers').select('household_id,signed_at').limit(2000),
+    admin.from('waivers').select('household_id,signed_at,signed_date,waiver_expires_at,created_at').limit(2000),
   ]);
 
   const peopleByHousehold = new Map<string, PersonRow[]>();
@@ -32,10 +33,12 @@ export async function GET(req: Request) {
     if (active) membershipByHousehold.set(m.household_id, true);
   });
 
-  const waiverByHousehold = new Map<string, boolean>();
+  const waiversByHousehold = new Map<string, Array<{ signed_at: string | null; signed_date: string | null; waiver_expires_at: string | null; created_at: string | null }>>();
   (waivers ?? []).forEach((w) => {
     if (!w.household_id) return;
-    if (w.signed_at) waiverByHousehold.set(w.household_id, true);
+    const arr = waiversByHousehold.get(w.household_id) ?? [];
+    arr.push(w);
+    waiversByHousehold.set(w.household_id, arr);
   });
 
   const normalized = query.toLowerCase();
@@ -56,7 +59,7 @@ export async function GET(req: Request) {
         email,
         children_names: children.map((p) => `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()).filter(Boolean),
         membership_status: membershipByHousehold.get(household.id) ? 'active' : 'none',
-        waiver_status: waiverByHousehold.get(household.id) ? 'signed' : 'missing',
+        waiver_status: getWaiverStatus(waiversByHousehold.get(household.id) ?? []).status,
       };
     })
     .filter((item) => {

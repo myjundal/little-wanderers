@@ -22,6 +22,12 @@ type FamilyDetail = {
 
 type MemberForm = { id?: string; first_name: string; last_name: string; birthdate: string; role: 'adult' | 'child' };
 
+function waiverLabel(status: string) {
+  if (status === 'completed') return 'Waiver completed';
+  if (status === 'expired') return 'Waiver expired / renewal needed';
+  return 'Waiver required';
+}
+
 function toIsoLocal(date: string, hourLocal: number) {
   return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
@@ -217,7 +223,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         <p style={{ margin: 0 }}><Link href="/staff">← Back to Staff Dashboard</Link></p>
       </div>
       <h1 style={{ color: '#4f3f82' }}>{item.household.name ?? 'Family detail'}</h1>
-      <p style={{ color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {item.waiver_status} · QR: {item.qr_status}</p>
+      <p style={{ color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {waiverLabel(item.waiver_status)} · QR: {item.qr_status}</p>
       {message && <p style={{ color: '#5f3da4' }}>{message}</p>}
 
       <section style={{ border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>

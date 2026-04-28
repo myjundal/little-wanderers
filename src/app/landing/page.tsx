@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
+import { getWaiverStatus, getWaiverStatusLabel, type WaiverStatus } from '@/lib/waivers';
 
 type RecentItem = {
   id: string;
@@ -16,6 +17,7 @@ type RecentItem = {
 };
 
 type MembershipStatus = 'active' | 'none';
+type WaiverWidget = { status: WaiverStatus; expires_at: string | null; days_until_expiration: number | null };
 
 type HouseholdPersonRow = {
   id: string;
@@ -56,6 +58,7 @@ export default function AppHome() {
 
   // widgets
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
+  const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
 
@@ -145,6 +148,31 @@ export default function AppHome() {
     })();
   }, [householdId]);
 
+  useEffect(() => {
+    if (!householdId) return;
+    (async () => {
+      const supabase = createBrowserSupabaseClient();
+      const { data, error } = await supabase
+        .from('waivers')
+        .select('signed_at,signed_date,waiver_expires_at,created_at')
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: false })
+        .limit(25);
+
+      if (error) {
+        setWaiver({ status: 'required', expires_at: null, days_until_expiration: null });
+        return;
+      }
+
+      const details = getWaiverStatus(data ?? []);
+      setWaiver({
+        status: details.status,
+        expires_at: details.expiresAt,
+        days_until_expiration: details.daysUntilExpiration,
+      });
+    })();
+  }, [householdId]);
+
   // recent visits widget (last 5 check-ins for this household)
   useEffect(() => {
     if (!householdId) return;
@@ -219,6 +247,23 @@ export default function AppHome() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto' }}>
+      {(waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
+        <section style={{ marginBottom: 14, padding: 14, borderRadius: 12, border: '1px solid #f1cf8a', background: '#fff6e8' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#7f4a04' }}>
+            {waiver.status === 'completed'
+              ? `Waiver renewal reminder: your waiver expires in ${waiver.days_until_expiration} day${waiver.days_until_expiration === 1 ? '' : 's'}.`
+              : waiver.status === 'expired'
+                ? 'Waiver expired / renewal needed.'
+                : 'Waiver required before your next visit.'}
+          </p>
+          <p style={{ margin: '6px 0 0', color: '#6f4c1c' }}>
+            Please sign the current waiver form to keep your family check-in ready.
+            {' '}
+            <a href={process.env.NEXT_PUBLIC_WAIVER_URL ?? 'https://docs.google.com/forms/d/e/1FAIpQLSeleoqMn8UslZs8RiEg_02Ld4t-5WuIyhhHySoyb_3mCYJMUw/viewform?usp=dialog'} target="_blank" rel="noreferrer">Sign waiver</a>
+          </p>
+        </section>
+      )}
+
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, alignItems: 'stretch', marginBottom: 20 }}>
         <div style={{ padding: 20, borderRadius: 24, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 18px 30px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
@@ -232,11 +277,12 @@ export default function AppHome() {
       {/* Membership badge + CTA */}
       <section style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between', }}>
-	<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Badge status={membership.status} />
-          {membership.status === 'active' && membership.renews_at && (
-            <span style={{ color: '#555' }}>Renews on {new Date(membership.renews_at).toLocaleDateString()}</span>
-          )} </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Badge status={membership.status} />
+            {membership.status === 'active' && membership.renews_at && (
+              <span style={{ color: '#555' }}>Renews on {new Date(membership.renews_at).toLocaleDateString()}</span>
+            )}
+          </div>
           {membership.status !== 'active' && (
             <Link href="/landing/membership" 
  		style={{
@@ -259,6 +305,10 @@ export default function AppHome() {
           >Start Membership</Link>
           )}
         </div>
+        <p style={{ margin: '8px 0 0', color: waiver.status === 'completed' ? '#137333' : '#9a3412' }}>
+          {getWaiverStatusLabel(waiver.status)}
+          {waiver.status === 'completed' && waiver.expires_at ? ` · Expires on ${new Date(waiver.expires_at).toLocaleDateString()}` : ''}
+        </p>
       </section>
 
 {/* Quick actions */}
