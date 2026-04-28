@@ -56,6 +56,22 @@ type CartItemState = {
   quantity: number;
 };
 
+const historyTabButtonStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: '1px solid #d9c8f7',
+  padding: '9px 14px',
+  fontWeight: 700,
+  color: '#5f3da4',
+  background: '#fff',
+};
+
+const historyTabButtonActiveStyle: React.CSSProperties = {
+  ...historyTabButtonStyle,
+  background: '#f3ebff',
+  border: '1px solid #b897ec',
+  boxShadow: '0 2px 8px rgba(95,61,164,0.12)',
+};
+
 export default function ClassSchedulePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -548,13 +564,13 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class history</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          <button onClick={() => setHistoryTab('upcoming')} style={{ borderRadius: 999, border: '1px solid #d9c8f7', background: historyTab === 'upcoming' ? '#f3ebff' : '#fff', padding: '7px 12px', fontWeight: 700 }}>
+          <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Upcoming ({upcomingHistoryItems.length})
           </button>
-          <button onClick={() => setHistoryTab('past')} style={{ borderRadius: 999, border: '1px solid #d9c8f7', background: historyTab === 'past' ? '#f3ebff' : '#fff', padding: '7px 12px', fontWeight: 700 }}>
+          <button onClick={() => setHistoryTab('past')} style={historyTab === 'past' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Past ({pastHistoryItems.length})
           </button>
-          <button onClick={() => setHistoryTab('cancelled')} style={{ borderRadius: 999, border: '1px solid #d9c8f7', background: historyTab === 'cancelled' ? '#f3ebff' : '#fff', padding: '7px 12px', fontWeight: 700 }}>
+          <button onClick={() => setHistoryTab('cancelled')} style={historyTab === 'cancelled' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Cancelled ({cancelledItems.length})
           </button>
         </div>
@@ -600,7 +616,14 @@ export default function ClassSchedulePage() {
                       <button
                         onClick={() => saveClassReflection(item.id, !item.customer_favorite, noteDrafts[item.id] ?? item.customer_note ?? '')}
                         disabled={savingClassMemoId === item.id}
-                        style={{ borderRadius: 999, border: '1px solid #d9c8f7', background: item.customer_favorite ? '#ffe9a8' : '#fff', padding: '6px 10px' }}
+                        style={{
+                          borderRadius: 12,
+                          border: item.customer_favorite ? '1px solid #f7ca45' : '1px solid #d9c8f7',
+                          background: item.customer_favorite ? '#fff4cc' : '#f3ebff',
+                          color: item.customer_favorite ? '#7a5200' : '#5f3da4',
+                          padding: '8px 12px',
+                          fontWeight: 700,
+                        }}
                       >
                         {item.customer_favorite ? '★ Favorite' : '☆ Mark favorite'}
                       </button>
