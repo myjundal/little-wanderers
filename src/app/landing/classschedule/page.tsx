@@ -70,6 +70,7 @@ export default function ClassSchedulePage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled'>('upcoming');
   const [cartHydrated, setCartHydrated] = useState(false);
   const CART_STORAGE_KEY = 'lw_class_cart_v1';
 
@@ -277,6 +278,22 @@ export default function ClassSchedulePage() {
   const activeItems = useMemo(
     () => myItems.filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled'),
     [myItems]
+  );
+  const upcomingHistoryItems = useMemo(
+    () =>
+      activeItems.filter((item) => {
+        const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
+        return startsAt > Date.now() || item.attendance_display_status === 'upcoming';
+      }),
+    [activeItems]
+  );
+  const pastHistoryItems = useMemo(
+    () =>
+      activeItems.filter((item) => {
+        const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
+        return startsAt <= Date.now() && item.attendance_display_status !== 'upcoming';
+      }),
+    [activeItems]
   );
 
   const cartClassDetails = useMemo(
@@ -529,16 +546,31 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 Paid / booked classes</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class history</h2>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button onClick={() => setHistoryTab('upcoming')} style={{ borderRadius: 999, border: '1px solid #d9c8f7', background: historyTab === 'upcoming' ? '#f3ebff' : '#fff', padding: '7px 12px', fontWeight: 700 }}>
+            Upcoming ({upcomingHistoryItems.length})
+          </button>
+          <button onClick={() => setHistoryTab('past')} style={{ borderRadius: 999, border: '1px solid #d9c8f7', background: historyTab === 'past' ? '#f3ebff' : '#fff', padding: '7px 12px', fontWeight: 700 }}>
+            Past ({pastHistoryItems.length})
+          </button>
+          <button onClick={() => setHistoryTab('cancelled')} style={{ borderRadius: 999, border: '1px solid #d9c8f7', background: historyTab === 'cancelled' ? '#f3ebff' : '#fff', padding: '7px 12px', fontWeight: 700 }}>
+            Cancelled ({cancelledItems.length})
+          </button>
+        </div>
         {loading ? (
           <p>Loading…</p>
-        ) : activeItems.length === 0 ? (
+        ) : historyTab !== 'cancelled' && activeItems.length === 0 ? (
           <div style={{ border: '1px dashed #ccc', borderRadius: 12, padding: 16 }}>
             <p>You do not have any class bookings yet.</p>
           </div>
+        ) : historyTab === 'cancelled' && cancelledItems.length === 0 ? (
+          <div style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 16, background: '#fff7fc' }}>
+            <p>No cancelled classes.</p>
+          </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {activeItems.map((item) => (
+            {(historyTab === 'upcoming' ? upcomingHistoryItems : historyTab === 'past' ? pastHistoryItems : cancelledItems).map((item) => (
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
@@ -562,7 +594,7 @@ export default function ClassSchedulePage() {
                     This class was cancelled by the studio and has been removed from the customer calendar.
                   </p>
                 )}
-                {item.attendance_display_status === 'attended' && (
+                {(item.attendance_status === 'attended' || item.status === 'attended') && (
                   <div style={{ marginTop: 10, border: '1px solid #efe3ff', borderRadius: 10, padding: 10, background: '#fcf9ff' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                       <button
@@ -600,22 +632,6 @@ export default function ClassSchedulePage() {
           </div>
         )}
       </section>
-
-      {cancelledItems.length > 0 && (
-        <section style={{ marginTop: 20 }}>
-          <h2 style={{ fontSize: 20, margin: '0 0 10px', color: '#8a3f6b' }}>Cancelled bookings</h2>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {cancelledItems.map((item) => (
-              <div key={`cancelled-${item.id}`} style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 12, background: '#fff7fc' }}>
-                <strong>{item.class?.title ?? 'Removed class'}</strong>
-                <p style={{ margin: '6px 0' }}>Person: {item.person_name}</p>
-                <p style={{ margin: '6px 0' }}>Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}</p>
-                <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 700 }}>Cancelled</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       <p style={{ marginTop: 20 }}>
         <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
