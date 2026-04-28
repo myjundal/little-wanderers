@@ -15,6 +15,10 @@ type PartyBooking = {
   status: 'pending' | 'confirmed' | 'cancelled';
   status_updated_at: string | null;
   created_at: string;
+  final_child_count: number | null;
+  final_adult_count: number | null;
+  final_total_count: number | null;
+  attendance_finalized_at: string | null;
 };
 
 const PARTY_DEPOSIT_DOLLARS = 150;
@@ -392,6 +396,14 @@ export default function PartyPage() {
                   </p>
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {prettyNote(item.notes)}</p>
                   <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
+                  {item.attendance_finalized_at && (
+                    <div style={{ margin: '8px 0', padding: 10, borderRadius: 10, border: '1px solid #d6f0dc', background: '#f2fbf4' }}>
+                      <p style={{ margin: '2px 0', color: '#2f7a47', fontWeight: 700 }}>Final attendance submitted</p>
+                      <p style={{ margin: '2px 0' }}>Children: {item.final_child_count ?? 0}</p>
+                      <p style={{ margin: '2px 0' }}>Adults: {item.final_adult_count ?? 0}</p>
+                      <p style={{ margin: '2px 0', fontWeight: 700 }}>Total: {item.final_total_count ?? ((item.final_child_count ?? 0) + (item.final_adult_count ?? 0))}</p>
+                    </div>
+                  )}
                   <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
                     Status: {item.status === 'confirmed' ? 'Party scheduled' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending cancel' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
                   </p>

@@ -40,6 +40,16 @@ type ClassItem = {
   status: 'scheduled' | 'cancelled' | 'completed';
   booked_count: number;
   seats_left: number | null;
+  registrants: {
+    registration_id: string;
+    person_id: string;
+    person_name: string;
+    household_id: string | null;
+    registration_status: 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
+    attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
+    attendance_marked_at: string | null;
+    attendance_marked_by: string | null;
+  }[];
 };
 
 type PartyBookingItem = {
@@ -54,6 +64,13 @@ type PartyBookingItem = {
   notes: string | null;
   status: 'pending' | 'confirmed' | 'cancelled';
   status_updated_at: string | null;
+  current_child_count: number;
+  current_adult_count: number;
+  final_child_count: number | null;
+  final_adult_count: number | null;
+  final_total_count: number | null;
+  attendance_finalized_at: string | null;
+  attendance_notes: string | null;
 };
 
 const sectionStyle: React.CSSProperties = {
@@ -149,6 +166,8 @@ export default function StaffDashboard() {
   const [savingClass, setSavingClass] = useState(false);
   const [statusNote, setStatusNote] = useState<Record<string, string>>({});
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [savingAttendanceKey, setSavingAttendanceKey] = useState<string | null>(null);
+  const [partyAttendanceNotes, setPartyAttendanceNotes] = useState<Record<string, string>>({});
 
   const selectedBooking = useMemo(
     () => partyBookings.find((item) => item.id === selectedBookingId) ?? partyBookings[0] ?? null,
@@ -279,6 +298,52 @@ export default function StaffDashboard() {
     await load();
   };
 
+  const updateClassAttendance = async (
+    classId: string,
+    registrationId: string,
+    attendanceStatus: 'unknown' | 'attended' | 'cancelled' | 'no_show'
+  ) => {
+    const key = `${classId}:${registrationId}`;
+    setSavingAttendanceKey(key);
+    const res = await fetch(`/api/admin/classes/${classId}/attendance`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ registration_id: registrationId, attendance_status: attendanceStatus }),
+    });
+    const json = await res.json();
+    setSavingAttendanceKey(null);
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Could not update class attendance.');
+      return;
+    }
+    setMessage('Class attendance updated.');
+    await load();
+  };
+
+  const updatePartyAttendance = async (
+    bookingId: string,
+    action: 'increment_child' | 'decrement_child' | 'increment_adult' | 'decrement_adult' | 'finalize' | 'reopen'
+  ) => {
+    const res = await fetch(`/api/admin/party-bookings/${bookingId}/headcount`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, notes: partyAttendanceNotes[bookingId] ?? '' }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Could not update party attendance.');
+      return;
+    }
+    setMessage(
+      action === 'finalize'
+        ? 'Party attendance finalized.'
+        : action === 'reopen'
+          ? 'Party attendance reopened.'
+          : 'Party attendance updated.'
+    );
+    await load();
+  };
+
   const updatePartyStatus = async (bookingId: string, status: 'cancelled') => {
     const res = await fetch(`/api/admin/party-bookings/${bookingId}/status`, {
       method: 'PATCH',
@@ -294,19 +359,6 @@ export default function StaffDashboard() {
 
     setMessage(`Party booking marked ${status}.`);
     setStatusNote((prev) => ({ ...prev, [bookingId]: '' }));
-    await load();
-  };
-
-  const markHeadcountReceived = async (bookingId: string) => {
-    const res = await fetch(`/api/admin/party-bookings/${bookingId}/headcount`, {
-      method: 'PATCH',
-    });
-    const json = await res.json();
-    if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Could not update headcount reminder.');
-      return;
-    }
-    setMessage('Final headcount marked as received.');
     await load();
   };
 
@@ -440,6 +492,37 @@ export default function StaffDashboard() {
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}</p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong> · Price: {dollars(item.price_cents)}</p>
                   {item.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{item.description}</p>}
+                  <div style={{ marginTop: 12, border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
+                    <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Registrant attendance checklist</p>
+                    {item.registrants.length === 0 ? (
+                      <p style={{ margin: 0, color: '#7a6d97' }}>No registrants yet.</p>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {item.registrants.map((reg) => {
+                          const key = `${item.id}:${reg.registration_id}`;
+                          return (
+                            <div key={reg.registration_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 220px', gap: 8, alignItems: 'center' }}>
+                              <div>
+                                <div style={{ fontWeight: 600, color: '#4f3f82' }}>{reg.person_name}</div>
+                                <div style={{ color: '#7a6d97', fontSize: 12 }}>Registration: {reg.registration_status}</div>
+                              </div>
+                              <select
+                                value={reg.attendance_status}
+                                disabled={savingAttendanceKey === key}
+                                onChange={(e) => updateClassAttendance(item.id, reg.registration_id, e.target.value as 'unknown' | 'attended' | 'cancelled' | 'no_show')}
+                                style={inputStyle}
+                              >
+                                <option value="unknown">Unknown / not marked</option>
+                                <option value="attended">Attended</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="no_show">Not attended / no-show</option>
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => {
@@ -493,34 +576,52 @@ export default function StaffDashboard() {
                 <h3 style={{ marginTop: 0, color: '#4f3f82' }}>{selectedBooking.household_name}</h3>
                 <p style={{ color: '#6d6480' }}><strong>When:</strong> {new Date(selectedBooking.start_time).toLocaleString()} → {new Date(selectedBooking.end_time).toLocaleString()}</p>
                 <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{selectedBooking.status}</span></p>
-                <p style={{ color: '#6d6480' }}><strong>Headcount:</strong> {selectedBooking.headcount_expected ?? '-'}</p>
+                <p style={{ color: '#6d6480' }}><strong>Headcount (requested):</strong> {selectedBooking.headcount_expected ?? '-'}</p>
                 <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
                 <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {prettyNote(selectedBooking.notes)}</p>
+                <div style={{ marginTop: 10, border: '1px solid #eadfff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
+                  <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Party attendance tracker</p>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#7a6d97' }}>Children</div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count}</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'decrement_child')}>-</button>
+                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'increment_child')}>+</button>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#7a6d97' }}>Adults</div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_adult_count}</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'decrement_adult')}>-</button>
+                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'increment_adult')}>+</button>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#7a6d97' }}>Current total</div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count + selectedBooking.current_adult_count}</div>
+                    </div>
+                  </div>
+                  <textarea rows={2} placeholder="Optional final attendance notes" value={partyAttendanceNotes[selectedBooking.id] ?? selectedBooking.attendance_notes ?? ''} onChange={(e) => setPartyAttendanceNotes((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 10 }} />
+                  {selectedBooking.attendance_finalized_at ? (
+                    <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: '#ebf8ef', border: '1px solid #cae9d2' }}>
+                      <p style={{ margin: '0 0 6px', color: '#2f7a47', fontWeight: 700 }}>Attendance finalized at {new Date(selectedBooking.attendance_finalized_at).toLocaleString()}</p>
+                      <p style={{ margin: '2px 0' }}>Final children: {selectedBooking.final_child_count ?? 0}</p>
+                      <p style={{ margin: '2px 0' }}>Final adults: {selectedBooking.final_adult_count ?? 0}</p>
+                      <p style={{ margin: '2px 0', fontWeight: 700 }}>Final total: {selectedBooking.final_total_count ?? 0}</p>
+                      <button style={{ ...buttonStyle, marginTop: 8, background: '#fff', color: '#2f7a47', border: '1px solid #8fcea0' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'reopen')}>Reopen attendance (explicit edit)</button>
+                    </div>
+                  ) : (
+                    <button style={{ ...buttonStyle, marginTop: 10, background: '#2f7a47', color: '#fff' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'finalize')}>Finalize attendance</button>
+                  )}
+                </div>
                 <p style={{ color: '#6d6480' }}>
                   <strong>{selectedBooking.status === 'cancelled' ? 'Cancelled on:' : 'Last status change:'}</strong>{' '}
                   {selectedBooking.status_updated_at ? new Date(selectedBooking.status_updated_at).toLocaleString() : '-'}
                 </p>
                 <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
-                  {selectedBooking.status !== 'cancelled' && (() => {
-                    const headcountReceived = (selectedBooking.notes ?? '').includes('[Final headcount received');
-                    const daysUntilParty = (new Date(selectedBooking.start_time).getTime() - Date.now()) / 86_400_000;
-                    if (headcountReceived) {
-                      return <span style={{ ...buttonStyle, background: '#e5f6ea', color: '#2f7a47', display: 'inline-flex', alignItems: 'center' }}>✅ Final headcount received</span>;
-                    }
-                    return (
-                      <button
-                        style={{
-                          ...buttonStyle,
-                          background: daysUntilParty <= 3 ? '#ffe2e2' : '#f3ebff',
-                          color: daysUntilParty <= 3 ? '#b42318' : '#5f3da4',
-                        }}
-                        onClick={() => markHeadcountReceived(selectedBooking.id)}
-                      >
-                        Final headcount received
-                      </button>
-                    );
-                  })()}
                   {selectedBooking.status !== 'cancelled' && (
                     <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
                   )}
