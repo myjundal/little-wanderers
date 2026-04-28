@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { getWaiverStatus } from '@/lib/waivers';
 
 type Params = { params: { id: string } };
 
@@ -13,7 +14,7 @@ export async function GET(_: Request, { params }: Params) {
     admin.from('households').select('id,name,phone,created_at').eq('id', id).maybeSingle(),
     admin.from('people').select('id,first_name,last_name,birthdate,role,created_at').eq('household_id', id).order('created_at', { ascending: true }),
     admin.from('memberships').select('id,renews_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
-    admin.from('waivers').select('id,signed_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
+    admin.from('waivers').select('id,signed_at,signed_date,waiver_expires_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
     admin.from('party_bookings').select('id,start_time,end_time,status,headcount_expected,notes,created_at').eq('household_id', id).order('start_time', { ascending: true }),
   ]);
 
@@ -33,7 +34,7 @@ export async function GET(_: Request, { params }: Params) {
   const now = new Date().toISOString();
 
   const activeMembership = (memberships ?? []).some((m) => !m.renews_at || m.renews_at > now);
-  const waiverSigned = (waivers ?? []).some((w) => Boolean(w.signed_at));
+  const waiverStatus = getWaiverStatus(waivers ?? []);
 
   const normalizedRegs = (classRegs ?? []).map((reg) => ({
     ...reg,
@@ -71,7 +72,13 @@ export async function GET(_: Request, { params }: Params) {
       guardians: peopleRows.filter((p) => p.role !== 'child'),
       children: peopleRows.filter((p) => p.role === 'child'),
       membership_status: activeMembership ? 'active' : 'none',
-      waiver_status: waiverSigned ? 'signed' : 'missing',
+      waiver_status: waiverStatus.status,
+      waiver: {
+        status: waiverStatus.status,
+        signed_at: waiverStatus.signedAt,
+        expires_at: waiverStatus.expiresAt,
+        days_until_expiration: waiverStatus.daysUntilExpiration,
+      },
       qr_status: peopleRows.length > 0 ? 'available' : 'unavailable',
       upcoming_classes: upcomingClasses,
       upcoming_parties: upcomingParties,

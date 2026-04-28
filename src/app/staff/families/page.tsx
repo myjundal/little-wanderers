@@ -14,6 +14,12 @@ type FamilyItem = {
   waiver_status: string;
 };
 
+function waiverLabel(status: string) {
+  if (status === 'completed') return 'Waiver completed';
+  if (status === 'expired') return 'Waiver expired / renewal needed';
+  return 'Waiver required';
+}
+
 export default function StaffFamiliesPage() {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<FamilyItem[]>([]);
@@ -55,7 +61,7 @@ export default function StaffFamiliesPage() {
             <h3 style={{ margin: 0, color: '#4f3f82' }}>{item.guardian_name}</h3>
             <p style={{ margin: '6px 0', color: '#6d6480' }}>Phone: {item.phone ?? '-'} · Email: {item.email ?? '-'}</p>
             <p style={{ margin: '6px 0', color: '#6d6480' }}>Children: {item.children_names.length ? item.children_names.join(', ') : '-'}</p>
-            <p style={{ margin: '6px 0', color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {item.waiver_status}</p>
+            <p style={{ margin: '6px 0', color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {waiverLabel(item.waiver_status)}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               <Link href={`/staff/families/${item.household_id}`} style={{ borderRadius: 10, padding: '8px 10px', border: '1px solid #d9c8f7', textDecoration: 'none' }}>View</Link>
             </div>
