@@ -86,7 +86,7 @@ export default function ClassSchedulePage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled'>('upcoming');
+  const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [cartHydrated, setCartHydrated] = useState(false);
   const CART_STORAGE_KEY = 'lw_class_cart_v1';
 
@@ -308,6 +308,14 @@ export default function ClassSchedulePage() {
       activeItems.filter((item) => {
         const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
         return startsAt <= Date.now() && item.attendance_display_status !== 'upcoming';
+      }),
+    [activeItems]
+  );
+  const favoriteItems = useMemo(
+    () =>
+      activeItems.filter((item) => {
+        const attended = item.attendance_status === 'attended' || item.status === 'attended';
+        return attended && item.customer_favorite;
       }),
     [activeItems]
   );
@@ -573,10 +581,13 @@ export default function ClassSchedulePage() {
           <button onClick={() => setHistoryTab('cancelled')} style={historyTab === 'cancelled' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Cancelled ({cancelledItems.length})
           </button>
+          <button onClick={() => setHistoryTab('favorites')} style={historyTab === 'favorites' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
+            Favorites ({favoriteItems.length})
+          </button>
         </div>
         {loading ? (
           <p>Loading…</p>
-        ) : historyTab !== 'cancelled' && activeItems.length === 0 ? (
+        ) : historyTab !== 'cancelled' && historyTab !== 'favorites' && activeItems.length === 0 ? (
           <div style={{ border: '1px dashed #ccc', borderRadius: 12, padding: 16 }}>
             <p>You do not have any class bookings yet.</p>
           </div>
@@ -584,9 +595,19 @@ export default function ClassSchedulePage() {
           <div style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 16, background: '#fff7fc' }}>
             <p>No cancelled classes.</p>
           </div>
+        ) : historyTab === 'favorites' && favoriteItems.length === 0 ? (
+          <div style={{ border: '1px dashed #f2d067', borderRadius: 12, padding: 16, background: '#fff9e8' }}>
+            <p>No favorite classes yet.</p>
+          </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {(historyTab === 'upcoming' ? upcomingHistoryItems : historyTab === 'past' ? pastHistoryItems : cancelledItems).map((item) => (
+            {(historyTab === 'upcoming'
+              ? upcomingHistoryItems
+              : historyTab === 'past'
+                ? pastHistoryItems
+                : historyTab === 'favorites'
+                  ? favoriteItems
+                  : cancelledItems).map((item) => (
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
