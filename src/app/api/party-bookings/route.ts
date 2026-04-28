@@ -7,8 +7,8 @@ import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
-const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at';
-const PARTY_SELECT_FALLBACK = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,created_at';
+const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,final_child_count,final_adult_count,final_total_count,attendance_finalized_at';
+const PARTY_SELECT_FALLBACK = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at';
 
 const PARTY_TOTAL_FEE_CENTS = 30000;
 const PARTY_DEPOSIT_CENTS = 15000;
@@ -57,8 +57,12 @@ async function selectPartyBookings(householdId: string) {
 
   return (fallback.data ?? []).map((item) => ({
     ...item,
-    status: 'confirmed',
-    status_updated_at: item.created_at,
+    status: item.status ?? 'confirmed',
+    status_updated_at: item.status_updated_at ?? item.created_at,
+    final_child_count: null,
+    final_adult_count: null,
+    final_total_count: null,
+    attendance_finalized_at: null,
   }));
 }
 

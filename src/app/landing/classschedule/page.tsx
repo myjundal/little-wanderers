@@ -33,8 +33,14 @@ type ClassItem = {
 type RegistrationItem = {
   id: string;
   status: 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
+  attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
+  attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming';
+  attendance_marked_at: string | null;
   person_name: string;
   created_at: string;
+  customer_favorite: boolean;
+  customer_note: string | null;
+  customer_note_updated_at: string | null;
   class: {
     id: string;
     title: string;
@@ -50,6 +56,22 @@ type CartItemState = {
   quantity: number;
 };
 
+const historyTabButtonStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: '1px solid #d9c8f7',
+  padding: '9px 14px',
+  fontWeight: 700,
+  color: '#5f3da4',
+  background: '#fff',
+};
+
+const historyTabButtonActiveStyle: React.CSSProperties = {
+  ...historyTabButtonStyle,
+  background: '#f3ebff',
+  border: '1px solid #b897ec',
+  boxShadow: '0 2px 8px rgba(95,61,164,0.12)',
+};
+
 export default function ClassSchedulePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -62,6 +84,9 @@ export default function ClassSchedulePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [checkouting, setCheckouting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [cartHydrated, setCartHydrated] = useState(false);
   const CART_STORAGE_KEY = 'lw_class_cart_v1';
 
@@ -230,6 +255,16 @@ export default function ClassSchedulePage() {
     setCartItems((prev) => prev.filter((item) => !paidClassIds.has(item.class_id)));
   }, [paidClassIds]);
 
+  useEffect(() => {
+    setNoteDrafts((prev) => {
+      const next = { ...prev };
+      myItems.forEach((item) => {
+        if (!(item.id in next)) next[item.id] = item.customer_note ?? '';
+      });
+      return next;
+    });
+  }, [myItems]);
+
   const classSlots = useMemo<CalendarSlot[]>(
     () => [
       ...classes.map<CalendarSlot>((c) => ({
@@ -259,6 +294,30 @@ export default function ClassSchedulePage() {
   const activeItems = useMemo(
     () => myItems.filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled'),
     [myItems]
+  );
+  const upcomingHistoryItems = useMemo(
+    () =>
+      activeItems.filter((item) => {
+        const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
+        return startsAt > Date.now() || item.attendance_display_status === 'upcoming';
+      }),
+    [activeItems]
+  );
+  const pastHistoryItems = useMemo(
+    () =>
+      activeItems.filter((item) => {
+        const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
+        return startsAt <= Date.now() && item.attendance_display_status !== 'upcoming';
+      }),
+    [activeItems]
+  );
+  const favoriteItems = useMemo(
+    () =>
+      activeItems.filter((item) => {
+        const attended = item.attendance_status === 'attended' || item.status === 'attended';
+        return attended && item.customer_favorite;
+      }),
+    [activeItems]
   );
 
   const cartClassDetails = useMemo(
@@ -369,6 +428,25 @@ export default function ClassSchedulePage() {
 
     setMessage('Paid class booking has been cancelled.');
     setCancellingId(null);
+    await load();
+  };
+
+  const saveClassReflection = async (registrationId: string, favorite: boolean, note: string) => {
+    setSavingClassMemoId(registrationId);
+    const res = await fetch(`/api/classes/my/${registrationId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ customer_favorite: favorite, customer_note: note || null }),
+    });
+    const json = await res.json();
+    setSavingClassMemoId(null);
+
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Could not save class note/favorite.');
+      return;
+    }
+
+    setMessage('Class favorite/note saved.');
     await load();
   };
 
@@ -492,22 +570,50 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 Paid / booked classes</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class history</h2>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
+            Upcoming ({upcomingHistoryItems.length})
+          </button>
+          <button onClick={() => setHistoryTab('past')} style={historyTab === 'past' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
+            Past ({pastHistoryItems.length})
+          </button>
+          <button onClick={() => setHistoryTab('cancelled')} style={historyTab === 'cancelled' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
+            Cancelled ({cancelledItems.length})
+          </button>
+          <button onClick={() => setHistoryTab('favorites')} style={historyTab === 'favorites' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
+            Favorites ({favoriteItems.length})
+          </button>
+        </div>
         {loading ? (
           <p>Loading…</p>
-        ) : activeItems.length === 0 ? (
+        ) : historyTab !== 'cancelled' && historyTab !== 'favorites' && activeItems.length === 0 ? (
           <div style={{ border: '1px dashed #ccc', borderRadius: 12, padding: 16 }}>
             <p>You do not have any class bookings yet.</p>
           </div>
+        ) : historyTab === 'cancelled' && cancelledItems.length === 0 ? (
+          <div style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 16, background: '#fff7fc' }}>
+            <p>No cancelled classes.</p>
+          </div>
+        ) : historyTab === 'favorites' && favoriteItems.length === 0 ? (
+          <div style={{ border: '1px dashed #f2d067', borderRadius: 12, padding: 16, background: '#fff9e8' }}>
+            <p>No favorite classes yet.</p>
+          </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {activeItems.map((item) => (
+            {(historyTab === 'upcoming'
+              ? upcomingHistoryItems
+              : historyTab === 'past'
+                ? pastHistoryItems
+                : historyTab === 'favorites'
+                  ? favoriteItems
+                  : cancelledItems).map((item) => (
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status:{' '}
                   <b style={{ textTransform: 'uppercase' }}>
-                    {item.class?.status === 'cancelled' ? 'studio_cancelled' : item.status}
+                    {item.attendance_display_status}
                   </b>
                 </p>
                 {recentlyPaidRegistrationIds.includes(item.id) && (
@@ -517,10 +623,48 @@ export default function ClassSchedulePage() {
                   Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}
                 </p>
                 <p style={{ margin: '6px 0' }}>Category: {item.class?.category ?? '-'}</p>
+                {item.attendance_marked_at && (
+                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Attendance marked: {new Date(item.attendance_marked_at).toLocaleString()}</p>
+                )}
                 {item.class?.status === 'cancelled' && (
                   <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 600 }}>
                     This class was cancelled by the studio and has been removed from the customer calendar.
                   </p>
+                )}
+                {(item.attendance_status === 'attended' || item.status === 'attended') && (
+                  <div style={{ marginTop: 10, border: '1px solid #efe3ff', borderRadius: 10, padding: 10, background: '#fcf9ff' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      <button
+                        onClick={() => saveClassReflection(item.id, !item.customer_favorite, noteDrafts[item.id] ?? item.customer_note ?? '')}
+                        disabled={savingClassMemoId === item.id}
+                        style={{
+                          borderRadius: 12,
+                          border: item.customer_favorite ? '1px solid #f7ca45' : '1px solid #d9c8f7',
+                          background: item.customer_favorite ? '#fff4cc' : '#f3ebff',
+                          color: item.customer_favorite ? '#7a5200' : '#5f3da4',
+                          padding: '8px 12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {item.customer_favorite ? '★ Favorite' : '☆ Mark favorite'}
+                      </button>
+                    </div>
+                    <textarea
+                      rows={2}
+                      placeholder="Optional personal note"
+                      value={noteDrafts[item.id] ?? item.customer_note ?? ''}
+                      onChange={(e) => setNoteDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      style={{ width: '100%' }}
+                    />
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        onClick={() => saveClassReflection(item.id, item.customer_favorite, noteDrafts[item.id] ?? '')}
+                        disabled={savingClassMemoId === item.id}
+                      >
+                        {savingClassMemoId === item.id ? 'Saving...' : 'Save note'}
+                      </button>
+                    </div>
+                  </div>
                 )}
                 {item.status !== 'cancelled' && item.class?.status !== 'cancelled' && (
                   <button onClick={() => cancelRegistration(item.id)} disabled={cancellingId === item.id}>
@@ -532,22 +676,6 @@ export default function ClassSchedulePage() {
           </div>
         )}
       </section>
-
-      {cancelledItems.length > 0 && (
-        <section style={{ marginTop: 20 }}>
-          <h2 style={{ fontSize: 20, margin: '0 0 10px', color: '#8a3f6b' }}>Cancelled bookings</h2>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {cancelledItems.map((item) => (
-              <div key={`cancelled-${item.id}`} style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 12, background: '#fff7fc' }}>
-                <strong>{item.class?.title ?? 'Removed class'}</strong>
-                <p style={{ margin: '6px 0' }}>Person: {item.person_name}</p>
-                <p style={{ margin: '6px 0' }}>Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}</p>
-                <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 700 }}>Cancelled</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       <p style={{ marginTop: 20 }}>
         <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>

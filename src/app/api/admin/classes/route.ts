@@ -6,6 +6,8 @@ export const dynamic = 'force-dynamic';
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,capacity,price_cents,status,created_at,updated_at';
 const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status,created_at,updated_at';
 
+type AttendanceStatus = 'unknown' | 'attended' | 'cancelled' | 'no_show';
+
 type ClassRow = {
   id: string;
   title: string;
@@ -89,30 +91,89 @@ async function selectClasses(admin: SupabaseClient) {
 async function loadClasses(admin: SupabaseClient) {
   const classes = await selectClasses(admin);
   const ids = classes.map((item) => item.id);
-  let countsByClass = new Map<string, number>();
+
+  let regs: {
+    id: string;
+    class_id: string;
+    person_id: string;
+    status: string;
+    attendance_status?: AttendanceStatus;
+    attendance_marked_at?: string | null;
+    attendance_marked_by?: string | null;
+  }[] = [];
 
   if (ids.length > 0) {
-    const { data: regs, error: regErr } = await admin.from('class_registrations').select('class_id,status').in('class_id', ids);
-    if (regErr) throw new Error(regErr.message);
+    const primaryRegs = await admin
+      .from('class_registrations')
+      .select('id,class_id,person_id,status,attendance_status,attendance_marked_at,attendance_marked_by')
+      .in('class_id', ids);
 
-    countsByClass = (regs ?? []).reduce((map, row) => {
-      if (row.status !== 'cancelled') {
-        map.set(row.class_id, (map.get(row.class_id) ?? 0) + 1);
-      }
-      return map;
-    }, new Map<string, number>());
+    if (primaryRegs.error && !isMissingColumnError(primaryRegs.error.message)) {
+      throw new Error(primaryRegs.error.message);
+    }
+
+    if (primaryRegs.error) {
+      const fallbackRegs = await admin.from('class_registrations').select('id,class_id,person_id,status').in('class_id', ids);
+      if (fallbackRegs.error) throw new Error(fallbackRegs.error.message);
+      regs = (fallbackRegs.data ?? []).map((row) => ({ ...row, attendance_status: 'unknown' }));
+    } else {
+      regs = primaryRegs.data ?? [];
+    }
   }
 
+  const personIds = [...new Set(regs.map((row) => row.person_id))];
+  let people = new Map<string, { first_name: string | null; last_name: string | null; household_id: string | null }>();
+
+  if (personIds.length > 0) {
+    const { data: peopleRows, error: peopleErr } = await admin
+      .from('people')
+      .select('id,first_name,last_name,household_id')
+      .in('id', personIds);
+    if (peopleErr) throw new Error(peopleErr.message);
+
+    people = new Map((peopleRows ?? []).map((row) => [row.id, row]));
+  }
+
+  const bookedCounts = new Map<string, number>();
+  const registrantsByClass = new Map<string, Array<Record<string, unknown>>>();
+
+  regs.forEach((row) => {
+    if (row.status !== 'cancelled') {
+      bookedCounts.set(row.class_id, (bookedCounts.get(row.class_id) ?? 0) + 1);
+    }
+
+    const person = people.get(row.person_id);
+    const list = registrantsByClass.get(row.class_id) ?? [];
+    list.push({
+      registration_id: row.id,
+      person_id: row.person_id,
+      person_name: `${person?.first_name ?? ''} ${person?.last_name ?? ''}`.trim() || 'Unknown',
+      household_id: person?.household_id ?? null,
+      registration_status: row.status,
+      attendance_status: row.attendance_status ?? 'unknown',
+      attendance_marked_at: row.attendance_marked_at ?? null,
+      attendance_marked_by: row.attendance_marked_by ?? null,
+    });
+    registrantsByClass.set(row.class_id, list);
+  });
+
   return classes.map((item) => {
-    const booked = countsByClass.get(item.id) ?? 0;
+    const booked = bookedCounts.get(item.id) ?? 0;
+    const registrants = (registrantsByClass.get(item.id) ?? []).sort((a, b) =>
+      String(a.person_name).localeCompare(String(b.person_name))
+    );
+
     return {
       ...item,
-      duration_minutes: item.duration_minutes ?? Math.max(Math.round((new Date(item.end_time).getTime() - new Date(item.start_time).getTime()) / 60_000), 1),
+      duration_minutes:
+        item.duration_minutes ??
+        Math.max(Math.round((new Date(item.end_time).getTime() - new Date(item.start_time).getTime()) / 60_000), 1),
       instructor_name: item.instructor_name ?? null,
       description: item.description ?? null,
       age_range: item.age_range ?? null,
       booked_count: booked,
       seats_left: item.capacity == null ? null : Math.max(item.capacity - booked, 0),
+      registrants,
     };
   });
 }
