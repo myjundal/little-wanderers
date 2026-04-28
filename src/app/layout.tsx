@@ -1,12 +1,11 @@
 import { Quicksand, Nunito } from 'next/font/google';
-import Script from 'next/script';
 import './globals.css';
 import AnalyticsBoot from '@/components/AnalyticsBoot';
+import GoogleAnalytics from '@/components/GoogleAnalytics';
 import PwaBoot from '@/components/pwa/PwaBoot';
 import AddToHomeScreenPrompt from '@/components/pwa/AddToHomeScreenPrompt';
 import NotificationPrompt from '@/components/pwa/NotificationPrompt';
 
-const GOOGLE_TAG_ID = 'G-RHZ3580FJ8';
 const SHOW_INSTALL_AND_PUSH_PROMPTS = false;
 
 const headingFont = Quicksand({
@@ -47,16 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${headingFont.variable} ${bodyFont.variable}`}>
       <body className="antialiased">
-        <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_TAG_ID}`}
-          strategy="afterInteractive"
-        />
-        <Script id="google-tag-manager" strategy="afterInteractive">
-          {`window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', '${GOOGLE_TAG_ID}');`}
-        </Script>
+        <GoogleAnalytics />
         {children}
         <PwaBoot />
         {SHOW_INSTALL_AND_PUSH_PROMPTS && <AddToHomeScreenPrompt />}

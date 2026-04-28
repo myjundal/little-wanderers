@@ -49,7 +49,7 @@ export default function HomeComingSoon() {
               <div className={styles.ctaRow}>
                 <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
                   <span>Join Waitlist</span>
-                  <span className={styles.primaryBtnSubtext}>(over 240+ local families already signed up)</span>
+                  <span className={styles.primaryBtnSubtext}>(over 270+ local families already signed up)</span>
                 </Link>
                 <Link href="/faq" className={styles.secondaryBtn}>
                   FAQ
