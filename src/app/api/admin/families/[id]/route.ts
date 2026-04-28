@@ -73,6 +73,12 @@ export async function GET(_: Request, { params }: Params) {
       children: peopleRows.filter((p) => p.role === 'child'),
       membership_status: activeMembership ? 'active' : 'none',
       waiver_status: waiverStatus.status,
+      waiver: {
+        status: waiverStatus.status,
+        signed_at: waiverStatus.signedAt,
+        expires_at: waiverStatus.expiresAt,
+        days_until_expiration: waiverStatus.daysUntilExpiration,
+      },
       qr_status: peopleRows.length > 0 ? 'available' : 'unavailable',
       upcoming_classes: upcomingClasses,
       upcoming_parties: upcomingParties,

@@ -14,6 +14,12 @@ type FamilyDetail = {
   children: Person[];
   membership_status: string;
   waiver_status: string;
+  waiver?: {
+    status: string;
+    signed_at: string | null;
+    expires_at: string | null;
+    days_until_expiration: number | null;
+  };
   qr_status: string;
   upcoming_classes: Array<{ id: string; person_id: string; person_name: string; class: { id?: string; title: string; start_time: string } | null }>;
   upcoming_parties: Array<{ id: string; start_time: string; end_time: string; status: string }>;
@@ -46,6 +52,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   const [editableMembers, setEditableMembers] = useState<MemberForm[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [qrMap, setQrMap] = useState<Record<string, string>>({});
+  const [showWaiverPanel, setShowWaiverPanel] = useState(false);
 
   const load = useCallback(async () => {
     const [detailRes, classesRes, calendarRes] = await Promise.all([
@@ -215,6 +222,8 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   ];
 
   if (!item) return <main style={{ padding: 24 }}>Loading family…</main>;
+  const waiver = item.waiver ?? { status: item.waiver_status, signed_at: null, expires_at: null, days_until_expiration: null };
+  const waiverUrl = process.env.NEXT_PUBLIC_WAIVER_URL ?? 'https://docs.google.com/forms/d/e/1FAIpQLSeleoqMn8UslZs8RiEg_02Ld4t-5WuIyhhHySoyb_3mCYJMUw/viewform?usp=dialog';
 
   return (
     <main style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
@@ -244,9 +253,31 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
           <button type="button" onClick={addMemberRow}>Add member</button>
           <button type="button" onClick={saveMembers}>Save family</button>
-          <button type="button">Manage waiver</button>
+          <button type="button" onClick={() => setShowWaiverPanel((prev) => !prev)}>
+            {showWaiverPanel ? 'Hide waiver details' : 'Manage waiver'}
+          </button>
           <button type="button" onClick={() => router.push(`/staff/families/${familyId}/membership`)}>Manage membership</button>
         </div>
+        {showWaiverPanel && (
+          <div style={{ marginTop: 12, border: '1px solid #efe6ff', borderRadius: 12, padding: 10, background: '#faf7ff' }}>
+            <p style={{ margin: '0 0 8px', color: '#4f3f82', fontWeight: 700 }}>Waiver status: {waiverLabel(waiver.status)}</p>
+            {waiver.signed_at && <p style={{ margin: '4px 0', color: '#5f5470' }}>Signed: {new Date(waiver.signed_at).toLocaleDateString()}</p>}
+            {waiver.expires_at && <p style={{ margin: '4px 0', color: '#5f5470' }}>Expires: {new Date(waiver.expires_at).toLocaleDateString()}</p>}
+            {waiver.status === 'completed' && waiver.days_until_expiration !== null && (
+              <p style={{ margin: '4px 0', color: '#137333' }}>
+                {waiver.days_until_expiration >= 0
+                  ? `${waiver.days_until_expiration} day${waiver.days_until_expiration === 1 ? '' : 's'} left until renewal is needed.`
+                  : 'Renewal needed now.'}
+              </p>
+            )}
+            {(waiver.status === 'required' || waiver.status === 'expired') && (
+              <p style={{ margin: '6px 0 0', color: '#9a3412' }}>
+                A valid waiver is needed.{' '}
+                <a href={waiverUrl} target="_blank" rel="noreferrer">Open waiver form</a>
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
