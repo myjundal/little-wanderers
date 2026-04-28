@@ -7,6 +7,7 @@ type Action =
   | 'decrement_child'
   | 'increment_adult'
   | 'decrement_adult'
+  | 'set_counts'
   | 'finalize'
   | 'reopen';
 
@@ -15,7 +16,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!context.ok) return context.response;
 
   try {
-    const body = (await req.json().catch(() => ({}))) as { action?: Action; notes?: string | null };
+    const body = (await req.json().catch(() => ({}))) as {
+      action?: Action;
+      notes?: string | null;
+      child_count?: number;
+      adult_count?: number;
+      total_count?: number;
+    };
     const action = body.action ?? 'increment_child';
 
     const { data: booking, error: bookingErr } = await context.admin
@@ -64,6 +71,29 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           attendance_finalized_at: new Date().toISOString(),
           attendance_recorded_by: context.user.id,
           attendance_notes: typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 2000) : null,
+        };
+        break;
+      }
+      case 'set_counts': {
+        const childCount = Number(body.child_count);
+        const adultCount = Number(body.adult_count);
+        const totalCount = Number(body.total_count);
+        if (
+          !Number.isInteger(childCount) ||
+          !Number.isInteger(adultCount) ||
+          !Number.isInteger(totalCount) ||
+          childCount < 0 ||
+          adultCount < 0 ||
+          totalCount < 0
+        ) {
+          return Response.json({ ok: false, error: 'counts must be whole numbers greater than or equal to 0' }, { status: 400 });
+        }
+        if (childCount + adultCount !== totalCount) {
+          return Response.json({ ok: false, error: 'total_count must equal child_count + adult_count' }, { status: 400 });
+        }
+        payload = {
+          current_child_count: childCount,
+          current_adult_count: adultCount,
         };
         break;
       }

@@ -168,6 +168,7 @@ export default function StaffDashboard() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [savingAttendanceKey, setSavingAttendanceKey] = useState<string | null>(null);
   const [partyAttendanceNotes, setPartyAttendanceNotes] = useState<Record<string, string>>({});
+  const [partyCountDrafts, setPartyCountDrafts] = useState<Record<string, { child: string; adult: string; total: string }>>({});
 
   const selectedBooking = useMemo(
     () => partyBookings.find((item) => item.id === selectedBookingId) ?? partyBookings[0] ?? null,
@@ -179,6 +180,20 @@ export default function StaffDashboard() {
       setSelectedBookingId(partyBookings[0].id);
     }
   }, [partyBookings, selectedBookingId]);
+
+  useEffect(() => {
+    setPartyCountDrafts(() => {
+      const next: Record<string, { child: string; adult: string; total: string }> = {};
+      partyBookings.forEach((item) => {
+        next[item.id] = {
+          child: String(item.current_child_count ?? 0),
+          adult: String(item.current_adult_count ?? 0),
+          total: String((item.current_child_count ?? 0) + (item.current_adult_count ?? 0)),
+        };
+      });
+      return next;
+    });
+  }, [partyBookings]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -322,12 +337,19 @@ export default function StaffDashboard() {
 
   const updatePartyAttendance = async (
     bookingId: string,
-    action: 'increment_child' | 'decrement_child' | 'increment_adult' | 'decrement_adult' | 'finalize' | 'reopen'
+    action: 'increment_child' | 'decrement_child' | 'increment_adult' | 'decrement_adult' | 'set_counts' | 'finalize' | 'reopen'
   ) => {
+    const draft = partyCountDrafts[bookingId];
     const res = await fetch(`/api/admin/party-bookings/${bookingId}/headcount`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action, notes: partyAttendanceNotes[bookingId] ?? '' }),
+      body: JSON.stringify({
+        action,
+        notes: partyAttendanceNotes[bookingId] ?? '',
+        child_count: draft ? Number(draft.child) : undefined,
+        adult_count: draft ? Number(draft.adult) : undefined,
+        total_count: draft ? Number(draft.total) : undefined,
+      }),
     });
     const json = await res.json();
     if (!res.ok || !json.ok) {
@@ -360,6 +382,26 @@ export default function StaffDashboard() {
     setMessage(`Party booking marked ${status}.`);
     setStatusNote((prev) => ({ ...prev, [bookingId]: '' }));
     await load();
+  };
+
+  const updatePartyDraft = (bookingId: string, next: Partial<{ child: string; adult: string; total: string }>) => {
+    setPartyCountDrafts((prev) => {
+      const current = prev[bookingId] ?? { child: '0', adult: '0', total: '0' };
+      const merged = { ...current, ...next };
+
+      if (next.total != null && next.child == null && next.adult == null) {
+        const total = Math.max(Number(merged.total) || 0, 0);
+        const child = Math.max(Number(merged.child) || 0, 0);
+        merged.adult = String(Math.max(total - child, 0));
+        merged.total = String(total);
+      } else {
+        const child = Math.max(Number(merged.child) || 0, 0);
+        const adult = Math.max(Number(merged.adult) || 0, 0);
+        merged.total = String(child + adult);
+      }
+
+      return { ...prev, [bookingId]: merged };
+    });
   };
 
   if (loading) {
@@ -603,6 +645,46 @@ export default function StaffDashboard() {
                       <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count + selectedBooking.current_adult_count}</div>
                     </div>
                   </div>
+                  <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(90px, 120px))', gap: 8 }}>
+                    <label style={{ fontSize: 12, color: '#6d6480' }}>
+                      Child
+                      <input
+                        type="number"
+                        min={0}
+                        value={partyCountDrafts[selectedBooking.id]?.child ?? String(selectedBooking.current_child_count)}
+                        onChange={(e) => updatePartyDraft(selectedBooking.id, { child: e.target.value })}
+                        disabled={Boolean(selectedBooking.attendance_finalized_at)}
+                        style={{ ...inputStyle, marginTop: 4 }}
+                      />
+                    </label>
+                    <label style={{ fontSize: 12, color: '#6d6480' }}>
+                      Adult
+                      <input
+                        type="number"
+                        min={0}
+                        value={partyCountDrafts[selectedBooking.id]?.adult ?? String(selectedBooking.current_adult_count)}
+                        onChange={(e) => updatePartyDraft(selectedBooking.id, { adult: e.target.value })}
+                        disabled={Boolean(selectedBooking.attendance_finalized_at)}
+                        style={{ ...inputStyle, marginTop: 4 }}
+                      />
+                    </label>
+                    <label style={{ fontSize: 12, color: '#6d6480' }}>
+                      Total
+                      <input
+                        type="number"
+                        min={0}
+                        value={partyCountDrafts[selectedBooking.id]?.total ?? String(selectedBooking.current_child_count + selectedBooking.current_adult_count)}
+                        onChange={(e) => updatePartyDraft(selectedBooking.id, { total: e.target.value })}
+                        disabled={Boolean(selectedBooking.attendance_finalized_at)}
+                        style={{ ...inputStyle, marginTop: 4 }}
+                      />
+                    </label>
+                  </div>
+                  {!selectedBooking.attendance_finalized_at && (
+                    <button style={{ ...buttonStyle, marginTop: 8, background: '#f3ebff', color: '#5f3da4' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'set_counts')}>
+                      Update counts
+                    </button>
+                  )}
                   <textarea rows={2} placeholder="Optional final attendance notes" value={partyAttendanceNotes[selectedBooking.id] ?? selectedBooking.attendance_notes ?? ''} onChange={(e) => setPartyAttendanceNotes((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 10 }} />
                   {selectedBooking.attendance_finalized_at ? (
                     <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: '#ebf8ef', border: '1px solid #cae9d2' }}>
