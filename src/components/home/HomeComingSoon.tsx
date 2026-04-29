@@ -7,74 +7,71 @@ const LOGO_SRC = '/logo.png';
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 export default function HomeComingSoon() {
-  const parentLovePoints = [
-    'Designed and crafted for toddlers, not just toddler-friendly.',
-    'Gentle, safe, and intentionally never chaotic.',
-    'Rotating diverse sensory-rich stations that keep little ones deeply engaged.',
-    'Every visit brings something new to explore and discover.',
-    'The first and only dedicated toddler sensory play space in West Hartford.',
-    'Built and operated by a local mom who truly understands family rhythms.',
-    'A cozy rhythm where parents can truly exhale.',
-  ];
-
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
         <div className={styles.heroGlowLeft} />
         <div className={styles.heroGlowRight} />
 
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div className={styles.heroGrid}>
-            <div className={styles.heroCopy}>
-              <div className={styles.titleLockup}>
-                <Image
-                  src={LOGO_SRC}
-                  alt="Little Wanderers brand mark"
-                  width={162}
-                  height={162}
-                  className={styles.titleLogo}
-                  priority
-                />
-                <div className={styles.titleCopy}>
-                  <p className={styles.brandLine}>Little Wanderers: West Hartford</p>
-                  <h1>Coming soon in Summer 2026</h1>
-                </div>
-              </div>
-              <p className={styles.subtitle}>
-                A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in
-                the day and coffee-in-hand moments that feel restorative for parents too.
-              </p>
-              <p className={styles.subline}>Join waitlist for updates and early access!</p>
-
-              <div className={styles.ctaRow}>
-                <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
-                  <span>Join Waitlist</span>
-                  <span className={styles.primaryBtnSubtext}>(over 270+ local families already signed up)</span>
-                </Link>
-                <Link href="/faq" className={styles.secondaryBtn}>
-                  FAQ
-                </Link>
-              </div>
-
-              <div className={styles.chips}>
-                <span>✦ sensory-led</span>
-                <span>☾ calm</span>
-                <span>♡ breathe</span>
-              </div>
+        <div className={styles.heroGrid}>
+          <div className={styles.heroCopy}>
+            <div className={styles.titleLockup}>
+              <Image src={LOGO_SRC} alt="Little Wanderers logo" width={220} height={60} className={styles.titleLogo} priority />
             </div>
 
-            <aside className={styles.parentsLoveAside}>
-              <section className={styles.parentsLoveSection} aria-labelledby="parents-love-heading">
-                <p className={styles.sectionEyebrow}>Why parents love Little Wanderers</p>
-                <h2 id="parents-love-heading">Soft playtime for kids, softer days for families.</h2>
-                <ul className={styles.parentsLoveList}>
-                  {parentLovePoints.map((point) => (
-                    <li key={point}>{point}</li>
-                  ))}
-                </ul>
-              </section>
-            </aside>
+            <h1>
+              A calm space
+              <br />
+              to play, connect
+              <br />
+              and breathe
+            </h1>
+
+            <p className={styles.subtitle}>
+              A sensory play studio &amp; cafe designed for little explorers and the grown-ups who love them.
+            </p>
+
+            <div className={styles.ctaRow}>
+              <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
+                <span>Join the Waitlist</span>
+              </Link>
+              <Link href="/space" className={styles.secondaryBtn}>
+                Explore the Space
+              </Link>
+            </div>
+
+            <div className={styles.chips}>
+              <span>✦ sensory play for little explorers</span>
+              <span>♡ gentle pause for parents</span>
+              <span>☕ cafe with good coffee</span>
+            </div>
           </div>
+
+          <aside className={styles.parentsLoveAside}>
+            <section className={styles.parentsLoveSection}>
+              <p className={styles.sectionEyebrow}>Play With Purpose</p>
+              <h2>Calm, curated, and intentionally designed.</h2>
+              <ul className={styles.parentsLoveList}>
+                <li>Sensory exploration with safe and thoughtful materials.</li>
+                <li>Open-ended play that encourages confidence and independence.</li>
+                <li>Space for babies, toddlers, and families to settle in comfortably.</li>
+              </ul>
+
+              <div className={styles.photoGrid}>
+                <div className={styles.photoMain}>
+                  <img src="https://images.unsplash.com/photo-1618069734300-0de5f8686f6f?auto=format&fit=crop&w=900&q=80" alt="Calm indoor play studio" />
+                </div>
+                <div className={styles.photoStack}>
+                  <div className={styles.photoSmall}>
+                    <img src="https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=600&q=80" alt="Minimal shelves and toys" />
+                  </div>
+                  <div className={styles.photoSmall}>
+                    <img src="https://images.unsplash.com/photo-1505693314120-0d443867891c?auto=format&fit=crop&w=600&q=80" alt="Cozy seating nook" />
+                  </div>
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
       </section>
     </main>
