@@ -312,7 +312,7 @@ export default function AppHome() {
       </section>
 
 {/* Quick actions */}
-<section style={{ marginTop: 24, marginBottom: 32 }}>
+<section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
   <h3 style={{ marginBottom: 12, fontSize: 18, fontWeight: 500 }}>Quick Actions</h3>
   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
     <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
@@ -332,7 +332,7 @@ export default function AppHome() {
 </section>
 
       {/* Recent visits */}
-      <section style={{ marginTop: 16 }}>
+      <section style={{ marginTop: 16, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h3 style={{ margin: 0 }}>Recent visits</h3>
           <Link href="/landing/checkins" style={{ marginLeft: 'auto' }}>View all</Link>

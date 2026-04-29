@@ -30,7 +30,7 @@ export default function HomeComingSoon() {
         <div className={styles.right}>
           <PastelCard>
             <div className={styles.heroImageFrame}>
-              <img src="/lobby.png" alt="Little Wanderers lobby" />
+              <img src="/Lobby.png" alt="Little Wanderers lobby" />
             </div>
           </PastelCard>
         </div>
