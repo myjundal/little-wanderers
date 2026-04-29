@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 import styles from './Nav.module.css';
 
@@ -11,10 +12,7 @@ export default function Nav() {
     <nav className={styles.navShell}>
       <div className={styles.navInner}>
         <Link href="/" className={styles.brand}>
-          <span className={styles.brandCopy}>
-            <strong>Little Wanderers</strong>
-            <span>Sensory Studio and Cafe</span>
-          </span>
+          <Image src="/logo.png" alt="Little Wanderers logo" width={240} height={70} className={styles.brandLogo} priority />
         </Link>
 
         <div className={styles.menu}>

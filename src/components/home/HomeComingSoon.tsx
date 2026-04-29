@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import styles from '@/app/(public)/home.module.css';
 
-const LOGO_SRC = '/brand-mark.svg';
+const LOGO_SRC = '/logo.png';
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 export default function HomeComingSoon() {

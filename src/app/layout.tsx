@@ -1,4 +1,4 @@
-import { Quicksand, Nunito } from 'next/font/google';
+import { Fraunces, Poppins } from 'next/font/google';
 import './globals.css';
 import AnalyticsBoot from '@/components/AnalyticsBoot';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
@@ -8,14 +8,14 @@ import NotificationPrompt from '@/components/pwa/NotificationPrompt';
 
 const SHOW_INSTALL_AND_PUSH_PROMPTS = false;
 
-const headingFont = Quicksand({
+const headingFont = Fraunces({
   variable: '--font-heading',
   subsets: ['latin'],
   weight: ['500', '600', '700'],
   display: 'swap',
 });
 
-const bodyFont = Nunito({
+const bodyFont = Poppins({
   variable: '--font-body',
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
