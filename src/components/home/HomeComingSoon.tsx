@@ -27,7 +27,7 @@ export default function HomeComingSoon() {
           <PastelCard>
             <div className={styles.heroImageFrame}>
               <img
-                src="https://images.unsplash.com/photo-1618069734300-0de5f8686f6f?auto=format&fit=crop&w=1300&q=80"
+                src="/lobby.png"
                 alt="Little Wanderers inspired interior"
               />
             </div>
