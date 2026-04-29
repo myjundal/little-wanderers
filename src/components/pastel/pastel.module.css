@@ -1,0 +1,9 @@
+.header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 28px}
+.logo{width:auto;height:54px}
+.nav{display:flex;gap:22px;flex-wrap:wrap}
+.nav a{color:#4A4A4A;font-weight:500}
+.buttonPrimary,.buttonSecondary{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 22px;border-radius:999px;font-weight:600}
+.buttonPrimary{background:#A78BCB;color:#fff;border:1px solid #A78BCB}
+.buttonSecondary{background:transparent;color:#9E8FBF;border:1px solid #CFC0E2}
+.card{background:#fffdf9;border:1px solid #e8dfef;border-radius:28px;box-shadow:0 14px 30px rgba(158,143,191,.1)}
+@media (max-width:900px){.header{padding:16px;flex-wrap:wrap}.nav{order:3;width:100%}.logo{height:46px}}
