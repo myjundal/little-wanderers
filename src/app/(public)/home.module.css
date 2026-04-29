@@ -8,9 +8,9 @@
   overflow: hidden;
   background:
     radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.92), transparent 24%),
-    radial-gradient(circle at 87% 12%, rgba(220, 209, 251, 0.82), transparent 26%),
-    linear-gradient(180deg, #fbf8ff 0%, #f8f4ff 48%, #f6f1ff 100%);
-  box-shadow: 0 26px 70px rgba(123, 106, 168, 0.12);
+    radial-gradient(circle at 87% 12%, rgba(220, 204, 240, 0.45), transparent 26%),
+    linear-gradient(180deg, #ffffff 0%, #f8f3ec 48%, #f6f1e8 100%);
+  box-shadow: 0 26px 70px rgba(158, 143, 191, 0.10);
 }
 
 .hero {
@@ -32,7 +32,7 @@
   top: -18px;
   width: 280px;
   height: 280px;
-  background: radial-gradient(circle, rgba(220, 209, 251, 0.95), rgba(220, 209, 251, 0) 70%);
+  background: radial-gradient(circle, rgba(220, 204, 240, 0.5), rgba(220, 209, 251, 0) 70%);
 }
 
 .heroGlowRight {
@@ -40,7 +40,7 @@
   top: 40px;
   width: 380px;
   height: 380px;
-  background: radial-gradient(circle, rgba(220, 209, 251, 0.84), rgba(220, 209, 251, 0.04) 70%);
+  background: radial-gradient(circle, rgba(220, 204, 240, 0.38), rgba(220, 204, 240, 0.04) 70%);
 }
 
 .heroGrid {
@@ -57,7 +57,7 @@
 .cardEyebrow,
 .visualEyebrow {
   margin: 0;
-  color: #7b6aa8;
+  color: #9e8fbf;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -71,7 +71,7 @@
 .waitlistSection h2,
 .visualCard h2 {
   margin: 8px 0 0;
-  color: #4b4360;
+  color: #4a4a4a;
   font-family: var(--font-heading), 'Quicksand', 'Nunito', sans-serif;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -96,7 +96,7 @@
 
 .brandLine {
   margin: 0;
-  color: #5f4f87;
+  color: #7d6f9f;
   font-size: clamp(1.25rem, 1.7vw, 1.6rem);
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -109,20 +109,20 @@
   border-radius: 36px;
   background: rgba(255, 255, 255, 0.68);
   padding: 16px;
-  box-shadow: 0 22px 36px rgba(123, 106, 168, 0.2);
+  box-shadow: 0 22px 36px rgba(158, 143, 191, 0.14);
 }
 
 .subtitle {
   max-width: 640px;
   margin: 24px 0 0;
-  color: #7e7695;
+  color: #6f6a78;
   font-size: clamp(1.08rem, 1.8vw, 1.35rem);
   line-height: 1.78;
 }
 
 .subline {
   margin: 24px 0 0;
-  color: #7b6aa8;
+  color: #9e8fbf;
   font-size: clamp(1.1rem, 2vw, 1.5rem);
   font-style: italic;
   line-height: 1.6;
@@ -151,9 +151,9 @@
 
 .primaryBtn {
   flex-direction: column;
-  color: #fbf8ff;
-  background: linear-gradient(180deg, #8a79b7 0%, #6f5f99 100%);
-  box-shadow: 0 16px 30px rgba(123, 106, 168, 0.22);
+  color: #ffffff;
+  background: linear-gradient(180deg, #b19fd2 0%, #9e8fbf 100%);
+  box-shadow: 0 16px 30px rgba(158, 143, 191, 0.18);
 }
 
 .primaryBtnSubtext {
@@ -165,22 +165,22 @@
 }
 
 .primaryBtn:hover {
-  color: #fbf8ff;
+  color: #ffffff;
   transform: scale(1.02);
-  box-shadow: 0 20px 34px rgba(123, 106, 168, 0.3);
+  box-shadow: 0 20px 34px rgba(158, 143, 191, 0.24);
 }
 
 .secondaryBtn,
 .ghostBtn {
-  color: #7b6aa8;
-  background: rgba(255, 255, 255, 0.42);
-  border: 1px solid rgba(123, 106, 168, 0.24);
+  color: #9e8fbf;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(167, 139, 203, 0.35);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .secondaryBtn:hover,
 .ghostBtn:hover {
-  color: #6f5f99;
+  color: #9e8fbf;
   transform: scale(1.02);
 }
 
@@ -194,7 +194,7 @@
 
 .chips span,
 .tags span {
-  color: #7e7695;
+  color: #6f6a78;
   font-size: 0.96rem;
   letter-spacing: 0.02em;
 }
@@ -203,7 +203,7 @@
 .tags span + span::before {
   content: '·';
   margin-right: 10px;
-  color: rgba(123, 106, 168, 0.55);
+  color: rgba(158, 143, 191, 0.45);
 }
 
 .parentsLoveSection {
@@ -212,7 +212,7 @@
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 16px 34px rgba(123, 106, 168, 0.1);
+  box-shadow: 0 16px 34px rgba(158, 143, 191, 0.08);
 }
 
 .parentsLoveAside {
@@ -222,7 +222,7 @@
 
 .parentsLoveSection h2 {
   margin: 10px 0 0;
-  color: #4b4360;
+  color: #4a4a4a;
   font-size: clamp(1.25rem, 2.2vw, 1.7rem);
   line-height: 1.32;
   letter-spacing: -0.02em;
@@ -240,13 +240,13 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  color: #706a83;
+  color: #6c6775;
   line-height: 1.65;
 }
 
 .parentsLoveList li::before {
   content: '✽';
-  color: #7b6aa8;
+  color: #9e8fbf;
   font-size: 0.95rem;
   line-height: 1.7;
 }
@@ -259,8 +259,8 @@
   padding: 24px;
   border-radius: 36px;
   border: 1px solid rgba(255, 255, 255, 0.72);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(220, 209, 251, 0.72) 100%);
-  box-shadow: 0 26px 50px rgba(123, 106, 168, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(220, 204, 240, 0.36) 100%);
+  box-shadow: 0 26px 50px rgba(158, 143, 191, 0.11);
   overflow: hidden;
 }
 
@@ -271,7 +271,7 @@
   border-radius: 30px;
   background: rgba(255, 255, 255, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.74);
-  box-shadow: 0 18px 34px rgba(123, 106, 168, 0.1);
+  box-shadow: 0 18px 34px rgba(158, 143, 191, 0.08);
 }
 
 .heroLogo {
@@ -287,7 +287,7 @@
 .visitItem p,
 .waitlistSection p {
   margin: 18px 0 0;
-  color: #7e7695;
+  color: #6f6a78;
   font-size: 1rem;
   line-height: 1.78;
 }
@@ -307,9 +307,9 @@
   margin: 0;
   padding: 12px 14px;
   border-radius: 18px;
-  background: rgba(246, 241, 255, 0.92);
-  border: 1px solid rgba(223, 204, 251, 0.9);
-  color: #6d6480;
+  background: rgba(247, 244, 239, 0.92);
+  border: 1px solid rgba(220, 204, 240, 0.72);
+  color: #6a6572;
   font-size: 0.98rem;
   line-height: 1.5;
 }
@@ -335,7 +335,7 @@
   margin: 0 28px 28px;
   padding: 34px;
   border-radius: 34px;
-  background: rgba(246, 241, 255, 0.7);
+  background: rgba(247, 244, 239, 0.76);
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
@@ -366,7 +366,7 @@
   background: rgba(255, 255, 255, 0.72);
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.76);
-  box-shadow: 0 16px 32px rgba(123, 106, 168, 0.08);
+  box-shadow: 0 16px 32px rgba(158, 143, 191, 0.07);
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
@@ -378,13 +378,13 @@
 .featureCard:hover,
 .visitItem:hover {
   transform: translateY(-2px);
-  box-shadow: 0 20px 38px rgba(123, 106, 168, 0.14);
+  box-shadow: 0 20px 38px rgba(158, 143, 191, 0.11);
 }
 
 .softCard h3,
 .featureCard h3 {
   margin: 12px 0 0;
-  color: #4b4360;
+  color: #4a4a4a;
   font-size: 1.75rem;
 }
 
@@ -410,7 +410,7 @@
 }
 
 .featureIcon {
-  color: #7b6aa8;
+  color: #9e8fbf;
   font-size: 1.5rem;
 }
 
@@ -435,7 +435,7 @@
 }
 
 .visitItem span {
-  color: #7b6aa8;
+  color: #9e8fbf;
   font-size: 1rem;
   line-height: 1.8;
 }
@@ -450,7 +450,7 @@
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 34px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.66) 0%, rgba(220, 209, 251, 0.7) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.66) 0%, rgba(220, 204, 240, 0.36) 100%);
 }
 
 .waitlistSection > div:first-child {

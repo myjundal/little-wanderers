@@ -24,7 +24,7 @@ body {
 body {
   margin: 0;
   color: var(--foreground);
-  font-family: var(--font-body), 'Nunito', 'Segoe UI', sans-serif;
+  font-family: var(--font-body), 'Poppins', 'Segoe UI', sans-serif;
   background:
     radial-gradient(circle at 12% 8%, rgba(220, 204, 240, 0.34), transparent 35%),
     radial-gradient(circle at 85% 12%, rgba(199, 214, 193, 0.22), transparent 33%),
@@ -46,7 +46,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-heading), 'Quicksand', 'Nunito', sans-serif;
+  font-family: var(--font-heading), 'Fraunces', serif;
   color: #9e8fbf;
   letter-spacing: -0.01em;
 }
@@ -62,7 +62,7 @@ button,
 a,
 th,
 td {
-  font-family: var(--font-body), 'Nunito', 'Segoe UI', sans-serif;
+  font-family: var(--font-body), 'Poppins', 'Segoe UI', sans-serif;
 }
 
 a {
@@ -72,7 +72,7 @@ a {
 }
 
 a:hover {
-  color: #6649aa;
+  color: #8f7bb4;
 }
 
 button {
@@ -118,7 +118,7 @@ a:focus-visible {
 table {
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid #e4d8f8;
+  border: 1px solid #e8dfef;
   background: #fff;
 }
 
