@@ -161,3 +161,37 @@ section {
   border-radius: 999px;
   padding-inline: 16px;
 }
+
+/* Broad visual consistency pass */
+main, section, article {
+  border-radius: 22px;
+}
+
+article {
+  background: #fffdf9;
+  border: 1px solid #e8dfef;
+}
+
+button, .button, [role='button'] {
+  border-radius: 999px;
+}
+
+input, select, textarea {
+  background: #fffdf9;
+}
+
+thead th {
+  background: #f6f0fb;
+  color: #7a6f95;
+}
+
+td, th {
+  padding: 10px 12px;
+}
+
+.alert, .badge, [data-status] {
+  border-radius: 999px;
+  background: #f3ecfb;
+  color: #7f70a3;
+  border: 1px solid #dfd1ef;
+}
