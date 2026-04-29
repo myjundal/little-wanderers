@@ -125,3 +125,39 @@ table {
 section {
   border-radius: 14px;
 }
+
+.pastel-page-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 20px 36px;
+}
+
+.pastel-section,
+.pastel-dashboard-shell main,
+.pastel-dashboard-shell section {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #e8dfef;
+  border-radius: 24px;
+  box-shadow: 0 14px 36px rgba(158, 143, 191, 0.08);
+}
+
+.pastel-dashboard-shell {
+  max-width: 1280px;
+  margin: 18px auto 32px;
+  padding: 0 20px;
+}
+
+.pastel-dashboard-shell h1,
+.pastel-dashboard-shell h2,
+.pastel-dashboard-shell h3 {
+  color: #9e8fbf;
+}
+
+.pastel-dashboard-shell table {
+  border-color: #e8dfef;
+}
+
+.pastel-dashboard-shell button {
+  border-radius: 999px;
+  padding-inline: 16px;
+}
