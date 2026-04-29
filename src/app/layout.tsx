@@ -1,4 +1,4 @@
-import { Fraunces, Poppins } from 'next/font/google';
+import { Fraunces, Poppins, Sacramento } from 'next/font/google';
 import './globals.css';
 import AnalyticsBoot from '@/components/AnalyticsBoot';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
@@ -12,6 +12,13 @@ const headingFont = Fraunces({
   variable: '--font-heading',
   subsets: ['latin'],
   weight: ['500', '600', '700'],
+  display: 'swap',
+});
+
+const scriptFont = Sacramento({
+  variable: '--font-script',
+  subsets: ['latin'],
+  weight: ['400'],
   display: 'swap',
 });
 
@@ -44,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${headingFont.variable} ${bodyFont.variable}`}>
+    <html lang="en" className={`${headingFont.variable} ${bodyFont.variable} ${scriptFont.variable}`}>
       <body className="antialiased">
         <GoogleAnalytics />
         {children}

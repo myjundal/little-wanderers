@@ -19,17 +19,14 @@ export function PastelHeader() {
   return (
     <header className={styles.header}>
       <Link href="/" className={styles.logoWrap}>
-        <Image src="/logo.png" alt="Little Wanderers logo" width={220} height={64} className={styles.logo} priority />
+        <Image src="/logo.png" alt="Little Wanderers logo" width={72} height={72} className={styles.logo} priority />
+        <div className={styles.wordmark}>
+          <strong>Little Wanderers</strong>
+          <span>Sensory Play Studio and Cafe</span>
+        </div>
       </Link>
-      <nav className={styles.nav}>
-        <Link href="/space">Play</Link>
-        <Link href="/classes">Classes</Link>
-        <Link href="/party">Parties</Link>
-        <Link href="/pricing">Membership</Link>
-        <Link href="/visit">Visit</Link>
-      </nav>
       <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-        Join Waitlist
+        Join waitlist (over 280+ local families have joined)
       </PastelButton>
     </header>
   );

@@ -11,17 +11,14 @@ export default function HomeComingSoon() {
             <br />
             to play, connect
             <br />
-            and breathe
+            and <span className={styles.script}>breathe</span>
           </h1>
           <p>
             A sensory play studio & cafe designed for little explorers and the grown-ups who love them.
           </p>
           <div className={styles.actions}>
             <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-              Join the Waitlist
-            </PastelButton>
-            <PastelButton href="/space" secondary>
-              Explore the Space
+              Join waitlist
             </PastelButton>
           </div>
         </div>
@@ -45,21 +42,10 @@ export default function HomeComingSoon() {
       <div className={styles.cloudDivider} />
 
       <section className={styles.values}>
-        <div>Sensory play for little explorers</div>
-        <div>A gentle pause for parents</div>
-        <div>Cafe with good coffee</div>
-        <div>Connection & community</div>
-      </section>
-
-      <section className={styles.about}>
-        <h2>Thoughtfully designed for curious minds and busy hearts.</h2>
-        <div>
-          <p>
-            Little Wanderers is a sensory studio & cafe created to support your child’s development through
-            intentional play, while giving you space to relax, connect, and breathe.
-          </p>
-          <img src="/brand-mark.svg" alt="Little Wanderers fox mark" />
-        </div>
+        <div>🌿 Sensory play for little explorers</div>
+        <div>🤍 A gentle pause for parents</div>
+        <div>☕ Cafe with good coffee</div>
+        <div>✨ Connection & community</div>
       </section>
     </main>
   );
