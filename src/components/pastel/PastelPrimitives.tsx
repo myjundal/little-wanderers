@@ -25,8 +25,14 @@ export function PastelHeader() {
           <span>Sensory Play Studio and Cafe</span>
         </div>
       </Link>
+
+      <nav className={styles.navOnlyFaq}>
+        <Link href="/faq">FAQ</Link>
+      </nav>
+
       <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-        Join waitlist (over 280+ local families have joined)
+        <span>Join waitlist</span>
+        <small>(Over 280+ local families already joined)</small>
       </PastelButton>
     </header>
   );

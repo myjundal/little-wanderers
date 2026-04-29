@@ -13,12 +13,16 @@ export default function HomeComingSoon() {
             <br />
             and <span className={styles.script}>breathe</span>
           </h1>
+          <p className={styles.comingSoon}>Coming soon in Summer 2026</p>
           <p>
-            A sensory play studio & cafe designed for little explorers and the grown-ups who love them.
+            A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in the
+            day and coffee-in-hand moments that feel restorative for parents too.
           </p>
+          <p className={styles.subline}>Join waitlist for updates and early access!</p>
           <div className={styles.actions}>
             <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-              Join waitlist
+              <span>Join waitlist</span>
+              <small>(Over 280+ local families already joined)</small>
             </PastelButton>
           </div>
         </div>
@@ -26,10 +30,7 @@ export default function HomeComingSoon() {
         <div className={styles.right}>
           <PastelCard>
             <div className={styles.heroImageFrame}>
-              <img
-                src="/lobby.png"
-                alt="Little Wanderers inspired interior"
-              />
+              <img src="/lobby.png" alt="Little Wanderers lobby" />
             </div>
           </PastelCard>
         </div>
@@ -39,7 +40,7 @@ export default function HomeComingSoon() {
         <span className={styles.moon}>☾</span>
       </section>
 
-      <div className={styles.cloudDivider} />
+      <div className={styles.softBand} />
 
       <section className={styles.values}>
         <div>🌿 Sensory play for little explorers</div>
