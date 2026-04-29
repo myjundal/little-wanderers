@@ -1,81 +1,52 @@
-import Image from 'next/image';
-import Link from 'next/link';
-
 import styles from '@/app/(public)/home.module.css';
-
-const LOGO_SRC = '/brand-mark.svg';
-const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
+import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
 
 export default function HomeComingSoon() {
-  const parentLovePoints = [
-    'Designed and crafted for toddlers, not just toddler-friendly.',
-    'Gentle, safe, and intentionally never chaotic.',
-    'Rotating diverse sensory-rich stations that keep little ones deeply engaged.',
-    'Every visit brings something new to explore and discover.',
-    'The first and only dedicated toddler sensory play space in West Hartford.',
-    'Built and operated by a local mom who truly understands family rhythms.',
-    'A cozy rhythm where parents can truly exhale.',
-  ];
-
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
-        <div className={styles.heroGlowLeft} />
-        <div className={styles.heroGlowRight} />
-
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div className={styles.heroGrid}>
-            <div className={styles.heroCopy}>
-              <div className={styles.titleLockup}>
-                <Image
-                  src={LOGO_SRC}
-                  alt="Little Wanderers brand mark"
-                  width={162}
-                  height={162}
-                  className={styles.titleLogo}
-                  priority
-                />
-                <div className={styles.titleCopy}>
-                  <p className={styles.brandLine}>Little Wanderers: West Hartford</p>
-                  <h1>Coming soon in Summer 2026</h1>
-                </div>
-              </div>
-              <p className={styles.subtitle}>
-                A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in
-                the day and coffee-in-hand moments that feel restorative for parents too.
-              </p>
-              <p className={styles.subline}>Join waitlist for updates and early access!</p>
-
-              <div className={styles.ctaRow}>
-                <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
-                  <span>Join Waitlist</span>
-                  <span className={styles.primaryBtnSubtext}>(over 270+ local families already signed up)</span>
-                </Link>
-                <Link href="/faq" className={styles.secondaryBtn}>
-                  FAQ
-                </Link>
-              </div>
-
-              <div className={styles.chips}>
-                <span>✦ sensory-led</span>
-                <span>☾ calm</span>
-                <span>♡ breathe</span>
-              </div>
-            </div>
-
-            <aside className={styles.parentsLoveAside}>
-              <section className={styles.parentsLoveSection} aria-labelledby="parents-love-heading">
-                <p className={styles.sectionEyebrow}>Why parents love Little Wanderers</p>
-                <h2 id="parents-love-heading">Soft playtime for kids, softer days for families.</h2>
-                <ul className={styles.parentsLoveList}>
-                  {parentLovePoints.map((point) => (
-                    <li key={point}>{point}</li>
-                  ))}
-                </ul>
-              </section>
-            </aside>
+        <div className={styles.left}>
+          <h1>
+            A calm space
+            <br />
+            to play, connect
+            <br />
+            and <span className={styles.script}>breathe</span>
+          </h1>
+          <p className={styles.comingSoon}>Coming soon in Summer 2026</p>
+          <p>
+            A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in the
+            day and coffee-in-hand moments that feel restorative for parents too.
+          </p>
+          <p className={styles.subline}>Join waitlist for updates and early access!</p>
+          <div className={styles.actions}>
+            <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
+              <span>Join waitlist</span>
+              <small>(Over 280+ local families already joined)</small>
+            </PastelButton>
           </div>
         </div>
+
+        <div className={styles.right}>
+          <PastelCard>
+            <div className={styles.heroImageFrame}>
+              <img src="/Lobby.png" alt="Little Wanderers lobby" />
+            </div>
+          </PastelCard>
+        </div>
+
+        <span className={styles.starOne}>✦</span>
+        <span className={styles.starTwo}>✦</span>
+        <span className={styles.moon}>☾</span>
+      </section>
+
+      <div className={styles.softBand} />
+
+      <section className={styles.values}>
+        <div>🌿 Sensory play for little explorers</div>
+        <div>🤍 A gentle pause for parents</div>
+        <div>☕ Cafe with good coffee</div>
+        <div>✨ Connection & community</div>
       </section>
     </main>
   );

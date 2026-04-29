@@ -75,18 +75,18 @@ type PartyBookingItem = {
 
 const sectionStyle: React.CSSProperties = {
   marginTop: 24,
-  border: '1px solid #ddcff7',
+  border: '1px solid #e8dfef',
   borderRadius: 24,
-  background: 'linear-gradient(180deg,#fff,#faf5ff)',
+  background: 'linear-gradient(180deg,#fff,#fbf8f3)',
   padding: 20,
-  boxShadow: '0 16px 28px rgba(120,87,177,0.08)',
+  boxShadow: '0 16px 28px rgba(158,143,191,0.08)',
 };
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 12px',
   borderRadius: 12,
-  border: '1px solid #d9c8f7',
+  border: '1px solid #ddd1ea',
   background: '#fff',
 };
 
@@ -419,11 +419,11 @@ export default function StaffDashboard() {
       <section style={{ ...sectionStyle, marginTop: 16 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner tools</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-          <Link href="/owner/families" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Family Management</Link>
-          <a href="#manual-family-registration" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Manual family registration</a>
-          <a href="#occupancy-management" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Occupancy</a>
-          <a href="#class-management" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Class management</a>
-          <a href="#party-management" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Party management</a>
+          <Link href="/owner/families" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Family Management</Link>
+          <a href="#manual-family-registration" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Manual family registration</a>
+          <a href="#occupancy-management" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Occupancy</a>
+          <a href="#class-management" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Class management</a>
+          <a href="#party-management" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Party management</a>
         </div>
       </section>
 

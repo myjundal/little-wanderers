@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f9f5ff;
-  --background-soft: #f3ecff;
+  --background: #f7f4ef;
+  --background-soft: #f4efe7;
   --surface: #ffffff;
-  --foreground: #41375b;
-  --foreground-muted: #6c6189;
-  --primary: #9a7bd6;
-  --primary-strong: #7f5ec1;
-  --border: #e4d8f8;
-  --shadow: 0 10px 30px rgba(127, 94, 193, 0.14);
+  --foreground: #4a4a4a;
+  --foreground-muted: #7a708e;
+  --primary: #a78bcb;
+  --primary-strong: #9e8fbf;
+  --border: #e8dfef;
+  --shadow: 0 10px 30px rgba(158, 143, 191, 0.12);
 }
 
 * {
@@ -24,15 +24,15 @@ body {
 body {
   margin: 0;
   color: var(--foreground);
-  font-family: var(--font-body), 'Nunito', 'Segoe UI', sans-serif;
+  font-family: var(--font-body), 'Poppins', 'Segoe UI', sans-serif;
   background:
-    radial-gradient(circle at 12% 8%, rgba(191, 173, 233, 0.32), transparent 35%),
-    radial-gradient(circle at 85% 12%, rgba(184, 227, 243, 0.28), transparent 33%),
-    linear-gradient(180deg, var(--background) 0%, #fdfbff 100%);
+    radial-gradient(circle at 12% 8%, rgba(220, 204, 240, 0.34), transparent 35%),
+    radial-gradient(circle at 85% 12%, rgba(199, 214, 193, 0.22), transparent 33%),
+    linear-gradient(180deg, var(--background) 0%, #fbf8f3 100%);
 }
 
 main {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.82);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   border-radius: 24px;
@@ -46,8 +46,8 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-heading), 'Quicksand', 'Nunito', sans-serif;
-  color: #4f3f74;
+  font-family: var(--font-heading), 'Fraunces', serif;
+  color: #9e8fbf;
   letter-spacing: -0.01em;
 }
 
@@ -62,7 +62,7 @@ button,
 a,
 th,
 td {
-  font-family: var(--font-body), 'Nunito', 'Segoe UI', sans-serif;
+  font-family: var(--font-body), 'Poppins', 'Segoe UI', sans-serif;
 }
 
 a {
@@ -72,18 +72,18 @@ a {
 }
 
 a:hover {
-  color: #6649aa;
+  color: #8f7bb4;
 }
 
 button {
-  border: 1px solid #bca5e8;
-  background: linear-gradient(180deg, #c8b4ee 0%, #a98be2 100%);
+  border: 1px solid #a78bcb;
+  background: #a78bcb;
   color: #fff;
   border-radius: 12px;
   padding: 8px 14px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 6px 14px rgba(143, 112, 207, 0.25);
+  box-shadow: 0 6px 14px rgba(158, 143, 191, 0.24);
 }
 
 button:hover:not(:disabled) {
@@ -99,20 +99,99 @@ button:disabled {
 input,
 select,
 textarea {
-  border: 1px solid #d8caef;
+  border: 1px solid #ddd1ea;
   border-radius: 12px;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 253, 249, 0.96);
   color: var(--foreground);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #a78bcb;
+  outline-offset: 2px;
 }
 
 table {
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid #e4d8f8;
+  border: 1px solid #e8dfef;
   background: #fff;
 }
 
 section {
   border-radius: 14px;
+}
+
+.pastel-page-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 20px 36px;
+}
+
+.pastel-section,
+.pastel-dashboard-shell main,
+.pastel-dashboard-shell section {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #e8dfef;
+  border-radius: 24px;
+  box-shadow: 0 14px 36px rgba(158, 143, 191, 0.08);
+}
+
+.pastel-dashboard-shell {
+  max-width: 1280px;
+  margin: 18px auto 32px;
+  padding: 0 20px;
+}
+
+.pastel-dashboard-shell h1,
+.pastel-dashboard-shell h2,
+.pastel-dashboard-shell h3 {
+  color: #9e8fbf;
+}
+
+.pastel-dashboard-shell table {
+  border-color: #e8dfef;
+}
+
+.pastel-dashboard-shell button {
+  border-radius: 999px;
+  padding-inline: 16px;
+}
+
+/* Broad visual consistency pass */
+main, section, article {
+  border-radius: 22px;
+}
+
+article {
+  background: #fffdf9;
+  border: 1px solid #e8dfef;
+}
+
+button, .button, [role='button'] {
+  border-radius: 999px;
+}
+
+input, select, textarea {
+  background: #fffdf9;
+}
+
+thead th {
+  background: #f6f0fb;
+  color: #7a6f95;
+}
+
+td, th {
+  padding: 10px 12px;
+}
+
+.alert, .badge, [data-status] {
+  border-radius: 999px;
+  background: #f3ecfb;
+  color: #7f70a3;
+  border: 1px solid #dfd1ef;
 }

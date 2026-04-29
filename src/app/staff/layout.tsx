@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { getCurrentUserRole, isStaffRole } from '@/lib/authz';
+import { PastelDashboardShell } from '@/components/pastel/PastelShells';
 
 export default async function StaffLayout({ children }: { children: ReactNode }) {
   const { user, role } = await getCurrentUserRole();
@@ -13,5 +14,5 @@ export default async function StaffLayout({ children }: { children: ReactNode })
     redirect('/landing');
   }
 
-  return <>{children}</>;
+  return <PastelDashboardShell>{children}</PastelDashboardShell>;
 }

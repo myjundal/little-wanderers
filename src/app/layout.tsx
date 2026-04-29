@@ -1,4 +1,4 @@
-import { Quicksand, Nunito } from 'next/font/google';
+import { Fraunces, Poppins, Sacramento } from 'next/font/google';
 import './globals.css';
 import AnalyticsBoot from '@/components/AnalyticsBoot';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
@@ -8,14 +8,21 @@ import NotificationPrompt from '@/components/pwa/NotificationPrompt';
 
 const SHOW_INSTALL_AND_PUSH_PROMPTS = false;
 
-const headingFont = Quicksand({
+const headingFont = Fraunces({
   variable: '--font-heading',
   subsets: ['latin'],
   weight: ['500', '600', '700'],
   display: 'swap',
 });
 
-const bodyFont = Nunito({
+const scriptFont = Sacramento({
+  variable: '--font-script',
+  subsets: ['latin'],
+  weight: ['400'],
+  display: 'swap',
+});
+
+const bodyFont = Poppins({
   variable: '--font-body',
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
@@ -44,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${headingFont.variable} ${bodyFont.variable}`}>
+    <html lang="en" className={`${headingFont.variable} ${bodyFont.variable} ${scriptFont.variable}`}>
       <body className="antialiased">
         <GoogleAnalytics />
         {children}
