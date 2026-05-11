@@ -257,6 +257,20 @@ export async function POST(req: Request) {
         if (pendingInsert.error && !isMissingColumnError(pendingInsert.error.message)) {
           return Response.json({ ok: false, error: pendingInsert.error.message }, { status: 500 });
         }
+        if (pendingInsert.error) {
+          const pendingFallback = await supa.from('party_bookings').insert({
+            household_id: householdId,
+            child_id: null,
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            headcount_expected: headcountExpected,
+            notes,
+            price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+            created_by_user_id: user.id,
+            created_by_role: 'customer',
+          });
+          if (pendingFallback.error) return Response.json({ ok: false, error: pendingFallback.error.message }, { status: 500 });
+        }
       }
 
       return Response.json({ ok: true, payment_url: url, deposit_cents: PARTY_DEPOSIT_CENTS });

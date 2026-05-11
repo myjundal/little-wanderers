@@ -138,7 +138,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
           const list = dayMap.get(key) ?? [];
           const displaySlots = Array.from(
             list.reduce((map, slot) => {
-              const aggregateKey = `${slot.status}::${slot.label}`;
+              const aggregateKey = `${slot.status}::${slot.label}::${new Date(slot.start).toISOString().slice(11, 16)}`;
               const current = map.get(aggregateKey);
               if (!current) {
                 map.set(aggregateKey, { ...slot, count: 1 });
