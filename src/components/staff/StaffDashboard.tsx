@@ -71,7 +71,19 @@ type PartyBookingItem = {
   final_total_count: number | null;
   attendance_finalized_at: string | null;
   attendance_notes: string | null;
+  birthday_child_name: string | null;
+  birthday_age: number | null;
+  occasion_details: string | null;
 };
+
+function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | 'birthday_age' | 'occasion_details'>) {
+  const lines: string[] = [];
+  if (item.birthday_child_name) {
+    lines.push(item.birthday_age ? `Birthday: ${item.birthday_child_name} — turning ${item.birthday_age}` : `Birthday: ${item.birthday_child_name}`);
+  }
+  if (item.occasion_details) lines.push(`Occasion: ${item.occasion_details}`);
+  return lines;
+}
 
 const sectionStyle: React.CSSProperties = {
   marginTop: 24,
@@ -606,6 +618,9 @@ export default function StaffDashboard() {
                 </div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>{new Date(item.start_time).toLocaleString()} → {new Date(item.end_time).toLocaleString()}</div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>Guests: {item.headcount_expected ?? '-'} · Quote: {dollars(item.price_quote_cents)}</div>
+                {celebrationLines(item).map((line) => (
+                  <div key={`${item.id}-${line}`} style={{ marginTop: 6, color: '#6d6480' }}>{line}</div>
+                ))}
               </button>
             ))}
           </div>
@@ -620,6 +635,9 @@ export default function StaffDashboard() {
                 <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{selectedBooking.status}</span></p>
                 <p style={{ color: '#6d6480' }}><strong>Headcount (requested):</strong> {selectedBooking.headcount_expected ?? '-'}</p>
                 <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
+                {celebrationLines(selectedBooking).map((line) => (
+                  <p key={`detail-${line}`} style={{ color: '#6d6480' }}><strong>{line.split(':')[0]}:</strong> {line.split(':').slice(1).join(':').trim()}</p>
+                ))}
                 <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {prettyNote(selectedBooking.notes)}</p>
                 <div style={{ marginTop: 10, border: '1px solid #eadfff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
                   <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Party attendance tracker</p>

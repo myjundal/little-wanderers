@@ -2,7 +2,7 @@ import { requireStaffContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
-const PARTY_SELECT = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at,current_child_count,current_adult_count,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,attendance_recorded_by,attendance_notes';
+const PARTY_SELECT = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at,current_child_count,current_adult_count,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,attendance_recorded_by,attendance_notes,birthday_child_name,birthday_age,occasion_details';
 const PARTY_SELECT_FALLBACK = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at';
 
 function isMissingColumnError(message: string) {
@@ -39,6 +39,9 @@ export async function GET() {
         attendance_finalized_at: null,
         attendance_recorded_by: null,
         attendance_notes: null,
+        birthday_child_name: null,
+        birthday_age: null,
+        occasion_details: null,
       }));
     }
 

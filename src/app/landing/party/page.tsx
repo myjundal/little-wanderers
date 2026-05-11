@@ -19,6 +19,9 @@ type PartyBooking = {
   final_adult_count: number | null;
   final_total_count: number | null;
   attendance_finalized_at: string | null;
+  birthday_child_name: string | null;
+  birthday_age: number | null;
+  occasion_details: string | null;
 };
 
 const PARTY_DEPOSIT_DOLLARS = 150;
@@ -69,6 +72,9 @@ export default function PartyPage() {
     slot: '11:00',
     headcount_expected: '',
     notes: '',
+    birthday_child_name: '',
+    birthday_age: '',
+    occasion_details: '',
   });
 
   const startIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 15 : 11), [form.party_date, form.slot]);
@@ -125,6 +131,9 @@ export default function PartyPage() {
       const headcount = params.get('headcount_expected');
       const slot = params.get('slot');
     const notes = params.get('notes');
+    const birthdayChildName = params.get('birthday_child_name');
+    const birthdayAge = params.get('birthday_age');
+    const occasionDetails = params.get('occasion_details');
     if (!startTime || !endTime) return;
 
     const finalize = async () => {
@@ -139,6 +148,9 @@ export default function PartyPage() {
           end_time: endTime,
           headcount_expected: headcount ? Number(headcount) : null,
           notes: notes || null,
+          birthday_child_name: birthdayChildName || null,
+          birthday_age: birthdayAge ? Number(birthdayAge) : null,
+          occasion_details: occasionDetails || null,
           slot: slot || undefined,
         }),
       });
@@ -174,6 +186,20 @@ export default function PartyPage() {
       setSubmitting(false);
       return;
     }
+    const birthdayAgeValue = form.birthday_age.trim();
+    if (birthdayAgeValue) {
+      const parsedAge = Number(birthdayAgeValue);
+      if (!Number.isInteger(parsedAge) || parsedAge <= 0 || parsedAge > 21) {
+        setMessage('Please enter a valid birthday age (1-21).');
+        setSubmitting(false);
+        return;
+      }
+    }
+    if (form.occasion_details.length > 120) {
+      setMessage('Occasion details can be up to 120 characters.');
+      setSubmitting(false);
+      return;
+    }
 
     const res = await fetch('/api/party-bookings', {
       method: 'POST',
@@ -184,6 +210,9 @@ export default function PartyPage() {
         end_time: endIso,
         headcount_expected: form.headcount_expected ? Number(form.headcount_expected) : null,
         notes: form.notes || null,
+        birthday_child_name: form.birthday_child_name.trim() || null,
+        birthday_age: birthdayAgeValue ? Number(birthdayAgeValue) : null,
+        occasion_details: form.occasion_details.trim() || null,
         slot: form.slot,
       }),
     });
@@ -334,6 +363,9 @@ export default function PartyPage() {
         </div>
 
         <div style={{ display: 'grid', gap: 10 }}>
+          <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
+            Most parties are birthdays, but you can also use this for baby showers, baby namings, family celebrations, or other special occasions.
+          </p>
           <label>
             Party date (Saturday or Sunday)
             <br />
@@ -364,6 +396,29 @@ export default function PartyPage() {
             Notes (optional)
             <br />
             <textarea rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
+          </label>
+
+          <label>
+            Birthday child&apos;s name (optional)
+            <br />
+            <input value={form.birthday_child_name} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} />
+          </label>
+
+          <label>
+            Age they are turning (optional)
+            <br />
+            <input type="number" min={1} max={21} value={form.birthday_age} onChange={(e) => setForm((prev) => ({ ...prev, birthday_age: e.target.value }))} />
+          </label>
+
+          <label>
+            If this is not a birthday party, what is this for and who is this for? (optional)
+            <br />
+            <input
+              value={form.occasion_details}
+              maxLength={120}
+              placeholder="Baby naming for Maya"
+              onChange={(e) => setForm((prev) => ({ ...prev, occasion_details: e.target.value }))}
+            />
           </label>
 
           <button onClick={submit} disabled={submitting}>
