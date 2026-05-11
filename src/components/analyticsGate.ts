@@ -1,4 +1,6 @@
 export const PRODUCTION_HOSTNAME = 'thelittlewanderers.com';
+const PRODUCTION_HOSTNAME_ALIASES = new Set([PRODUCTION_HOSTNAME, `www.${PRODUCTION_HOSTNAME}`]);
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 
 function hasIgnoreCookie() {
   if (typeof document === 'undefined') return false;
@@ -10,8 +12,8 @@ export function shouldLoadAnalytics() {
   // Set lw_ignore_analytics=true in your browser cookies to exclude your own testing traffic.
   if (hasIgnoreCookie()) return false;
 
-  const isProdNodeEnv = process.env.NODE_ENV === 'production';
-  const isProdVercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV === 'production';
-  const isProdHost = window.location.hostname === PRODUCTION_HOSTNAME;
-  return isProdNodeEnv && isProdVercelEnv && isProdHost;
+  const hostname = window.location.hostname;
+  if (LOCAL_HOSTNAMES.has(hostname)) return false;
+
+  return PRODUCTION_HOSTNAME_ALIASES.has(hostname);
 }
