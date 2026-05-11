@@ -18,11 +18,18 @@ export default function HomeComingSoon() {
             A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in the
             day and coffee-in-hand moments that feel restorative for parents too.
           </p>
+          <p>
+            Little Wanderers is coming to Bishop&apos;s Corner plaza in West Hartford — on the Target side, between The Paper Store and Float Forty One, near Marshalls, Chopt, Koma, and more.
+          </p>
           <p className={styles.subline}>Join waitlist for updates and early access!</p>
           <div className={styles.actions}>
             <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
               <span>Join waitlist</span>
               <small>(Over 280+ local families already joined)</small>
+            </PastelButton>
+            <PastelButton href="/visit-us" secondary>
+              <span>Plan your visit</span>
+              <small>Bishop&apos;s Corner, West Hartford, CT</small>
             </PastelButton>
           </div>
         </div>

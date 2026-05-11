@@ -19,12 +19,15 @@ type PartyBooking = {
   final_adult_count: number | null;
   final_total_count: number | null;
   attendance_finalized_at: string | null;
+  birthday_child_name: string | null;
+  birthday_age: number | null;
+  occasion_details: string | null;
 };
 
 const PARTY_DEPOSIT_DOLLARS = 150;
 
-function toIsoUtc(date: string, hourUtc: number) {
-  return new Date(`${date}T${String(hourUtc).padStart(2, '0')}:00:00.000Z`).toISOString();
+function toIsoLocal(date: string, hourLocal: number) {
+  return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
 
 function getDefaultWeekendDate() {
@@ -69,10 +72,13 @@ export default function PartyPage() {
     slot: '11:00',
     headcount_expected: '',
     notes: '',
+    birthday_child_name: '',
+    birthday_age: '',
+    occasion_details: '',
   });
 
-  const startIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 15 : 11), [form.party_date, form.slot]);
-  const endIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 18 : 14), [form.party_date, form.slot]);
+  const startIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 15 : 11), [form.party_date, form.slot]);
+  const endIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 18 : 14), [form.party_date, form.slot]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,9 +128,13 @@ export default function PartyPage() {
 
     const startTime = params.get('start_time');
     const endTime = params.get('end_time');
+    const bookingId = params.get('booking_id');
       const headcount = params.get('headcount_expected');
       const slot = params.get('slot');
     const notes = params.get('notes');
+    const birthdayChildName = params.get('birthday_child_name');
+    const birthdayAge = params.get('birthday_age');
+    const occasionDetails = params.get('occasion_details');
     if (!startTime || !endTime) return;
 
     const finalize = async () => {
@@ -135,10 +145,14 @@ export default function PartyPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           mode: 'finalize',
+          booking_id: bookingId || undefined,
           start_time: startTime,
           end_time: endTime,
           headcount_expected: headcount ? Number(headcount) : null,
           notes: notes || null,
+          birthday_child_name: birthdayChildName || null,
+          birthday_age: birthdayAge ? Number(birthdayAge) : null,
+          occasion_details: occasionDetails || null,
           slot: slot || undefined,
         }),
       });
@@ -174,6 +188,20 @@ export default function PartyPage() {
       setSubmitting(false);
       return;
     }
+    const birthdayAgeValue = form.birthday_age.trim();
+    if (birthdayAgeValue) {
+      const parsedAge = Number(birthdayAgeValue);
+      if (!Number.isInteger(parsedAge) || parsedAge <= 0 || parsedAge > 21) {
+        setMessage('Please enter a valid birthday age (1-21).');
+        setSubmitting(false);
+        return;
+      }
+    }
+    if (form.occasion_details.length > 120) {
+      setMessage('Occasion details can be up to 120 characters.');
+      setSubmitting(false);
+      return;
+    }
 
     const res = await fetch('/api/party-bookings', {
       method: 'POST',
@@ -184,6 +212,9 @@ export default function PartyPage() {
         end_time: endIso,
         headcount_expected: form.headcount_expected ? Number(form.headcount_expected) : null,
         notes: form.notes || null,
+        birthday_child_name: form.birthday_child_name.trim() || null,
+        birthday_age: birthdayAgeValue ? Number(birthdayAgeValue) : null,
+        occasion_details: form.occasion_details.trim() || null,
         slot: form.slot,
       }),
     });
@@ -240,8 +271,8 @@ export default function PartyPage() {
         const day = d.getUTCDay();
         if (day !== 0 && day !== 6) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const start11 = toIsoUtc(dayStr, 11);
-        const start15 = toIsoUtc(dayStr, 15);
+        const start11 = toIsoLocal(dayStr, 11);
+        const start15 = toIsoLocal(dayStr, 15);
         const blockedStarts = new Set(
           [...bookedSlots, ...items.filter((item) => item.status !== 'cancelled')].map((item) =>
             new Date(item.start_time).getTime()
@@ -251,7 +282,7 @@ export default function PartyPage() {
           generated.push({
             id: `avail-${dayStr}-11`,
             start: start11,
-            end: toIsoUtc(dayStr, 14),
+            end: toIsoLocal(dayStr, 14),
             label: 'Available party slot',
             status: 'available',
           });
@@ -260,7 +291,7 @@ export default function PartyPage() {
           generated.push({
             id: `avail-${dayStr}-15`,
             start: start15,
-            end: toIsoUtc(dayStr, 18),
+            end: toIsoLocal(dayStr, 18),
             label: 'Available party slot',
             status: 'available',
           });
@@ -294,8 +325,8 @@ export default function PartyPage() {
   ];
 
   const reschedule = async (bookingId: string) => {
-    const nextStart = toIsoUtc(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
-    const nextEnd = toIsoUtc(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 14);
+    const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
+    const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 14);
     const res = await fetch('/api/party-bookings/reschedule', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -328,12 +359,16 @@ export default function PartyPage() {
           <ul style={{ margin: '8px 0 0 20px' }}>
             <li>50% of the party fee ($150) is required to reserve your party.</li>
             <li>The deposit is non-refundable.</li>
+            <li>Rest of the party fee ($150) is required upon arrival before party setup.</li>
             <li>You may reschedule once, up to 7 days before your party date.</li>
             <li>Final headcount is due 3 days before the party.</li>
           </ul>
         </div>
 
         <div style={{ display: 'grid', gap: 10 }}>
+          <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
+            Most parties are birthdays, but you can also use this for baby showers, baby namings, family celebrations, or other special occasions.
+          </p>
           <label>
             Party date (Saturday or Sunday)
             <br />
@@ -347,6 +382,28 @@ export default function PartyPage() {
               <option value="11:00">11:00 AM (ends at 2:00 PM)</option>
               <option value="15:00">3:00 PM (ends at 6:00 PM)</option>
             </select>
+          </label>
+
+          <label>
+            Birthday child&apos;s name (optional)
+            <br />
+            <input value={form.birthday_child_name} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} />
+          </label>
+
+          <label>
+            Age they are turning (optional)
+            <br />
+            <input type="number" min={1} max={21} value={form.birthday_age} onChange={(e) => setForm((prev) => ({ ...prev, birthday_age: e.target.value }))} />
+          </label>
+
+          <label>
+            If this is not a birthday party, what is this for and who is this for? (optional, i.e. Baby naming for Maya)
+            <br />
+            <input
+              value={form.occasion_details}
+              maxLength={120}
+              onChange={(e) => setForm((prev) => ({ ...prev, occasion_details: e.target.value }))}
+            />
           </label>
 
           <label>
@@ -389,6 +446,15 @@ export default function PartyPage() {
                   <p style={{ margin: 0, fontWeight: 600 }}>
                     {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
                   </p>
+                  {item.birthday_child_name && (
+                    <p style={{ margin: '6px 0' }}>
+                      Birthday: {item.birthday_child_name}
+                      {item.birthday_age ? ` — turning ${item.birthday_age}` : ''}
+                    </p>
+                  )}
+                  {item.occasion_details && (
+                    <p style={{ margin: '6px 0' }}>Occasion: {item.occasion_details}</p>
+                  )}
                   <p style={{ margin: '6px 0' }}>Expected guests: {item.headcount_expected ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>
                     Party fee:{' '}

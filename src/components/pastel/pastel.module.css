@@ -4,6 +4,7 @@
 .wordmark{display:grid;line-height:1.05}
 .wordmark strong{font-family:var(--font-heading);font-size:1.55rem;color:#9E8FBF}
 .wordmark span{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:#8f85a5}
+.navOnlyFaq{display:flex;align-items:center;gap:14px}
 .navOnlyFaq a{color:#4A4A4A;font-weight:600}
 .buttonPrimary,.buttonSecondary{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;padding:8px 22px;border-radius:999px;font-weight:600;line-height:1.2}
 .buttonPrimary small{font-size:.72rem;font-weight:500;opacity:.95}

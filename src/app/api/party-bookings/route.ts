@@ -7,7 +7,7 @@ import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
-const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,final_child_count,final_adult_count,final_total_count,attendance_finalized_at';
+const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,birthday_child_name,birthday_age,occasion_details';
 const PARTY_SELECT_FALLBACK = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at';
 
 const PARTY_TOTAL_FEE_CENTS = 30000;
@@ -20,6 +20,10 @@ type PartyPayload = {
   notes?: string | null;
   slot?: '11:00' | '15:00';
   mode?: 'create_payment_link' | 'finalize';
+  birthday_child_name?: string | null;
+  birthday_age?: number | null;
+  occasion_details?: string | null;
+  booking_id?: string;
 };
 
 const admin = () =>
@@ -63,6 +67,9 @@ async function selectPartyBookings(householdId: string) {
     final_adult_count: null,
     final_total_count: null,
     attendance_finalized_at: null,
+    birthday_child_name: null,
+    birthday_age: null,
+    occasion_details: null,
   }));
 }
 
@@ -94,7 +101,11 @@ export async function POST(req: Request) {
     const headcountExpected = body?.headcount_expected == null ? null : Number(body.headcount_expected);
     const notes = (body?.notes as string | null) ?? null;
     const slot = typeof body.slot === 'string' ? body.slot : undefined;
+    const birthdayChildName = typeof body.birthday_child_name === 'string' ? body.birthday_child_name.trim().slice(0, 80) : null;
+    const birthdayAge = body?.birthday_age == null ? null : Number(body.birthday_age);
+    const occasionDetails = typeof body.occasion_details === 'string' ? body.occasion_details.trim().slice(0, 120) : null;
     const mode = body.mode ?? 'create_payment_link';
+    const bookingId = typeof body.booking_id === 'string' ? body.booking_id : null;
 
     if (!startTime || !endTime) {
       return Response.json({ ok: false, error: 'start_time and end_time are required' }, { status: 400 });
@@ -108,6 +119,9 @@ export async function POST(req: Request) {
 
     if (!isWeekendSlot(start, end, slot)) {
       return Response.json({ ok: false, error: 'Party bookings are only available on Saturday/Sunday at 11:00 AM or 3:00 PM.' }, { status: 400 });
+    }
+    if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
+      return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });
     }
 
     const server = createServerSupabaseClient();
@@ -132,19 +146,31 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
-    if (existingSameSlot) {
-      return Response.json({ ok: true, id: existingSameSlot.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, deduplicated: true });
+    if (mode === 'finalize' && existingSameSlot) {
+      const updateExisting = await supa.from('party_bookings').update({
+        headcount_expected: headcountExpected,
+        notes,
+        birthday_child_name: birthdayChildName,
+        birthday_age: birthdayAge,
+        occasion_details: occasionDetails,
+        status: 'confirmed',
+        status_updated_at: new Date().toISOString(),
+      }).eq('id', existingSameSlot.id).eq('household_id', householdId).select('id').maybeSingle();
+      if (!updateExisting.error && updateExisting.data?.id) {
+        return Response.json({ ok: true, id: updateExisting.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+      }
     }
 
     const { data: conflicts, error: conflictErr } = await supa
       .from('party_bookings')
-      .select('id,start_time,end_time,status')
+      .select('id,household_id,start_time,end_time,status')
       .lt('start_time', end.toISOString())
       .gt('end_time', start.toISOString())
       .neq('status', 'cancelled');
 
     if (conflictErr) return Response.json({ ok: false, error: conflictErr.message }, { status: 500 });
-    if ((conflicts ?? []).length > 0) {
+    const conflictingBookings = (conflicts ?? []).filter((item) => item.household_id !== householdId && item.id !== existingSameSlot?.id);
+    if (conflictingBookings.length > 0) {
       return Response.json({ ok: false, error: 'That party slot is already booked.' }, { status: 409 });
     }
 
@@ -161,7 +187,10 @@ export async function POST(req: Request) {
       const encodedHeadcount = encodeURIComponent(String(headcountExpected ?? ''));
       const encodedNotes = encodeURIComponent(notes ?? '');
       const encodedSlot = encodeURIComponent(slot ?? '');
-      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}`;
+      const encodedBirthdayName = encodeURIComponent(birthdayChildName ?? '');
+      const encodedBirthdayAge = encodeURIComponent(birthdayAge == null ? '' : String(birthdayAge));
+      const encodedOccasion = encodeURIComponent(occasionDetails ?? '');
+      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}`;
 
       const squareBody = {
         idempotency_key: idempotencyKey,
@@ -179,6 +208,12 @@ export async function POST(req: Request) {
         },
         ...(buildPrePopulatedData(user.email) ? { pre_populated_data: buildPrePopulatedData(user.email) } : {}),
         reference_id: `pb_${reference}`,
+        note: JSON.stringify({
+          party_type: 'party_booking',
+          birthday_child_name: birthdayChildName,
+          birthday_age: birthdayAge,
+          occasion_details: occasionDetails,
+        }),
       };
 
       logSquarePayload('party checkout payload', squareBody as Record<string, unknown>);
@@ -202,16 +237,68 @@ export async function POST(req: Request) {
       const url: string | undefined = data?.payment_link?.url;
       if (!url) return Response.json({ ok: false, error: 'no_url_returned' }, { status: 500 });
 
+      if (!existingSameSlot) {
+        const pendingInsert = await supa.from('party_bookings').insert({
+          household_id: householdId,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          headcount_expected: headcountExpected,
+          notes,
+          birthday_child_name: birthdayChildName,
+          birthday_age: birthdayAge,
+          occasion_details: occasionDetails,
+          status: 'pending',
+          status_updated_at: new Date().toISOString(),
+          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+          created_by_user_id: user.id,
+          created_by_role: 'customer',
+        });
+        if (pendingInsert.error && isMissingColumnError(pendingInsert.error.message)) {
+          const pendingFallback = await supa.from('party_bookings').insert({
+            household_id: householdId,
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            headcount_expected: headcountExpected,
+            notes,
+            price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+            created_by_user_id: user.id,
+            created_by_role: 'customer',
+          });
+          if (pendingFallback.error) {
+            console.warn('party pending fallback insert failed', pendingFallback.error.message);
+          }
+        } else if (pendingInsert.error) {
+          console.warn('party pending insert failed', pendingInsert.error.message);
+        }
+      }
+
       return Response.json({ ok: true, payment_url: url, deposit_cents: PARTY_DEPOSIT_CENTS });
+    }
+
+    if (bookingId) {
+      const primaryUpdate = await supa.from('party_bookings').update({
+        headcount_expected: headcountExpected,
+        notes,
+        birthday_child_name: birthdayChildName,
+        birthday_age: birthdayAge,
+        occasion_details: occasionDetails,
+        status: 'confirmed',
+        status_updated_at: new Date().toISOString(),
+      }).eq('id', bookingId).eq('household_id', householdId).select('id').maybeSingle();
+      if (!primaryUpdate.error && primaryUpdate.data?.id) {
+        return Response.json({ ok: true, id: primaryUpdate.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+      }
     }
 
     const insertPayload = {
       household_id: householdId,
-      child_id: null,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       headcount_expected: headcountExpected,
       notes,
+      birthday_child_name: birthdayChildName,
+      birthday_age: birthdayAge,
+      occasion_details: occasionDetails,
       status: 'confirmed',
       status_updated_at: new Date().toISOString(),
       price_quote_cents: PARTY_TOTAL_FEE_CENTS,
@@ -230,7 +317,6 @@ export async function POST(req: Request) {
         .from('party_bookings')
         .insert({
           household_id: householdId,
-          child_id: null,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           headcount_expected: headcountExpected,

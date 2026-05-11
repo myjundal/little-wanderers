@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
+import { shouldLoadAnalytics } from '@/components/analyticsGate';
 
 const GOOGLE_TAG_ID = 'G-RHZ3580FJ8';
-const PRODUCTION_HOSTNAME = 'thelittlewanderers.com';
 
 export default function GoogleAnalytics() {
-  const [shouldLoadAnalytics, setShouldLoadAnalytics] = useState(false);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(false);
 
   useEffect(() => {
-    setShouldLoadAnalytics(window.location.hostname === PRODUCTION_HOSTNAME);
+    setAnalyticsEnabled(shouldLoadAnalytics());
   }, []);
 
-  if (!shouldLoadAnalytics) {
+  if (!analyticsEnabled) {
     return null;
   }
 

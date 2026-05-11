@@ -71,7 +71,19 @@ type PartyBookingItem = {
   final_total_count: number | null;
   attendance_finalized_at: string | null;
   attendance_notes: string | null;
+  birthday_child_name: string | null;
+  birthday_age: number | null;
+  occasion_details: string | null;
 };
+
+function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | 'birthday_age' | 'occasion_details'>) {
+  const lines: string[] = [];
+  if (item.birthday_child_name) {
+    lines.push(item.birthday_age ? `Birthday: ${item.birthday_child_name} — turning ${item.birthday_age}` : `Birthday: ${item.birthday_child_name}`);
+  }
+  if (item.occasion_details) lines.push(`Occasion: ${item.occasion_details}`);
+  return lines;
+}
 
 const sectionStyle: React.CSSProperties = {
   marginTop: 24,
@@ -492,7 +504,22 @@ export default function StaffDashboard() {
           <input placeholder="Class title" value={classForm.title} onChange={(e) => setClassForm((prev) => ({ ...prev, title: e.target.value }))} style={inputStyle} />
           <input placeholder="Category" value={classForm.category} onChange={(e) => setClassForm((prev) => ({ ...prev, category: e.target.value }))} style={inputStyle} />
           <input type="date" value={classForm.date} onChange={(e) => setClassForm((prev) => ({ ...prev, date: e.target.value }))} style={inputStyle} />
-          <input type="time" value={classForm.start_time} onChange={(e) => setClassForm((prev) => ({ ...prev, start_time: e.target.value }))} style={inputStyle} />
+          <input
+            type="time"
+            value={classForm.start_time}
+            onChange={(e) => {
+              const startValue = e.target.value;
+              const [h, m] = startValue.split(':').map(Number);
+              if (Number.isNaN(h) || Number.isNaN(m)) {
+                setClassForm((prev) => ({ ...prev, start_time: startValue }));
+                return;
+              }
+              const nextEndHour = (h + 1) % 24;
+              const nextEnd = `${String(nextEndHour).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+              setClassForm((prev) => ({ ...prev, start_time: startValue, end_time: nextEnd }));
+            }}
+            style={inputStyle}
+          />
           <input type="time" value={classForm.end_time} onChange={(e) => setClassForm((prev) => ({ ...prev, end_time: e.target.value }))} style={inputStyle} />
           <input placeholder="Instructor (optional)" value={classForm.instructor_name} onChange={(e) => setClassForm((prev) => ({ ...prev, instructor_name: e.target.value }))} style={inputStyle} />
           <input placeholder="Age(s) (optional, e.g. 2-4 years)" value={classForm.age_range} onChange={(e) => setClassForm((prev) => ({ ...prev, age_range: e.target.value }))} style={inputStyle} />
@@ -606,6 +633,9 @@ export default function StaffDashboard() {
                 </div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>{new Date(item.start_time).toLocaleString()} → {new Date(item.end_time).toLocaleString()}</div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>Guests: {item.headcount_expected ?? '-'} · Quote: {dollars(item.price_quote_cents)}</div>
+                {celebrationLines(item).map((line) => (
+                  <div key={`${item.id}-${line}`} style={{ marginTop: 6, color: '#6d6480' }}>{line}</div>
+                ))}
               </button>
             ))}
           </div>
@@ -620,6 +650,9 @@ export default function StaffDashboard() {
                 <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{selectedBooking.status}</span></p>
                 <p style={{ color: '#6d6480' }}><strong>Headcount (requested):</strong> {selectedBooking.headcount_expected ?? '-'}</p>
                 <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
+                {celebrationLines(selectedBooking).map((line) => (
+                  <p key={`detail-${line}`} style={{ color: '#6d6480' }}><strong>{line.split(':')[0]}:</strong> {line.split(':').slice(1).join(':').trim()}</p>
+                ))}
                 <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {prettyNote(selectedBooking.notes)}</p>
                 <div style={{ marginTop: 10, border: '1px solid #eadfff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
                   <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Party attendance tracker</p>
