@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { shouldLoadAnalytics } from '@/components/analyticsGate';
+import { shouldLoadAnalytics, syncAnalyticsOptPreferenceFromUrl } from '@/components/analyticsGate';
 
 const GOOGLE_TAG_ID = 'G-RHZ3580FJ8';
 
@@ -19,8 +19,9 @@ export default function GoogleAnalytics() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    syncAnalyticsOptPreferenceFromUrl();
     setAnalyticsEnabled(shouldLoadAnalytics());
-  }, []);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!analyticsEnabled || !window.gtag) return;
