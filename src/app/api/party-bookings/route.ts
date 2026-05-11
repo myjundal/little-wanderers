@@ -240,7 +240,6 @@ export async function POST(req: Request) {
       if (!existingSameSlot) {
         const pendingInsert = await supa.from('party_bookings').insert({
           household_id: householdId,
-          child_id: null,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           headcount_expected: headcountExpected,
@@ -257,7 +256,6 @@ export async function POST(req: Request) {
         if (pendingInsert.error && isMissingColumnError(pendingInsert.error.message)) {
           const pendingFallback = await supa.from('party_bookings').insert({
             household_id: householdId,
-            child_id: null,
             start_time: start.toISOString(),
             end_time: end.toISOString(),
             headcount_expected: headcountExpected,
@@ -294,7 +292,6 @@ export async function POST(req: Request) {
 
     const insertPayload = {
       household_id: householdId,
-      child_id: null,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       headcount_expected: headcountExpected,
@@ -320,7 +317,6 @@ export async function POST(req: Request) {
         .from('party_bookings')
         .insert({
           household_id: householdId,
-          child_id: null,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           headcount_expected: headcountExpected,
