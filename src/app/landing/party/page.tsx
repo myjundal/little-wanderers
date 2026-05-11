@@ -451,6 +451,15 @@ export default function PartyPage() {
                     Party fee:{' '}
                     {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
                   </p>
+                  {item.birthday_child_name && (
+                    <p style={{ margin: '6px 0' }}>
+                      Birthday: {item.birthday_child_name}
+                      {item.birthday_age ? ` — turning ${item.birthday_age}` : ''}
+                    </p>
+                  )}
+                  {item.occasion_details && (
+                    <p style={{ margin: '6px 0' }}>Occasion: {item.occasion_details}</p>
+                  )}
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {prettyNote(item.notes)}</p>
                   <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
                   {item.attendance_finalized_at && (
