@@ -146,10 +146,6 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
-    if (existingSameSlot && mode === 'create_payment_link') {
-      return Response.json({ ok: true, id: existingSameSlot.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, deduplicated: true });
-    }
-
     const { data: conflicts, error: conflictErr } = await supa
       .from('party_bookings')
       .select('id,start_time,end_time,status')
@@ -158,7 +154,8 @@ export async function POST(req: Request) {
       .neq('status', 'cancelled');
 
     if (conflictErr) return Response.json({ ok: false, error: conflictErr.message }, { status: 500 });
-    if ((conflicts ?? []).length > 0) {
+    const conflictingBookings = (conflicts ?? []).filter((item) => item.id !== existingSameSlot?.id);
+    if (conflictingBookings.length > 0) {
       return Response.json({ ok: false, error: 'That party slot is already booked.' }, { status: 409 });
     }
 
@@ -178,13 +175,51 @@ export async function POST(req: Request) {
       const encodedBirthdayName = encodeURIComponent(birthdayChildName ?? '');
       const encodedBirthdayAge = encodeURIComponent(birthdayAge == null ? '' : String(birthdayAge));
       const encodedOccasion = encodeURIComponent(occasionDetails ?? '');
-      const provisionalInsert = await supa
-        .from('party_bookings')
-        .insert({
-          household_id: householdId,
-          child_id: null,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
+      let provisionalId = existingSameSlot?.id ?? null;
+      if (!provisionalId) {
+        const provisionalInsert = await supa
+          .from('party_bookings')
+          .insert({
+            household_id: householdId,
+            child_id: null,
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            headcount_expected: headcountExpected,
+            notes,
+            birthday_child_name: birthdayChildName,
+            birthday_age: birthdayAge,
+            occasion_details: occasionDetails,
+            status: 'pending',
+            status_updated_at: new Date().toISOString(),
+            price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+            created_by_user_id: user.id,
+            created_by_role: 'customer',
+          })
+          .select('id')
+          .maybeSingle();
+        if (provisionalInsert.error && !isMissingColumnError(provisionalInsert.error.message)) {
+          return Response.json({ ok: false, error: provisionalInsert.error.message }, { status: 500 });
+        }
+        provisionalId = provisionalInsert.data?.id ?? null;
+        if (provisionalInsert.error) {
+          const fallbackInsert = await supa.from('party_bookings').insert({
+            household_id: householdId,
+            child_id: null,
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            headcount_expected: headcountExpected,
+            notes,
+            status: 'pending',
+            status_updated_at: new Date().toISOString(),
+            price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+            created_by_user_id: user.id,
+            created_by_role: 'customer',
+          }).select('id').maybeSingle();
+          if (fallbackInsert.error) return Response.json({ ok: false, error: fallbackInsert.error.message }, { status: 500 });
+          provisionalId = fallbackInsert.data?.id ?? null;
+        }
+      } else {
+        const updateExistingPending = await supa.from('party_bookings').update({
           headcount_expected: headcountExpected,
           notes,
           birthday_child_name: birthdayChildName,
@@ -192,32 +227,10 @@ export async function POST(req: Request) {
           occasion_details: occasionDetails,
           status: 'pending',
           status_updated_at: new Date().toISOString(),
-          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-          created_by_user_id: user.id,
-          created_by_role: 'customer',
-        })
-        .select('id')
-        .maybeSingle();
-      if (provisionalInsert.error && !isMissingColumnError(provisionalInsert.error.message)) {
-        return Response.json({ ok: false, error: provisionalInsert.error.message }, { status: 500 });
-      }
-      let provisionalId = provisionalInsert.data?.id ?? null;
-      if (provisionalInsert.error) {
-        const fallbackInsert = await supa.from('party_bookings').insert({
-          household_id: householdId,
-          child_id: null,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          headcount_expected: headcountExpected,
-          notes,
-          status: 'pending',
-          status_updated_at: new Date().toISOString(),
-          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-          created_by_user_id: user.id,
-          created_by_role: 'customer',
-        }).select('id').maybeSingle();
-        if (fallbackInsert.error) return Response.json({ ok: false, error: fallbackInsert.error.message }, { status: 500 });
-        provisionalId = fallbackInsert.data?.id ?? null;
+        }).eq('id', provisionalId).eq('household_id', householdId);
+        if (updateExistingPending.error && !isMissingColumnError(updateExistingPending.error.message)) {
+          return Response.json({ ok: false, error: updateExistingPending.error.message }, { status: 500 });
+        }
       }
 
       const encodedBookingId = encodeURIComponent(provisionalId ?? '');
