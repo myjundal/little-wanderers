@@ -175,66 +175,7 @@ export async function POST(req: Request) {
       const encodedBirthdayName = encodeURIComponent(birthdayChildName ?? '');
       const encodedBirthdayAge = encodeURIComponent(birthdayAge == null ? '' : String(birthdayAge));
       const encodedOccasion = encodeURIComponent(occasionDetails ?? '');
-      let provisionalId = existingSameSlot?.id ?? null;
-      if (!provisionalId) {
-        const provisionalInsert = await supa
-          .from('party_bookings')
-          .insert({
-            household_id: householdId,
-            child_id: null,
-            start_time: start.toISOString(),
-            end_time: end.toISOString(),
-            headcount_expected: headcountExpected,
-            notes,
-            birthday_child_name: birthdayChildName,
-            birthday_age: birthdayAge,
-            occasion_details: occasionDetails,
-            status: 'pending',
-            status_updated_at: new Date().toISOString(),
-            price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-            created_by_user_id: user.id,
-            created_by_role: 'customer',
-          })
-          .select('id')
-          .maybeSingle();
-        if (provisionalInsert.error && !isMissingColumnError(provisionalInsert.error.message)) {
-          return Response.json({ ok: false, error: provisionalInsert.error.message }, { status: 500 });
-        }
-        provisionalId = provisionalInsert.data?.id ?? null;
-        if (provisionalInsert.error) {
-          const fallbackInsert = await supa.from('party_bookings').insert({
-            household_id: householdId,
-            child_id: null,
-            start_time: start.toISOString(),
-            end_time: end.toISOString(),
-            headcount_expected: headcountExpected,
-            notes,
-            status: 'pending',
-            status_updated_at: new Date().toISOString(),
-            price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-            created_by_user_id: user.id,
-            created_by_role: 'customer',
-          }).select('id').maybeSingle();
-          if (fallbackInsert.error) return Response.json({ ok: false, error: fallbackInsert.error.message }, { status: 500 });
-          provisionalId = fallbackInsert.data?.id ?? null;
-        }
-      } else {
-        const updateExistingPending = await supa.from('party_bookings').update({
-          headcount_expected: headcountExpected,
-          notes,
-          birthday_child_name: birthdayChildName,
-          birthday_age: birthdayAge,
-          occasion_details: occasionDetails,
-          status: 'pending',
-          status_updated_at: new Date().toISOString(),
-        }).eq('id', provisionalId).eq('household_id', householdId);
-        if (updateExistingPending.error && !isMissingColumnError(updateExistingPending.error.message)) {
-          return Response.json({ ok: false, error: updateExistingPending.error.message }, { status: 500 });
-        }
-      }
-
-      const encodedBookingId = encodeURIComponent(provisionalId ?? '');
-      const redirectUrl = `${base}/landing/party?party_checkout=success&booking_id=${encodedBookingId}&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}`;
+      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}`;
 
       const squareBody = {
         idempotency_key: idempotencyKey,

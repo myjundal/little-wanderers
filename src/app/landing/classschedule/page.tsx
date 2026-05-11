@@ -455,6 +455,10 @@ export default function ClassSchedulePage() {
       <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Add classes, edit your cart, and pay once with Square. You can also cancel booked classes.</p>
 
+      {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
+
+      <AvailabilityCalendar title="Class calendar" slots={classSlots} />
+
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
         <select
@@ -475,10 +479,6 @@ export default function ClassSchedulePage() {
           </p>
         )}
       </section>
-
-      {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
-
-      <AvailabilityCalendar title="Class calendar" slots={classSlots} />
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>

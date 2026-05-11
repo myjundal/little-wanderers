@@ -136,6 +136,18 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
         {calendarDays.map((d) => {
           const key = ymd(d);
           const list = dayMap.get(key) ?? [];
+          const displaySlots = Array.from(
+            list.reduce((map, slot) => {
+              const aggregateKey = `${slot.status}::${slot.label}`;
+              const current = map.get(aggregateKey);
+              if (!current) {
+                map.set(aggregateKey, { ...slot, count: 1 });
+              } else {
+                current.count += 1;
+              }
+              return map;
+            }, new Map<string, CalendarSlot & { count: number }>())
+          ).map(([, value]) => value);
           const inMonth = d.getMonth() === cursor.getMonth();
           return (
             <div
@@ -151,9 +163,9 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
             >
               <div style={{ fontSize: 12, fontWeight: 800, color: '#5d4f88' }}>{d.getDate()}</div>
               <div style={{ display: 'grid', gap: 4, marginTop: 5 }}>
-                {list.slice(0, 2).map((slot) => (
+                {displaySlots.slice(0, 2).map((slot) => (
                   <div
-                    key={slot.id}
+                    key={`${slot.status}:${slot.label}`}
                     title={`${slot.label} (${statusLabel[slot.status]})`}
                     style={{
                       fontSize: 10,
@@ -168,15 +180,15 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {slot.label}
+                    {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {slot.label}{slot.count > 1 ? ` (${slot.count})` : ''}
                   </div>
                 ))}
-                {list.length > 2 && (
+                {displaySlots.length > 2 && (
                   <button
                     onClick={() => setExpandedDayKey(key)}
                     style={{ fontSize: 10, color: '#7d709b', border: 'none', background: 'transparent', textAlign: 'left', padding: 0, cursor: 'pointer' }}
                   >
-                    +{list.length - 2} more
+                    +{displaySlots.length - 2} more
                   </button>
                 )}
               </div>
@@ -189,7 +201,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
         <div style={{ marginTop: 12, border: '1px solid #e3d0fb', borderRadius: 12, padding: 10, background: '#fff' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <strong style={{ color: '#4f3f82' }}>All bookings on {expandedDayKey}</strong>
-            <button onClick={() => setExpandedDayKey(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>X</button>
+            <button onClick={() => setExpandedDayKey(null)} style={{ border: '1px solid #d5c3f5', borderRadius: 8, background: '#fff', color: '#4f3f82', cursor: 'pointer', width: 28, height: 28, fontWeight: 700 }}>✕</button>
           </div>
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
             {(dayMap.get(expandedDayKey) ?? []).map((slot) => (

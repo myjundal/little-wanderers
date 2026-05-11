@@ -504,7 +504,22 @@ export default function StaffDashboard() {
           <input placeholder="Class title" value={classForm.title} onChange={(e) => setClassForm((prev) => ({ ...prev, title: e.target.value }))} style={inputStyle} />
           <input placeholder="Category" value={classForm.category} onChange={(e) => setClassForm((prev) => ({ ...prev, category: e.target.value }))} style={inputStyle} />
           <input type="date" value={classForm.date} onChange={(e) => setClassForm((prev) => ({ ...prev, date: e.target.value }))} style={inputStyle} />
-          <input type="time" value={classForm.start_time} onChange={(e) => setClassForm((prev) => ({ ...prev, start_time: e.target.value }))} style={inputStyle} />
+          <input
+            type="time"
+            value={classForm.start_time}
+            onChange={(e) => {
+              const startValue = e.target.value;
+              const [h, m] = startValue.split(':').map(Number);
+              if (Number.isNaN(h) || Number.isNaN(m)) {
+                setClassForm((prev) => ({ ...prev, start_time: startValue }));
+                return;
+              }
+              const nextEndHour = (h + 1) % 24;
+              const nextEnd = `${String(nextEndHour).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+              setClassForm((prev) => ({ ...prev, start_time: startValue, end_time: nextEnd }));
+            }}
+            style={inputStyle}
+          />
           <input type="time" value={classForm.end_time} onChange={(e) => setClassForm((prev) => ({ ...prev, end_time: e.target.value }))} style={inputStyle} />
           <input placeholder="Instructor (optional)" value={classForm.instructor_name} onChange={(e) => setClassForm((prev) => ({ ...prev, instructor_name: e.target.value }))} style={inputStyle} />
           <input placeholder="Age(s) (optional, e.g. 2-4 years)" value={classForm.age_range} onChange={(e) => setClassForm((prev) => ({ ...prev, age_range: e.target.value }))} style={inputStyle} />
