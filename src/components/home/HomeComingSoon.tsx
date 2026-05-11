@@ -19,7 +19,7 @@ export default function HomeComingSoon() {
             day and coffee-in-hand moments that feel restorative for parents too.
           </p>
           <p>
-            Little Wanderers is coming to Bishop&apos;s Corner in West Hartford, on the Target side of the plaza, between The Paper Store and Float Forty One. We&apos;re near Marshalls, Chopt, and Koma — tucked just around the back side of the main plaza.
+            Little Wanderers is coming to Bishop&apos;s Corner plaza in West Hartford — on the Target side, between The Paper Store and Float Forty One, near Marshalls, Chopt, Koma, and more.
           </p>
           <p className={styles.subline}>Join waitlist for updates and early access!</p>
           <div className={styles.actions}>

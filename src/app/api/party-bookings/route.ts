@@ -23,6 +23,7 @@ type PartyPayload = {
   birthday_child_name?: string | null;
   birthday_age?: number | null;
   occasion_details?: string | null;
+  booking_id?: string;
 };
 
 const admin = () =>
@@ -104,6 +105,7 @@ export async function POST(req: Request) {
     const birthdayAge = body?.birthday_age == null ? null : Number(body.birthday_age);
     const occasionDetails = typeof body.occasion_details === 'string' ? body.occasion_details.trim().slice(0, 120) : null;
     const mode = body.mode ?? 'create_payment_link';
+    const bookingId = typeof body.booking_id === 'string' ? body.booking_id : null;
 
     if (!startTime || !endTime) {
       return Response.json({ ok: false, error: 'start_time and end_time are required' }, { status: 400 });
@@ -144,7 +146,7 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
-    if (existingSameSlot) {
+    if (existingSameSlot && mode === 'create_payment_link') {
       return Response.json({ ok: true, id: existingSameSlot.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, deduplicated: true });
     }
 
@@ -176,7 +178,50 @@ export async function POST(req: Request) {
       const encodedBirthdayName = encodeURIComponent(birthdayChildName ?? '');
       const encodedBirthdayAge = encodeURIComponent(birthdayAge == null ? '' : String(birthdayAge));
       const encodedOccasion = encodeURIComponent(occasionDetails ?? '');
-      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}`;
+      const provisionalInsert = await supa
+        .from('party_bookings')
+        .insert({
+          household_id: householdId,
+          child_id: null,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          headcount_expected: headcountExpected,
+          notes,
+          birthday_child_name: birthdayChildName,
+          birthday_age: birthdayAge,
+          occasion_details: occasionDetails,
+          status: 'pending',
+          status_updated_at: new Date().toISOString(),
+          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+          created_by_user_id: user.id,
+          created_by_role: 'customer',
+        })
+        .select('id')
+        .maybeSingle();
+      if (provisionalInsert.error && !isMissingColumnError(provisionalInsert.error.message)) {
+        return Response.json({ ok: false, error: provisionalInsert.error.message }, { status: 500 });
+      }
+      let provisionalId = provisionalInsert.data?.id ?? null;
+      if (provisionalInsert.error) {
+        const fallbackInsert = await supa.from('party_bookings').insert({
+          household_id: householdId,
+          child_id: null,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          headcount_expected: headcountExpected,
+          notes,
+          status: 'pending',
+          status_updated_at: new Date().toISOString(),
+          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+          created_by_user_id: user.id,
+          created_by_role: 'customer',
+        }).select('id').maybeSingle();
+        if (fallbackInsert.error) return Response.json({ ok: false, error: fallbackInsert.error.message }, { status: 500 });
+        provisionalId = fallbackInsert.data?.id ?? null;
+      }
+
+      const encodedBookingId = encodeURIComponent(provisionalId ?? '');
+      const redirectUrl = `${base}/landing/party?party_checkout=success&booking_id=${encodedBookingId}&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}`;
 
       const squareBody = {
         idempotency_key: idempotencyKey,
@@ -224,6 +269,21 @@ export async function POST(req: Request) {
       if (!url) return Response.json({ ok: false, error: 'no_url_returned' }, { status: 500 });
 
       return Response.json({ ok: true, payment_url: url, deposit_cents: PARTY_DEPOSIT_CENTS });
+    }
+
+    if (bookingId) {
+      const primaryUpdate = await supa.from('party_bookings').update({
+        headcount_expected: headcountExpected,
+        notes,
+        birthday_child_name: birthdayChildName,
+        birthday_age: birthdayAge,
+        occasion_details: occasionDetails,
+        status: 'confirmed',
+        status_updated_at: new Date().toISOString(),
+      }).eq('id', bookingId).eq('household_id', householdId).select('id').maybeSingle();
+      if (!primaryUpdate.error && primaryUpdate.data?.id) {
+        return Response.json({ ok: true, id: primaryUpdate.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+      }
     }
 
     const insertPayload = {

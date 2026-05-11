@@ -128,6 +128,7 @@ export default function PartyPage() {
 
     const startTime = params.get('start_time');
     const endTime = params.get('end_time');
+    const bookingId = params.get('booking_id');
       const headcount = params.get('headcount_expected');
       const slot = params.get('slot');
     const notes = params.get('notes');
@@ -144,6 +145,7 @@ export default function PartyPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           mode: 'finalize',
+          booking_id: bookingId || undefined,
           start_time: startTime,
           end_time: endTime,
           headcount_expected: headcount ? Number(headcount) : null,
@@ -357,6 +359,7 @@ export default function PartyPage() {
           <ul style={{ margin: '8px 0 0 20px' }}>
             <li>50% of the party fee ($150) is required to reserve your party.</li>
             <li>The deposit is non-refundable.</li>
+            <li>Rest of the party fee ($150) is required upon arrival before party setup.</li>
             <li>You may reschedule once, up to 7 days before your party date.</li>
             <li>Final headcount is due 3 days before the party.</li>
           </ul>
