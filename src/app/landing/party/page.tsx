@@ -446,11 +446,6 @@ export default function PartyPage() {
                   <p style={{ margin: 0, fontWeight: 600 }}>
                     {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
                   </p>
-                  <p style={{ margin: '6px 0' }}>Expected guests: {item.headcount_expected ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>
-                    Party fee:{' '}
-                    {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
-                  </p>
                   {item.birthday_child_name && (
                     <p style={{ margin: '6px 0' }}>
                       Birthday: {item.birthday_child_name}
@@ -460,6 +455,11 @@ export default function PartyPage() {
                   {item.occasion_details && (
                     <p style={{ margin: '6px 0' }}>Occasion: {item.occasion_details}</p>
                   )}
+                  <p style={{ margin: '6px 0' }}>Expected guests: {item.headcount_expected ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>
+                    Party fee:{' '}
+                    {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
+                  </p>
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {prettyNote(item.notes)}</p>
                   <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
                   {item.attendance_finalized_at && (
