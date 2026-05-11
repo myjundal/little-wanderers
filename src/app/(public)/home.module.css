@@ -13,8 +13,4 @@
 .softBand{height:48px;margin-top:20px;border-radius:0 0 32px 32px;background:linear-gradient(180deg,rgba(241,224,189,0.28),rgba(255,255,255,0.7));}
 .values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 8px 10px;color:#6f6a78;font-size:.95rem}
 .values div{display:flex;align-items:center;gap:8px;justify-content:center;text-align:center}
-.locationCard{margin:20px 8px 8px;padding:22px;border-radius:24px;border:1px solid #eadff3;background:linear-gradient(180deg,#fff,#fbf7ff);display:grid;gap:10px}
-.locationCard h2{margin:0;color:#7e64b0}
-.locationCard p{margin:0;color:#5a526c;line-height:1.7;max-width:900px}
-.locationEyebrow{color:#8f85a5;font-weight:700;letter-spacing:.02em}
 @media (max-width:980px){.page{padding:8px 12px 20px}.hero{grid-template-columns:1fr}.heroImageFrame img{height:390px}.values{grid-template-columns:1fr 1fr}}

@@ -382,6 +382,28 @@ export default function PartyPage() {
           </label>
 
           <label>
+            Birthday child&apos;s name (optional)
+            <br />
+            <input value={form.birthday_child_name} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} />
+          </label>
+
+          <label>
+            Age they are turning (optional)
+            <br />
+            <input type="number" min={1} max={21} value={form.birthday_age} onChange={(e) => setForm((prev) => ({ ...prev, birthday_age: e.target.value }))} />
+          </label>
+
+          <label>
+            If this is not a birthday party, what is this for and who is this for? (optional, i.e. Baby naming for Maya)
+            <br />
+            <input
+              value={form.occasion_details}
+              maxLength={120}
+              onChange={(e) => setForm((prev) => ({ ...prev, occasion_details: e.target.value }))}
+            />
+          </label>
+
+          <label>
             Expected guests (optional)
             <br />
             <input
@@ -396,29 +418,6 @@ export default function PartyPage() {
             Notes (optional)
             <br />
             <textarea rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
-          </label>
-
-          <label>
-            Birthday child&apos;s name (optional)
-            <br />
-            <input value={form.birthday_child_name} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} />
-          </label>
-
-          <label>
-            Age they are turning (optional)
-            <br />
-            <input type="number" min={1} max={21} value={form.birthday_age} onChange={(e) => setForm((prev) => ({ ...prev, birthday_age: e.target.value }))} />
-          </label>
-
-          <label>
-            If this is not a birthday party, what is this for and who is this for? (optional)
-            <br />
-            <input
-              value={form.occasion_details}
-              maxLength={120}
-              placeholder="Baby naming for Maya"
-              onChange={(e) => setForm((prev) => ({ ...prev, occasion_details: e.target.value }))}
-            />
           </label>
 
           <button onClick={submit} disabled={submitting}>

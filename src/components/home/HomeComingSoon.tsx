@@ -18,17 +18,20 @@ export default function HomeComingSoon() {
             A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in the
             day and coffee-in-hand moments that feel restorative for parents too.
           </p>
+          <p>
+            Little Wanderers is coming to Bishop&apos;s Corner in West Hartford, on the Target side of the plaza, between The Paper Store and Float Forty One. We&apos;re near Marshalls, Chopt, and Koma — tucked just around the back side of the main plaza.
+          </p>
           <p className={styles.subline}>Join waitlist for updates and early access!</p>
-        <div className={styles.actions}>
-          <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
+          <div className={styles.actions}>
+            <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
               <span>Join waitlist</span>
               <small>(Over 280+ local families already joined)</small>
-          </PastelButton>
-          <PastelButton href="/visit-us" secondary>
-            <span>Plan your visit</span>
-            <small>Bishop&apos;s Corner, West Hartford, CT</small>
-          </PastelButton>
-        </div>
+            </PastelButton>
+            <PastelButton href="/visit-us" secondary>
+              <span>Plan your visit</span>
+              <small>Bishop&apos;s Corner, West Hartford, CT</small>
+            </PastelButton>
+          </div>
         </div>
 
         <div className={styles.right}>
@@ -51,15 +54,6 @@ export default function HomeComingSoon() {
         <div>🤍 A gentle pause for parents</div>
         <div>☕ Cafe with good coffee</div>
         <div>✨ Connection & community</div>
-      </section>
-
-      <section className={styles.locationCard}>
-        <p className={styles.locationEyebrow}>Opening 2026 • West Hartford, CT</p>
-        <h2>Little Wanderers is coming to Bishop&apos;s Corner</h2>
-        <p>
-          Little Wanderers is coming to Bishop&apos;s Corner in West Hartford, on the Target side of the plaza, between The Paper Store and Float Forty One. We&apos;re near Marshalls, Chopt, and Koma — tucked just around the back side of the main plaza.
-        </p>
-        <PastelButton href="/visit-us">Plan your visit</PastelButton>
       </section>
     </main>
   );
