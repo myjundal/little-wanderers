@@ -163,13 +163,13 @@ export async function POST(req: Request) {
 
     const { data: conflicts, error: conflictErr } = await supa
       .from('party_bookings')
-      .select('id,start_time,end_time,status')
+      .select('id,household_id,start_time,end_time,status')
       .lt('start_time', end.toISOString())
       .gt('end_time', start.toISOString())
       .neq('status', 'cancelled');
 
     if (conflictErr) return Response.json({ ok: false, error: conflictErr.message }, { status: 500 });
-    const conflictingBookings = (conflicts ?? []).filter((item) => item.id !== existingSameSlot?.id);
+    const conflictingBookings = (conflicts ?? []).filter((item) => item.household_id !== householdId && item.id !== existingSameSlot?.id);
     if (conflictingBookings.length > 0) {
       return Response.json({ ok: false, error: 'That party slot is already booked.' }, { status: 409 });
     }
