@@ -254,10 +254,7 @@ export async function POST(req: Request) {
           created_by_user_id: user.id,
           created_by_role: 'customer',
         });
-        if (pendingInsert.error && !isMissingColumnError(pendingInsert.error.message)) {
-          return Response.json({ ok: false, error: pendingInsert.error.message }, { status: 500 });
-        }
-        if (pendingInsert.error) {
+        if (pendingInsert.error && isMissingColumnError(pendingInsert.error.message)) {
           const pendingFallback = await supa.from('party_bookings').insert({
             household_id: householdId,
             child_id: null,
@@ -269,7 +266,11 @@ export async function POST(req: Request) {
             created_by_user_id: user.id,
             created_by_role: 'customer',
           });
-          if (pendingFallback.error) return Response.json({ ok: false, error: pendingFallback.error.message }, { status: 500 });
+          if (pendingFallback.error) {
+            console.warn('party pending fallback insert failed', pendingFallback.error.message);
+          }
+        } else if (pendingInsert.error) {
+          console.warn('party pending insert failed', pendingInsert.error.message);
         }
       }
 
