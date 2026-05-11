@@ -146,6 +146,21 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
+    if (mode === 'finalize' && existingSameSlot) {
+      const updateExisting = await supa.from('party_bookings').update({
+        headcount_expected: headcountExpected,
+        notes,
+        birthday_child_name: birthdayChildName,
+        birthday_age: birthdayAge,
+        occasion_details: occasionDetails,
+        status: 'confirmed',
+        status_updated_at: new Date().toISOString(),
+      }).eq('id', existingSameSlot.id).eq('household_id', householdId).select('id').maybeSingle();
+      if (!updateExisting.error && updateExisting.data?.id) {
+        return Response.json({ ok: true, id: updateExisting.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+      }
+    }
+
     const { data: conflicts, error: conflictErr } = await supa
       .from('party_bookings')
       .select('id,start_time,end_time,status')
@@ -221,6 +236,28 @@ export async function POST(req: Request) {
       const data = await resp.json();
       const url: string | undefined = data?.payment_link?.url;
       if (!url) return Response.json({ ok: false, error: 'no_url_returned' }, { status: 500 });
+
+      if (!existingSameSlot) {
+        const pendingInsert = await supa.from('party_bookings').insert({
+          household_id: householdId,
+          child_id: null,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          headcount_expected: headcountExpected,
+          notes,
+          birthday_child_name: birthdayChildName,
+          birthday_age: birthdayAge,
+          occasion_details: occasionDetails,
+          status: 'pending',
+          status_updated_at: new Date().toISOString(),
+          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+          created_by_user_id: user.id,
+          created_by_role: 'customer',
+        });
+        if (pendingInsert.error && !isMissingColumnError(pendingInsert.error.message)) {
+          return Response.json({ ok: false, error: pendingInsert.error.message }, { status: 500 });
+        }
+      }
 
       return Response.json({ ok: true, payment_url: url, deposit_cents: PARTY_DEPOSIT_CENTS });
     }

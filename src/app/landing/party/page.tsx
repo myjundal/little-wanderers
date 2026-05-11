@@ -26,8 +26,8 @@ type PartyBooking = {
 
 const PARTY_DEPOSIT_DOLLARS = 150;
 
-function toIsoUtc(date: string, hourUtc: number) {
-  return new Date(`${date}T${String(hourUtc).padStart(2, '0')}:00:00.000Z`).toISOString();
+function toIsoLocal(date: string, hourLocal: number) {
+  return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
 
 function getDefaultWeekendDate() {
@@ -77,8 +77,8 @@ export default function PartyPage() {
     occasion_details: '',
   });
 
-  const startIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 15 : 11), [form.party_date, form.slot]);
-  const endIso = useMemo(() => toIsoUtc(form.party_date, form.slot === '15:00' ? 18 : 14), [form.party_date, form.slot]);
+  const startIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 15 : 11), [form.party_date, form.slot]);
+  const endIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 18 : 14), [form.party_date, form.slot]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -271,8 +271,8 @@ export default function PartyPage() {
         const day = d.getUTCDay();
         if (day !== 0 && day !== 6) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const start11 = toIsoUtc(dayStr, 11);
-        const start15 = toIsoUtc(dayStr, 15);
+        const start11 = toIsoLocal(dayStr, 11);
+        const start15 = toIsoLocal(dayStr, 15);
         const blockedStarts = new Set(
           [...bookedSlots, ...items.filter((item) => item.status !== 'cancelled')].map((item) =>
             new Date(item.start_time).getTime()
@@ -282,7 +282,7 @@ export default function PartyPage() {
           generated.push({
             id: `avail-${dayStr}-11`,
             start: start11,
-            end: toIsoUtc(dayStr, 14),
+            end: toIsoLocal(dayStr, 14),
             label: 'Available party slot',
             status: 'available',
           });
@@ -291,7 +291,7 @@ export default function PartyPage() {
           generated.push({
             id: `avail-${dayStr}-15`,
             start: start15,
-            end: toIsoUtc(dayStr, 18),
+            end: toIsoLocal(dayStr, 18),
             label: 'Available party slot',
             status: 'available',
           });
@@ -325,8 +325,8 @@ export default function PartyPage() {
   ];
 
   const reschedule = async (bookingId: string) => {
-    const nextStart = toIsoUtc(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
-    const nextEnd = toIsoUtc(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 14);
+    const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
+    const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 14);
     const res = await fetch('/api/party-bookings/reschedule', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
