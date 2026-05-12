@@ -37,7 +37,7 @@ const WEEKLY_HOURS = [
   { label: 'Saturday', hours: '9am–7pm' },
 ];
 
-export default function CrowdLevelCard({ compact = false, style }: { compact?: boolean; style?: CSSProperties }) {
+export default function CrowdLevelCard({ compact = false, style, showHours = true, showStatus = true }: { compact?: boolean; style?: CSSProperties; showHours?: boolean; showStatus?: boolean }) {
   const [data, setData] = useState<CrowdPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export default function CrowdLevelCard({ compact = false, style }: { compact?: b
 
   return (
     <section className={styles.card} aria-live="polite" style={{ ...(compact ? { padding: 16 } : {}), ...(style ?? {}) }}>
-      <div className={styles.hoursBlock}>
+      {showHours && <div className={styles.hoursBlock}>
         <p className={styles.currentDateTime}>{currentDate} · {currentTime}</p>
         <p className={styles.openStatus}>
           {isOpenNow ? 'Come on in, we are open now!' : 'We are closed now, but see you soon!'}
@@ -117,8 +117,8 @@ export default function CrowdLevelCard({ compact = false, style }: { compact?: b
             ))}
           </ul>
         </details>
-      </div>
-      <div className={styles.titleRow}>
+      </div>}
+      {showStatus && <div className={styles.titleRow}>
         <div>
           <h3 style={{ margin: 0, color: '#4f3f82', fontSize: compact ? '1.1rem' : '1.35rem' }}>Current flow occupancy status</h3>
           <p className={styles.helper} style={{ marginTop: 8, marginBottom: 0 }}>
@@ -131,9 +131,9 @@ export default function CrowdLevelCard({ compact = false, style }: { compact?: b
         >
           {data?.label ?? 'Loading'}
         </span>
-      </div>
+      </div>}
 
-      <div className={styles.progressTrack}>
+      {showStatus && <div className={styles.progressTrack}>
         <div
           className={styles.progressFill}
           style={{
@@ -141,9 +141,9 @@ export default function CrowdLevelCard({ compact = false, style }: { compact?: b
             background: `linear-gradient(90deg, ${data?.accent ?? '#eadcff'}, ${data?.accent_strong ?? '#8751df'})`,
           }}
         />
-      </div>
+      </div>}
 
-      <div className={styles.metrics}>
+      {showStatus && <div className={styles.metrics}>
         <div className={styles.metricCard}>
           <span className={styles.metricLabel}>Current estimated occupancy</span>
           <strong className={styles.metricValue}>
@@ -154,9 +154,9 @@ export default function CrowdLevelCard({ compact = false, style }: { compact?: b
           <span className={styles.metricLabel}>Flow complexity</span>
           <strong className={styles.metricValue}>{loading ? 'Refreshing…' : data?.label ?? 'Loading'}</strong>
         </div>
-      </div>
+      </div>}
 
-      <div className={styles.scale}>
+      {showStatus && <div className={styles.scale}>
         {LEVELS.map((level) => {
           const active = data?.crowd_level === level;
           return (
@@ -169,11 +169,11 @@ export default function CrowdLevelCard({ compact = false, style }: { compact?: b
             </div>
           );
         })}
-      </div>
+      </div>}
 
-      <div className={styles.meta}>
+      {showStatus && <div className={styles.meta}>
         <span>{data?.last_updated_at ? `Updated ${new Date(data.last_updated_at).toLocaleTimeString()}` : 'Updates throughout the day'}</span>
-      </div>
+      </div>}
 
       {error && <p className={`${styles.helper} ${styles.error}`}>{error}</p>}
     </section>

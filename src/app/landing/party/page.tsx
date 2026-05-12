@@ -501,7 +501,7 @@ export default function PartyPage() {
               return (
                 <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 12, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <p style={{ margin: 0, fontWeight: 600 }}>
-                    {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
+                    {new Date(item.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(item.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}
                   </p>
                   {item.birthday_child_name && (
                     <p style={{ margin: '6px 0' }}>
@@ -518,7 +518,7 @@ export default function PartyPage() {
                     {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
                   </p>
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {prettyNote(item.notes)}</p>
-                  <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
+                  <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase() : '-'}</p>
                   {item.attendance_finalized_at && (
                     <div style={{ margin: '8px 0', padding: 10, borderRadius: 10, border: '1px solid #d6f0dc', background: '#f2fbf4' }}>
                       <p style={{ margin: '2px 0', color: '#2f7a47', fontWeight: 700 }}>Final attendance submitted</p>

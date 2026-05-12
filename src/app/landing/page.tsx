@@ -297,18 +297,10 @@ export default function AppHome() {
         <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
-          <section style={{ marginTop: 8, border: '1px solid #e3d0fb', borderRadius: 14, padding: 12, background: '#fff' }}>
-            <p style={{ margin: 0, color: '#5f3da4', fontWeight: 700 }}>Operating information</p>
-            <p style={{ margin: '6px 0 0', color: '#6f628d' }}>Today: {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-            <p style={{ margin: '4px 0 0', color: '#6f628d' }}>Current time: {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
-            <details style={{ marginTop: 8 }}>
-              <summary style={{ color: '#5f3da4', cursor: 'pointer' }}>Other operating hours</summary>
-              <p style={{ margin: '6px 0 0', color: '#6f628d' }}>Tue–Sun · 9:00am–6:00pm</p>
-            </details>
-          </section>
+          <CrowdLevelCard compact showStatus={false} style={{ marginTop: 8 }} />
         </div>
 
-        <CrowdLevelCard compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
+        <CrowdLevelCard compact showHours={false} style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
       </section>
 
 

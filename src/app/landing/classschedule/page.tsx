@@ -638,7 +638,7 @@ export default function ClassSchedulePage() {
                 </p>
                 <p style={{ margin: '6px 0' }}>Category: {item.class?.category ?? '-'}</p>
                 {item.attendance_marked_at && (
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Attendance marked: {new Date(item.attendance_marked_at).toLocaleString()}</p>
+                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Attendance marked: {new Date(item.attendance_marked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
                 )}
                 {item.class?.status === 'cancelled' && (
                   <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 600 }}>
