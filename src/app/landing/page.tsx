@@ -400,7 +400,6 @@ export default function AppHome() {
         <Link href="/landing/qr">QR Codes</Link>
         <Link href="/landing/classschedule">Classes</Link>
         <Link href="/landing/party">Party</Link>
-        <button onClick={() => setMenuOpen((v) => !v)}>More</button>
       </nav>
 
       <style jsx>{`
@@ -419,7 +418,7 @@ export default function AppHome() {
           .mobileMenu { display:grid; gap:10px; border:1px solid #e3d0fb; border-radius:14px; background:#fffdf9; padding:12px; margin-bottom:14px; }
           .mobileMenu :global(a), .mobileMenu button { color:#4f3f82; text-decoration:none; font-weight:600; }
           .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
-          .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 10px max(10px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
+          .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;
  border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }

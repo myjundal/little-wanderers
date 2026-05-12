@@ -142,10 +142,6 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
             {loading ? '—' : `${data?.occupancy ?? 0} / ${data?.capacity ?? 24}`}
           </strong>
         </div>
-        <div className={styles.metricCard}>
-          <span className={styles.metricLabel}>Flow complexity</span>
-          <strong className={styles.metricValue}>{loading ? 'Refreshing…' : data?.label ?? 'Loading'}</strong>
-        </div>
       </div>}
 
       {showStatus && <div className={styles.meta}>
