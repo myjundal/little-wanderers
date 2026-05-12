@@ -339,7 +339,9 @@ export default function PartyPage() {
   const weekendDates = getWeekendDates(weekendAnchor);
   const mobileAvailableDates = weekendDates.filter((date) => mobileAvailableSlots.some((slot) => new Date(slot.start).toISOString().slice(0, 10) === date));
   const activeMobileDate = selectedMobileDate || mobileAvailableDates[0] || weekendDates[0];
-  const selectedDateSlots = mobileAvailableSlots.filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === activeMobileDate);
+  const selectedDateSlots = mobileAvailableSlots
+    .filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === activeMobileDate)
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
 
   const reschedule = async (bookingId: string) => {
@@ -399,7 +401,7 @@ export default function PartyPage() {
                 <p style={{ margin: 0, fontWeight: 700 }}>{new Date(slot.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                 <p style={{ margin: '6px 0', color: '#6f628d' }}>{new Date(slot.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} - {new Date(slot.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
                 <p style={{ margin: '6px 0', color: slot.status === 'mine' ? '#5f3da4' : '#2f7a47', fontWeight: 700 }}>{slot.status === 'mine' ? 'Reserved by you' : 'Available'}</p>
-                <p style={{ margin: 0, fontSize: 13, color: '#6f628d' }}>Use the booking form below to reserve this date/time.</p>
+                {slot.status !== 'mine' && <p style={{ margin: 0, fontSize: 13, color: '#6f628d' }}>Use the booking form below to reserve this date/time.</p>}
               </article>
             ))
           )}

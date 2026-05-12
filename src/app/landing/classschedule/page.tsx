@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -73,6 +73,7 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
 };
 
 export default function ClassSchedulePage() {
+  const checkoutFinalizingRef = useRef(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
@@ -194,7 +195,7 @@ export default function ClassSchedulePage() {
     const personId = params.get('person_id');
     const itemsRaw = params.get('items');
 
-    if (checkout !== 'success' || !personId) return;
+    if (checkout !== 'success' || !personId || checkoutFinalizingRef.current) return;
     const safeItems = (itemsRaw
       ? itemsRaw
           .split(',')
@@ -214,6 +215,7 @@ export default function ClassSchedulePage() {
     if (safeItems.length === 0) return;
 
     const finalize = async () => {
+      checkoutFinalizingRef.current = true;
       setCheckouting(true);
       const res = await fetch('/api/classes/checkout', {
         method: 'POST',
@@ -224,6 +226,7 @@ export default function ClassSchedulePage() {
       if (!res.ok || !json.ok) {
         setMessage(json.error ?? 'Could not finalize checkout after payment.');
         setCheckouting(false);
+        checkoutFinalizingRef.current = false;
         return;
       }
 
@@ -232,6 +235,7 @@ export default function ClassSchedulePage() {
       setRecentlyPaidRegistrationIds((json.checkout_summary?.registration_ids ?? []) as string[]);
       setCartItems([]);
       setCheckouting(false);
+      checkoutFinalizingRef.current = false;
       await load();
       window.history.replaceState({}, '', '/landing/classschedule');
     };

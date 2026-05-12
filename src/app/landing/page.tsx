@@ -261,6 +261,7 @@ export default function AppHome() {
 
       {menuOpen && (
         <section className="mobileMenu">
+          {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && <Link href="/staff">Owner Dashboard</Link>}
           <Link href="/landing/people">My People</Link>
           <Link href="/landing/qr">My QR Codes</Link>
           <Link href="/landing/membership">My Membership</Link>
@@ -288,11 +289,11 @@ export default function AppHome() {
         </section>
       )}
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, alignItems: 'stretch', marginBottom: 20 }}>
-        <div style={{ padding: 20, borderRadius: 24, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 18px 30px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'stretch', marginBottom: 16 }}>
+        <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
-          
+          <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>Operating hours: Tue–Sun · 9:00am–6:00pm</p>
         </div>
 
         <CrowdLevelCard compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
@@ -408,7 +409,7 @@ export default function AppHome() {
         @media (max-width: 1024px){
           .desktopOnly { display:none; }
           .mobileTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-          .menuBtn { border:1px solid #d9c8f7; background:#fff; border-radius:12px; padding:10px 12px; font-size:18px; }
+          .menuBtn { border:1px solid #d9c8f7; background:#fff; border-radius:12px; padding:8px 10px; font-size:14px; font-weight:700; }
           .mobileMenu { display:grid; gap:10px; border:1px solid #e3d0fb; border-radius:14px; background:#fffdf9; padding:12px; margin-bottom:14px; }
           .mobileMenu :global(a), .mobileMenu button { color:#4f3f82; text-decoration:none; font-weight:600; }
           .mobileBottom { position:fixed; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 10px max(10px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
