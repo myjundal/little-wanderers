@@ -66,6 +66,8 @@ export default function PartyPage() {
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultWeekendDate());
   const [rescheduleSlot, setRescheduleSlot] = useState<'11:00' | '15:00'>('11:00');
+  const [selectedMobileDate, setSelectedMobileDate] = useState<string>('');
+  const [selectedMobileWeek, setSelectedMobileWeek] = useState<string>('');
 
   const [form, setForm] = useState({
     party_date: getDefaultWeekendDate(),
@@ -324,6 +326,24 @@ export default function PartyPage() {
     })),
   ];
 
+  const mobileAvailableSlots = slots.filter((slot) => slot.status === 'available' || slot.status === 'mine');
+  const getWeekendDates = (anchor: string) => {
+    const d = new Date(`${anchor}T00:00:00`);
+    const sat = new Date(d);
+    sat.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+    const sun = new Date(sat);
+    sun.setDate(sat.getDate() + 1);
+    return [sat.toISOString().slice(0, 10), sun.toISOString().slice(0, 10)];
+  };
+  const weekendAnchor = selectedMobileWeek || new Date().toISOString().slice(0, 10);
+  const weekendDates = getWeekendDates(weekendAnchor);
+  const mobileAvailableDates = weekendDates.filter((date) => mobileAvailableSlots.some((slot) => new Date(slot.start).toISOString().slice(0, 10) === date));
+  const activeMobileDate = selectedMobileDate || mobileAvailableDates[0] || weekendDates[0];
+  const selectedDateSlots = mobileAvailableSlots
+    .filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === activeMobileDate)
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+
   const reschedule = async (bookingId: string) => {
     const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
     const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 14);
@@ -349,7 +369,44 @@ export default function PartyPage() {
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
 
-      <AvailabilityCalendar title="Party booking calendar" slots={slots} />
+      <div className="desktopCalendar"><AvailabilityCalendar title="Party booking calendar" slots={slots} /></div>
+      <section className="mobileSlots" style={{ marginTop: 12 }}>
+        <h3 style={{ margin: '0 0 10px', color: '#4f3f82' }}>Choose a date</h3>
+        <input type="date" value={weekendAnchor} onChange={(e) => { setSelectedMobileWeek(e.target.value); setSelectedMobileDate(''); }} style={{ width: '100%', border: '1px solid #dbcdf5', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }} />
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
+          {mobileAvailableDates.map((date) => (
+            <button
+              key={date}
+              onClick={() => setSelectedMobileDate(date)}
+              style={{
+                borderRadius: 999,
+                border: date === activeMobileDate ? '1px solid #9b7fd1' : '1px solid #dbcdf5',
+                background: date === activeMobileDate ? '#f1e9ff' : '#fff',
+                color: '#4f3f82',
+                padding: '8px 12px',
+                whiteSpace: 'nowrap',
+                fontWeight: 700,
+              }}
+            >
+              {new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+          {selectedDateSlots.length === 0 ? (
+            <p style={{ margin: 0, color: '#6f628d' }}>No available party slots for this date.</p>
+          ) : (
+            selectedDateSlots.map((slot) => (
+              <article key={`slot-${slot.id}`} style={{ border: '1px solid #e3d4fa', borderRadius: 12, padding: 12, background: '#fff' }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{new Date(slot.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p style={{ margin: '6px 0', color: '#6f628d' }}>{new Date(slot.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} - {new Date(slot.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
+                <p style={{ margin: '6px 0', color: slot.status === 'mine' ? '#5f3da4' : '#2f7a47', fontWeight: 700 }}>{slot.status === 'mine' ? 'Reserved by you' : 'Available'}</p>
+                {slot.status !== 'mine' && <p style={{ margin: 0, fontSize: 13, color: '#6f628d' }}>Use the booking form below to reserve this date/time.</p>}
+              </article>
+            ))
+          )}
+        </div>
+      </section>
 
       <section style={{ marginTop: 16, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h3 style={{ marginTop: 0, color: '#4f3f82' }}>🪐 New party booking</h3>
@@ -444,7 +501,7 @@ export default function PartyPage() {
               return (
                 <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 12, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <p style={{ margin: 0, fontWeight: 600 }}>
-                    {new Date(item.start_time).toLocaleString()} ~ {new Date(item.end_time).toLocaleString()}
+                    {new Date(item.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(item.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}
                   </p>
                   {item.birthday_child_name && (
                     <p style={{ margin: '6px 0' }}>
@@ -461,7 +518,7 @@ export default function PartyPage() {
                     {item.price_quote_cents == null ? '-' : `$${(item.price_quote_cents / 100).toFixed(2)}`}
                   </p>
                   <p style={{ margin: '6px 0', color: '#555' }}>Notes: {prettyNote(item.notes)}</p>
-                  <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString() : '-'}</p>
+                  <p style={{ margin: '6px 0', color: '#6a6082' }}>Last updated: {item.status_updated_at ? new Date(item.status_updated_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase() : '-'}</p>
                   {item.attendance_finalized_at && (
                     <div style={{ margin: '8px 0', padding: 10, borderRadius: 10, border: '1px solid #d6f0dc', background: '#f2fbf4' }}>
                       <p style={{ margin: '2px 0', color: '#2f7a47', fontWeight: 700 }}>Final attendance submitted</p>
@@ -525,6 +582,14 @@ export default function PartyPage() {
           ← Back to my dashboard
         </Link>
       </p>
+    <style jsx>{`
+  .mobileSlots { display:none; }
+  .desktopCalendar { display:block; }
+  @media (max-width: 900px) {
+    .mobileSlots { display:block; }
+    .desktopCalendar { display:none; }
+  }
+`}</style>
     </main>
   );
 }

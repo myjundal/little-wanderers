@@ -32,17 +32,17 @@ function readString(row: OccupancyStatusRow | null, keys: string[]) {
   return null;
 }
 
-export function normalizeCrowdLevel(level: string | null, occupancy: number, capacity: number): CrowdLevel {
+export function normalizeCrowdLevel(level: string | null, occupancy: number, _capacity: number): CrowdLevel {
   const normalized = level?.trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_') ?? '';
   if (normalized === 'light') return 'light';
   if (normalized === 'moderate') return 'moderate';
   if (normalized === 'busy') return 'busy';
   if (normalized === 'near_capacity' || normalized === 'nearcapacity') return 'near_capacity';
 
-  const ratio = capacity > 0 ? Math.max(occupancy, 0) / capacity : 0;
-  if (ratio >= 0.8) return 'near_capacity';
-  if (ratio >= 0.5) return 'busy';
-  if (ratio >= 0.25) return 'moderate';
+  const count = Math.max(occupancy, 0);
+  if (count >= 24) return 'near_capacity';
+  if (count >= 16) return 'busy';
+  if (count >= 9) return 'moderate';
   return 'light';
 }
 
@@ -50,28 +50,28 @@ export function getCrowdLevelMeta(level: CrowdLevel) {
   switch (level) {
     case 'light':
       return {
-        label: 'Light',
+        label: 'Calm',
         accent: '#eadcff',
         accentStrong: '#c8a5ff',
         description: 'A softer, more open moment in the studio right now.',
       };
     case 'moderate':
       return {
-        label: 'Moderate',
+        label: 'Comfortable',
         accent: '#dfc9ff',
         accentStrong: '#aa7cf4',
         description: 'A steady flow of families with room to settle in.',
       };
     case 'busy':
       return {
-        label: 'Busy',
+        label: 'Getting Busy',
         accent: '#ceb0ff',
         accentStrong: '#8751df',
         description: 'A lively stretch with a fuller feel than usual.',
       };
     case 'near_capacity':
       return {
-        label: 'Near Capacity',
+        label: 'Almost Full',
         accent: '#b184ff',
         accentStrong: '#5c29b2',
         description: 'One of our fuller moments today, with limited extra room.',

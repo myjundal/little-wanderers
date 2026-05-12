@@ -234,7 +234,7 @@ async function finalizeCheckout(context: LoadedContext, createdByUserId: string,
   };
 }
 
-async function createSquarePaymentLink(context: LoadedContext, userEmail?: string | null) {
+async function createSquarePaymentLink(context: LoadedContext, userEmail?: string | null, baseUrl?: string) {
   if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) {
     throw new Error('Square payment is not configured');
   }
@@ -259,7 +259,7 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
     };
   });
 
-  const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const base = baseUrl || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
   const checkoutItemsToken = context.requestedItems.map((item) => `${item.class_id}:${item.quantity}`).join(',');
   const redirectParams = new URLSearchParams({
     checkout: 'success',
@@ -326,7 +326,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, checkout_summary });
     }
 
-    const payment = await createSquarePaymentLink(context, user.email);
+    const payment = await createSquarePaymentLink(context, user.email, new URL(req.url).origin);
     return Response.json({ ok: true, payment_url: payment.url, total_price_cents: payment.total_price_cents });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';

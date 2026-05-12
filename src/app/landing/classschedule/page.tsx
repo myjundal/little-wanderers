@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -32,6 +32,7 @@ type ClassItem = {
 
 type RegistrationItem = {
   id: string;
+  person_id: string;
   status: 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
   attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
   attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming';
@@ -73,6 +74,7 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
 };
 
 export default function ClassSchedulePage() {
+  const checkoutFinalizingRef = useRef(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
@@ -87,7 +89,9 @@ export default function ClassSchedulePage() {
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
+  const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
   const [cartHydrated, setCartHydrated] = useState(false);
+  const [cartAssignments, setCartAssignments] = useState<Record<string, string[]>>({});
   const CART_STORAGE_KEY = 'lw_class_cart_v1';
 
   useEffect(() => {
@@ -194,7 +198,7 @@ export default function ClassSchedulePage() {
     const personId = params.get('person_id');
     const itemsRaw = params.get('items');
 
-    if (checkout !== 'success' || !personId) return;
+    if (checkout !== 'success' || !personId || checkoutFinalizingRef.current) return;
     const safeItems = (itemsRaw
       ? itemsRaw
           .split(',')
@@ -214,6 +218,7 @@ export default function ClassSchedulePage() {
     if (safeItems.length === 0) return;
 
     const finalize = async () => {
+      checkoutFinalizingRef.current = true;
       setCheckouting(true);
       const res = await fetch('/api/classes/checkout', {
         method: 'POST',
@@ -224,6 +229,7 @@ export default function ClassSchedulePage() {
       if (!res.ok || !json.ok) {
         setMessage(json.error ?? 'Could not finalize checkout after payment.');
         setCheckouting(false);
+        checkoutFinalizingRef.current = false;
         return;
       }
 
@@ -232,6 +238,7 @@ export default function ClassSchedulePage() {
       setRecentlyPaidRegistrationIds((json.checkout_summary?.registration_ids ?? []) as string[]);
       setCartItems([]);
       setCheckouting(false);
+      checkoutFinalizingRef.current = false;
       await load();
       window.history.replaceState({}, '', '/landing/classschedule');
     };
@@ -388,10 +395,14 @@ export default function ClassSchedulePage() {
       return;
     }
 
+    const firstSelectedPerson = cartClassDetails
+      .map((item) => cartAssignments[item.class_id]?.[0])
+      .find(Boolean) ?? selectedPersonId;
+
     const res = await fetch('/api/classes/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mode: 'create_payment_link', items: filteredItems, person_id: selectedPersonId }),
+      body: JSON.stringify({ mode: 'create_payment_link', items: filteredItems, person_id: firstSelectedPerson }),
     });
 
     const json = await res.json();
@@ -457,28 +468,7 @@ export default function ClassSchedulePage() {
 
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
 
-      <AvailabilityCalendar title="Class calendar" slots={classSlots} showUpcoming />
-
-      <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
-        <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
-        <select
-          value={selectedPersonId}
-          onChange={(e) => setSelectedPersonId(e.target.value)}
-          style={{ minWidth: 280, padding: 6 }}
-        >
-          {people.length === 0 && <option value="">No people found</option>}
-          {people.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.first_name} {p.last_name ?? ''}
-            </option>
-          ))}
-        </select>
-        {!isAuthenticated && (
-          <p style={{ marginBottom: 0, marginTop: 8, color: '#6f628d' }}>
-            Browse classes freely. Sign in is required at checkout.
-          </p>
-        )}
-      </section>
+      <div className="desktopCalendar"><AvailabilityCalendar title="Class calendar" slots={classSlots} showUpcoming /></div>
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
@@ -499,6 +489,24 @@ export default function ClassSchedulePage() {
                     <span>Qty: {item.quantity}</span>
                     <button onClick={() => updateCartQuantity(item.class_id, item.quantity + 1)}>+</button>
                     <button onClick={() => updateCartQuantity(item.class_id, 0)} style={{ marginLeft: 8 }}>Remove</button>
+                  </div>
+                  <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                    {Array.from({ length: item.quantity }).map((_, seatIndex) => (
+                      <label key={`assign-${item.class_id}-${seatIndex}`} style={{ fontSize: 13, color: '#6f628d' }}>
+                        Register {item.classInfo.title} for:
+                        <select
+                          value={cartAssignments[item.class_id]?.[seatIndex] ?? selectedPersonId}
+                          onChange={(e) => setCartAssignments((prev) => {
+                            const next = [...(prev[item.class_id] ?? Array.from({ length: item.quantity }, () => selectedPersonId))];
+                            next[seatIndex] = e.target.value;
+                            return { ...prev, [item.class_id]: next };
+                          })}
+                          style={{ marginLeft: 8, padding: '4px 6px', borderRadius: 8 }}
+                        >
+                          {people.map((p) => <option key={`${item.class_id}-p-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+                        </select>
+                      </label>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -547,7 +555,7 @@ export default function ClassSchedulePage() {
                     )}
                   </h3>
                   <p style={{ margin: '8px 0', color: '#666' }}>
-                    {new Date(c.start_time).toLocaleString()} ~ {new Date(c.end_time).toLocaleTimeString()}
+                    {new Date(c.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(c.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}
                   </p>
                   <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Instructor: {c.instructor_name ?? '-'}</p>
@@ -572,6 +580,10 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class history</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <select value={historyPersonFilter} onChange={(e) => setHistoryPersonFilter(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8 }}>
+            <option value='all'>All family members</option>
+            {people.map((p) => <option key={`hist-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+          </select>
           <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Upcoming ({upcomingHistoryItems.length})
           </button>
@@ -607,7 +619,9 @@ export default function ClassSchedulePage() {
                 ? pastHistoryItems
                 : historyTab === 'favorites'
                   ? favoriteItems
-                  : cancelledItems).map((item) => (
+                  : cancelledItems)
+              .filter((item) => historyPersonFilter === 'all' || item.person_id === historyPersonFilter)
+              .map((item) => (
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
@@ -620,11 +634,11 @@ export default function ClassSchedulePage() {
                   <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Payment completed</p>
                 )}
                 <p style={{ margin: '6px 0' }}>
-                  Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}
+                  Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase() : '-'}
                 </p>
                 <p style={{ margin: '6px 0' }}>Category: {item.class?.category ?? '-'}</p>
                 {item.attendance_marked_at && (
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Attendance marked: {new Date(item.attendance_marked_at).toLocaleString()}</p>
+                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Attendance marked: {new Date(item.attendance_marked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
                 )}
                 {item.class?.status === 'cancelled' && (
                   <p style={{ margin: '6px 0', color: '#8a3f6b', fontWeight: 600 }}>
@@ -682,6 +696,12 @@ export default function ClassSchedulePage() {
           ← Back to my dashboard
         </Link>
       </p>
+    <style jsx>{`
+  .desktopCalendar { display:block; }
+  @media (max-width: 900px) {
+    .desktopCalendar { display:none; }
+  }
+`}</style>
     </main>
   );
 }

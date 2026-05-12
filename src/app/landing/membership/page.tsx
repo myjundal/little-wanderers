@@ -62,7 +62,7 @@ export default async function MembershipPage() {
       return (
         <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 640, margin: '0 auto', boxSizing: 'border-box' }}>
           <h1>Membership</h1>
-          <section style={{ marginTop: 16, overflow: 'hidden' }}>
+          <section style={{ marginTop: 16, overflow: 'visible' }}>
             <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
             <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
               <StartSubscriptionButton plan="monthly" />
@@ -90,7 +90,7 @@ export default async function MembershipPage() {
           </span>{' '}
 
           {!isActive && (
-            <section style={{ marginTop: 16, overflow: 'hidden' }}>
+            <section style={{ marginTop: 16, overflow: 'visible' }}>
               <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
               <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
                 <StartSubscriptionButton plan="monthly" />
