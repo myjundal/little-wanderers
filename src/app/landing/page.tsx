@@ -266,14 +266,7 @@ export default function AppHome() {
           <Link href="/landing/membership">My Membership</Link>
           <Link href="/landing/classschedule">Class Schedule / My Class Booking</Link>
           <Link href="/landing/party">Party Calendar / My Parties</Link>
-          <details>
-            <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#4f3f82' }}>Contact</summary>
-            <div style={{ display: 'grid', gap: 6, marginTop: 8, paddingLeft: 8 }}>
-              <a href="https://instagram.com/littlewanderers.weha" target="_blank" rel="noreferrer">Instagram: @littlewanderers.weha</a>
-              <a href="https://facebook.com/littlewanderers.weha" target="_blank" rel="noreferrer">Facebook: littlewanderers.weha</a>
-              <Link href="/visit-us">Visit us (location details)</Link>
-            </div>
-          </details>
+          <Link href="/landing/contact">Contact</Link>
           <Link href="/faq">FAQ</Link>
           <button onClick={handleLogout} style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, color: '#8a3f6b', fontWeight: 700 }}>Log Out</button>
         </section>
@@ -417,6 +410,7 @@ export default function AppHome() {
           .mobileTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
           .menuBtn { border:1px solid #d9c8f7; background:#fff; border-radius:12px; padding:10px 12px; font-size:18px; }
           .mobileMenu { display:grid; gap:10px; border:1px solid #e3d0fb; border-radius:14px; background:#fffdf9; padding:12px; margin-bottom:14px; }
+          .mobileMenu :global(a), .mobileMenu button { color:#4f3f82; text-decoration:none; font-weight:600; }
           .mobileBottom { position:fixed; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 10px max(10px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;

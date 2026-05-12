@@ -114,7 +114,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
           >
             ‹
           </button>
-          <b style={{ color: '#4f3f82' }}>{cursor.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</b>
+          <b style={{ color: '#4f3f82' }}>{new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(cursor)}</b>
           <button
             aria-label="Next month"
             style={{
@@ -189,7 +189,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {slot.label}{slot.count > 1 ? ` (${slot.count})` : ''}
+                    {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} {slot.label}{slot.count > 1 ? ` (${slot.count})` : ''}
                   </div>
                 ))}
                 {displaySlots.length > 2 && (
@@ -213,7 +213,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
             {upcoming.map((slot) => (
               <div key={`upcoming-${slot.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, color: '#5b4a84' }}>
-                <span>{new Date(slot.start).toLocaleDateString()} · {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                <span>{new Intl.DateTimeFormat('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).format(new Date(slot.start))} · {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()}</span>
                 <span style={{ fontWeight: 700, color: statusColor[slot.status] }}>{slot.label}</span>
               </div>
             ))}
@@ -230,7 +230,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
             {(dayMap.get(expandedDayKey) ?? []).map((slot) => (
               <div key={slot.id} style={{ fontSize: 12, color: '#4f3f82' }}>
-                {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · {slot.label} ({statusLabel[slot.status]})
+                {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} · {slot.label} ({statusLabel[slot.status]})
               </div>
             ))}
           </div>

@@ -67,6 +67,7 @@ export default function PartyPage() {
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultWeekendDate());
   const [rescheduleSlot, setRescheduleSlot] = useState<'11:00' | '15:00'>('11:00');
   const [selectedMobileDate, setSelectedMobileDate] = useState<string>('');
+  const [selectedMobileWeek, setSelectedMobileWeek] = useState<string>('');
 
   const [form, setForm] = useState({
     party_date: getDefaultWeekendDate(),
@@ -325,8 +326,18 @@ export default function PartyPage() {
     })),
   ];
 
-  const mobileAvailableSlots = slots.filter((slot) => slot.status === 'available');
-  const mobileAvailableDates = Array.from(new Set(mobileAvailableSlots.map((slot) => new Date(slot.start).toISOString().slice(0, 10)))).slice(0, 8);
+  const mobileAvailableSlots = slots.filter((slot) => slot.status === 'available' || slot.status === 'mine');
+  const weekKey = (isoDate: string) => {
+    const d = new Date(`${isoDate}T00:00:00`);
+    const sunday = new Date(d);
+    sunday.setDate(d.getDate() - d.getDay());
+    return sunday.toISOString().slice(0, 10);
+  };
+  const weekOptions = Array.from(new Set(mobileAvailableSlots.map((slot) => weekKey(new Date(slot.start).toISOString().slice(0, 10))))).slice(0, 12);
+  const activeWeek = selectedMobileWeek || weekOptions[0] || '';
+  const mobileAvailableDates = Array.from(new Set(mobileAvailableSlots
+    .filter((slot) => weekKey(new Date(slot.start).toISOString().slice(0, 10)) === activeWeek)
+    .map((slot) => new Date(slot.start).toISOString().slice(0, 10))));
   const activeMobileDate = selectedMobileDate || mobileAvailableDates[0] || '';
   const selectedDateSlots = mobileAvailableSlots.filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === activeMobileDate);
 
@@ -359,6 +370,17 @@ export default function PartyPage() {
       <div className="desktopCalendar"><AvailabilityCalendar title="Party booking calendar" slots={slots} /></div>
       <section className="mobileSlots" style={{ marginTop: 12 }}>
         <h3 style={{ margin: '0 0 10px', color: '#4f3f82' }}>Choose a date</h3>
+        <select
+          value={activeWeek}
+          onChange={(e) => { setSelectedMobileWeek(e.target.value); setSelectedMobileDate(''); }}
+          style={{ width: '100%', border: '1px solid #dbcdf5', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }}
+        >
+          {weekOptions.map((week) => (
+            <option key={week} value={week}>
+              Week of {new Date(`${week}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </option>
+          ))}
+        </select>
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
           {mobileAvailableDates.map((date) => (
             <button
@@ -374,7 +396,7 @@ export default function PartyPage() {
                 fontWeight: 700,
               }}
             >
-              {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' })}
+              {new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
             </button>
           ))}
         </div>
@@ -384,9 +406,9 @@ export default function PartyPage() {
           ) : (
             selectedDateSlots.map((slot) => (
               <article key={`slot-${slot.id}`} style={{ border: '1px solid #e3d4fa', borderRadius: 12, padding: 12, background: '#fff' }}>
-                <p style={{ margin: 0, fontWeight: 700 }}>{new Date(slot.start).toLocaleDateString()}</p>
-                <p style={{ margin: '6px 0', color: '#6f628d' }}>{new Date(slot.start).toLocaleTimeString()} - {new Date(slot.end).toLocaleTimeString()}</p>
-                <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Available</p>
+                <p style={{ margin: 0, fontWeight: 700 }}>{new Date(slot.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p style={{ margin: '6px 0', color: '#6f628d' }}>{new Date(slot.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} - {new Date(slot.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
+                <p style={{ margin: '6px 0', color: slot.status === 'mine' ? '#5f3da4' : '#2f7a47', fontWeight: 700 }}>{slot.status === 'mine' ? 'Reserved by you' : 'Available'}</p>
                 <p style={{ margin: 0, fontSize: 13, color: '#6f628d' }}>Use the booking form below to reserve this date/time.</p>
               </article>
             ))
