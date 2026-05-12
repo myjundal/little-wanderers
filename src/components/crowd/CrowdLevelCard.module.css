@@ -179,3 +179,16 @@
     flex-direction: column;
   }
 }
+
+@media (max-width: 640px) {
+  .scale {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scaleItem {
+    white-space: normal;
+    line-height: 1.25;
+    font-size: 0.74rem;
+    padding: 7px 8px;
+  }
+}

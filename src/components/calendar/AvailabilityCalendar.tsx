@@ -127,7 +127,8 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6, marginTop: 12 }}>
+      <div style={{ overflowX: 'auto', marginTop: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(44px, 1fr))', gap: 6, minWidth: 720 }}>
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
           <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: '#6f628d' }}>
             {d}
@@ -195,6 +196,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
             </div>
           );
         })}
+      </div>
       </div>
 
       {expandedDayKey && (

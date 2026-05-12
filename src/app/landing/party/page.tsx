@@ -343,7 +343,7 @@ export default function PartyPage() {
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 860, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
+    <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 860, margin: '0 auto', boxSizing: 'border-box', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>🎉 My Party Bookings</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Choose a weekend party slot, pay your deposit, and manage your booking from one dashboard.</p>
 
@@ -372,13 +372,13 @@ export default function PartyPage() {
           <label>
             Party date (Saturday or Sunday)
             <br />
-            <input type="date" value={form.party_date} onChange={(e) => setForm((prev) => ({ ...prev, party_date: e.target.value }))} />
+            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} type="date" value={form.party_date} onChange={(e) => setForm((prev) => ({ ...prev, party_date: e.target.value }))} />
           </label>
 
           <label>
             Time
             <br />
-            <select value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value }))}>
+            <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value }))}>
               <option value="11:00">11:00 AM (ends at 2:00 PM)</option>
               <option value="15:00">3:00 PM (ends at 6:00 PM)</option>
             </select>
@@ -387,19 +387,19 @@ export default function PartyPage() {
           <label>
             Birthday child&apos;s name (optional)
             <br />
-            <input value={form.birthday_child_name} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} />
+            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.birthday_child_name} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} />
           </label>
 
           <label>
             Age they are turning (optional)
             <br />
-            <input type="number" min={1} max={21} value={form.birthday_age} onChange={(e) => setForm((prev) => ({ ...prev, birthday_age: e.target.value }))} />
+            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} type="number" min={1} max={21} value={form.birthday_age} onChange={(e) => setForm((prev) => ({ ...prev, birthday_age: e.target.value }))} />
           </label>
 
           <label>
             If this is not a birthday party, what is this for and who is this for? (optional, i.e. Baby naming for Maya)
             <br />
-            <input
+            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
               value={form.occasion_details}
               maxLength={120}
               onChange={(e) => setForm((prev) => ({ ...prev, occasion_details: e.target.value }))}
@@ -409,7 +409,7 @@ export default function PartyPage() {
           <label>
             Expected guests (optional)
             <br />
-            <input
+            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
               type="number"
               min={1}
               value={form.headcount_expected}
@@ -420,10 +420,10 @@ export default function PartyPage() {
           <label>
             Notes (optional)
             <br />
-            <textarea rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
+            <textarea style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
           </label>
 
-          <button onClick={submit} disabled={submitting}>
+          <button style={{ width: '100%' }} onClick={submit} disabled={submitting}>
             {submitting ? 'Preparing payment...' : `Confirm party and pay $${PARTY_DEPOSIT_DOLLARS} deposit`}
           </button>
         </div>
@@ -497,12 +497,12 @@ export default function PartyPage() {
                       <label>
                         New date
                         <br />
-                        <input type="date" value={rescheduleDate} onChange={(e) => setRescheduleDate(e.target.value)} />
+                        <input style={{ width: '100%' }} type="date" value={rescheduleDate} onChange={(e) => setRescheduleDate(e.target.value)} />
                       </label>
                       <label style={{ marginLeft: 10 }}>
                         New time
                         <br />
-                        <select value={rescheduleSlot} onChange={(e) => setRescheduleSlot(e.target.value as '11:00' | '15:00')}>
+                        <select style={{ width: '100%' }} value={rescheduleSlot} onChange={(e) => setRescheduleSlot(e.target.value as '11:00' | '15:00')}>
                           <option value="11:00">11:00 AM</option>
                           <option value="15:00">3:00 PM</option>
                         </select>
