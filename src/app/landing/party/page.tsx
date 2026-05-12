@@ -66,6 +66,7 @@ export default function PartyPage() {
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultWeekendDate());
   const [rescheduleSlot, setRescheduleSlot] = useState<'11:00' | '15:00'>('11:00');
+  const [selectedMobileDate, setSelectedMobileDate] = useState<string>('');
 
   const [form, setForm] = useState({
     party_date: getDefaultWeekendDate(),
@@ -324,6 +325,12 @@ export default function PartyPage() {
     })),
   ];
 
+  const mobileAvailableSlots = slots.filter((slot) => slot.status === 'available');
+  const mobileAvailableDates = Array.from(new Set(mobileAvailableSlots.map((slot) => new Date(slot.start).toISOString().slice(0, 10)))).slice(0, 8);
+  const activeMobileDate = selectedMobileDate || mobileAvailableDates[0] || '';
+  const selectedDateSlots = mobileAvailableSlots.filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === activeMobileDate);
+
+
   const reschedule = async (bookingId: string) => {
     const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
     const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 14);
@@ -351,19 +358,39 @@ export default function PartyPage() {
 
       <div className="desktopCalendar"><AvailabilityCalendar title="Party booking calendar" slots={slots} /></div>
       <section className="mobileSlots" style={{ marginTop: 12 }}>
-        <h3 style={{ margin: "0 0 10px", color: "#4f3f82" }}>Party slots</h3>
-        <div style={{ display: "grid", gap: 10 }}>
-          {slots.slice(0, 24).map((slot) => {
-            const isOpen = slot.status === "available";
-            return (
-              <article key={`slot-${slot.id}`} style={{ border: "1px solid #e3d4fa", borderRadius: 12, padding: 12, background: isOpen ? "#fff" : "#f8f4ff", opacity: isOpen ? 1 : 0.75 }}>
+        <h3 style={{ margin: '0 0 10px', color: '#4f3f82' }}>Choose a date</h3>
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
+          {mobileAvailableDates.map((date) => (
+            <button
+              key={date}
+              onClick={() => setSelectedMobileDate(date)}
+              style={{
+                borderRadius: 999,
+                border: date === activeMobileDate ? '1px solid #9b7fd1' : '1px solid #dbcdf5',
+                background: date === activeMobileDate ? '#f1e9ff' : '#fff',
+                color: '#4f3f82',
+                padding: '8px 12px',
+                whiteSpace: 'nowrap',
+                fontWeight: 700,
+              }}
+            >
+              {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' })}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+          {selectedDateSlots.length === 0 ? (
+            <p style={{ margin: 0, color: '#6f628d' }}>No available party slots for this date.</p>
+          ) : (
+            selectedDateSlots.map((slot) => (
+              <article key={`slot-${slot.id}`} style={{ border: '1px solid #e3d4fa', borderRadius: 12, padding: 12, background: '#fff' }}>
                 <p style={{ margin: 0, fontWeight: 700 }}>{new Date(slot.start).toLocaleDateString()}</p>
-                <p style={{ margin: "6px 0" }}>{new Date(slot.start).toLocaleTimeString()} ({new Date(slot.start).getHours() === 11 ? "11am" : "3pm"})</p>
-                <p style={{ margin: "6px 0", color: isOpen ? "#2f7a47" : "#8a3f6b" }}>{isOpen ? "Available" : "Booked"}</p>
-                <button disabled={!isOpen} style={{ width: "100%" }}>{isOpen ? "Book Party" : "Unavailable"}</button>
+                <p style={{ margin: '6px 0', color: '#6f628d' }}>{new Date(slot.start).toLocaleTimeString()} - {new Date(slot.end).toLocaleTimeString()}</p>
+                <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Available</p>
+                <p style={{ margin: 0, fontSize: 13, color: '#6f628d' }}>Use the booking form below to reserve this date/time.</p>
               </article>
-            );
-          })}
+            ))
+          )}
         </div>
       </section>
 

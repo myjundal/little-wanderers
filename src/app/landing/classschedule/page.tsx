@@ -458,18 +458,6 @@ export default function ClassSchedulePage() {
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
 
       <div className="desktopCalendar"><AvailabilityCalendar title="Class calendar" slots={classSlots} showUpcoming /></div>
-      <section className="mobileAgenda" style={{ marginTop: 12 }}>
-        <h3 style={{ margin: "0 0 8px", color: "#4f3f82" }}>Upcoming by date</h3>
-        <div style={{ display: "grid", gap: 10 }}>
-          {classes.map((c) => (
-            <article key={`agenda-${c.id}`} style={{ border: "1px solid #e3d4fa", borderRadius: 12, padding: 12, background: "#fff" }}>
-              <strong>{new Date(c.start_time).toLocaleDateString()}</strong>
-              <p style={{ margin: "6px 0", color: "#6f628d" }}>{new Date(c.start_time).toLocaleTimeString()} - {new Date(c.end_time).toLocaleTimeString()}</p>
-              <p style={{ margin: 0 }}>{c.title}</p>
-            </article>
-          ))}
-        </div>
-      </section>
 
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
@@ -695,10 +683,8 @@ export default function ClassSchedulePage() {
         </Link>
       </p>
     <style jsx>{`
-  .mobileAgenda { display:none; }
   .desktopCalendar { display:block; }
   @media (max-width: 900px) {
-    .mobileAgenda { display:block; }
     .desktopCalendar { display:none; }
   }
 `}</style>

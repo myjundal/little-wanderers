@@ -256,7 +256,7 @@ export default function AppHome() {
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
       <header className="mobileTop">
         <Link href="/landing" style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none' }}>Little Wanderers</Link>
-        <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open menu">☰</button>
+        <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open more menu">☰ More</button>
       </header>
 
       {menuOpen && (
@@ -266,7 +266,14 @@ export default function AppHome() {
           <Link href="/landing/membership">My Membership</Link>
           <Link href="/landing/classschedule">Class Schedule / My Class Booking</Link>
           <Link href="/landing/party">Party Calendar / My Parties</Link>
-          <Link href="/visit-us">Contact · Instagram/Facebook + Location</Link>
+          <details>
+            <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#4f3f82' }}>Contact</summary>
+            <div style={{ display: 'grid', gap: 6, marginTop: 8, paddingLeft: 8 }}>
+              <a href="https://instagram.com/littlewanderers.weha" target="_blank" rel="noreferrer">Instagram: @littlewanderers.weha</a>
+              <a href="https://facebook.com/littlewanderers.weha" target="_blank" rel="noreferrer">Facebook: littlewanderers.weha</a>
+              <Link href="/visit-us">Visit us (location details)</Link>
+            </div>
+          </details>
           <Link href="/faq">FAQ</Link>
           <button onClick={handleLogout} style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, color: '#8a3f6b', fontWeight: 700 }}>Log Out</button>
         </section>
@@ -292,19 +299,14 @@ export default function AppHome() {
         <div style={{ padding: 20, borderRadius: 24, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 18px 30px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
-          <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Hello {displayName ?? 'there'}! 🤝</p>
+          
         </div>
 
         <CrowdLevelCard compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
       </section>
 
 
-      <section className="quickGrid" style={{ marginTop: 8, marginBottom: 20 }}>
-        <Link className="quickCard" href="/landing/qr">My QR Codes</Link>
-        <Link className="quickCard" href="/landing/classschedule">Classes</Link>
-        <Link className="quickCard" href="/landing/party">My Party</Link>
-        <Link className="quickCard" href="/landing/people">My People</Link>
-      </section>
+      
 
       {/* Membership badge + CTA */}
       <section className="desktopOnly" style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
