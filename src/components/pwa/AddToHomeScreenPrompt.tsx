@@ -31,8 +31,9 @@ export default function AddToHomeScreenPrompt() {
 
   return (
     <aside style={{ position: 'fixed', bottom: 16, left: 16, right: 16, zIndex: 1000, borderRadius: 16, padding: 14, background: '#fff8ea', border: '1px solid #f2d9a6', boxShadow: '0 10px 24px rgba(0,0,0,0.12)' }}>
-      <p style={{ margin: 0, color: '#5b4b2e', fontWeight: 700 }}>Add to Home Screen for a better experience</p>
-      <p style={{ margin: '6px 0 0', color: '#6d6480' }}>Add Little Wanderers to your home screen for a faster, app-like experience.</p>
+      <p style={{ margin: 0, color: '#5b4b2e', fontWeight: 700 }}>Welcome to Little Wanderers!</p>
+      <p style={{ margin: '6px 0 0', color: '#6d6480' }}>Want quicker access next time? Add Little Wanderers to your phone’s home screen to check crowd levels, book visits, and manage everything in one easy place.</p>
+      <p style={{ margin: '6px 0 0', color: '#6d6480' }}>Tap “Add to Home Screen” to save it to your phone.</p>
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button
           type="button"
