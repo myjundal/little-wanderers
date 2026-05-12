@@ -356,12 +356,12 @@ export default function PartyPage() {
 
         <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, border: '1px solid #eadfff', background: '#faf5ff' }}>
           <strong>Please note:</strong>
-          <ul style={{ margin: '8px 0 0 20px' }}>
-            <li>50% of the party fee ($150) is required to reserve your party.</li>
-            <li>The deposit is non-refundable.</li>
-            <li>Rest of the party fee ($150) is required upon arrival before party setup.</li>
-            <li>You may reschedule once, up to 7 days before your party date.</li>
-            <li>Final headcount is due 3 days before the party.</li>
+          <ul style={{ margin: '10px 0 0 20px', display: 'grid', gap: 6, lineHeight: 1.5 }}>
+            <li><strong>Deposit:</strong> 50% of the party fee ($150) is required to reserve your party.</li>
+            <li><strong>Refunds:</strong> The deposit is non-refundable.</li>
+            <li><strong>Remaining balance:</strong> The other 50% ($150) is due upon arrival before setup.</li>
+            <li><strong>Reschedule:</strong> Available once, up to 7 days before your party date.</li>
+            <li><strong>Headcount due:</strong> Final guest count is due 3 days before party day.</li>
           </ul>
         </div>
 

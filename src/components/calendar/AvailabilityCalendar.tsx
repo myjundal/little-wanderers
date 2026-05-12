@@ -40,6 +40,13 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
+  const upcoming = useMemo(
+    () => [...slots]
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+      .filter((slot) => new Date(slot.start).getTime() >= Date.now())
+      .slice(0, 8),
+    [slots]
+  );
 
   const { dayMap, calendarDays } = useMemo(() => {
     const map = new Map<string, CalendarSlot[]>();
@@ -198,6 +205,20 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
         })}
       </div>
       </div>
+
+      {upcoming.length > 0 && (
+        <div style={{ marginTop: 12, border: '1px solid #e7d8fb', borderRadius: 12, padding: 10, background: '#fff' }}>
+          <strong style={{ color: '#4f3f82' }}>Upcoming at a glance</strong>
+          <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+            {upcoming.map((slot) => (
+              <div key={`upcoming-${slot.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, color: '#5b4a84' }}>
+                <span>{new Date(slot.start).toLocaleDateString()} · {new Date(slot.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                <span style={{ fontWeight: 700, color: statusColor[slot.status] }}>{slot.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {expandedDayKey && (
         <div style={{ marginTop: 12, border: '1px solid #e3d0fb', borderRadius: 12, padding: 10, background: '#fff' }}>

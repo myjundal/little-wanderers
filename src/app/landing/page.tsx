@@ -50,7 +50,6 @@ export default function AppHome() {
   const [ready, setReady] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [appRole, setAppRole] = useState<string | null>(null);
 
 
   // household
@@ -74,9 +73,6 @@ export default function AppHome() {
       setDisplayName(user?.email ?? user?.phone ?? null);
       setIsAuthenticated(Boolean(user));
       if (!user) { setReady(true); return; }
-
-      const { data: roleRow } = await supabase.from('roles').select('role').eq('id', user.id).maybeSingle();
-      setAppRole(roleRow?.role ?? null);
 
       // 2) Resolve household from household_members first (source of truth)
       let householdId: string | null = null;
@@ -310,26 +306,6 @@ export default function AppHome() {
           {waiver.status === 'completed' && waiver.expires_at ? ` · Expires on ${new Date(waiver.expires_at).toLocaleDateString()}` : ''}
         </p>
       </section>
-
-{/* Quick actions */}
-<section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
-  <h3 style={{ marginBottom: 12, fontSize: 18, fontWeight: 500 }}>Quick Actions</h3>
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-    <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
-    <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
-    <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>
-    <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
-    <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
-    {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && (
-      <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
-    )}
-    {/* 내부 운영/개발용 문서 미리보기 */}
-    <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
-      UX Flows (preview)
-    </Link>
-
-</div>
-</section>
 
       {/* Recent visits */}
       <section style={{ marginTop: 16, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>

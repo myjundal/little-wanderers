@@ -60,10 +60,10 @@ export default async function MembershipPage() {
     if (!membershipRow) {
       logger.info({ action: 'membership.lookup_empty', userId: user.id, householdId });
       return (
-        <main style={{ padding: 24, maxWidth: 640 }}>
+        <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 640, margin: '0 auto', boxSizing: 'border-box' }}>
           <h1>Membership</h1>
           <section style={{ marginTop: 16 }}>
-            <p>You don&apos;t have an active membership right now.</p>
+            <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
             <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
               <StartSubscriptionButton plan="monthly" />
             </div>
@@ -81,7 +81,7 @@ export default async function MembershipPage() {
     const isActive = !membershipRow.renews_at || membershipRow.renews_at > nowISO;
 
     return (
-      <main style={{ padding: 24, maxWidth: 640 }}>
+      <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 640, margin: '0 auto', boxSizing: 'border-box' }}>
         <h1>Membership</h1>
 
         <div style={{ marginTop: 8 }}>
@@ -91,7 +91,7 @@ export default async function MembershipPage() {
 
           {!isActive && (
             <section style={{ marginTop: 16 }}>
-              <p>You don&apos;t have an active membership right now.</p>
+              <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
               <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
                 <StartSubscriptionButton plan="monthly" />
               </div>
