@@ -122,8 +122,8 @@ export default function PeoplePage() {
       <h1>Family & Household</h1>
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
 
-      <section style={{ marginTop: 24 }}>
-        <h3 style={{ margin: 0, paddingRight: 2 }}>Family Members</h3>
+      <section style={{ marginTop: 24, overflow: 'hidden' }}>
+        <h3 style={{ margin: 0, padding: '0 2px' }}>Family Members</h3>
         {people.length === 0 && <p>No one is registered yet.</p>}
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
           {people.map((p) => (

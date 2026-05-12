@@ -14,6 +14,7 @@ type Props = {
   title: string;
   subtitle?: string;
   slots: CalendarSlot[];
+  showUpcoming?: boolean;
 };
 
 const statusColor: Record<CalendarSlot['status'], string> = {
@@ -34,7 +35,7 @@ function ymd(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export default function AvailabilityCalendar({ title, subtitle, slots }: Props) {
+export default function AvailabilityCalendar({ title, subtitle, slots, showUpcoming = false }: Props) {
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -134,8 +135,8 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto', marginTop: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(44px, 1fr))', gap: 6, minWidth: 720 }}>
+      <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
           <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: '#6f628d' }}>
             {d}
@@ -206,7 +207,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots }: Props) 
       </div>
       </div>
 
-      {upcoming.length > 0 && (
+      {showUpcoming && upcoming.length > 0 && (
         <div style={{ marginTop: 12, border: '1px solid #e7d8fb', borderRadius: 12, padding: 10, background: '#fff' }}>
           <strong style={{ color: '#4f3f82' }}>Upcoming at a glance</strong>
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
