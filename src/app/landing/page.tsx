@@ -50,7 +50,6 @@ export default function AppHome() {
   const [ready, setReady] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [appRole, setAppRole] = useState<string | null>(null);
 
 
   // household
@@ -58,6 +57,7 @@ export default function AppHome() {
 
   // widgets
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
+  const [appRole, setAppRole] = useState<string | null>(null);
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -311,25 +311,21 @@ export default function AppHome() {
         </p>
       </section>
 
-{/* Quick actions */}
-<section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
-  <h3 style={{ marginBottom: 12, fontSize: 18, fontWeight: 500 }}>Quick Actions</h3>
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-    <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
-    <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
-    <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>
-    <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
-    <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
-    {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && (
-      <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
-    )}
-    {/* 내부 운영/개발용 문서 미리보기 */}
-    <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
-      UX Flows (preview)
-    </Link>
-
-</div>
-</section>
+      <section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
+          <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
+          <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>
+          <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
+          <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
+          {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && (
+            <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
+          )}
+          <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
+            UX Flows (preview)
+          </Link>
+        </div>
+      </section>
 
       {/* Recent visits */}
       <section style={{ marginTop: 16, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>

@@ -457,7 +457,7 @@ export default function ClassSchedulePage() {
 
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
 
-      <AvailabilityCalendar title="Class calendar" slots={classSlots} />
+      <AvailabilityCalendar title="Class calendar" slots={classSlots} showUpcoming />
 
       <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>

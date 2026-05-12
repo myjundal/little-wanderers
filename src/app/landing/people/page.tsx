@@ -118,21 +118,36 @@ export default function PeoplePage() {
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 760 }}>
+    <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }}>
       <h1>Family & Household</h1>
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
+
+      <section style={{ marginTop: 24, overflow: 'hidden' }}>
+        <h3 style={{ margin: 0, padding: '0 2px' }}>Family Members</h3>
+        {people.length === 0 && <p>No one is registered yet.</p>}
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+          {people.map((p) => (
+            <li key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, padding: 10, border: '1px solid #e6ddf4', borderRadius: 10 }}>
+              <span style={{ fontSize: 13, textTransform: 'capitalize', color: '#6d6480' }}>{p.role}</span>
+              <span style={{ fontWeight: 700 }}>{p.first_name} {p.last_name ?? ''}</span>
+              <span style={{ color: '#666', fontSize: 14 }}>{p.birthdate ?? '-'}</span>
+              <button onClick={() => removePerson(p.id)} style={{ width: '100%' }}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
         <h3>Add Family Member</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          <select style={{ width: '100%', minWidth: 0 }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             <option value="adult">Adult</option>
             <option value="child">Child</option>
           </select>
-          <input placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
-          <input placeholder="Last name (optional)" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
-          <input type="date" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: e.target.value })} />
-          <button type="button" onClick={addPerson}>Add Family Member</button>
+          <input style={{ width: '100%', minWidth: 0 }} placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+          <input style={{ width: '100%', minWidth: 0 }} placeholder="Last name (optional)" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          <input style={{ width: '100%', minWidth: 0 }} type="date" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: e.target.value })} />
+          <button style={{ width: '100%' }} type="button" onClick={addPerson}>Add Family Member</button>
         </div>
       </section>
 
@@ -142,20 +157,6 @@ export default function PeoplePage() {
         <p style={{ color: uiError ? '#8a3f6b' : '#2f7a44', marginTop: 10 }}>{uiError ?? uiMessage}</p>
       )}
 
-      <section style={{ marginTop: 24 }}>
-        <h3>Family Members</h3>
-        {people.length === 0 && <p>No one is registered yet.</p>}
-        <ul>
-          {people.map((p) => (
-            <li key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
-              <span style={{ width: 64, textTransform: 'capitalize' }}>{p.role}</span>
-              <span style={{ minWidth: 160 }}>{p.first_name} {p.last_name ?? ''}</span>
-              <span style={{ color: '#666' }}>{p.birthdate ?? '-'}</span>
-              <button onClick={() => removePerson(p.id)} style={{ marginLeft: 'auto' }}>Remove</button>
-            </li>
-          ))}
-        </ul>
-      </section>
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
         <h3>Invite Family Member</h3>
@@ -165,7 +166,7 @@ export default function PeoplePage() {
             placeholder="Email"
             value={inviteForm.email}
             onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
-            style={{ minWidth: 240 }}
+            style={{ width: '100%', minWidth: 0 }}
           />
           <button type="button" onClick={sendInvite} disabled={sendingInvite}>{sendingInvite ? 'Sending…' : 'Send Invite'}</button>
         </div>

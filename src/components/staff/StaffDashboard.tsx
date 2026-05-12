@@ -570,7 +570,7 @@ export default function StaffDashboard() {
                         {item.registrants.map((reg) => {
                           const key = `${item.id}:${reg.registration_id}`;
                           return (
-                            <div key={reg.registration_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 220px', gap: 8, alignItems: 'center' }}>
+                            <div key={reg.registration_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8, alignItems: 'center' }}>
                               <div>
                                 <div style={{ fontWeight: 600, color: '#4f3f82' }}>{reg.person_name}</div>
                                 <div style={{ color: '#7a6d97', fontSize: 12 }}>Registration: {reg.registration_status}</div>
@@ -579,7 +579,7 @@ export default function StaffDashboard() {
                                 value={reg.attendance_status}
                                 disabled={savingAttendanceKey === key}
                                 onChange={(e) => updateClassAttendance(item.id, reg.registration_id, e.target.value as 'unknown' | 'attended' | 'cancelled' | 'no_show')}
-                                style={inputStyle}
+                                style={{ ...inputStyle, width: '100%' }}
                               >
                                 <option value="unknown">Unknown / not marked</option>
                                 <option value="attended">Attended</option>
@@ -612,7 +612,7 @@ export default function StaffDashboard() {
         <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Review and manage scheduled party bookings</h2>
         <p style={{ margin: 0, color: '#6d6480' }}>Status changes are written back immediately so the customer view stays in sync.</p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
           <div style={{ display: 'grid', gap: 12 }}>
             {partyBookings.map((item) => (
               <button
@@ -622,6 +622,7 @@ export default function StaffDashboard() {
                   textAlign: 'left',
                   borderRadius: 18,
                   padding: 16,
+                  width: '100%',
                   border: selectedBooking?.id === item.id ? '2px solid #8a63d2' : '1px solid #eadfff',
                   background: '#fff',
                   cursor: 'pointer',
@@ -678,7 +679,7 @@ export default function StaffDashboard() {
                       <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count + selectedBooking.current_adult_count}</div>
                     </div>
                   </div>
-                  <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(90px, 120px))', gap: 8 }}>
+                  <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
                     <label style={{ fontSize: 12, color: '#6d6480' }}>
                       Child
                       <input
@@ -714,7 +715,7 @@ export default function StaffDashboard() {
                     </label>
                   </div>
                   {!selectedBooking.attendance_finalized_at && (
-                    <button style={{ ...buttonStyle, marginTop: 8, background: '#f3ebff', color: '#5f3da4' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'set_counts')}>
+                    <button style={{ ...buttonStyle, marginTop: 8, background: '#f3ebff', color: '#5f3da4', width: '100%' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'set_counts')}>
                       Update counts
                     </button>
                   )}
@@ -728,7 +729,7 @@ export default function StaffDashboard() {
                       <button style={{ ...buttonStyle, marginTop: 8, background: '#fff', color: '#2f7a47', border: '1px solid #8fcea0' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'reopen')}>Reopen attendance (explicit edit)</button>
                     </div>
                   ) : (
-                    <button style={{ ...buttonStyle, marginTop: 10, background: '#2f7a47', color: '#fff' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'finalize')}>Finalize attendance</button>
+                    <button style={{ ...buttonStyle, marginTop: 10, background: '#2f7a47', color: '#fff', width: '100%' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'finalize')}>Finalize attendance</button>
                   )}
                 </div>
                 <p style={{ color: '#6d6480' }}>
@@ -738,7 +739,7 @@ export default function StaffDashboard() {
                 <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
                   {selectedBooking.status !== 'cancelled' && (
-                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
+                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b', width: '100%' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
                   )}
                 </div>
               </>

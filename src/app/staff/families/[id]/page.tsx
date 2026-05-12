@@ -226,7 +226,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   const waiverUrl = process.env.NEXT_PUBLIC_WAIVER_URL ?? 'https://docs.google.com/forms/d/e/1FAIpQLSeleoqMn8UslZs8RiEg_02Ld4t-5WuIyhhHySoyb_3mCYJMUw/viewform?usp=dialog';
 
   return (
-    <main style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
+    <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <p style={{ margin: 0 }}><Link href="/staff/families">← Back to Family Management</Link></p>
         <p style={{ margin: 0 }}><Link href="/staff">← Back to Staff Dashboard</Link></p>
@@ -239,11 +239,11 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         <h3 style={{ marginTop: 0 }}>Edit / Add family members</h3>
         <div style={{ display: 'grid', gap: 8 }}>
           {editableMembers.map((member, idx) => (
-            <div key={`${member.id ?? 'new'}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 120px', gap: 8 }}>
-              <input value={member.first_name} placeholder="First name" onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, first_name: e.target.value } : m)))} />
-              <input value={member.last_name} placeholder="Last name" onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, last_name: e.target.value } : m)))} />
-              <input type="date" value={member.birthdate} onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, birthdate: e.target.value } : m)))} />
-              <select value={member.role} onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, role: e.target.value as 'adult' | 'child' } : m)))}>
+            <div key={`${member.id ?? 'new'}-${idx}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+              <input style={{ width: '100%', minWidth: 0 }} value={member.first_name} placeholder="First name" onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, first_name: e.target.value } : m)))} />
+              <input style={{ width: '100%', minWidth: 0 }} value={member.last_name} placeholder="Last name" onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, last_name: e.target.value } : m)))} />
+              <input style={{ width: '100%', minWidth: 0 }} type="date" value={member.birthdate} onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, birthdate: e.target.value } : m)))} />
+              <select style={{ width: '100%', minWidth: 0 }} value={member.role} onChange={(e) => setEditableMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, role: e.target.value as 'adult' | 'child' } : m)))}>
                 <option value="adult">Adult</option>
                 <option value="child">Child</option>
               </select>
