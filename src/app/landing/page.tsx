@@ -2,6 +2,7 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
@@ -255,7 +256,10 @@ export default function AppHome() {
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
       <header className="mobileTop">
-        <Link href="/landing" style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none' }}>Little Wanderers</Link>
+        <Link href="/landing" style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          <Image src="/logo.png" alt="Little Wanderers logo" width={28} height={28} />
+          Little Wanderers
+        </Link>
         <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open more menu" style={{ color: '#4f3f82' }}>☰ More</button>
       </header>
 
@@ -289,7 +293,7 @@ export default function AppHome() {
         </section>
       )}
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'stretch', marginBottom: 16 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr)', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
         <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>

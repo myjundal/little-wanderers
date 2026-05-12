@@ -88,6 +88,7 @@ export default function ClassSchedulePage() {
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
+  const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
   const [cartHydrated, setCartHydrated] = useState(false);
   const CART_STORAGE_KEY = 'lw_class_cart_v1';
 
@@ -463,29 +464,12 @@ export default function ClassSchedulePage() {
 
       <div className="desktopCalendar"><AvailabilityCalendar title="Class calendar" slots={classSlots} showUpcoming /></div>
 
-      <section style={{ marginTop: 16, padding: 12, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff' }}>
-        <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Choose a person to book</label>
-        <select
-          value={selectedPersonId}
-          onChange={(e) => setSelectedPersonId(e.target.value)}
-          style={{ minWidth: 280, padding: 6 }}
-        >
-          {people.length === 0 && <option value="">No people found</option>}
-          {people.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.first_name} {p.last_name ?? ''}
-            </option>
-          ))}
-        </select>
-        {!isAuthenticated && (
-          <p style={{ marginBottom: 0, marginTop: 8, color: '#6f628d' }}>
-            Browse classes freely. Sign in is required at checkout.
-          </p>
-        )}
-      </section>
-
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Register classes for</label>
+        <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)} style={{ width: '100%', maxWidth: 360, padding: 8, marginBottom: 10 }}>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+        </select>
         <p style={{ marginTop: -2, color: '#6f628d', fontSize: 13 }}>
           A class you&apos;ve already registered for won&apos;t be added to the cart. To modify a booking, please cancel and rebook.
         </p>
@@ -576,6 +560,10 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class history</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <select value={historyPersonFilter} onChange={(e) => setHistoryPersonFilter(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8 }}>
+            <option value='all'>All family members</option>
+            {people.map((p) => <option key={`hist-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+          </select>
           <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Upcoming ({upcomingHistoryItems.length})
           </button>
@@ -611,7 +599,9 @@ export default function ClassSchedulePage() {
                 ? pastHistoryItems
                 : historyTab === 'favorites'
                   ? favoriteItems
-                  : cancelledItems).map((item) => (
+                  : cancelledItems)
+              .filter((item) => historyPersonFilter === 'all' || item.person_id === historyPersonFilter)
+              .map((item) => (
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
