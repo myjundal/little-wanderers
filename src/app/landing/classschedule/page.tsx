@@ -32,6 +32,7 @@ type ClassItem = {
 
 type RegistrationItem = {
   id: string;
+  person_id: string;
   status: 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
   attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
   attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming';
