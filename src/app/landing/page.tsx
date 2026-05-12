@@ -293,7 +293,7 @@ export default function AppHome() {
         </section>
       )}
 
-      <section className="heroGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(280px,1fr))', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
+      <section className="heroGrid" style={{ display: 'grid', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
         <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
@@ -406,6 +406,7 @@ export default function AppHome() {
       <style jsx>{`
         .mobileTop { display:none; }
         .mobileMenu { display:none; }
+        .heroGrid { grid-template-columns: repeat(2,minmax(280px,1fr)); }
         .quickGrid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
         .quickCard { border:1px solid #e3d0fb; border-radius:16px; padding:16px; background:#fffdf9; color:#4f3f82; text-decoration:none; font-weight:700; text-align:center; }
         .mobileBottom { display:none; }
@@ -417,8 +418,8 @@ export default function AppHome() {
           .menuBtn { border:1px solid #d9c8f7; background:#fff; border-radius:12px; padding:8px 10px; font-size:14px; font-weight:700; }
           .mobileMenu { display:grid; gap:10px; border:1px solid #e3d0fb; border-radius:14px; background:#fffdf9; padding:12px; margin-bottom:14px; }
           .mobileMenu :global(a), .mobileMenu button { color:#4f3f82; text-decoration:none; font-weight:600; }
-          .heroGrid { grid-template-columns: minmax(0, 1fr); }
-          .mobileBottom { position:fixed; left:0; right:0; bottom:0; max-width:980px; margin:0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 10px max(10px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
+          .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
+          .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 10px max(10px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;
  border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }

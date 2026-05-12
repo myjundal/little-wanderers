@@ -18,14 +18,6 @@ type CrowdPayload = {
   error?: string;
 };
 
-const LEVELS = ['light', 'moderate', 'busy', 'near_capacity'] as const;
-const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
-  light: 'Light',
-  moderate: 'Moderate',
-  busy: 'Busy',
-  near_capacity: 'Near Capacity',
-};
-
 const BUSINESS_TIME_ZONE = 'America/New_York';
 const WEEKLY_HOURS = [
   { label: 'Sunday', hours: '9am–6pm' },
@@ -154,21 +146,6 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
           <span className={styles.metricLabel}>Flow complexity</span>
           <strong className={styles.metricValue}>{loading ? 'Refreshing…' : data?.label ?? 'Loading'}</strong>
         </div>
-      </div>}
-
-      {showStatus && <div className={styles.scale}>
-        {LEVELS.map((level) => {
-          const active = data?.crowd_level === level;
-          return (
-            <div
-              key={level}
-              className={`${styles.scaleItem} ${active ? styles.active : ''}`.trim()}
-              style={active ? { background: data?.accent_strong ?? '#8751df' } : undefined}
-            >
-              {LEVEL_LABELS[level]}
-            </div>
-          );
-        })}
       </div>}
 
       {showStatus && <div className={styles.meta}>
