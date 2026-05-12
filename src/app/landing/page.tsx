@@ -50,7 +50,7 @@ export default function AppHome() {
   const [ready, setReady] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // household
   const [householdId, setHouseholdId] = useState<string | null>(null);
@@ -234,6 +234,13 @@ export default function AppHome() {
     })();
   }, [householdId]);
 
+
+  const handleLogout = async () => {
+    const supabase = createBrowserSupabaseClient();
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  };
+
   if (!ready) return <main style={{ padding: 24 }}>Loading…</main>;
 
   if (!isAuthenticated) {
@@ -246,7 +253,24 @@ export default function AppHome() {
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto' }}>
+    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
+      <header className="mobileTop">
+        <Link href="/landing" style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none' }}>Little Wanderers</Link>
+        <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open menu">☰</button>
+      </header>
+
+      {menuOpen && (
+        <section className="mobileMenu">
+          <Link href="/landing/people">My People</Link>
+          <Link href="/landing/qr">My QR Codes</Link>
+          <Link href="/landing/membership">My Membership</Link>
+          <Link href="/landing/classschedule">Class Schedule / My Class Booking</Link>
+          <Link href="/landing/party">Party Calendar / My Parties</Link>
+          <Link href="/visit-us">Contact · Instagram/Facebook + Location</Link>
+          <Link href="/faq">FAQ</Link>
+          <button onClick={handleLogout} style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, color: '#8a3f6b', fontWeight: 700 }}>Log Out</button>
+        </section>
+      )}
       {(waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
         <section style={{ marginBottom: 14, padding: 14, borderRadius: 12, border: '1px solid #f1cf8a', background: '#fff6e8' }}>
           <p style={{ margin: 0, fontWeight: 700, color: '#7f4a04' }}>
@@ -268,14 +292,22 @@ export default function AppHome() {
         <div style={{ padding: 20, borderRadius: 24, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 18px 30px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
-          <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Check your household details, classes, party bookings, and today’s approximate studio flow from one calm landing page.</p>
+          <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.6 }}>Hello {displayName ?? 'there'}! 🤝</p>
         </div>
 
         <CrowdLevelCard compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
       </section>
 
+
+      <section className="quickGrid" style={{ marginTop: 8, marginBottom: 20 }}>
+        <Link className="quickCard" href="/landing/qr">My QR Codes</Link>
+        <Link className="quickCard" href="/landing/classschedule">Classes</Link>
+        <Link className="quickCard" href="/landing/party">My Party</Link>
+        <Link className="quickCard" href="/landing/people">My People</Link>
+      </section>
+
       {/* Membership badge + CTA */}
-      <section style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
+      <section className="desktopOnly" style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between', }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Badge status={membership.status} />
@@ -311,7 +343,7 @@ export default function AppHome() {
         </p>
       </section>
 
-      <section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
+      <section className="desktopOnly" style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
           <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
@@ -328,7 +360,7 @@ export default function AppHome() {
       </section>
 
       {/* Recent visits */}
-      <section style={{ marginTop: 16, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
+      <section className="desktopOnly" style={{ marginTop: 16, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h3 style={{ margin: 0 }}>Recent visits</h3>
           <Link href="/landing/checkins" style={{ marginLeft: 'auto' }}>View all</Link>
@@ -362,6 +394,33 @@ export default function AppHome() {
           </table>
         )}
       </section>
+
+      <nav className="mobileBottom">
+        <Link href="/landing">Home</Link>
+        <Link href="/landing/qr">QR Codes</Link>
+        <Link href="/landing/classschedule">Classes</Link>
+        <Link href="/landing/party">Party</Link>
+        <button onClick={() => setMenuOpen((v) => !v)}>More</button>
+      </nav>
+
+      <style jsx>{`
+        .mobileTop { display:none; }
+        .mobileMenu { display:none; }
+        .quickGrid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
+        .quickCard { border:1px solid #e3d0fb; border-radius:16px; padding:16px; background:#fffdf9; color:#4f3f82; text-decoration:none; font-weight:700; text-align:center; }
+        .mobileBottom { display:none; }
+        .desktopOnly { display:block; }
+        @media (max-width: 1024px){
+          .desktopOnly { display:none; }
+          .mobileTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+          .menuBtn { border:1px solid #d9c8f7; background:#fff; border-radius:12px; padding:10px 12px; font-size:18px; }
+          .mobileMenu { display:grid; gap:10px; border:1px solid #e3d0fb; border-radius:14px; background:#fffdf9; padding:12px; margin-bottom:14px; }
+          .mobileBottom { position:fixed; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:10px 10px max(10px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
+          .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
+          min-height:44px;
+ border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }
+        }
+      `}</style>
     </main>
   );
 }

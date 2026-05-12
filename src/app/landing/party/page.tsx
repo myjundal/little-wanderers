@@ -349,7 +349,23 @@ export default function PartyPage() {
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
 
-      <AvailabilityCalendar title="Party booking calendar" slots={slots} />
+      <div className="desktopCalendar"><AvailabilityCalendar title="Party booking calendar" slots={slots} /></div>
+      <section className="mobileSlots" style={{ marginTop: 12 }}>
+        <h3 style={{ margin: "0 0 10px", color: "#4f3f82" }}>Party slots</h3>
+        <div style={{ display: "grid", gap: 10 }}>
+          {slots.slice(0, 24).map((slot) => {
+            const isOpen = slot.status === "available";
+            return (
+              <article key={`slot-${slot.id}`} style={{ border: "1px solid #e3d4fa", borderRadius: 12, padding: 12, background: isOpen ? "#fff" : "#f8f4ff", opacity: isOpen ? 1 : 0.75 }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{new Date(slot.start).toLocaleDateString()}</p>
+                <p style={{ margin: "6px 0" }}>{new Date(slot.start).toLocaleTimeString()} ({new Date(slot.start).getHours() === 11 ? "11am" : "3pm"})</p>
+                <p style={{ margin: "6px 0", color: isOpen ? "#2f7a47" : "#8a3f6b" }}>{isOpen ? "Available" : "Booked"}</p>
+                <button disabled={!isOpen} style={{ width: "100%" }}>{isOpen ? "Book Party" : "Unavailable"}</button>
+              </article>
+            );
+          })}
+        </div>
+      </section>
 
       <section style={{ marginTop: 16, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h3 style={{ marginTop: 0, color: '#4f3f82' }}>🪐 New party booking</h3>
@@ -525,6 +541,14 @@ export default function PartyPage() {
           ← Back to my dashboard
         </Link>
       </p>
+    <style jsx>{`
+  .mobileSlots { display:none; }
+  .desktopCalendar { display:block; }
+  @media (max-width: 900px) {
+    .mobileSlots { display:block; }
+    .desktopCalendar { display:none; }
+  }
+`}</style>
     </main>
   );
 }
