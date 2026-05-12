@@ -327,18 +327,18 @@ export default function PartyPage() {
   ];
 
   const mobileAvailableSlots = slots.filter((slot) => slot.status === 'available' || slot.status === 'mine');
-  const weekKey = (isoDate: string) => {
-    const d = new Date(`${isoDate}T00:00:00`);
-    const sunday = new Date(d);
-    sunday.setDate(d.getDate() - d.getDay());
-    return sunday.toISOString().slice(0, 10);
+  const getWeekendDates = (anchor: string) => {
+    const d = new Date(`${anchor}T00:00:00`);
+    const sat = new Date(d);
+    sat.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+    const sun = new Date(sat);
+    sun.setDate(sat.getDate() + 1);
+    return [sat.toISOString().slice(0, 10), sun.toISOString().slice(0, 10)];
   };
-  const weekOptions = Array.from(new Set(mobileAvailableSlots.map((slot) => weekKey(new Date(slot.start).toISOString().slice(0, 10))))).slice(0, 12);
-  const activeWeek = selectedMobileWeek || weekOptions[0] || '';
-  const mobileAvailableDates = Array.from(new Set(mobileAvailableSlots
-    .filter((slot) => weekKey(new Date(slot.start).toISOString().slice(0, 10)) === activeWeek)
-    .map((slot) => new Date(slot.start).toISOString().slice(0, 10))));
-  const activeMobileDate = selectedMobileDate || mobileAvailableDates[0] || '';
+  const weekendAnchor = selectedMobileWeek || new Date().toISOString().slice(0, 10);
+  const weekendDates = getWeekendDates(weekendAnchor);
+  const mobileAvailableDates = weekendDates.filter((date) => mobileAvailableSlots.some((slot) => new Date(slot.start).toISOString().slice(0, 10) === date));
+  const activeMobileDate = selectedMobileDate || mobileAvailableDates[0] || weekendDates[0];
   const selectedDateSlots = mobileAvailableSlots.filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === activeMobileDate);
 
 
@@ -370,17 +370,7 @@ export default function PartyPage() {
       <div className="desktopCalendar"><AvailabilityCalendar title="Party booking calendar" slots={slots} /></div>
       <section className="mobileSlots" style={{ marginTop: 12 }}>
         <h3 style={{ margin: '0 0 10px', color: '#4f3f82' }}>Choose a date</h3>
-        <select
-          value={activeWeek}
-          onChange={(e) => { setSelectedMobileWeek(e.target.value); setSelectedMobileDate(''); }}
-          style={{ width: '100%', border: '1px solid #dbcdf5', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }}
-        >
-          {weekOptions.map((week) => (
-            <option key={week} value={week}>
-              Week of {new Date(`${week}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </option>
-          ))}
-        </select>
+        <input type="date" value={weekendAnchor} onChange={(e) => { setSelectedMobileWeek(e.target.value); setSelectedMobileDate(''); }} style={{ width: '100%', border: '1px solid #dbcdf5', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }} />
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
           {mobileAvailableDates.map((date) => (
             <button

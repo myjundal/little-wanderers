@@ -256,7 +256,7 @@ export default function AppHome() {
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
       <header className="mobileTop">
         <Link href="/landing" style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none' }}>Little Wanderers</Link>
-        <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open more menu">☰ More</button>
+        <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open more menu" style={{ color: '#4f3f82' }}>☰ More</button>
       </header>
 
       {menuOpen && (

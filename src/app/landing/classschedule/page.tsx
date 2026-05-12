@@ -547,7 +547,7 @@ export default function ClassSchedulePage() {
                     )}
                   </h3>
                   <p style={{ margin: '8px 0', color: '#666' }}>
-                    {new Date(c.start_time).toLocaleString()} ~ {new Date(c.end_time).toLocaleTimeString()}
+                    {new Date(c.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(c.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}
                   </p>
                   <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Instructor: {c.instructor_name ?? '-'}</p>
@@ -620,7 +620,7 @@ export default function ClassSchedulePage() {
                   <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Payment completed</p>
                 )}
                 <p style={{ margin: '6px 0' }}>
-                  Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString() : '-'}
+                  Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase() : '-'}
                 </p>
                 <p style={{ margin: '6px 0' }}>Category: {item.class?.category ?? '-'}</p>
                 {item.attendance_marked_at && (

@@ -181,7 +181,7 @@ export async function POST(req: Request) {
 
       const idempotencyKey = crypto.randomUUID();
       const reference = crypto.createHash('sha1').update(`${householdId}:${start.toISOString()}`).digest('hex').slice(0, 20);
-      const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+      const base = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
       const encodedStart = encodeURIComponent(start.toISOString());
       const encodedEnd = encodeURIComponent(end.toISOString());
       const encodedHeadcount = encodeURIComponent(String(headcountExpected ?? ''));
