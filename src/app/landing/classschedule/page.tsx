@@ -91,6 +91,7 @@ export default function ClassSchedulePage() {
   const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
   const [cartHydrated, setCartHydrated] = useState(false);
+  const [cartAssignments, setCartAssignments] = useState<Record<string, string[]>>({});
   const CART_STORAGE_KEY = 'lw_class_cart_v1';
 
   useEffect(() => {
@@ -394,10 +395,14 @@ export default function ClassSchedulePage() {
       return;
     }
 
+    const firstSelectedPerson = cartClassDetails
+      .map((item) => cartAssignments[item.class_id]?.[0])
+      .find(Boolean) ?? selectedPersonId;
+
     const res = await fetch('/api/classes/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mode: 'create_payment_link', items: filteredItems, person_id: selectedPersonId }),
+      body: JSON.stringify({ mode: 'create_payment_link', items: filteredItems, person_id: firstSelectedPerson }),
     });
 
     const json = await res.json();
@@ -467,10 +472,6 @@ export default function ClassSchedulePage() {
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Register classes for</label>
-        <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)} style={{ width: '100%', maxWidth: 360, padding: 8, marginBottom: 10 }}>
-          {people.map((p) => <option key={p.id} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
-        </select>
         <p style={{ marginTop: -2, color: '#6f628d', fontSize: 13 }}>
           A class you&apos;ve already registered for won&apos;t be added to the cart. To modify a booking, please cancel and rebook.
         </p>
@@ -488,6 +489,24 @@ export default function ClassSchedulePage() {
                     <span>Qty: {item.quantity}</span>
                     <button onClick={() => updateCartQuantity(item.class_id, item.quantity + 1)}>+</button>
                     <button onClick={() => updateCartQuantity(item.class_id, 0)} style={{ marginLeft: 8 }}>Remove</button>
+                  </div>
+                  <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                    {Array.from({ length: item.quantity }).map((_, seatIndex) => (
+                      <label key={`assign-${item.class_id}-${seatIndex}`} style={{ fontSize: 13, color: '#6f628d' }}>
+                        Register {item.classInfo.title} for:
+                        <select
+                          value={cartAssignments[item.class_id]?.[seatIndex] ?? selectedPersonId}
+                          onChange={(e) => setCartAssignments((prev) => {
+                            const next = [...(prev[item.class_id] ?? Array.from({ length: item.quantity }, () => selectedPersonId))];
+                            next[seatIndex] = e.target.value;
+                            return { ...prev, [item.class_id]: next };
+                          })}
+                          style={{ marginLeft: 8, padding: '4px 6px', borderRadius: 8 }}
+                        >
+                          {people.map((p) => <option key={`${item.class_id}-p-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+                        </select>
+                      </label>
+                    ))}
                   </div>
                 </div>
               ))}

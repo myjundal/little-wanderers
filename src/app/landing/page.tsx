@@ -257,7 +257,7 @@ export default function AppHome() {
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
       <header className="mobileTop">
         <Link href="/landing" style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-          <Image src="/logo.png" alt="Little Wanderers logo" width={28} height={28} />
+          <Image src="/logo.png" alt="Little Wanderers logo" width={38} height={38} />
           Little Wanderers
         </Link>
         <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open more menu" style={{ color: '#4f3f82' }}>☰ More</button>
@@ -293,11 +293,19 @@ export default function AppHome() {
         </section>
       )}
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr)', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(280px,1fr))', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
         <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
-          <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>Operating hours: Tue–Sun · 9:00am–6:00pm</p>
+          <section style={{ marginTop: 8, border: '1px solid #e3d0fb', borderRadius: 14, padding: 12, background: '#fff' }}>
+            <p style={{ margin: 0, color: '#5f3da4', fontWeight: 700 }}>Operating information</p>
+            <p style={{ margin: '6px 0 0', color: '#6f628d' }}>Today: {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+            <p style={{ margin: '4px 0 0', color: '#6f628d' }}>Current time: {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ color: '#5f3da4', cursor: 'pointer' }}>Other operating hours</summary>
+              <p style={{ margin: '6px 0 0', color: '#6f628d' }}>Tue–Sun · 9:00am–6:00pm</p>
+            </details>
+          </section>
         </div>
 
         <CrowdLevelCard compact style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
@@ -411,6 +419,7 @@ export default function AppHome() {
         .mobileBottom { display:none; }
         .desktopOnly { display:block; }
         @media (max-width: 1024px){
+          main > section:first-of-type { grid-template-columns: minmax(0, 1fr) !important; }
           .desktopOnly { display:none; }
           .mobileTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
           .menuBtn { border:1px solid #d9c8f7; background:#fff; border-radius:12px; padding:8px 10px; font-size:14px; font-weight:700; }
