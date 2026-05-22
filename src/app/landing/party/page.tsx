@@ -487,7 +487,8 @@ export default function PartyPage() {
       </section>
 
       <section style={{ marginTop: 22 }}>
-        <h3 style={{ color: '#4f3f82' }}>📒 My current booking/history</h3>
+        <details>
+          <summary style={{ color: '#4f3f82', cursor: 'pointer', fontWeight: 700 }}>▸ 📒 My current booking/history</summary>
         {loading ? (
           <p>Loading…</p>
         ) : items.length === 0 ? (
@@ -575,6 +576,7 @@ export default function PartyPage() {
             })}
           </div>
         )}
+        </details>
       </section>
 
       <p style={{ marginTop: 20 }}>

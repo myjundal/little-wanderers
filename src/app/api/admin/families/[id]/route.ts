@@ -11,7 +11,7 @@ export async function GET(_: Request, { params }: Params) {
   const admin = context.admin;
 
   const [{ data: household }, { data: people }, { data: memberships }, { data: waivers }, { data: parties }] = await Promise.all([
-    admin.from('households').select('id,name,phone,created_at').eq('id', id).maybeSingle(),
+    admin.from('households').select('id,name,phone,city,state,created_at').eq('id', id).maybeSingle(),
     admin.from('people').select('id,first_name,last_name,birthdate,role,created_at').eq('household_id', id).order('created_at', { ascending: true }),
     admin.from('memberships').select('id,renews_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
     admin.from('waivers').select('id,signed_at,signed_date,waiver_expires_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),

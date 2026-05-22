@@ -463,7 +463,7 @@ export default function ClassSchedulePage() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
-      <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Add classes, edit your cart, and pay once with Square. You can also cancel booked classes.</p>
 
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
@@ -578,7 +578,11 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class history</h2>
+        <details className="historyDetails">
+          <summary className="historySummary">
+            <span className="historyChevron">▸</span>
+            <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82', fontWeight: 400 }}>🌙 My class history</h2>
+          </summary>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           <select value={historyPersonFilter} onChange={(e) => setHistoryPersonFilter(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8 }}>
             <option value='all'>All family members</option>
@@ -689,6 +693,7 @@ export default function ClassSchedulePage() {
             ))}
           </div>
         )}
+        </details>
       </section>
 
       <p style={{ marginTop: 20 }}>
@@ -698,6 +703,23 @@ export default function ClassSchedulePage() {
       </p>
     <style jsx>{`
   .desktopCalendar { display:block; }
+  .historySummary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    margin: 0 0 10px;
+  }
+  .historySummary::-webkit-details-marker { display: none; }
+  .historyChevron {
+    color: #4f3f82;
+    font-size: 16px;
+    transform: translateY(1px);
+  }
+  .historyDetails[open] .historyChevron {
+    transform: rotate(90deg) translateX(1px);
+  }
   @media (max-width: 900px) {
     .desktopCalendar { display:none; }
   }

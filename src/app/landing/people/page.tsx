@@ -33,6 +33,10 @@ export default function PeoplePage() {
   const [sendingInvite, setSendingInvite] = useState(false);
   const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', birthdate: '' });
   const [inviteForm, setInviteForm] = useState({ email: '' });
+  const [contactForm, setContactForm] = useState({ city: '', state: 'CT' });
+  const [openAdd, setOpenAdd] = useState(false);
+  const [openNotify, setOpenNotify] = useState(false);
+  const [openInvite, setOpenInvite] = useState(false);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -43,6 +47,8 @@ export default function PeoplePage() {
     if (!hid) return;
 
     setHouseholdId(hid);
+    const { data: household } = await supabase.from('households').select('city,state').eq('id', hid).maybeSingle();
+    setContactForm({ city: household?.city ?? '', state: household?.state ?? 'CT' });
 
     const [{ data: ppl }, invitesRes] = await Promise.all([
       supabase.from('people').select('id, role, first_name, last_name, birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
@@ -87,6 +93,11 @@ export default function PeoplePage() {
     setUiMessage('Family member added.');
     await load();
   };
+  const saveHouseholdLocation = async () => {
+    if (!householdId) return;
+    await supabase.from('households').update({ city: contactForm.city || null, state: contactForm.state || 'CT' }).eq('id', householdId);
+    setUiMessage('Family information updated.');
+  };
 
   const sendInvite = async () => {
     setUiError(null);
@@ -121,7 +132,6 @@ export default function PeoplePage() {
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }}>
       <h1>Family & Household</h1>
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
-
       <section style={{ marginTop: 24, overflow: 'visible' }}>
         <h3 style={{ margin: 0, padding: '0 2px' }}>Family Members</h3>
         {people.length === 0 && <p>No one is registered yet.</p>}
@@ -136,9 +146,20 @@ export default function PeoplePage() {
           ))}
         </ul>
       </section>
+      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
+        <h3 style={{ marginTop: 0 }}>Family information</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input style={{ width: '100%' }} placeholder="City" value={contactForm.city} onChange={(e) => setContactForm((p) => ({ ...p, city: e.target.value }))} />
+          <select style={{ width: '100%' }} value={contactForm.state} onChange={(e) => setContactForm((p) => ({ ...p, state: e.target.value }))}>
+            {['CT', 'MA', 'NY', 'RI', 'NJ', 'NH', 'VT', 'ME'].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <button type="button" onClick={saveHouseholdLocation}>Save family information</button>
+        </div>
+      </section>
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
-        <h3>Add Family Member</h3>
+        <button type="button" onClick={() => setOpenAdd((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>{openAdd ? '▾' : '▸'} Add Family Member</button>
+        {openAdd && <>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <select style={{ width: '100%', minWidth: 0 }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             <option value="adult">Adult</option>
@@ -149,9 +170,13 @@ export default function PeoplePage() {
           <input style={{ width: '100%', minWidth: 0 }} type="date" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: e.target.value })} />
           <button style={{ width: '100%' }} type="button" onClick={addPerson}>Add Family Member</button>
         </div>
+        </>}
       </section>
 
-      <NotificationPreferences />
+      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
+        <button type="button" onClick={() => setOpenNotify((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>{openNotify ? '▾' : '▸'} Notification Preferences</button>
+        {openNotify && <NotificationPreferences />}
+      </section>
 
       {(uiError || uiMessage) && (
         <p style={{ color: uiError ? '#8a3f6b' : '#2f7a44', marginTop: 10 }}>{uiError ?? uiMessage}</p>
@@ -159,7 +184,8 @@ export default function PeoplePage() {
 
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
-        <h3>Invite Family Member</h3>
+        <button type="button" onClick={() => setOpenInvite((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>{openInvite ? '▾' : '▸'} Invite Family Member</button>
+        {openInvite && <>
         <p style={{ color: '#6d6480' }}>Invite another family member by email.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <input
@@ -180,6 +206,7 @@ export default function PeoplePage() {
               <li key={invite.id}>{invite.email} · expires {new Date(invite.expires_at).toLocaleDateString()}</li>
             ))}
         </ul>
+        </>}
       </section>
 
       <div style={{ marginTop: 18 }}>

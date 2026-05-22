@@ -15,7 +15,7 @@ export async function PUT(req: Request, { params }: Params) {
   if (!context.ok) return context.response;
 
   const householdId = params.id;
-  const body = (await req.json()) as { members?: MemberInput[] };
+  const body = (await req.json()) as { members?: MemberInput[]; city?: string | null; state?: string | null };
   const members = Array.isArray(body.members) ? body.members : [];
 
   const cleaned = members
@@ -66,6 +66,7 @@ export async function PUT(req: Request, { params }: Params) {
     const { error } = await admin.from('people').delete().in('id', toDelete);
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
+  await admin.from('households').update({ city: body.city ? String(body.city).trim() : null, state: body.state ? String(body.state).trim() : 'CT' }).eq('id', householdId);
 
   return Response.json({ ok: true });
 }
