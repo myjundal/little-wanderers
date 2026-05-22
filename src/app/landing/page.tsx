@@ -2,7 +2,6 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
@@ -51,7 +50,6 @@ export default function AppHome() {
   const [ready, setReady] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // household
   const [householdId, setHouseholdId] = useState<string | null>(null);
@@ -236,11 +234,6 @@ export default function AppHome() {
   }, [householdId]);
 
 
-  const handleLogout = async () => {
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    window.location.href = '/';
-  };
 
   if (!ready) return <main style={{ padding: 24 }}>Loading…</main>;
 
@@ -255,27 +248,6 @@ export default function AppHome() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
-      <header className="mobileTop">
-        <Link href="/landing" style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-          <Image src="/logo.png" alt="Little Wanderers logo" width={38} height={38} />
-          Little Wanderers
-        </Link>
-        <button className="menuBtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Open more menu" style={{ color: '#4f3f82' }}>☰ More</button>
-      </header>
-
-      {menuOpen && (
-        <section className="mobileMenu">
-          {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && <Link href="/staff">Owner Dashboard</Link>}
-          <Link href="/landing/people">My People</Link>
-          <Link href="/landing/qr">My QR Codes</Link>
-          <Link href="/landing/membership">My Membership</Link>
-          <Link href="/landing/classschedule">Class Schedule / My Class Booking</Link>
-          <Link href="/landing/party">Party Calendar / My Parties</Link>
-          <Link href="/landing/contact">Contact</Link>
-          <Link href="/faq">FAQ</Link>
-          <button onClick={handleLogout} style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, color: '#8a3f6b', fontWeight: 700 }}>Log Out</button>
-        </section>
-      )}
       {(waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
         <section style={{ marginBottom: 14, padding: 14, borderRadius: 12, border: '1px solid #f1cf8a', background: '#fff6e8' }}>
           <p style={{ margin: 0, fontWeight: 700, color: '#7f4a04' }}>
@@ -403,8 +375,6 @@ export default function AppHome() {
       </nav>
 
       <style jsx>{`
-        .mobileTop { display:none; }
-        .mobileMenu { display:none; }
         .heroGrid { grid-template-columns: repeat(2,minmax(280px,1fr)); }
         .quickGrid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
         .quickCard { border:1px solid #e3d0fb; border-radius:16px; padding:16px; background:#fffdf9; color:#4f3f82; text-decoration:none; font-weight:700; text-align:center; }
@@ -413,10 +383,6 @@ export default function AppHome() {
         @media (max-width: 1024px){
           main > section:first-of-type { grid-template-columns: minmax(0, 1fr) !important; }
           .desktopOnly { display:none; }
-          .mobileTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-          .menuBtn { border:1px solid #d9c8f7; background:#fff; border-radius:12px; padding:8px 10px; font-size:14px; font-weight:700; }
-          .mobileMenu { display:grid; gap:10px; border:1px solid #e3d0fb; border-radius:14px; background:#fffdf9; padding:12px; margin-bottom:14px; }
-          .mobileMenu :global(a), .mobileMenu button { color:#4f3f82; text-decoration:none; font-weight:600; }
           .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
           .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;

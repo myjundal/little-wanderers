@@ -132,17 +132,6 @@ export default function PeoplePage() {
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }}>
       <h1>Family & Household</h1>
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
-      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Family information</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input style={{ width: '100%' }} placeholder="City" value={contactForm.city} onChange={(e) => setContactForm((p) => ({ ...p, city: e.target.value }))} />
-          <select style={{ width: '100%' }} value={contactForm.state} onChange={(e) => setContactForm((p) => ({ ...p, state: e.target.value }))}>
-            {['CT', 'MA', 'NY', 'RI', 'NJ', 'NH', 'VT', 'ME'].map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <button type="button" onClick={saveHouseholdLocation}>Save family information</button>
-        </div>
-      </section>
-
       <section style={{ marginTop: 24, overflow: 'visible' }}>
         <h3 style={{ margin: 0, padding: '0 2px' }}>Family Members</h3>
         {people.length === 0 && <p>No one is registered yet.</p>}
@@ -157,9 +146,19 @@ export default function PeoplePage() {
           ))}
         </ul>
       </section>
+      <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
+        <h3 style={{ marginTop: 0 }}>Family information</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input style={{ width: '100%' }} placeholder="City" value={contactForm.city} onChange={(e) => setContactForm((p) => ({ ...p, city: e.target.value }))} />
+          <select style={{ width: '100%' }} value={contactForm.state} onChange={(e) => setContactForm((p) => ({ ...p, state: e.target.value }))}>
+            {['CT', 'MA', 'NY', 'RI', 'NJ', 'NH', 'VT', 'ME'].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <button type="button" onClick={saveHouseholdLocation}>Save family information</button>
+        </div>
+      </section>
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
-        <button type="button" onClick={() => setOpenAdd((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700 }}>Add Family Member {openAdd ? '▾' : '▸'}</button>
+        <button type="button" onClick={() => setOpenAdd((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>Add Family Member {openAdd ? '▾' : '▸'}</button>
         {openAdd && <>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <select style={{ width: '100%', minWidth: 0 }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
@@ -175,7 +174,7 @@ export default function PeoplePage() {
       </section>
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
-        <button type="button" onClick={() => setOpenNotify((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700 }}>Notification Preferences {openNotify ? '▾' : '▸'}</button>
+        <button type="button" onClick={() => setOpenNotify((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>Notification Preferences {openNotify ? '▾' : '▸'}</button>
         {openNotify && <NotificationPreferences />}
       </section>
 
@@ -185,7 +184,7 @@ export default function PeoplePage() {
 
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
-        <button type="button" onClick={() => setOpenInvite((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700 }}>Invite Family Member {openInvite ? '▾' : '▸'}</button>
+        <button type="button" onClick={() => setOpenInvite((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>Invite Family Member {openInvite ? '▾' : '▸'}</button>
         {openInvite && <>
         <p style={{ color: '#6d6480' }}>Invite another family member by email.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>

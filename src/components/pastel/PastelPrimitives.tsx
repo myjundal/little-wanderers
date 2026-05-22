@@ -29,7 +29,7 @@ export function PastelHeader() {
       <nav className={styles.navOnlyFaq}>
         <Link href="/faq">FAQ</Link>
         <Link href="/visit-us">Visit us</Link>
-        <Link href="/landing/contact">Contact us</Link>
+        <Link href="/contact">Contact us</Link>
       </nav>
 
       <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
