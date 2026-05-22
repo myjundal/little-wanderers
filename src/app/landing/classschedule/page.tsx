@@ -463,7 +463,7 @@ export default function ClassSchedulePage() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
-      <h1 style={{ fontSize: 34, fontWeight: 900, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Add classes, edit your cart, and pay once with Square. You can also cancel booked classes.</p>
 
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
@@ -579,7 +579,7 @@ export default function ClassSchedulePage() {
 
       <section style={{ marginTop: 24 }}>
         <details>
-          <summary style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82', cursor: 'pointer', fontWeight: 700 }}>🌙 My class history</summary>
+          <summary style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82', cursor: 'pointer', fontWeight: 400 }}>▸ 🌙 My class history</summary>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           <select value={historyPersonFilter} onChange={(e) => setHistoryPersonFilter(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8 }}>
             <option value='all'>All family members</option>
