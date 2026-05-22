@@ -581,7 +581,7 @@ export default function ClassSchedulePage() {
         <details className="historyDetails">
           <summary className="historySummary">
             <span className="historyChevron">▸</span>
-            <span className="historyLabel">🌙 My class history</span>
+            <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82', fontWeight: 400 }}>🌙 My class history</h2>
           </summary>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           <select value={historyPersonFilter} onChange={(e) => setHistoryPersonFilter(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8 }}>
@@ -712,12 +712,6 @@ export default function ClassSchedulePage() {
     margin: 0 0 10px;
   }
   .historySummary::-webkit-details-marker { display: none; }
-  .historyLabel {
-    font-size: 22px;
-    color: #4f3f82;
-    font-weight: 700;
-    line-height: 1.2;
-  }
   .historyChevron {
     color: #4f3f82;
     font-size: 16px;
