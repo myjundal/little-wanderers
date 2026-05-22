@@ -578,8 +578,11 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <details>
-          <summary style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82', cursor: 'pointer' }}>🌙 My class history</summary>
+        <details className="historyDetails">
+          <summary className="historySummary">
+            <span className="historyChevron">▸</span>
+            <span className="historyLabel">🌙 My class history</span>
+          </summary>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           <select value={historyPersonFilter} onChange={(e) => setHistoryPersonFilter(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8 }}>
             <option value='all'>All family members</option>
@@ -700,6 +703,29 @@ export default function ClassSchedulePage() {
       </p>
     <style jsx>{`
   .desktopCalendar { display:block; }
+  .historySummary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    margin: 0 0 10px;
+  }
+  .historySummary::-webkit-details-marker { display: none; }
+  .historyLabel {
+    font-size: 22px;
+    color: #4f3f82;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .historyChevron {
+    color: #4f3f82;
+    font-size: 16px;
+    transform: translateY(1px);
+  }
+  .historyDetails[open] .historyChevron {
+    transform: rotate(90deg) translateX(1px);
+  }
   @media (max-width: 900px) {
     .desktopCalendar { display:none; }
   }
