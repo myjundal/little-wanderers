@@ -25,7 +25,11 @@ export default function HomeComingSoon() {
           <div className={styles.actions}>
             <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
               <span>Join waitlist</span>
-              <small>(Over 280+ local families already joined)</small>
+              <small>(Over 300+ local families already joined)</small>
+            </PastelButton>
+            <PastelButton href="https://www.instagram.com/littlewanderers.weha" secondary external>
+              <span>Follow on Instagram</span>
+              <small>Follow along for buildout sneak peeks</small>
             </PastelButton>
             <PastelButton href="/visit-us" secondary>
               <span>Plan your visit</span>

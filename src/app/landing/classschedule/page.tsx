@@ -578,7 +578,8 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🌙 My class history</h2>
+        <details>
+          <summary style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82', cursor: 'pointer', fontWeight: 700 }}>🌙 My class history</summary>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           <select value={historyPersonFilter} onChange={(e) => setHistoryPersonFilter(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8 }}>
             <option value='all'>All family members</option>
@@ -689,6 +690,7 @@ export default function ClassSchedulePage() {
             ))}
           </div>
         )}
+        </details>
       </section>
 
       <p style={{ marginTop: 20 }}>

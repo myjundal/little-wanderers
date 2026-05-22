@@ -9,7 +9,7 @@ import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/A
 
 type Person = { id: string; first_name: string | null; last_name: string | null; birthdate?: string | null; role: 'adult' | 'child' | null };
 type FamilyDetail = {
-  household: { id: string; name: string | null; phone: string | null };
+  household: { id: string; name: string | null; phone: string | null; city?: string | null; state?: string | null };
   guardians: Person[];
   children: Person[];
   membership_status: string;
@@ -50,6 +50,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   const [partyForm, setPartyForm] = useState({ party_date: new Date().toISOString().slice(0, 10), slot: '11:00', headcount_expected: '', notes: '' });
   const [bookedSlots, setBookedSlots] = useState<Array<{ id: string; start_time: string; end_time: string }>>([]);
   const [editableMembers, setEditableMembers] = useState<MemberForm[]>([]);
+  const [familyLocation, setFamilyLocation] = useState({ city: '', state: 'CT' });
   const [message, setMessage] = useState<string | null>(null);
   const [qrMap, setQrMap] = useState<Record<string, string>>({});
   const [showWaiverPanel, setShowWaiverPanel] = useState(false);
@@ -84,6 +85,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
       role: (person.role === 'child' ? 'child' : 'adult') as 'adult' | 'child',
     }));
     setEditableMembers(members);
+    setFamilyLocation({ city: item.household.city ?? '', state: item.household.state ?? 'CT' });
   }, [item]);
 
   useEffect(() => {
@@ -142,7 +144,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
     const res = await fetch(`/api/admin/families/${familyId}/members`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ members: editableMembers }),
+      body: JSON.stringify({ members: editableMembers, city: familyLocation.city, state: familyLocation.state }),
     });
     const json = await res.json();
     setMessage(json.ok ? 'Family members saved.' : json.error ?? 'Failed to save family members.');
@@ -237,6 +239,12 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
 
       <section style={{ border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
         <h3 style={{ marginTop: 0 }}>Edit / Add family members</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 10 }}>
+          <input value={familyLocation.city} placeholder="City" onChange={(e) => setFamilyLocation((p) => ({ ...p, city: e.target.value }))} />
+          <select value={familyLocation.state} onChange={(e) => setFamilyLocation((p) => ({ ...p, state: e.target.value }))}>
+            {['CT', 'MA', 'NY', 'RI', 'NJ', 'NH', 'VT', 'ME'].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
         <div style={{ display: 'grid', gap: 8 }}>
           {editableMembers.map((member, idx) => (
             <div key={`${member.id ?? 'new'}-${idx}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
