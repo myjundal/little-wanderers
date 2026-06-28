@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
+import { useOwnerDashboardAccess } from '@/lib/use-owner-dashboard-access';
 
 export default function LandingMoreMenu() {
   const [open, setOpen] = useState(false);
+  const canUseOwnerDashboard = useOwnerDashboardAccess();
 
   return (
     <div style={{ marginBottom: 12, position: 'sticky', top: 8, zIndex: 40 }}>
@@ -25,6 +27,9 @@ export default function LandingMoreMenu() {
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/membership">My Membership</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">Class Schedule / My Class Booking</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/party">Party Calendar / My Parties</Link>
+          {canUseOwnerDashboard && (
+            <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">Owner/Staff Dashboard</Link>
+          )}
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/contact">Contact</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/faq">FAQ</Link>
         </section>
