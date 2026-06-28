@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
+import { useOwnerDashboardAccess } from '@/lib/use-owner-dashboard-access';
 import { getWaiverStatus, getWaiverStatusLabel, type WaiverStatus } from '@/lib/waivers';
 
 type RecentItem = {
@@ -56,7 +57,7 @@ export default function AppHome() {
 
   // widgets
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
-  const [appRole, setAppRole] = useState<string | null>(null);
+  const canUseOwnerDashboard = useOwnerDashboardAccess();
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -73,9 +74,6 @@ export default function AppHome() {
       setDisplayName(user?.email ?? user?.phone ?? null);
       setIsAuthenticated(Boolean(user));
       if (!user) { setReady(true); return; }
-
-      const { data: roleRow } = await supabase.from('roles').select('role').eq('id', user.id).maybeSingle();
-      setAppRole(roleRow?.role ?? null);
 
       // 2) Resolve household from household_members first (source of truth)
       let householdId: string | null = null;
@@ -322,7 +320,7 @@ export default function AppHome() {
           <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>
           <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
           <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
-          {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && (
+          {canUseOwnerDashboard && (
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
           )}
           <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
@@ -367,8 +365,9 @@ export default function AppHome() {
         )}
       </section>
 
-      <nav className="mobileBottom">
+      <nav className={canUseOwnerDashboard ? 'mobileBottom mobileBottomStaff' : 'mobileBottom'}>
         <Link href="/landing">Home</Link>
+        {canUseOwnerDashboard && <Link href="/staff">Owner/Staff</Link>}
         <Link href="/landing/qr">QR Codes</Link>
         <Link href="/landing/classschedule">Classes</Link>
         <Link href="/landing/party">Party</Link>
@@ -385,6 +384,7 @@ export default function AppHome() {
           .desktopOnly { display:none; }
           .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
           .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
+          .mobileBottomStaff { grid-template-columns:repeat(5,1fr); }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;
  border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }
