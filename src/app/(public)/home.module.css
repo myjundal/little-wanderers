@@ -5,7 +5,18 @@
 .comingSoon{color:#9E8FBF;font-weight:600;letter-spacing:.02em;margin:18px 0 8px}
 .left p{max-width:520px;color:#4A4A4A;line-height:1.8;font-size:1.04rem;margin-top:10px}
 .subline{color:#8f85a5;font-size:1rem;font-style:italic}
-.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+.actions{display:grid;gap:14px;margin-top:24px}
+.waitlistAction{display:flex;align-items:stretch;gap:12px;width:100%;max-width:520px}
+.waitlistAction>a{flex:0 0 auto;width:auto}
+.secondaryActions{display:flex;gap:12px;flex-wrap:wrap}
+.waitlistCountCard{position:relative;isolation:isolate;display:flex;flex:0 0 auto;align-items:center;justify-content:flex-start;gap:12px;min-width:0;padding:8px 10px 8px 16px;overflow:hidden;border:1px solid rgba(167,139,203,.3);border-radius:18px;background:linear-gradient(135deg,rgba(255,253,249,.98),rgba(242,235,250,.95));box-shadow:0 12px 26px rgba(125,103,156,.11)}
+.waitlistCountCard::before{content:"";position:absolute;z-index:-1;right:-34px;bottom:-46px;width:150px;height:150px;border-radius:50%;background:rgba(241,224,189,.38);filter:blur(2px)}
+.waitlistCountCopy{min-width:0;max-width:150px}
+.waitlistCountEyebrow{display:block;color:#715e89;font-size:.72rem;font-weight:700;letter-spacing:.01em;line-height:1.35}
+.waitlistNumberStage{position:relative;flex:0 0 auto;min-width:112px;padding:10px 12px;overflow:hidden;border:1px solid rgba(255,255,255,.78);border-radius:13px;background:linear-gradient(180deg,#a98dca 0%,#9e82bf 50%,#9478b6 50%,#a489c5 100%);box-shadow:0 10px 20px rgba(113,86,145,.2),inset 0 1px rgba(255,255,255,.32);perspective:700px}
+.waitlistNumberStage::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(78,54,105,.24);box-shadow:0 1px rgba(255,255,255,.15)}
+.waitlistNumber{position:relative;z-index:1;display:block;color:#fffdf9;font-family:var(--font-heading);font-size:clamp(1.9rem,3vw,2.35rem);font-variant-numeric:tabular-nums;letter-spacing:-.04em;line-height:.92;text-align:center;text-shadow:0 2px 1px rgba(72,51,98,.18);transform-origin:center center;animation:waitlistFlip .68s cubic-bezier(.2,.78,.24,1)}
+@keyframes waitlistFlip{0%{opacity:0;transform:translateY(16px) rotateX(-92deg)}65%{opacity:1;transform:translateY(-2px) rotateX(8deg)}100%{opacity:1;transform:translateY(0) rotateX(0)}}
 .heroImageFrame{border-radius:44% 44% 20px 20px;overflow:hidden;border:1px solid #eadff3;background:#f1e0bd2a}
 .heroImageFrame img{display:block;width:100%;height:560px;object-fit:cover;filter:saturate(.92) brightness(1.01)}
 .starOne,.starTwo,.moon{position:absolute;color:#DCCCF0;font-size:1.3rem}
@@ -13,4 +24,6 @@
 .softBand{height:48px;margin-top:20px;border-radius:0 0 32px 32px;background:linear-gradient(180deg,rgba(241,224,189,0.28),rgba(255,255,255,0.7));}
 .values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 8px 10px;color:#6f6a78;font-size:.95rem}
 .values div{display:flex;align-items:center;gap:8px;justify-content:center;text-align:center}
+@media (prefers-reduced-motion:reduce){.waitlistNumber{animation:none}}
 @media (max-width:980px){.page{padding:8px 12px 20px}.hero{grid-template-columns:1fr}.heroImageFrame img{height:390px}.values{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.waitlistAction{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;width:100%}.secondaryActions{display:grid;width:100%}.waitlistCountCard{gap:6px;padding:7px 7px 7px 10px}.waitlistCountCopy{max-width:none}.waitlistCountEyebrow{font-size:.58rem;line-height:1.25}.waitlistNumberStage{min-width:78px;padding:9px 7px}.waitlistNumber{font-size:1.65rem}}

@@ -1,7 +1,11 @@
 import styles from '@/app/(public)/home.module.css';
+import WaitlistCountCard from '@/components/home/WaitlistCountCard';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
+import { getWaitlistCount } from '@/lib/waitlist-count';
 
-export default function HomeComingSoon() {
+export default async function HomeComingSoon() {
+  const waitlistCount = await getWaitlistCount();
+
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
@@ -23,18 +27,22 @@ export default function HomeComingSoon() {
           </p>
           <p className={styles.subline}>Join waitlist for updates and early access!</p>
           <div className={styles.actions}>
-            <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-              <span>Join waitlist</span>
-              <small>(Over 300+ local families already joined)</small>
-            </PastelButton>
-            <PastelButton href="https://www.instagram.com/littlewanderers.weha" secondary external>
-              <span>Follow on Instagram</span>
-              <small>Follow along for buildout sneak peeks</small>
-            </PastelButton>
-            <PastelButton href="/visit-us" secondary>
-              <span>Plan your visit</span>
-              <small>Bishop&apos;s Corner, West Hartford, CT</small>
-            </PastelButton>
+            <div className={styles.waitlistAction}>
+              <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
+                <span>Join waitlist</span>
+              </PastelButton>
+              <WaitlistCountCard initialCount={{ displayCount: waitlistCount.displayCount }} />
+            </div>
+            <div className={styles.secondaryActions}>
+              <PastelButton href="https://www.instagram.com/littlewanderers.weha" secondary external>
+                <span>Follow on Instagram</span>
+                <small>Follow along for buildout sneak peeks</small>
+              </PastelButton>
+              <PastelButton href="/visit-us" secondary>
+                <span>Plan your visit</span>
+                <small>Bishop&apos;s Corner, West Hartford, CT</small>
+              </PastelButton>
+            </div>
           </div>
         </div>
 
