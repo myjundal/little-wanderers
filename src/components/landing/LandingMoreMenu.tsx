@@ -22,14 +22,14 @@ export default function LandingMoreMenu() {
       </header>
       {open && (
         <section style={{ display: 'grid', gap: 10, border: '1px solid #e3d0fb', borderRadius: 14, background: '#fffdf9', padding: 12 }}>
+          {canUseOwnerDashboard && (
+            <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">Owner/Staff Dashboard</Link>
+          )}
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/people">My People</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/qr">My QR Codes</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/membership">My Membership</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">Class Schedule / My Class Booking</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/party">Party Calendar / My Parties</Link>
-          {canUseOwnerDashboard && (
-            <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">Owner/Staff Dashboard</Link>
-          )}
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/contact">Contact</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/faq">FAQ</Link>
         </section>

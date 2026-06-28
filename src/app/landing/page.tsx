@@ -367,10 +367,10 @@ export default function AppHome() {
 
       <nav className={canUseOwnerDashboard ? 'mobileBottom mobileBottomStaff' : 'mobileBottom'}>
         <Link href="/landing">Home</Link>
+        {canUseOwnerDashboard && <Link href="/staff">Owner/Staff</Link>}
         <Link href="/landing/qr">QR Codes</Link>
         <Link href="/landing/classschedule">Classes</Link>
         <Link href="/landing/party">Party</Link>
-        {canUseOwnerDashboard && <Link href="/staff">Staff</Link>}
       </nav>
 
       <style jsx>{`
