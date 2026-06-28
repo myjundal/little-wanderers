@@ -56,7 +56,7 @@ export default function AppHome() {
 
   // widgets
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
-  const [appRole, setAppRole] = useState<string | null>(null);
+  const [canUseOwnerDashboard, setCanUseOwnerDashboard] = useState(false);
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -74,8 +74,11 @@ export default function AppHome() {
       setIsAuthenticated(Boolean(user));
       if (!user) { setReady(true); return; }
 
-      const { data: roleRow } = await supabase.from('roles').select('role').eq('id', user.id).maybeSingle();
-      setAppRole(roleRow?.role ?? null);
+      const { data: isStaff, error: staffError } = await supabase.rpc('is_staff');
+      if (staffError) {
+        console.warn('Unable to check owner dashboard access.', staffError);
+      }
+      setCanUseOwnerDashboard(isStaff === true);
 
       // 2) Resolve household from household_members first (source of truth)
       let householdId: string | null = null;
@@ -322,7 +325,7 @@ export default function AppHome() {
           <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>
           <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
           <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
-          {(appRole === 'owner' || appRole === 'staff' || appRole === 'admin') && (
+          {canUseOwnerDashboard && (
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
           )}
           <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
