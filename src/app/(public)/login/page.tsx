@@ -105,7 +105,7 @@ export default function LoginPage() {
           setShowWaitlistInvite(true);
           setError(
             checkJson.error ||
-            'We are currently opening sign-ups to families on our waitlist first. Please join the waitlist or sign up after opening.'
+            'We are currently opening sign-ups to families on our waitlist first. Please join the waitlist, or we will be excited to welcome you after our official opening.'
           );
           return;
         }
@@ -256,6 +256,20 @@ export default function LoginPage() {
         <h1 style={{ margin: '10px 0 8px', color: '#4f3f82', fontSize: 26 }}>Sign in</h1>
         <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Use your phone for a quick sign-in, then head to your family dashboard.</p>
 
+        <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
+          <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access is open to waitlist families first.</p>
+          <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
+            To create your account, choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong> and enter the same email you used for the waitlist.
+          </p>
+          <p style={{ margin: '8px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
+            Not on the waitlist yet?{' '}
+            <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>
+              Join the waitlist
+            </a>
+            {' '}and we will be excited to welcome you after our official opening.
+          </p>
+        </div>
+
         <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
           <label style={{ color: '#4f3f82', fontWeight: 600 }}>Account status</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -266,7 +280,7 @@ export default function LoginPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 14 }}>
           <button type="button" onClick={() => { setAuthMethod('phone'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'phone' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with phone</button>
-          <button type="button" onClick={() => { setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'email' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Use email instead</button>
+          <button type="button" onClick={() => { setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'email' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with email</button>
         </div>
 
         {step === 'collect' && authMethod === 'phone' && (
@@ -338,7 +352,7 @@ export default function LoginPage() {
 
             {authMethod === 'phone' && (
               <button type="button" onClick={switchToEmailFallback} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#5f3da4', textDecoration: 'underline', fontWeight: 600 }}>
-                Did not get a text? Use email instead
+                Did not get a text? Continue with email
               </button>
             )}
 
@@ -356,7 +370,7 @@ export default function LoginPage() {
             <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 700 }}>
               join the waitlist here
             </a>
-            {' '}or sign up after opening.
+            {' '}and we will be excited to welcome you after our official opening.
           </p>
         )}
       </section>
