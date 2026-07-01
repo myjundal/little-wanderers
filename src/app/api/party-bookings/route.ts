@@ -19,7 +19,7 @@ type PartyPayload = {
   headcount_expected?: number | null;
   notes?: string | null;
   slot?: '11:00' | '15:00';
-  mode?: 'create_payment_link' | 'finalize';
+  mode?: 'create_payment_link' | 'finalize' | 'early_access_hold';
   birthday_child_name?: string | null;
   birthday_age?: number | null;
   occasion_details?: string | null;
@@ -38,12 +38,12 @@ function getSquareBaseUrl() {
   return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
 }
 
-function isWeekendSlot(start: Date, end: Date, slot?: string) {
+function isPartySlot(start: Date, end: Date, slot?: string) {
   const day = start.getUTCDay();
-  const isWeekend = day === 0 || day === 6;
+  const isPartyDay = day === 5 || day === 6 || day === 0;
   const durationHours = (end.getTime() - start.getTime()) / 3_600_000;
   const validSlot = slot === '11:00' || slot === '15:00';
-  return isWeekend && validSlot && durationHours === 3;
+  return isPartyDay && validSlot && durationHours === 3;
 }
 
 async function getHouseholdIdForUser(userId: string) {
@@ -117,8 +117,8 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
     }
 
-    if (!isWeekendSlot(start, end, slot)) {
-      return Response.json({ ok: false, error: 'Party bookings are only available on Saturday/Sunday at 11:00 AM or 3:00 PM.' }, { status: 400 });
+    if (!isPartySlot(start, end, slot)) {
+      return Response.json({ ok: false, error: 'Party bookings are only available on Friday, Saturday, or Sunday at 11:00 AM or 3:00 PM.' }, { status: 400 });
     }
     if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
       return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });
@@ -172,6 +172,46 @@ export async function POST(req: Request) {
     const conflictingBookings = (conflicts ?? []).filter((item) => item.household_id !== householdId && item.id !== existingSameSlot?.id);
     if (conflictingBookings.length > 0) {
       return Response.json({ ok: false, error: 'That party slot is already booked.' }, { status: 409 });
+    }
+
+    if (mode === 'early_access_hold') {
+      const holdPayload = {
+        household_id: householdId,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        headcount_expected: headcountExpected,
+        notes,
+        birthday_child_name: birthdayChildName,
+        birthday_age: birthdayAge,
+        occasion_details: occasionDetails,
+        status: 'early_access_hold',
+        status_updated_at: new Date().toISOString(),
+        price_quote_cents: PARTY_TOTAL_FEE_CENTS,
+        created_by_user_id: user.id,
+        created_by_role: 'customer',
+      };
+
+      if (existingSameSlot) {
+        const updateExisting = await supa
+          .from('party_bookings')
+          .update(holdPayload)
+          .eq('id', existingSameSlot.id)
+          .eq('household_id', householdId)
+          .select('id')
+          .maybeSingle();
+
+        if (updateExisting.error) return Response.json({ ok: false, error: updateExisting.error.message }, { status: 500 });
+        return Response.json({ ok: true, id: updateExisting.data?.id ?? existingSameSlot.id, status: 'early_access_hold', deposit_required_now: false });
+      }
+
+      const hold = await supa
+        .from('party_bookings')
+        .insert(holdPayload)
+        .select('id')
+        .maybeSingle();
+
+      if (hold.error) return Response.json({ ok: false, error: hold.error.message }, { status: 500 });
+      return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'early_access_hold', deposit_required_now: false });
     }
 
     if (mode === 'create_payment_link') {

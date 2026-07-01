@@ -15,6 +15,7 @@ type Props = {
   subtitle?: string;
   slots: CalendarSlot[];
   showUpcoming?: boolean;
+  onSlotSelect?: (slot: CalendarSlot) => void;
 };
 
 const statusColor: Record<CalendarSlot['status'], string> = {
@@ -35,7 +36,7 @@ function ymd(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export default function AvailabilityCalendar({ title, subtitle, slots, showUpcoming = false }: Props) {
+export default function AvailabilityCalendar({ title, subtitle, slots, showUpcoming = false, onSlotSelect }: Props) {
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -172,26 +173,43 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
             >
               <div style={{ fontSize: 12, fontWeight: 800, color: '#5d4f88' }}>{d.getDate()}</div>
               <div style={{ display: 'grid', gap: 4, marginTop: 5 }}>
-                {displaySlots.slice(0, 2).map((slot) => (
-                  <div
-                    key={`${slot.status}:${slot.label}`}
+                {displaySlots.slice(0, 2).map((slot) => {
+                  const selectable = slot.status === 'available' && Boolean(onSlotSelect);
+                  const slotStyle = {
+                    fontSize: 10,
+                    lineHeight: 1.2,
+                    borderRadius: 999,
+                    padding: '2px 6px',
+                    background: `${statusColor[slot.status]}22`,
+                    color: statusColor[slot.status],
+                    border: `1px solid ${statusColor[slot.status]}66`,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    textAlign: 'left' as const,
+                    cursor: selectable ? 'pointer' : 'default',
+                    boxShadow: 'none',
+                  };
+
+                  return selectable ? (
+                    <button
+                      key={`${slot.status}:${slot.label}:${slot.start}`}
+                      title={`${slot.label} (${statusLabel[slot.status]})`}
+                      onClick={() => onSlotSelect?.(slot)}
+                      style={slotStyle}
+                    >
+                      {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} {slot.label}{slot.count > 1 ? ` (${slot.count})` : ''}
+                    </button>
+                  ) : (
+                    <div
+                    key={`${slot.status}:${slot.label}:${slot.start}`}
                     title={`${slot.label} (${statusLabel[slot.status]})`}
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 1.2,
-                      borderRadius: 999,
-                      padding: '2px 6px',
-                      background: `${statusColor[slot.status]}22`,
-                      color: statusColor[slot.status],
-                      border: `1px solid ${statusColor[slot.status]}66`,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    style={slotStyle}
                   >
                     {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} {slot.label}{slot.count > 1 ? ` (${slot.count})` : ''}
                   </div>
-                ))}
+                  );
+                })}
                 {displaySlots.length > 2 && (
                   <button
                     onClick={() => setExpandedDayKey(key)}
@@ -228,11 +246,23 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
             <button onClick={() => setExpandedDayKey(null)} style={{ border: '1px solid #d5c3f5', borderRadius: 8, background: '#fff', color: '#4f3f82', cursor: 'pointer', width: 28, height: 28, fontWeight: 700 }}>✕</button>
           </div>
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
-            {(dayMap.get(expandedDayKey) ?? []).map((slot) => (
-              <div key={slot.id} style={{ fontSize: 12, color: '#4f3f82' }}>
-                {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} · {slot.label} ({statusLabel[slot.status]})
-              </div>
-            ))}
+            {(dayMap.get(expandedDayKey) ?? []).map((slot) => {
+              const selectable = slot.status === 'available' && Boolean(onSlotSelect);
+              const label = `${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} · ${slot.label} (${statusLabel[slot.status]})`;
+              return selectable ? (
+                <button
+                  key={slot.id}
+                  onClick={() => onSlotSelect?.(slot)}
+                  style={{ fontSize: 12, color: '#4f3f82', border: '1px solid #eadfff', background: '#fff', borderRadius: 10, padding: '8px 10px', textAlign: 'left', boxShadow: 'none' }}
+                >
+                  {label}
+                </button>
+              ) : (
+                <div key={slot.id} style={{ fontSize: 12, color: '#4f3f82' }}>
+                  {label}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

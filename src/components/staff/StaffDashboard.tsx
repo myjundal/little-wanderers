@@ -62,7 +62,7 @@ type PartyBookingItem = {
   headcount_expected: number | null;
   price_quote_cents: number | null;
   notes: string | null;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'early_access_hold';
   status_updated_at: string | null;
   current_child_count: number;
   current_adult_count: number;
@@ -83,6 +83,11 @@ function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | '
   }
   if (item.occasion_details) lines.push(`Occasion: ${item.occasion_details}`);
   return lines;
+}
+
+function partyStatusLabel(status: PartyBookingItem['status']) {
+  if (status === 'early_access_hold') return 'Early access hold';
+  return status;
 }
 
 const sectionStyle: React.CSSProperties = {
@@ -630,7 +635,7 @@ export default function StaffDashboard() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <strong style={{ color: '#4f3f82' }}>{item.household_name}</strong>
-                  <span style={{ color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 700, textTransform: 'capitalize' }}>{item.status}</span>
+                  <span style={{ color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 700, textTransform: 'capitalize' }}>{partyStatusLabel(item.status)}</span>
                 </div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>{new Date(item.start_time).toLocaleString()} → {new Date(item.end_time).toLocaleString()}</div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>Guests: {item.headcount_expected ?? '-'} · Quote: {dollars(item.price_quote_cents)}</div>

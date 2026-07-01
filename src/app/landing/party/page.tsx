@@ -12,7 +12,7 @@ type PartyBooking = {
   headcount_expected: number | null;
   price_quote_cents: number | null;
   notes: string | null;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'early_access_hold';
   status_updated_at: string | null;
   created_at: string;
   final_child_count: number | null;
@@ -24,27 +24,36 @@ type PartyBooking = {
   occasion_details: string | null;
 };
 
-const PARTY_DEPOSIT_DOLLARS = 150;
-
 function toIsoLocal(date: string, hourLocal: number) {
   return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
 
-function getDefaultWeekendDate() {
+function getDefaultPartyDate() {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + 1);
   for (let i = 0; i < 14; i += 1) {
     const day = d.getUTCDay();
-    if (day === 0 || day === 6) return d.toISOString().slice(0, 10);
+    if (day === 5 || day === 6 || day === 0) return d.toISOString().slice(0, 10);
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return new Date().toISOString().slice(0, 10);
 }
 
-function isWeekendDate(date: string) {
+function isPartyDate(date: string) {
   const d = new Date(`${date}T00:00:00.000Z`);
   const day = d.getUTCDay();
-  return day === 0 || day === 6;
+  return day === 5 || day === 6 || day === 0;
+}
+
+function getPartyWeekDates(anchor: string) {
+  const d = new Date(`${anchor}T00:00:00`);
+  const friday = new Date(d);
+  friday.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));
+  const saturday = new Date(friday);
+  saturday.setDate(friday.getDate() + 1);
+  const sunday = new Date(friday);
+  sunday.setDate(friday.getDate() + 2);
+  return [friday, saturday, sunday].map((item) => item.toISOString().slice(0, 10));
 }
 
 function prettyNote(note: string | null) {
@@ -64,13 +73,13 @@ export default function PartyPage() {
   const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
   const finalizingPaymentRef = useRef(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
-  const [rescheduleDate, setRescheduleDate] = useState(getDefaultWeekendDate());
+  const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
   const [rescheduleSlot, setRescheduleSlot] = useState<'11:00' | '15:00'>('11:00');
   const [selectedMobileDate, setSelectedMobileDate] = useState<string>('');
   const [selectedMobileWeek, setSelectedMobileWeek] = useState<string>('');
 
   const [form, setForm] = useState({
-    party_date: getDefaultWeekendDate(),
+    party_date: getDefaultPartyDate(),
     slot: '11:00',
     headcount_expected: '',
     notes: '',
@@ -185,8 +194,8 @@ export default function PartyPage() {
     setSubmitting(true);
     setMessage(null);
 
-    if (!isWeekendDate(form.party_date)) {
-      setMessage('Please choose a Saturday or Sunday.');
+    if (!isPartyDate(form.party_date)) {
+      setMessage('Please choose a Friday, Saturday, or Sunday.');
       setSubmitting(false);
       return;
     }
@@ -209,7 +218,7 @@ export default function PartyPage() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        mode: 'create_payment_link',
+        mode: 'early_access_hold',
         start_time: startIso,
         end_time: endIso,
         headcount_expected: form.headcount_expected ? Number(form.headcount_expected) : null,
@@ -228,13 +237,9 @@ export default function PartyPage() {
       return;
     }
 
-    if (!json.payment_url) {
-      setMessage('Payment URL was not returned.');
-      setSubmitting(false);
-      return;
-    }
-
-    window.location.assign(json.payment_url);
+    setMessage('Your party hold request is saved. We will contact you after our official opening so you can visit the space before deciding on the deposit.');
+    setSubmitting(false);
+    await load();
   };
 
   const requestCancel = async (bookingId: string) => {
@@ -271,7 +276,7 @@ export default function PartyPage() {
       for (let i = 0; i < 84; i += 1) {
         const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
         const day = d.getUTCDay();
-        if (day !== 0 && day !== 6) continue;
+        if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
         const start11 = toIsoLocal(dayStr, 11);
         const start15 = toIsoLocal(dayStr, 15);
@@ -327,22 +332,22 @@ export default function PartyPage() {
   ];
 
   const mobileAvailableSlots = slots.filter((slot) => slot.status === 'available' || slot.status === 'mine');
-  const getWeekendDates = (anchor: string) => {
-    const d = new Date(`${anchor}T00:00:00`);
-    const sat = new Date(d);
-    sat.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
-    const sun = new Date(sat);
-    sun.setDate(sat.getDate() + 1);
-    return [sat.toISOString().slice(0, 10), sun.toISOString().slice(0, 10)];
-  };
-  const weekendAnchor = selectedMobileWeek || new Date().toISOString().slice(0, 10);
-  const weekendDates = getWeekendDates(weekendAnchor);
-  const mobileAvailableDates = weekendDates.filter((date) => mobileAvailableSlots.some((slot) => new Date(slot.start).toISOString().slice(0, 10) === date));
-  const activeMobileDate = selectedMobileDate || mobileAvailableDates[0] || weekendDates[0];
-  const selectedDateSlots = mobileAvailableSlots
-    .filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === activeMobileDate)
-    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  const partyWeekAnchor = selectedMobileWeek || new Date().toISOString().slice(0, 10);
+  const partyWeekDates = getPartyWeekDates(partyWeekAnchor);
+  const activeMobileDate = selectedMobileDate || partyWeekDates[0];
 
+  const selectSlot = (slot: CalendarSlot) => {
+    if (slot.status !== 'available') return;
+    const start = new Date(slot.start);
+    const hour = start.getHours();
+    setForm((prev) => ({
+      ...prev,
+      party_date: slot.start.slice(0, 10),
+      slot: hour >= 15 ? '15:00' : '11:00',
+    }));
+    setSelectedMobileDate(slot.start.slice(0, 10));
+    setMessage(null);
+  };
 
   const reschedule = async (bookingId: string) => {
     const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
@@ -365,46 +370,62 @@ export default function PartyPage() {
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 860, margin: '0 auto', boxSizing: 'border-box', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>🎉 My Party Bookings</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose a weekend party slot, pay your deposit, and manage your booking from one dashboard.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose a Friday, Saturday, or Sunday party slot and request an early access hold. No deposit is collected today.</p>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
 
-      <div className="desktopCalendar"><AvailabilityCalendar title="Party booking calendar" slots={slots} /></div>
+      <div className="desktopCalendar">
+        <AvailabilityCalendar
+          title="Party booking calendar"
+          subtitle="Select an available slot to fill the booking form below."
+          slots={slots}
+          onSlotSelect={selectSlot}
+        />
+      </div>
       <section className="mobileSlots" style={{ marginTop: 12 }}>
-        <h3 style={{ margin: '0 0 10px', color: '#4f3f82' }}>Choose a date</h3>
-        <input type="date" value={weekendAnchor} onChange={(e) => { setSelectedMobileWeek(e.target.value); setSelectedMobileDate(''); }} style={{ width: '100%', border: '1px solid #dbcdf5', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }} />
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
-          {mobileAvailableDates.map((date) => (
-            <button
-              key={date}
-              onClick={() => setSelectedMobileDate(date)}
-              style={{
-                borderRadius: 999,
-                border: date === activeMobileDate ? '1px solid #9b7fd1' : '1px solid #dbcdf5',
-                background: date === activeMobileDate ? '#f1e9ff' : '#fff',
-                color: '#4f3f82',
-                padding: '8px 12px',
-                whiteSpace: 'nowrap',
-                fontWeight: 700,
-              }}
-            >
-              {new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-          {selectedDateSlots.length === 0 ? (
-            <p style={{ margin: 0, color: '#6f628d' }}>No available party slots for this date.</p>
-          ) : (
-            selectedDateSlots.map((slot) => (
-              <article key={`slot-${slot.id}`} style={{ border: '1px solid #e3d4fa', borderRadius: 12, padding: 12, background: '#fff' }}>
-                <p style={{ margin: 0, fontWeight: 700 }}>{new Date(slot.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                <p style={{ margin: '6px 0', color: '#6f628d' }}>{new Date(slot.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} - {new Date(slot.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</p>
-                <p style={{ margin: '6px 0', color: slot.status === 'mine' ? '#5f3da4' : '#2f7a47', fontWeight: 700 }}>{slot.status === 'mine' ? 'Reserved by you' : 'Available'}</p>
-                {slot.status !== 'mine' && <p style={{ margin: 0, fontSize: 13, color: '#6f628d' }}>Use the booking form below to reserve this date/time.</p>}
+        <h3 style={{ margin: '0 0 10px', color: '#4f3f82' }}>Choose a week</h3>
+        <input type="date" value={partyWeekAnchor} onChange={(e) => { setSelectedMobileWeek(e.target.value); setSelectedMobileDate(''); }} style={{ width: '100%', border: '1px solid #dbcdf5', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }} />
+        <div style={{ display: 'grid', gap: 10 }}>
+          {partyWeekDates.map((date) => {
+            const daySlots = mobileAvailableSlots
+              .filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === date)
+              .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+            const selected = date === activeMobileDate;
+
+            return (
+              <article key={`mobile-day-${date}`} style={{ border: selected ? '2px solid #9b7fd1' : '1px solid #e3d4fa', borderRadius: 14, padding: 12, background: selected ? '#fbf8ff' : '#fff' }}>
+                <p style={{ margin: 0, fontWeight: 800, color: '#4f3f82' }}>{new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'long' })}</p>
+                <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                  {daySlots.length === 0 ? (
+                    <p style={{ margin: 0, color: '#6f628d' }}>No available party slots for this date.</p>
+                  ) : (
+                    daySlots.map((slot) => {
+                      const isSelectedSlot = form.party_date === slot.start.slice(0, 10) && form.slot === (new Date(slot.start).getHours() >= 15 ? '15:00' : '11:00');
+                      return (
+                        <button
+                          key={`slot-${slot.id}`}
+                          type="button"
+                          onClick={() => selectSlot(slot)}
+                          disabled={slot.status === 'mine'}
+                          style={{
+                            borderRadius: 12,
+                            border: isSelectedSlot ? '2px solid #5f3da4' : '1px solid #dbcdf5',
+                            background: isSelectedSlot ? '#f1e9ff' : '#fff',
+                            color: slot.status === 'mine' ? '#5f3da4' : '#2f7a47',
+                            padding: '10px 12px',
+                            fontWeight: 800,
+                            textAlign: 'left',
+                          }}
+                        >
+                          {new Date(slot.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} - {new Date(slot.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} · {slot.status === 'mine' ? 'Reserved by you' : 'Available'}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </article>
-            ))
-          )}
+            );
+          })}
         </div>
       </section>
 
@@ -412,13 +433,13 @@ export default function PartyPage() {
         <h3 style={{ marginTop: 0, color: '#4f3f82' }}>🪐 New party booking</h3>
 
         <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, border: '1px solid #eadfff', background: '#faf5ff' }}>
-          <strong>Please note:</strong>
+          <strong>Early access party holds:</strong>
           <ul style={{ margin: '10px 0 0 20px', display: 'grid', gap: 6, lineHeight: 1.5 }}>
-            <li><strong>Deposit:</strong> 50% of the party fee ($150) is required to reserve your party.</li>
-            <li><strong>Refunds:</strong> The deposit is non-refundable.</li>
-            <li><strong>Remaining balance:</strong> The other 50% ($150) is due upon arrival before setup.</li>
-            <li><strong>Reschedule:</strong> Available once, up to 7 days before your party date.</li>
-            <li><strong>Headcount due:</strong> Final guest count is due 3 days before party day.</li>
+            <li>We are giving waitlist families first priority for party dates.</li>
+            <li>During early access, we will hold your selected party slot without collecting a deposit today.</li>
+            <li>After our official opening, we will contact you so you can visit the space.</li>
+            <li>If you love it and want to keep the booking, we will collect the 50% deposit ($150) then, with the remaining balance due upon arrival before setup.</li>
+            <li>Final guest count is due 3 days before party day.</li>
           </ul>
         </div>
 
@@ -427,7 +448,7 @@ export default function PartyPage() {
             Most parties are birthdays, but you can also use this for baby showers, baby namings, family celebrations, or other special occasions.
           </p>
           <label>
-            Party date (Saturday or Sunday)
+            Party date
             <br />
             <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} type="date" value={form.party_date} onChange={(e) => setForm((prev) => ({ ...prev, party_date: e.target.value }))} />
           </label>
@@ -481,7 +502,7 @@ export default function PartyPage() {
           </label>
 
           <button style={{ width: '100%' }} onClick={submit} disabled={submitting}>
-            {submitting ? 'Preparing payment...' : `Confirm party and pay $${PARTY_DEPOSIT_DOLLARS} deposit`}
+            {submitting ? 'Requesting hold...' : 'Request to hold'}
           </button>
         </div>
       </section>
@@ -529,9 +550,10 @@ export default function PartyPage() {
                     </div>
                   )}
                   <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
-                    Status: {item.status === 'confirmed' ? 'Party scheduled' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending cancel' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
+                    Status: {item.status === 'confirmed' ? 'Party scheduled' : item.status === 'early_access_hold' ? 'Early access hold' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending cancel' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
                   </p>
                   {item.status === 'confirmed' && <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Deposit paid</p>}
+                  {item.status === 'early_access_hold' && <p style={{ margin: '6px 0', color: '#87631d', fontWeight: 700 }}>Deposit not collected yet</p>}
                   {item.status !== 'cancelled' && isUpcoming && !cancellationRequested && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <button onClick={() => requestCancel(item.id)} disabled={requestingCancelId === item.id}>

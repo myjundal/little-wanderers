@@ -459,7 +459,7 @@ alter table public.party_bookings add column if not exists status_updated_at tim
 
 alter table public.party_bookings
   add constraint party_bookings_status_check
-  check (status in ('pending', 'confirmed', 'cancelled'));
+  check (status in ('pending', 'confirmed', 'cancelled', 'early_access_hold'));
 
 alter table public.party_bookings
   alter column status set default 'pending';

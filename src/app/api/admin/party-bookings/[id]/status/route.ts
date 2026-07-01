@@ -2,7 +2,7 @@ import { requireStaffContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'cancelled']);
+const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'cancelled', 'early_access_hold']);
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const context = await requireStaffContext();
@@ -34,6 +34,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const validTransition =
       nextStatus === currentStatus ||
       (currentStatus === 'pending' && (nextStatus === 'confirmed' || nextStatus === 'cancelled')) ||
+      (currentStatus === 'early_access_hold' && (nextStatus === 'confirmed' || nextStatus === 'cancelled')) ||
       (currentStatus === 'confirmed' && nextStatus === 'cancelled');
 
     if (!validTransition) {
