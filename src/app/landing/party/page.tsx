@@ -74,13 +74,13 @@ export default function PartyPage() {
   const finalizingPaymentRef = useRef(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
-  const [rescheduleSlot, setRescheduleSlot] = useState<'11:00' | '15:00'>('11:00');
+  const [rescheduleSlot, setRescheduleSlot] = useState<'10:00' | '15:00'>('10:00');
   const [selectedMobileDate, setSelectedMobileDate] = useState<string>('');
   const [selectedMobileWeek, setSelectedMobileWeek] = useState<string>('');
 
   const [form, setForm] = useState({
     party_date: getDefaultPartyDate(),
-    slot: '11:00',
+    slot: '10:00',
     headcount_expected: '',
     notes: '',
     birthday_child_name: '',
@@ -88,8 +88,8 @@ export default function PartyPage() {
     occasion_details: '',
   });
 
-  const startIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 15 : 11), [form.party_date, form.slot]);
-  const endIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 18 : 14), [form.party_date, form.slot]);
+  const startIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 15 : 10), [form.party_date, form.slot]);
+  const endIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 18 : 13), [form.party_date, form.slot]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -278,18 +278,18 @@ export default function PartyPage() {
         const day = d.getUTCDay();
         if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const start11 = toIsoLocal(dayStr, 11);
+        const start10 = toIsoLocal(dayStr, 10);
         const start15 = toIsoLocal(dayStr, 15);
         const blockedStarts = new Set(
           [...bookedSlots, ...items.filter((item) => item.status !== 'cancelled')].map((item) =>
             new Date(item.start_time).getTime()
           )
         );
-        if (!blockedStarts.has(new Date(start11).getTime())) {
+        if (!blockedStarts.has(new Date(start10).getTime())) {
           generated.push({
-            id: `avail-${dayStr}-11`,
-            start: start11,
-            end: toIsoLocal(dayStr, 14),
+            id: `avail-${dayStr}-10`,
+            start: start10,
+            end: toIsoLocal(dayStr, 13),
             label: 'Available party slot',
             status: 'available',
           });
@@ -343,15 +343,15 @@ export default function PartyPage() {
     setForm((prev) => ({
       ...prev,
       party_date: slot.start.slice(0, 10),
-      slot: hour >= 15 ? '15:00' : '11:00',
+      slot: hour >= 15 ? '15:00' : '10:00',
     }));
     setSelectedMobileDate(slot.start.slice(0, 10));
     setMessage(null);
   };
 
   const reschedule = async (bookingId: string) => {
-    const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 11);
-    const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 14);
+    const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 10);
+    const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 13);
     const res = await fetch('/api/party-bookings/reschedule', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -370,7 +370,7 @@ export default function PartyPage() {
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 860, margin: '0 auto', boxSizing: 'border-box', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>🎉 My Party Bookings</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose a Friday, Saturday, or Sunday party slot and request an early access hold. No deposit is collected today.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose a Friday, Saturday, or Sunday party slot and request an early access hold. No deposit is collected today, and party times are flexible.</p>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
 
@@ -400,7 +400,7 @@ export default function PartyPage() {
                     <p style={{ margin: 0, color: '#6f628d' }}>No available party slots for this date.</p>
                   ) : (
                     daySlots.map((slot) => {
-                      const isSelectedSlot = form.party_date === slot.start.slice(0, 10) && form.slot === (new Date(slot.start).getHours() >= 15 ? '15:00' : '11:00');
+                      const isSelectedSlot = form.party_date === slot.start.slice(0, 10) && form.slot === (new Date(slot.start).getHours() >= 15 ? '15:00' : '10:00');
                       return (
                         <button
                           key={`slot-${slot.id}`}
@@ -457,9 +457,10 @@ export default function PartyPage() {
             Time
             <br />
             <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value }))}>
-              <option value="11:00">11:00 AM (ends at 2:00 PM)</option>
+              <option value="10:00">10:00 AM (ends at 1:00 PM)</option>
               <option value="15:00">3:00 PM (ends at 6:00 PM)</option>
             </select>
+            <span style={{ display: 'block', marginTop: 6, color: '#6f628d', fontSize: 13 }}>Times are flexible. Tell us what you have in mind in the notes.</span>
           </label>
 
           <label>
@@ -582,8 +583,8 @@ export default function PartyPage() {
                       <label style={{ marginLeft: 10 }}>
                         New time
                         <br />
-                        <select style={{ width: '100%' }} value={rescheduleSlot} onChange={(e) => setRescheduleSlot(e.target.value as '11:00' | '15:00')}>
-                          <option value="11:00">11:00 AM</option>
+                        <select style={{ width: '100%' }} value={rescheduleSlot} onChange={(e) => setRescheduleSlot(e.target.value as '10:00' | '15:00')}>
+                          <option value="10:00">10:00 AM</option>
                           <option value="15:00">3:00 PM</option>
                         </select>
                       </label>

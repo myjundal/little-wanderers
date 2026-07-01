@@ -18,7 +18,7 @@ type PartyPayload = {
   end_time?: string;
   headcount_expected?: number | null;
   notes?: string | null;
-  slot?: '11:00' | '15:00';
+  slot?: '10:00' | '15:00';
   mode?: 'create_payment_link' | 'finalize' | 'early_access_hold';
   birthday_child_name?: string | null;
   birthday_age?: number | null;
@@ -42,7 +42,7 @@ function isPartySlot(start: Date, end: Date, slot?: string) {
   const day = start.getUTCDay();
   const isPartyDay = day === 5 || day === 6 || day === 0;
   const durationHours = (end.getTime() - start.getTime()) / 3_600_000;
-  const validSlot = slot === '11:00' || slot === '15:00';
+  const validSlot = slot === '10:00' || slot === '15:00';
   return isPartyDay && validSlot && durationHours === 3;
 }
 
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
     }
 
     if (!isPartySlot(start, end, slot)) {
-      return Response.json({ ok: false, error: 'Party bookings are only available on Friday, Saturday, or Sunday at 11:00 AM or 3:00 PM.' }, { status: 400 });
+      return Response.json({ ok: false, error: 'Party bookings are only available on Friday, Saturday, or Sunday at 10:00 AM or 3:00 PM.' }, { status: 400 });
     }
     if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
       return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });

@@ -9,14 +9,14 @@ type ReschedulePayload = {
   booking_id?: string;
   start_time?: string;
   end_time?: string;
-  slot?: '11:00' | '15:00';
+  slot?: '10:00' | '15:00';
 };
 
 function isPartySlot(start: Date, end: Date, slot?: string) {
   const day = start.getUTCDay();
   const isPartyDay = day === 5 || day === 6 || day === 0;
   const durationHours = (end.getTime() - start.getTime()) / 3_600_000;
-  return isPartyDay && (slot === '11:00' || slot === '15:00') && durationHours === 3;
+  return isPartyDay && (slot === '10:00' || slot === '15:00') && durationHours === 3;
 }
 
 async function getHouseholdIdForUser(userId: string) {
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
     }
     if (!isPartySlot(start, end, slot)) {
-      return Response.json({ ok: false, error: 'Reschedule is only available for Friday, Saturday, or Sunday 11:00 AM or 3:00 PM slots.' }, { status: 400 });
+      return Response.json({ ok: false, error: 'Reschedule is only available for Friday, Saturday, or Sunday 10:00 AM or 3:00 PM slots.' }, { status: 400 });
     }
 
     const server = createServerSupabaseClient();

@@ -105,7 +105,7 @@ export default function LoginPage() {
           setShowWaitlistInvite(true);
           setError(
             checkJson.error ||
-            'We are currently opening sign-ups to families on our waitlist first. Please join the waitlist, or we will be excited to welcome you after our official opening.'
+            'We are currently opening sign-ups to families on our waitlist first. Please join the waitlist and come back here to log in, or feel free to revisit us after opening.'
           );
           return;
         }
@@ -266,7 +266,7 @@ export default function LoginPage() {
             <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>
               Join the waitlist
             </a>
-            {' '}and we will be excited to welcome you after our official opening.
+            {' '}and come back here to log in, or feel free to revisit us after opening.
           </p>
         </div>
 
@@ -370,7 +370,7 @@ export default function LoginPage() {
             <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 700 }}>
               join the waitlist here
             </a>
-            {' '}and we will be excited to welcome you after our official opening.
+            {' '}and come back here to log in, or feel free to revisit us after opening.
           </p>
         )}
       </section>
