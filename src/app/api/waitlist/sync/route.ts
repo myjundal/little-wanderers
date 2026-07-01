@@ -45,16 +45,29 @@ export async function POST(req: Request) {
   }
 
   const invalid: string[] = [];
-  const rows = entries.flatMap((entry) => {
+  let validCount = 0;
+  const rowsByEmail = new Map<string, {
+    email: string;
+    normalized_email: string;
+    first_name: string | null;
+    last_name: string | null;
+    source: string;
+    external_id: string | null;
+    raw_payload: Record<string, unknown> | WaitlistSyncEntry;
+    synced_at: string;
+  }>();
+
+  entries.forEach((entry) => {
     const email = String(entry.email ?? '').trim();
     const normalizedEmail = normalizeWaitlistEmail(email);
 
     if (!isLikelyEmail(email) || !normalizedEmail) {
       if (email) invalid.push(email);
-      return [];
+      return;
     }
 
-    return [{
+    validCount += 1;
+    rowsByEmail.set(normalizedEmail, {
       email,
       normalized_email: normalizedEmail,
       first_name: entry.first_name ? String(entry.first_name).trim() : null,
@@ -63,8 +76,9 @@ export async function POST(req: Request) {
       external_id: entry.external_id ? String(entry.external_id).trim() : null,
       raw_payload: entry.raw_payload ?? entry,
       synced_at: new Date().toISOString(),
-    }];
+    });
   });
+  const rows = Array.from(rowsByEmail.values());
 
   if (rows.length === 0) {
     return NextResponse.json({ ok: false, error: 'No valid waitlist emails provided.', invalid }, { status: 400 });
@@ -83,6 +97,7 @@ export async function POST(req: Request) {
     ok: true,
     received: entries.length,
     synced: rows.length,
+    duplicates: validCount - rows.length,
     invalid,
   });
 }
