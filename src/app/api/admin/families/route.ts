@@ -1,7 +1,7 @@
 import { requireStaffContext } from '@/lib/authz';
 import { getWaiverStatus } from '@/lib/waivers';
 
-type HouseholdRow = { id: string; name: string | null; phone: string | null };
+type HouseholdRow = { id: string; name: string | null; phone: string | null; email: string | null };
 type PersonRow = { household_id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null };
 
 export async function GET(req: Request) {
@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const admin = context.admin;
 
   const [{ data: households }, { data: people }, { data: memberships }, { data: waivers }] = await Promise.all([
-    admin.from('households').select('id,name,phone').order('created_at', { ascending: false }).limit(400),
+    admin.from('households').select('id,name,phone,email').order('created_at', { ascending: false }).limit(400),
     admin.from('people').select('household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
     admin.from('memberships').select('household_id,renews_at').limit(2000),
     admin.from('waivers').select('household_id,signed_at,signed_date,waiver_expires_at,created_at').limit(2000),
@@ -49,14 +49,12 @@ export async function GET(req: Request) {
       const adults = familyPeople.filter((p) => p.role !== 'child');
       const children = familyPeople.filter((p) => p.role === 'child');
       const guardianName = adults[0] ? `${adults[0].first_name ?? ''} ${adults[0].last_name ?? ''}`.trim() : household.name ?? 'Unnamed family';
-      const email = null;
-
       return {
         household_id: household.id,
         household_name: household.name,
         guardian_name: guardianName || household.name || 'Unnamed family',
         phone: household.phone,
-        email,
+        email: household.email,
         children_names: children.map((p) => `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()).filter(Boolean),
         membership_status: membershipByHousehold.get(household.id) ? 'active' : 'none',
         waiver_status: getWaiverStatus(waiversByHousehold.get(household.id) ?? []).status,

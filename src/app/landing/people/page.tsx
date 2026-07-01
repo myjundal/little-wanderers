@@ -11,6 +11,7 @@ type Person = {
   role: 'adult' | 'child';
   first_name: string;
   last_name: string | null;
+  gender: string | null;
   birthdate: string | null;
 };
 
@@ -31,7 +32,7 @@ export default function PeoplePage() {
   const [uiError, setUiError] = useState<string | null>(null);
   const [uiMessage, setUiMessage] = useState<string | null>(null);
   const [sendingInvite, setSendingInvite] = useState(false);
-  const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', birthdate: '' });
+  const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', gender: '', birthdate: '' });
   const [inviteForm, setInviteForm] = useState({ email: '' });
   const [contactForm, setContactForm] = useState({ city: '', state: 'CT' });
   const [openAdd, setOpenAdd] = useState(false);
@@ -51,7 +52,7 @@ export default function PeoplePage() {
     setContactForm({ city: household?.city ?? '', state: household?.state ?? 'CT' });
 
     const [{ data: ppl }, invitesRes] = await Promise.all([
-      supabase.from('people').select('id, role, first_name, last_name, birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
+      supabase.from('people').select('id, role, first_name, last_name, gender, birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
       fetch('/api/family/invites', { cache: 'no-store' }),
     ]);
 
@@ -81,6 +82,7 @@ export default function PeoplePage() {
       role: form.role as 'adult' | 'child',
       first_name: form.first_name,
       last_name: form.last_name || null,
+      gender: form.gender || null,
       birthdate: form.birthdate || null,
     });
 
@@ -89,7 +91,7 @@ export default function PeoplePage() {
       return;
     }
 
-    setForm({ role: form.role, first_name: '', last_name: '', birthdate: '' });
+    setForm({ role: form.role, first_name: '', last_name: '', gender: '', birthdate: '' });
     setUiMessage('Family member added.');
     await load();
   };
@@ -140,6 +142,7 @@ export default function PeoplePage() {
             <li key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, padding: 10, border: '1px solid #e6ddf4', borderRadius: 10 }}>
               <span style={{ fontSize: 13, textTransform: 'capitalize', color: '#6d6480' }}>{p.role}</span>
               <span style={{ fontWeight: 700 }}>{p.first_name} {p.last_name ?? ''}</span>
+              <span style={{ color: '#666', fontSize: 14, textTransform: 'capitalize' }}>{p.gender ? p.gender.replaceAll('_', ' ') : '-'}</span>
               <span style={{ color: '#666', fontSize: 14 }}>{p.birthdate ?? '-'}</span>
               <button onClick={() => removePerson(p.id)} style={{ width: '100%' }}>Remove</button>
             </li>
@@ -167,6 +170,13 @@ export default function PeoplePage() {
           </select>
           <input style={{ width: '100%', minWidth: 0 }} placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
           <input style={{ width: '100%', minWidth: 0 }} placeholder="Last name (optional)" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          <select style={{ width: '100%', minWidth: 0 }} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+            <option value="">Gender</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="non_binary">Non-binary</option>
+            <option value="prefer_not_to_say">Prefer not to say</option>
+          </select>
           <input style={{ width: '100%', minWidth: 0 }} type="date" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: e.target.value })} />
           <button style={{ width: '100%' }} type="button" onClick={addPerson}>Add Family Member</button>
         </div>

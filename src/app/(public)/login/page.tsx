@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { WAITLIST_JOIN_URL } from '@/lib/waitlist';
 
 type AuthMethod = 'phone' | 'email';
 type JourneyMode = 'new' | 'existing';
@@ -28,6 +29,7 @@ export default function LoginPage() {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showWaitlistInvite, setShowWaitlistInvite] = useState(false);
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [resendIn, setResendIn] = useState(0);
 
@@ -72,14 +74,54 @@ export default function LoginPage() {
   const clearFeedback = () => {
     setError(null);
     setMessage(null);
+    setShowWaitlistInvite(false);
   };
 
   const requestOtp = async (reason: 'send' | 'resend') => {
     clearFeedback();
-    setPending(true);
 
     const supabase = createBrowserSupabaseClient();
     const shouldCreateUser = journeyMode === 'new';
+
+    if (shouldCreateUser && authMethod === 'phone') {
+      setShowWaitlistInvite(true);
+      setError('Early access sign-up is currently available by waitlist email only. Please continue with the email you used for the waitlist.');
+      return;
+    }
+
+    setPending(true);
+
+    if (shouldCreateUser && authMethod === 'email') {
+      try {
+        const checkRes = await fetch('/api/waitlist/check', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: normalizedEmail }),
+        });
+        const checkJson = (await checkRes.json()) as { allowed?: boolean; claimed?: boolean; error?: string };
+
+        if (!checkRes.ok || !checkJson.allowed) {
+          setPending(false);
+          setShowWaitlistInvite(true);
+          setError(
+            checkJson.error ||
+            'We are currently opening sign-ups to families on our waitlist first. Please join the waitlist or sign up after opening.'
+          );
+          return;
+        }
+
+        if (checkJson.claimed) {
+          setPending(false);
+          setJourneyMode('existing');
+          setError('This waitlist email already has an account. Please choose “I already have an account” and sign in.');
+          return;
+        }
+      } catch {
+        setPending(false);
+        setError('Unable to check waitlist access right now. Please try again soon.');
+        return;
+      }
+    }
 
     const response = authMethod === 'phone'
       ? await supabase.auth.signInWithOtp({
@@ -163,6 +205,14 @@ export default function LoginPage() {
 
     const next = sessionStorage.getItem('post_login_redirect') || '/landing';
     sessionStorage.removeItem('post_login_redirect');
+
+    if (journeyMode === 'new') {
+      await fetch('/api/waitlist/claim', { method: 'POST' }).catch(() => null);
+      sessionStorage.setItem('post_onboarding_redirect', next);
+      window.location.replace('/onboarding');
+      return;
+    }
+
     window.location.replace(next);
   };
 
@@ -210,7 +260,7 @@ export default function LoginPage() {
           <label style={{ color: '#4f3f82', fontWeight: 600 }}>Account status</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <button type="button" onClick={() => setJourneyMode('existing')} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'existing' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I already have an account</button>
-            <button type="button" onClick={() => setJourneyMode('new')} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'new' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I am new</button>
+            <button type="button" onClick={() => { setJourneyMode('new'); setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'new' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I am new</button>
           </div>
         </div>
 
@@ -300,6 +350,15 @@ export default function LoginPage() {
 
         {message && <p style={{ marginTop: 14, color: '#5f3da4' }}>{message}</p>}
         {error && <p style={{ marginTop: 14, color: '#8a3f6b' }}>{error}</p>}
+        {showWaitlistInvite && (
+          <p style={{ marginTop: 10, color: '#6d6480', lineHeight: 1.5 }}>
+            Already joined the waitlist? Try the email you used. Otherwise,{' '}
+            <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 700 }}>
+              join the waitlist here
+            </a>
+            {' '}or sign up after opening.
+          </p>
+        )}
       </section>
     </main>
   );

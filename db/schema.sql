@@ -44,6 +44,7 @@ CREATE TABLE public.households (
     role text NOT NULL DEFAULT 'owner'::text,
     name text,
     phone text,
+    email text,
     created_at timestamp with time zone DEFAULT now()
 );
 
@@ -85,6 +86,7 @@ CREATE TABLE public.people (
     household_id uuid NOT NULL,
     first_name text NOT NULL,
     last_name text,
+    gender text,
     birthdate date,
     notes text,
     created_at timestamp with time zone DEFAULT now()
@@ -112,6 +114,23 @@ CREATE TABLE public.webhook_log (
     received_at timestamp with time zone DEFAULT now()
 );
 
+CREATE TABLE public.waitlist_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    email text NOT NULL,
+    normalized_email text NOT NULL,
+    first_name text,
+    last_name text,
+    source text DEFAULT 'google_form'::text NOT NULL,
+    external_id text,
+    invite_token uuid DEFAULT gen_random_uuid() NOT NULL,
+    raw_payload jsonb,
+    claimed_user_id uuid,
+    claimed_at timestamp with time zone,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 -- =========================================
 -- PRIMARY KEYS
 -- =========================================
@@ -127,6 +146,7 @@ alter table public.people add primary key (id);
 alter table public.pricing_rules add primary key (id);
 alter table public.roles add primary key (id);
 alter table public.webhook_log add primary key (id);
+alter table public.waitlist_entries add primary key (id);
 
 -- =========================================
 -- FOREIGN KEYS
@@ -134,6 +154,10 @@ alter table public.webhook_log add primary key (id);
 alter table public.households
   add constraint households_user_id_fkey
   foreign key (user_id) references auth.users(id) on delete cascade;
+
+alter table public.waitlist_entries
+  add constraint waitlist_entries_claimed_user_id_fkey
+  foreign key (claimed_user_id) references auth.users(id) on delete set null;
 
 alter table public.household_members
   add constraint household_members_household_id_fkey
@@ -230,6 +254,10 @@ alter table public.households
 
 alter table public.household_members
   add constraint household_members_role_check check (role in ('owner','admin','member'));
+
+alter table public.waitlist_entries
+  add constraint waitlist_entries_email_check check (position('@' in email) > 1),
+  add constraint waitlist_entries_normalized_email_check check (position('@' in normalized_email) > 1);
 
 alter table public.memberships
   drop constraint if exists memberships_check;
@@ -328,6 +356,11 @@ create trigger set_updated_at_webhook_log
 before update on public.webhook_log
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_updated_at_waitlist_entries on public.waitlist_entries;
+create trigger set_updated_at_waitlist_entries
+before update on public.waitlist_entries
+for each row execute function public.set_updated_at();
+
 -- =========================================
 -- INDEXES
 -- =========================================
@@ -344,6 +377,11 @@ create index if not exists idx_memberships_person_id on public.memberships(perso
 create index if not exists idx_party_bookings_household_id on public.party_bookings(household_id);
 create index if not exists idx_party_bookings_start_time on public.party_bookings(start_time);
 create index if not exists idx_webhook_log_received_at on public.webhook_log(received_at desc);
+create unique index if not exists waitlist_entries_normalized_email_key on public.waitlist_entries(normalized_email);
+create unique index if not exists waitlist_entries_invite_token_idx on public.waitlist_entries(invite_token);
+create index if not exists waitlist_entries_claimed_user_id_idx on public.waitlist_entries(claimed_user_id);
+
+alter table public.waitlist_entries enable row level security;
 
 alter table public.people
 add column if not exists role text not null default 'child';
@@ -351,6 +389,10 @@ add column if not exists role text not null default 'child';
 alter table public.people
 add constraint people_role_check
 check (role in ('adult', 'child'));
+
+alter table public.people
+add constraint people_gender_check
+check (gender is null or gender in ('female', 'male', 'non_binary', 'prefer_not_to_say'));
 
 create or replace function public.handle_new_user()
 returns trigger

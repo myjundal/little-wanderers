@@ -11,8 +11,8 @@ export async function GET(_: Request, { params }: Params) {
   const admin = context.admin;
 
   const [{ data: household }, { data: people }, { data: memberships }, { data: waivers }, { data: parties }] = await Promise.all([
-    admin.from('households').select('id,name,phone,city,state,created_at').eq('id', id).maybeSingle(),
-    admin.from('people').select('id,first_name,last_name,birthdate,role,created_at').eq('household_id', id).order('created_at', { ascending: true }),
+    admin.from('households').select('id,name,phone,email,city,state,created_at').eq('id', id).maybeSingle(),
+    admin.from('people').select('id,first_name,last_name,gender,birthdate,role,created_at').eq('household_id', id).order('created_at', { ascending: true }),
     admin.from('memberships').select('id,renews_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
     admin.from('waivers').select('id,signed_at,signed_date,waiver_expires_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
     admin.from('party_bookings').select('id,start_time,end_time,status,headcount_expected,notes,created_at').eq('household_id', id).order('start_time', { ascending: true }),
@@ -22,7 +22,7 @@ export async function GET(_: Request, { params }: Params) {
     return Response.json({ ok: false, error: 'Family not found' }, { status: 404 });
   }
 
-  const peopleRows = (people ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null; birthdate: string | null }>;
+  const peopleRows = (people ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; gender: string | null; role: 'adult' | 'child' | null; birthdate: string | null }>;
   const { data: classRegs } = peopleRows.length
     ? await admin
         .from('class_registrations')

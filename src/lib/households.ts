@@ -73,7 +73,7 @@ export async function ensureHouseholdForUser(supabase: HouseholdClient, userId: 
 
   const { data: household, error: householdError } = await supabase
     .from('households')
-    .insert({ name: fallbackName })
+    .insert({ user_id: authenticatedUserId, role: 'owner', name: fallbackName })
     .select('id')
     .single();
 

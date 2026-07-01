@@ -7,9 +7,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
-type Person = { id: string; first_name: string | null; last_name: string | null; birthdate?: string | null; role: 'adult' | 'child' | null };
+type Person = { id: string; first_name: string | null; last_name: string | null; gender?: string | null; birthdate?: string | null; role: 'adult' | 'child' | null };
 type FamilyDetail = {
-  household: { id: string; name: string | null; phone: string | null; city?: string | null; state?: string | null };
+  household: { id: string; name: string | null; phone: string | null; email?: string | null; city?: string | null; state?: string | null };
   guardians: Person[];
   children: Person[];
   membership_status: string;
