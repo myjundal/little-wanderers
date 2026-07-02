@@ -1,38 +1,35 @@
 import styles from '@/app/(public)/home.module.css';
-import WaitlistCountCard from '@/components/home/WaitlistCountCard';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
-import { getWaitlistCount } from '@/lib/waitlist-count';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export default async function HomeComingSoon() {
-  const waitlistCount = await getWaitlistCount();
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isAuthenticated = Boolean(user);
 
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
         <div className={styles.left}>
           <h1>
-            A calm space
+            The only indoor
             <br />
-            to play, connect
+            play <span className={`${styles.script} ${styles.heroScriptLine}`}>studio + cafe</span>
             <br />
-            and <span className={styles.script}>breathe</span>
+            <span className={styles.heroLocationLine}>in West Hartford</span>
           </h1>
-          <p className={styles.comingSoon}>Coming soon in Summer 2026</p>
+          <p className={styles.comingSoon}>Coming soon in late Summer 2026</p>
           <p>
-            A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in the
-            day and coffee-in-hand moments that feel restorative for parents too.
+            Designed for curious 0-7 year olds, Little Wanderers blends sensory-friendly play, dreamy little
+            discoveries, and a cozy cafe pause where grown-ups can actually sip good coffee while the kids wander.
           </p>
           <p>
-            Little Wanderers is coming to Bishop&apos;s Corner plaza in West Hartford — on the Target side, between The Paper Store and Float Forty One, near Marshalls, Chopt, Koma, and more.
+            We&apos;re opening in Bishop&apos;s Corner plaza on the Target side, tucked between The Paper Store and Float
+            Forty One, with Marshalls, Chopt, Koma, and more neighborhood favorites nearby.
           </p>
-          <p className={styles.subline}>Join waitlist for updates and early access!</p>
           <div className={styles.actions}>
-            <div className={styles.waitlistAction}>
-              <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-                <span>Join waitlist</span>
-              </PastelButton>
-              <WaitlistCountCard initialCount={{ displayCount: waitlistCount.displayCount }} />
-            </div>
             <div className={styles.secondaryActions}>
               <PastelButton href="https://www.instagram.com/littlewanderers.weha" secondary external>
                 <span>Follow on Instagram</span>
@@ -57,6 +54,25 @@ export default async function HomeComingSoon() {
         <span className={styles.starOne}>✦</span>
         <span className={styles.starTwo}>✦</span>
         <span className={styles.moon}>☾</span>
+      </section>
+
+      <section className={styles.partyFeature}>
+        <div>
+          <p className={styles.partyEyebrow}>Early access parties</p>
+          <h2>Party holds are open for waitlist families</h2>
+          <p>
+            Peek at available Friday, Saturday, and Sunday party slots, then request a hold with no deposit today.
+          </p>
+          {!isAuthenticated && (
+            <p className={styles.accessNote}>
+              Requesting a party hold requires My Little Wanderers access. Early access accounts are currently available for waitlist families.
+            </p>
+          )}
+        </div>
+        <PastelButton href="/party">
+          <span>View party calendar</span>
+          <small>{isAuthenticated ? 'Request a hold from your account' : 'Sign in when you are ready to reserve'}</small>
+        </PastelButton>
       </section>
 
       <div className={styles.softBand} />

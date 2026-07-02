@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { useRouter } from 'next/navigation';
 
 
 type LineItem = {
@@ -53,18 +52,11 @@ function isBirthdayToday(birthday: string | null): boolean {
 export default function StaffCheckinPage() {
   const [lastScan, setLastScan] = useState<string>('');
   const [serverMsg, setServerMsg] = useState<string>('');
-  const [firstName, setFirstName] = useState<string | null>(null);
-  const [lastName, setLastName] = useState<string | null>(null);
-  const [birthday, setBirthday] = useState<string | null>(null);
-const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [reference, setReference] = useState<string>('');
   const [visits, setVisits] = useState<Visit[]>([]);
-const [scannerRunning, setScannerRunning] = useState(false);
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const lastScanTimeRef = useRef<number>(0);
   const startedRef = useRef(false);
-  const router = useRouter();
 
   useEffect(() => {
 if (startedRef.current) return;
@@ -82,10 +74,6 @@ const s = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 }, false);
  lastScanTimeRef.current = now;
 
       setLastScan(decodedText);
-      setFirstName(null);
-      setLastName(null);
-      setBirthday(null);
-     setLineItems([]);
       setServerMsg('');
 
       const personId = extractPersonId(decodedText);
@@ -106,10 +94,6 @@ const s = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 }, false);
           setServerMsg(`Error: ${data.error ?? 'checkin failed'}`);
           return;
         }
-	setFirstName(data.first_name ?? null);
-        setLastName(data.last_name ?? null);
-        setBirthday(data.birthday ?? null);
-setLineItems(data.lineItems ?? []);
         setVisits((prev) => [
           ...prev,
           {
@@ -129,12 +113,11 @@ setLineItems(data.lineItems ?? []);
         } else {
           setServerMsg(`Check-in OK ✅ • Price: $${price}`);
         }
-      } catch (e: unknown) {
+      } catch {
         setServerMsg(`Network error`);
       }
-    }, (errorMessage) => {
+    }, () => {
       // scanner failure callback (ignore noisy logs)
-      // console.debug(errorMessage);
     });
 
     scannerRef.current = s;
@@ -156,53 +139,11 @@ const totalAll = unpaidVisits.reduce((sum, visit) => {
     return sum + (visit.price_cents ?? 0);
   }, 0);
 
-  // 버튼 핸들러들
-  const handleMarkPaid = async () => {
-   for (const visit of unpaidVisits) {
-    try {
-      const res = await fetch(`/api/visits/${visit.id}/mark-paid`, { method: 'POST' });
-      if (!res.ok) throw new Error();
-	} catch {
-      alert(`Failed to mark visit ${visit.id} as paid`);
-	}
-     }
-      alert('All unpaid visits marked as paid');
-      setServerMsg('Marked as paid');
-  };
-
-  const handleCheckoutAtPOS = async () => {
-   for (const visit of unpaidVisits) {
-    try {
-      const res = await fetch(`/api/visits/${visit.id}/checkout-pos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reference }),
-      });
-      if (!res.ok) throw new Error();
-      } catch {
-      alert(`Failed to checkout visit ${visit.id} at POS`);
-      }
-     }
-     alert('Checkout at POS completed');
-      setServerMsg('Checkout at POS completed');
-  };
-
-  const handleOpenOnlineCheckout = () => {
-    if (unpaidVisits.length === 0) {
-	alert('No unpaid visits to checkout.');
-	return;
-	}
-     // if one visit is being taken care of
-     const visit = unpaidVisits[0];
-    router.push(`/checkout?visit_id=${visit.id}`);
-  };
-
 const handleResetAll = () => {
     if (confirm('Clear all scanned data?')) {
       setVisits([]);
       setServerMsg('');
       setLastScan('');
-      setReference('');
     }
   };
 
@@ -217,17 +158,14 @@ return (
         <div style={{ marginTop: 8 }}>{serverMsg}</div>
       </div>
 
-{/* 방문자 리스트 */} 
-	{visits.map((visit, idx) => { 
-		const subtotal = visit.lineItems.reduce(
-		(sum, item) => sum + item.price_cents * item.quantity, 0);
-
-return (
-          <div key={visit.id} style={{ marginTop: 24, padding: 12, border: '1px solid #aaa' }}>
-            <h3>#{idx + 1} - {visit.first_name} {visit.last_name}</h3>
-          {isBirthdayToday(birthday) && (
-            <div style={{ color: 'green', marginTop: 4 }}>
-              🎉 Happy Birthday! 🎂
+	{/* 방문자 리스트 */}
+		{visits.map((visit, idx) => {
+	return (
+	          <div key={visit.id} style={{ marginTop: 24, padding: 12, border: '1px solid #aaa' }}>
+	            <h3>#{idx + 1} - {visit.first_name} {visit.last_name}</h3>
+	          {isBirthdayToday(visit.birthday) && (
+	            <div style={{ color: 'green', marginTop: 4 }}>
+	              🎉 Happy Birthday! 🎂
             </div>
           )}
 <ul>
@@ -250,28 +188,9 @@ return (
           <h2>Total Summary</h2>
           <p><strong>People Requiring Payment:</strong> {unpaidVisits.length}</p>
           <p><strong>Grand Total:</strong> ${(totalAll / 100).toFixed(2)}</p>
-              
-      {/* 버튼들 */}
-      <div style={{ marginTop: 16 }}>
-        <button onClick={handleMarkPaid} style={{ marginRight: 12 }}>
-          Mark as Paid (Prepaid)
-        </button>
-
-        <div style={{ display: 'inline-block', marginRight: 12 }}>
-          <input
-            type="text"
-            placeholder="Reference from POS"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            style={{ marginRight: 6 }}
-          />
-          <button onClick={handleCheckoutAtPOS}>Checkout at POS</button>
-        </div>
-
-        <button onClick={handleOpenOnlineCheckout}>Open Online Checkout</button>
-      </div>
-    </div>
-  )}
+	      <p style={{ color: '#555' }}>Collect payment at the counter for unpaid visits.</p>
+	    </div>
+	  )}
 
 {/* 리셋 버튼은 항상 노출 */}
       {visits.length > 0 && (

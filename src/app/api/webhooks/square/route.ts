@@ -49,20 +49,18 @@ export async function POST(req: NextRequest) {
     payload?.event_id ?? payload?.id ?? payload?.data?.id ?? null;
 
   if (eventId) {
-    try {
-      await supa.from('webhook_log').insert({
-        provider: 'square',
-        event_id: eventId,
-        payload,
-      });
-    } catch (e: unknown) {
-      const errStr = typeof e === 'string' ? e : e instanceof Error ? e.message : 'insert error';
-      // duplicate key → already processed
-      if (errStr.toLowerCase().includes('duplicate')) {
+    const { error: logError } = await supa.from('webhook_log').insert({
+      provider: 'square',
+      event_id: eventId,
+      payload,
+    });
+
+    if (logError) {
+      if (logError.code === '23505' || logError.message.toLowerCase().includes('duplicate')) {
         return new Response('duplicate', { status: 200 });
       }
-      // if PostgREST error
-      return new Response(errStr, { status: 500 });
+
+      return new Response(logError.message, { status: 500 });
     }
   } else {
     // no event id → still log without unique guard
@@ -139,4 +137,3 @@ export async function POST(req: NextRequest) {
 
   return new Response('ok', { status: 200 });
 }
-

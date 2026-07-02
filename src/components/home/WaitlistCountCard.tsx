@@ -7,7 +7,7 @@ import type { WaitlistDisplayCount } from '@/lib/waitlist-count';
 
 const REFRESH_INTERVAL_MS = 60_000;
 
-export default function WaitlistCountCard({ initialCount }: { initialCount: WaitlistDisplayCount }) {
+export default function WaitlistCountCard({ initialCount, variant = 'default' }: { initialCount: WaitlistDisplayCount; variant?: 'default' | 'compact' }) {
   const [count, setCount] = useState(initialCount);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function WaitlistCountCard({ initialCount }: { initialCount: Wait
 
   return (
     <aside
-      className={styles.waitlistCountCard}
+      className={`${styles.waitlistCountCard} ${variant === 'compact' ? styles.waitlistCountCardCompact : ''}`}
       aria-label={`${count.displayCount} plus local families have joined the waitlist`}
     >
       <div className={styles.waitlistNumberStage} aria-live="polite" aria-atomic="true">
@@ -47,7 +47,9 @@ export default function WaitlistCountCard({ initialCount }: { initialCount: Wait
         </strong>
       </div>
       <div className={styles.waitlistCountCopy}>
-        <span className={styles.waitlistCountEyebrow}>Families already joined on the waitlist!</span>
+        <span className={styles.waitlistCountEyebrow}>
+          {variant === 'compact' ? 'waitlist families' : 'Families already joined on the waitlist!'}
+        </span>
       </div>
     </aside>
   );

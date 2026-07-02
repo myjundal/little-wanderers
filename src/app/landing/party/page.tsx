@@ -45,17 +45,6 @@ function isPartyDate(date: string) {
   return day === 5 || day === 6 || day === 0;
 }
 
-function getPartyWeekDates(anchor: string) {
-  const d = new Date(`${anchor}T00:00:00`);
-  const friday = new Date(d);
-  friday.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));
-  const saturday = new Date(friday);
-  saturday.setDate(friday.getDate() + 1);
-  const sunday = new Date(friday);
-  sunday.setDate(friday.getDate() + 2);
-  return [friday, saturday, sunday].map((item) => item.toISOString().slice(0, 10));
-}
-
 function prettyNote(note: string | null) {
   if (!note) return '-';
   return note.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (iso) =>
@@ -75,8 +64,6 @@ export default function PartyPage() {
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
   const [rescheduleSlot, setRescheduleSlot] = useState<'10:00' | '15:00'>('10:00');
-  const [selectedMobileDate, setSelectedMobileDate] = useState<string>('');
-  const [selectedMobileWeek, setSelectedMobileWeek] = useState<string>('');
 
   const [form, setForm] = useState({
     party_date: getDefaultPartyDate(),
@@ -331,11 +318,6 @@ export default function PartyPage() {
     })),
   ];
 
-  const mobileAvailableSlots = slots.filter((slot) => slot.status === 'available' || slot.status === 'mine');
-  const partyWeekAnchor = selectedMobileWeek || new Date().toISOString().slice(0, 10);
-  const partyWeekDates = getPartyWeekDates(partyWeekAnchor);
-  const activeMobileDate = selectedMobileDate || partyWeekDates[0];
-
   const selectSlot = (slot: CalendarSlot) => {
     if (slot.status !== 'available') return;
     const start = new Date(slot.start);
@@ -345,7 +327,6 @@ export default function PartyPage() {
       party_date: slot.start.slice(0, 10),
       slot: hour >= 15 ? '15:00' : '10:00',
     }));
-    setSelectedMobileDate(slot.start.slice(0, 10));
     setMessage(null);
   };
 
@@ -368,69 +349,55 @@ export default function PartyPage() {
   };
 
   return (
-    <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 860, margin: '0 auto', boxSizing: 'border-box', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>🎉 My Party Bookings</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose a Friday, Saturday, or Sunday party slot and request an early access hold. No deposit is collected today, and party times are flexible.</p>
+    <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 1160, margin: '0 auto', boxSizing: 'border-box', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>Birthday Parties at Little Wanderers</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Celebrate your little one with a calm, playful, space-inspired birthday experience designed for young children and their caregivers.</p>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
 
-      <div className="desktopCalendar">
-        <AvailabilityCalendar
-          title="Party booking calendar"
-          subtitle="Select an available slot to fill the booking form below."
-          slots={slots}
-          onSlotSelect={selectSlot}
-        />
-      </div>
-      <section className="mobileSlots" style={{ marginTop: 12 }}>
-        <h3 style={{ margin: '0 0 10px', color: '#4f3f82' }}>Choose a week</h3>
-        <input type="date" value={partyWeekAnchor} onChange={(e) => { setSelectedMobileWeek(e.target.value); setSelectedMobileDate(''); }} style={{ width: '100%', border: '1px solid #dbcdf5', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }} />
-        <div style={{ display: 'grid', gap: 10 }}>
-          {partyWeekDates.map((date) => {
-            const daySlots = mobileAvailableSlots
-              .filter((slot) => new Date(slot.start).toISOString().slice(0, 10) === date)
-              .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-            const selected = date === activeMobileDate;
+      <div className="partyIntroGrid">
+        <section style={{ border: '1px solid #dfccfb', borderRadius: 16, background: '#fff', padding: 16 }}>
+          <p style={{ margin: 0, color: '#7a63a5', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 12 }}>Founding Birthday Package</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'baseline', marginTop: 8 }}>
+            <h2 style={{ margin: 0, color: '#4f3f82', fontSize: 24 }}>$300</h2>
+            <span style={{ color: '#6f628d', fontWeight: 700 }}>3 hours semi-private party time</span>
+          </div>
+          <p style={{ color: '#6f628d', lineHeight: 1.55, margin: '10px 0 0' }}>
+            Your party includes 3 hours of semi-private celebration time, plus a separate 30-minute family setup window before the party and cleanup by our team afterward. Parties are limited to 30 guests total.
+          </p>
+          <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What is included</h3>
+          <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
+            <li>Basic Little Wanderers table setup with neutral, soft space-inspired touches</li>
+            <li>Disposable plates, cups, napkins, and utensils</li>
+            <li>Staff support for setup and party flow</li>
+            <li>Full cleanup after the party</li>
+            <li><strong>Our signature Little Wanderers Birthday Galaxy activity</strong></li>
+            <li>A sweet group photo moment</li>
+          </ul>
+          <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '12px 0 0' }}>
+            Available Friday evenings, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
+          </p>
+          <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '8px 0 0' }}>
+            For non-birthday events, larger gatherings, or special requests, please contact us at{' '}
+            <a href="mailto:hello@thelittlewanderers.com" style={{ color: '#5f3da4', fontWeight: 800 }}>hello@thelittlewanderers.com</a>{' '}
+            or on Instagram at{' '}
+            <a href="https://www.instagram.com/littlewanderers.weha" target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>@littlewanderers.weha</a>.
+          </p>
+        </section>
 
-            return (
-              <article key={`mobile-day-${date}`} style={{ border: selected ? '2px solid #9b7fd1' : '1px solid #e3d4fa', borderRadius: 14, padding: 12, background: selected ? '#fbf8ff' : '#fff' }}>
-                <p style={{ margin: 0, fontWeight: 800, color: '#4f3f82' }}>{new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'long' })}</p>
-                <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-                  {daySlots.length === 0 ? (
-                    <p style={{ margin: 0, color: '#6f628d' }}>No available party slots for this date.</p>
-                  ) : (
-                    daySlots.map((slot) => {
-                      const isSelectedSlot = form.party_date === slot.start.slice(0, 10) && form.slot === (new Date(slot.start).getHours() >= 15 ? '15:00' : '10:00');
-                      return (
-                        <button
-                          key={`slot-${slot.id}`}
-                          type="button"
-                          onClick={() => selectSlot(slot)}
-                          disabled={slot.status === 'mine'}
-                          style={{
-                            borderRadius: 12,
-                            border: isSelectedSlot ? '2px solid #5f3da4' : '1px solid #dbcdf5',
-                            background: isSelectedSlot ? '#f1e9ff' : '#fff',
-                            color: slot.status === 'mine' ? '#5f3da4' : '#2f7a47',
-                            padding: '10px 12px',
-                            fontWeight: 800,
-                            textAlign: 'left',
-                          }}
-                        >
-                          {new Date(slot.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} - {new Date(slot.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()} · {slot.status === 'mine' ? 'Reserved by you' : 'Available'}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </article>
-            );
-          })}
+        <div>
+          <AvailabilityCalendar
+            title="Party booking calendar"
+            subtitle="Friday, Saturday, and Sunday slots. Select an available time to fill the booking form below."
+            slots={slots}
+            onSlotSelect={selectSlot}
+            visibleWeekdays={[5, 6, 0]}
+          />
         </div>
-      </section>
+      </div>
 
       <section style={{ marginTop: 16, border: '1px solid #dfccfb', borderRadius: 14, background: '#fff', padding: 14 }}>
-        <h3 style={{ marginTop: 0, color: '#4f3f82' }}>🪐 New party booking</h3>
+        <h3 style={{ marginTop: 0, color: '#4f3f82' }}>New party booking</h3>
 
         <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, border: '1px solid #eadfff', background: '#faf5ff' }}>
           <strong>Early access party holds:</strong>
@@ -608,11 +575,9 @@ export default function PartyPage() {
         </Link>
       </p>
     <style jsx>{`
-  .mobileSlots { display:none; }
-  .desktopCalendar { display:block; }
+  .partyIntroGrid { display:grid; grid-template-columns:minmax(280px, 0.82fr) minmax(420px, 1.18fr); gap:16px; align-items:start; margin-top:16px; }
   @media (max-width: 900px) {
-    .mobileSlots { display:block; }
-    .desktopCalendar { display:none; }
+    .partyIntroGrid { grid-template-columns:1fr; }
   }
 `}</style>
     </main>

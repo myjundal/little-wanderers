@@ -47,7 +47,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
   const [classCart, setClassCart] = useState<Array<{ class_id: string; quantity: number }>>([]);
-  const [partyForm, setPartyForm] = useState({ party_date: new Date().toISOString().slice(0, 10), slot: '11:00', headcount_expected: '', notes: '' });
+  const [partyForm, setPartyForm] = useState({ party_date: new Date().toISOString().slice(0, 10), slot: '10:00', headcount_expected: '', notes: '' });
   const [bookedSlots, setBookedSlots] = useState<Array<{ id: string; start_time: string; end_time: string }>>([]);
   const [editableMembers, setEditableMembers] = useState<MemberForm[]>([]);
   const [familyLocation, setFamilyLocation] = useState({ city: '', state: 'CT' });
@@ -176,8 +176,8 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   };
 
   const submitParty = async () => {
-    const startIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 15 : 11);
-    const endIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 18 : 14);
+    const startIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 15 : 10);
+    const endIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 18 : 13);
 
     const res = await fetch(`/api/admin/families/${familyId}/party-bookings`, {
       method: 'POST',
@@ -208,10 +208,10 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         const day = d.getUTCDay();
         if (day !== 0 && day !== 6) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const start11 = toIsoLocal(dayStr, 11);
+        const start10 = toIsoLocal(dayStr, 10);
         const start15 = toIsoLocal(dayStr, 15);
-        if (!blockedStarts.has(new Date(start11).getTime())) {
-          generated.push({ id: `avail-${dayStr}-11`, start: start11, end: toIsoLocal(dayStr, 14), label: 'Available party slot', status: 'available' });
+        if (!blockedStarts.has(new Date(start10).getTime())) {
+          generated.push({ id: `avail-${dayStr}-10`, start: start10, end: toIsoLocal(dayStr, 13), label: 'Available party slot', status: 'available' });
         }
         if (!blockedStarts.has(new Date(start15).getTime())) {
           generated.push({ id: `avail-${dayStr}-15`, start: start15, end: toIsoLocal(dayStr, 18), label: 'Available party slot', status: 'available' });
@@ -335,7 +335,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
             <input type="date" value={partyForm.party_date} onChange={(e) => setPartyForm((prev) => ({ ...prev, party_date: e.target.value }))} />
             <select value={partyForm.slot} onChange={(e) => setPartyForm((prev) => ({ ...prev, slot: e.target.value }))}>
-              <option value="11:00">11:00 AM - 2:00 PM</option>
+              <option value="10:00">10:00 AM - 1:00 PM</option>
               <option value="15:00">3:00 PM - 6:00 PM</option>
             </select>
             <input type="number" min={0} value={partyForm.headcount_expected} placeholder="Headcount" onChange={(e) => setPartyForm((prev) => ({ ...prev, headcount_expected: e.target.value }))} />

@@ -16,6 +16,7 @@ type Props = {
   slots: CalendarSlot[];
   showUpcoming?: boolean;
   onSlotSelect?: (slot: CalendarSlot) => void;
+  visibleWeekdays?: number[];
 };
 
 const statusColor: Record<CalendarSlot['status'], string> = {
@@ -36,7 +37,7 @@ function ymd(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export default function AvailabilityCalendar({ title, subtitle, slots, showUpcoming = false, onSlotSelect }: Props) {
+export default function AvailabilityCalendar({ title, subtitle, slots, showUpcoming = false, onSlotSelect, visibleWeekdays }: Props) {
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -50,7 +51,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
     [slots]
   );
 
-  const { dayMap, calendarDays } = useMemo(() => {
+  const { dayMap, calendarDays, weekdayLabels } = useMemo(() => {
     const map = new Map<string, CalendarSlot[]>();
     slots.forEach((slot) => {
       const key = ymd(new Date(slot.start));
@@ -67,19 +68,44 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
     const year = cursor.getFullYear();
     const month = cursor.getMonth();
     const first = new Date(year, month, 1);
-    const firstWeekDay = first.getDay();
-    const start = new Date(first);
-    start.setDate(first.getDate() - firstWeekDay);
-
     const days: Date[] = [];
-    for (let i = 0; i < 42; i += 1) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      days.push(d);
+    const weekdayFilter = visibleWeekdays?.filter((day) => day >= 0 && day <= 6);
+
+    if (weekdayFilter?.length) {
+      const firstVisibleWeekday = weekdayFilter[0];
+      const start = new Date(first);
+      start.setDate(first.getDate() - ((first.getDay() - firstVisibleWeekday + 7) % 7));
+
+      for (let week = 0; week < 6; week += 1) {
+        weekdayFilter.forEach((weekday) => {
+          const d = new Date(start);
+          const offset = week * 7 + ((weekday - firstVisibleWeekday + 7) % 7);
+          d.setDate(start.getDate() + offset);
+          if (
+            d.getMonth() === month ||
+            (d.getTime() >= first.getTime() && d.getTime() <= new Date(year, month + 1, 6).getTime())
+          ) {
+            days.push(d);
+          }
+        });
+      }
+    } else {
+      const firstWeekDay = first.getDay();
+      const start = new Date(first);
+      start.setDate(first.getDate() - firstWeekDay);
+
+      for (let i = 0; i < 42; i += 1) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        days.push(d);
+      }
     }
 
-    return { dayMap: map, calendarDays: days };
-  }, [slots, cursor]);
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const labels = weekdayFilter?.length ? weekdayFilter.map((day) => dayNames[day]) : dayNames;
+
+    return { dayMap: map, calendarDays: days, weekdayLabels: labels };
+  }, [slots, cursor, visibleWeekdays]);
 
   return (
     <section
@@ -137,8 +163,8 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
       </div>
 
       <div style={{ marginTop: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weekdayLabels.length}, minmax(0, 1fr))`, gap: 4 }}>
+        {weekdayLabels.map((d) => (
           <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: '#6f628d' }}>
             {d}
           </div>

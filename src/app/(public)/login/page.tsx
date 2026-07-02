@@ -8,7 +8,7 @@ type AuthMethod = 'phone' | 'email';
 type JourneyMode = 'new' | 'existing';
 type Step = 'collect' | 'verify';
 
-const OTP_LENGTH = 6;
+const OTP_LENGTH = 4;
 const RESEND_SECONDS = 30;
 
 const normalizeUsPhone = (input: string) => {
@@ -152,10 +152,10 @@ export default function LoginPage() {
 
     if (authMethod === 'phone') {
       setPendingPhone(normalizedPhone);
-      setMessage(reason === 'send' ? 'We sent a 6-digit code by text.' : 'We sent a new code.');
+      setMessage(reason === 'send' ? 'We sent a 4-digit code by text.' : 'We sent a new code.');
     } else {
       setPendingEmail(normalizedEmail);
-      setMessage(reason === 'send' ? 'We sent a 6-digit code by email.' : 'We sent a new code.');
+      setMessage(reason === 'send' ? 'We sent a 4-digit code by email.' : 'We sent a new code.');
     }
 
     setStep('verify');
@@ -325,9 +325,9 @@ export default function LoginPage() {
         {step === 'verify' && (
           <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>
             <p style={{ margin: 0, color: '#6d6480' }}>
-              Enter the 6-digit code sent to {authMethod === 'phone' ? pendingPhone : pendingEmail}.
+              Enter the 4-digit code sent to {authMethod === 'phone' ? pendingPhone : pendingEmail}.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${OTP_LENGTH}, minmax(0, 1fr))`, gap: 8 }}>
               {otpDigits.map((digit, index) => (
                 <input
                   key={`otp-${index}`}

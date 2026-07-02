@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
+import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
@@ -48,6 +49,41 @@ function isPartySlot(start: Date, end: Date, slot?: string) {
 
 async function getHouseholdIdForUser(userId: string) {
   return getLatestHouseholdIdForUser(admin(), userId);
+}
+
+async function tagPartyEarlyAccessContact(input: { email: string | undefined; householdId: string }) {
+  if (!input.email) return;
+
+  const email = input.email.trim().toLowerCase();
+  const normalizedEmail = normalizeWaitlistEmail(email);
+  if (!normalizedEmail) return;
+
+  const supa = admin();
+  const { data: contact, error } = await supa
+    .from('contacts')
+    .upsert({
+      email,
+      normalized_email: normalizedEmail,
+      source: 'customer',
+      raw_metadata: { household_id: input.householdId },
+    }, { onConflict: 'normalized_email' })
+    .select('id')
+    .maybeSingle();
+
+  if (error || !contact?.id) {
+    console.warn('party contact tag upsert failed', error?.message);
+    return;
+  }
+
+  const { error: customerTagError } = await supa
+    .from('contact_tags')
+    .upsert({ contact_id: contact.id, tag: 'customer' }, { onConflict: 'contact_id,tag' });
+  if (customerTagError) console.warn('customer contact tag failed', customerTagError.message);
+
+  const { error: partyTagError } = await supa
+    .from('contact_tags')
+    .upsert({ contact_id: contact.id, tag: 'party_early_access' }, { onConflict: 'contact_id,tag' });
+  if (partyTagError) console.warn('party early access contact tag failed', partyTagError.message);
 }
 
 async function selectPartyBookings(householdId: string) {
@@ -175,6 +211,8 @@ export async function POST(req: Request) {
     }
 
     if (mode === 'early_access_hold') {
+      await tagPartyEarlyAccessContact({ email: user.email, householdId });
+
       const holdPayload = {
         household_id: householdId,
         start_time: start.toISOString(),

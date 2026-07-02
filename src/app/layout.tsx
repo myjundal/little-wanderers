@@ -6,7 +6,8 @@ import PwaBoot from '@/components/pwa/PwaBoot';
 import AddToHomeScreenPrompt from '@/components/pwa/AddToHomeScreenPrompt';
 import NotificationPrompt from '@/components/pwa/NotificationPrompt';
 
-const SHOW_INSTALL_AND_PUSH_PROMPTS = false;
+const SHOW_INSTALL_PROMPT = true;
+const SHOW_PUSH_PROMPT = false;
 
 const headingFont = Fraunces({
   variable: '--font-heading',
@@ -45,6 +46,11 @@ export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -56,8 +62,8 @@ export default function RootLayout({
         <GoogleAnalytics />
         {children}
         <PwaBoot />
-        {SHOW_INSTALL_AND_PUSH_PROMPTS && <AddToHomeScreenPrompt />}
-        {SHOW_INSTALL_AND_PUSH_PROMPTS && <NotificationPrompt />}
+        {SHOW_INSTALL_PROMPT && <AddToHomeScreenPrompt />}
+        {SHOW_PUSH_PROMPT && <NotificationPrompt />}
         <AnalyticsBoot />
       </body>
     </html>

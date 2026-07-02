@@ -1,5 +1,4 @@
 import { requireStaffContext } from '@/lib/authz';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 
 type MemberInput = {
@@ -49,10 +48,10 @@ export async function POST(req: Request) {
   const primaryAdult = cleanedMembers.find((item) => item.role === 'adult') ?? cleanedMembers[0];
   const householdName = String(body.household_name ?? '').trim() || `${primaryAdult.full_name} Family`;
 
-  const server = createServerSupabaseClient();
+  const admin = context.admin;
 
   // 1) Create household (no households.user_id usage).
-  const { data: household, error: householdError } = await server
+  const { data: household, error: householdError } = await admin
     .from('households')
     .insert({
       role: 'owner',
@@ -83,14 +82,14 @@ export async function POST(req: Request) {
     member_role: item.role,
   }));
 
-  const { error: householdMembersError } = await server.from('household_members').insert(walkInMemberRows);
+  const { error: householdMembersError } = await admin.from('household_members').insert(walkInMemberRows);
 
   if (householdMembersError) {
     logger.error(
       { action: 'staff.family_registration.walkin_members_insert_failed', userId: context.user.id, householdId: household.id },
       householdMembersError
     );
-    await server.from('households').delete().eq('id', household.id);
+    await admin.from('households').delete().eq('id', household.id);
     return Response.json(
       { ok: false, error: formatDbError('Unable to save family members', householdMembersError) },
       { status: 500 }
@@ -109,14 +108,14 @@ export async function POST(req: Request) {
     };
   });
 
-  const { error: peopleError } = await server.from('people').insert(peopleRows);
+  const { error: peopleError } = await admin.from('people').insert(peopleRows);
 
   if (peopleError) {
     logger.error(
       { action: 'staff.family_registration.people_insert_failed', userId: context.user.id, householdId: household.id },
       peopleError
     );
-    await server.from('households').delete().eq('id', household.id);
+    await admin.from('households').delete().eq('id', household.id);
     return Response.json(
       { ok: false, error: formatDbError('Unable to save family members', peopleError) },
       { status: 500 }
