@@ -19,6 +19,23 @@ const normalizeUsPhone = (input: string) => {
   return `+1${local}`;
 };
 
+function formatAuthError(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('signup') && (normalized.includes('disable') || normalized.includes('not allowed'))) {
+    return 'Email sign-up is currently turned off. Please check Supabase Auth sign-up settings, then try again.';
+  }
+  if (normalized.includes('rate limit') || normalized.includes('too many')) {
+    return 'Too many code requests. Please wait a minute and try again.';
+  }
+  if (normalized.includes('invalid') && normalized.includes('otp')) {
+    return 'That code was not accepted. Please check the code and try again.';
+  }
+  if (normalized.includes('expired')) {
+    return 'That code expired. Please request a new code.';
+  }
+  return message || 'Something went wrong. Please try again.';
+}
+
 export default function LoginPage() {
   const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
   const [journeyMode, setJourneyMode] = useState<JourneyMode>('existing');
@@ -135,6 +152,7 @@ export default function LoginPage() {
           email: normalizedEmail,
           options: {
             shouldCreateUser,
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         });
 
@@ -143,10 +161,10 @@ export default function LoginPage() {
     if (response.error) {
       const safeError = response.error.message.toLowerCase();
       if (!shouldCreateUser && safeError.includes('not found')) {
-        setError('Something went wrong');
+        setError('We could not find an account for this email. If you are new, choose “I am new” first.');
         return;
       }
-      setError('Something went wrong');
+      setError(formatAuthError(response.error.message));
       return;
     }
 
@@ -167,7 +185,7 @@ export default function LoginPage() {
   const verifyOtp = async () => {
     clearFeedback();
     if (otpToken.length !== OTP_LENGTH) {
-      setError('Something went wrong');
+      setError(`Please enter the ${OTP_LENGTH}-digit code.`);
       return;
     }
 
@@ -188,7 +206,7 @@ export default function LoginPage() {
     setPending(false);
 
     if (response.error) {
-      setError('Something went wrong');
+      setError(formatAuthError(response.error.message));
       setLastAutoSubmitToken(null);
       return;
     }
@@ -199,7 +217,7 @@ export default function LoginPage() {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      setError('Something went wrong');
+      setError('We could not finish signing you in. Please try again.');
       return;
     }
 
