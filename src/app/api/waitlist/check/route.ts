@@ -28,10 +28,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, allowed: false, error: 'Unable to check waitlist access right now.' }, { status: 500 });
   }
 
+  const claimed = Boolean(data?.claimed_user_id);
+  if (data?.claimed_at && !data.claimed_user_id) {
+    await admin
+      .from('waitlist_entries')
+      .update({ claimed_at: null })
+      .eq('id', data.id)
+      .is('claimed_user_id', null);
+  }
+
   return NextResponse.json({
     ok: true,
     allowed: Boolean(data),
-    claimed: Boolean(data?.claimed_user_id || data?.claimed_at),
+    claimed,
     waitlist_url: WAITLIST_JOIN_URL,
   });
 }
