@@ -9,7 +9,8 @@ type JourneyMode = 'new' | 'existing';
 type Step = 'collect' | 'verify' | 'emailLinkSent';
 
 const OTP_LENGTH = 4;
-const RESEND_SECONDS = 30;
+const TEXT_RESEND_SECONDS = 30;
+const EMAIL_RESEND_SECONDS = 120;
 const PRODUCTION_SITE_URL = 'https://thelittlewanderers.com';
 
 const normalizeUsPhone = (input: string) => {
@@ -20,13 +21,15 @@ const normalizeUsPhone = (input: string) => {
   return `+1${local}`;
 };
 
-function formatAuthError(message: string) {
+function formatAuthError(message: string, method: AuthMethod) {
   const normalized = message.toLowerCase();
   if (normalized.includes('signup') && (normalized.includes('disable') || normalized.includes('not allowed'))) {
     return 'Email sign-up is currently turned off. Please check Supabase Auth sign-up settings, then try again.';
   }
   if (normalized.includes('rate limit') || normalized.includes('too many')) {
-    return 'Too many code requests. Please wait a minute and try again.';
+    return method === 'email'
+      ? 'Too many login link requests for this email. Please wait a few more minutes, then try again. If a recent email arrived, use the newest link.'
+      : 'Too many text code requests. Please wait a few more minutes, then try again.';
   }
   if (normalized.includes('invalid') && normalized.includes('otp')) {
     return 'That code was not accepted. Please check the code and try again.';
@@ -186,7 +189,7 @@ export default function LoginPage() {
         setError('We could not find an account for this email. If you are new, choose “I am new” first.');
         return;
       }
-      setError(formatAuthError(response.error.message));
+      setError(formatAuthError(response.error.message, authMethod));
       return;
     }
 
@@ -207,7 +210,7 @@ export default function LoginPage() {
       setStep('emailLinkSent');
     }
 
-    setResendIn(RESEND_SECONDS);
+    setResendIn(authMethod === 'email' ? EMAIL_RESEND_SECONDS : TEXT_RESEND_SECONDS);
   };
 
   const verifyOtp = async () => {
@@ -234,7 +237,7 @@ export default function LoginPage() {
     setPending(false);
 
     if (response.error) {
-      setError(formatAuthError(response.error.message));
+      setError(formatAuthError(response.error.message, authMethod));
       setLastAutoSubmitToken(null);
       return;
     }

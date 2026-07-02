@@ -43,6 +43,26 @@ function normalizeCityName(input: string) {
   return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
 }
 
+function getCookieValue(name: string) {
+  if (typeof document === 'undefined') return null;
+  const encodedName = `${encodeURIComponent(name)}=`;
+  const match = document.cookie
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(encodedName));
+  return match ? decodeURIComponent(match.slice(encodedName.length)) : null;
+}
+
+function clearCookie(name: string) {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0`;
+}
+
+function getSafeRedirect(value: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/landing';
+  return value;
+}
+
 export default function OnboardingPage() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [ready, setReady] = useState(false);
@@ -195,8 +215,9 @@ export default function OnboardingPage() {
     setSaving(true);
 
     const parentName = `${adultFirstName.trim()} ${adultLastName.trim()}`.trim();
-    const nextRedirect = sessionStorage.getItem('post_onboarding_redirect') || '/landing';
+    const nextRedirect = getSafeRedirect(sessionStorage.getItem('post_onboarding_redirect') || getCookieValue('post_onboarding_redirect'));
     sessionStorage.removeItem('post_onboarding_redirect');
+    clearCookie('post_onboarding_redirect');
 
     if (!isPreview) {
       if (!householdId) {

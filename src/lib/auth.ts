@@ -14,13 +14,20 @@ export const supabaseServer = () => {
           return cookie ? cookie.value : null;
         },
         set: (name: string, value: string, options) => {
-          cookieStore.set({ name, value, ...options });
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch {
+            // Server Components cannot always write refreshed auth cookies.
+          }
         },
         remove: (name: string, options) => {
-          cookieStore.delete({ name, ...options });
+          try {
+            cookieStore.delete({ name, ...options });
+          } catch {
+            // Server Components cannot always write refreshed auth cookies.
+          }
         },
       },
     }
   );
 };
-
