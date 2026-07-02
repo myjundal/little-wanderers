@@ -24,6 +24,8 @@ type PartyBooking = {
   occasion_details: string | null;
 };
 
+const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
+
 function toIsoLocal(date: string, hourLocal: number) {
   return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
@@ -260,7 +262,7 @@ export default function PartyPage() {
     ...(() => {
       const generated: CalendarSlot[] = [];
       const now = new Date();
-      for (let i = 0; i < 84; i += 1) {
+      for (let i = 0; i < PARTY_SLOT_LOOKAHEAD_DAYS; i += 1) {
         const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
         const day = d.getUTCDay();
         if (day !== 5 && day !== 6 && day !== 0) continue;

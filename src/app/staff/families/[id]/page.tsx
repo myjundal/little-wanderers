@@ -28,6 +28,12 @@ type FamilyDetail = {
 
 type MemberForm = { id?: string; first_name: string; last_name: string; birthdate: string; role: 'adult' | 'child' };
 
+const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
+
+function emptyPartyForm() {
+  return { party_date: new Date().toISOString().slice(0, 10), slot: '10:00', headcount_expected: '', notes: '' };
+}
+
 function waiverLabel(status: string) {
   if (status === 'completed') return 'Waiver completed';
   if (status === 'expired') return 'Waiver expired / renewal needed';
@@ -47,7 +53,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
   const [classCart, setClassCart] = useState<Array<{ class_id: string; quantity: number }>>([]);
-  const [partyForm, setPartyForm] = useState({ party_date: new Date().toISOString().slice(0, 10), slot: '10:00', headcount_expected: '', notes: '' });
+  const [partyForm, setPartyForm] = useState(emptyPartyForm);
   const [bookedSlots, setBookedSlots] = useState<Array<{ id: string; start_time: string; end_time: string }>>([]);
   const [editableMembers, setEditableMembers] = useState<MemberForm[]>([]);
   const [familyLocation, setFamilyLocation] = useState({ city: '', state: 'CT' });
@@ -192,6 +198,9 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
 
     const json = await res.json();
     setMessage(json.ok ? 'Party booking created.' : json.error ?? 'Party booking failed.');
+    if (json.ok) {
+      setPartyForm(emptyPartyForm());
+    }
     await load();
   };
 
@@ -203,10 +212,10 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         [...bookedSlots, ...(item?.upcoming_parties ?? [])].map((slot) => new Date(slot.start_time).getTime())
       );
 
-      for (let i = 0; i < 84; i += 1) {
+      for (let i = 0; i < PARTY_SLOT_LOOKAHEAD_DAYS; i += 1) {
         const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
         const day = d.getUTCDay();
-        if (day !== 0 && day !== 6) continue;
+        if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
         const start10 = toIsoLocal(dayStr, 10);
         const start15 = toIsoLocal(dayStr, 15);

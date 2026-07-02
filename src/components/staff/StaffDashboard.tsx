@@ -175,6 +175,19 @@ function prettyNote(note: string | null) {
   );
 }
 
+function emptyPrebookForm() {
+  return {
+    email: '',
+    household_name: '',
+    party_date: new Date().toISOString().slice(0, 10),
+    slot: '10:00',
+    headcount_expected: '',
+    birthday_child_name: '',
+    birthday_age: '',
+    notes: '',
+  };
+}
+
 export default function StaffDashboard() {
   const [occupancy, setOccupancy] = useState<OccupancyState | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -190,16 +203,7 @@ export default function StaffDashboard() {
   const [savingAttendanceKey, setSavingAttendanceKey] = useState<string | null>(null);
   const [partyAttendanceNotes, setPartyAttendanceNotes] = useState<Record<string, string>>({});
   const [partyCountDrafts, setPartyCountDrafts] = useState<Record<string, { child: string; adult: string; total: string }>>({});
-  const [prebookForm, setPrebookForm] = useState({
-    email: '',
-    household_name: '',
-    party_date: new Date().toISOString().slice(0, 10),
-    slot: '10:00',
-    headcount_expected: '',
-    birthday_child_name: '',
-    birthday_age: '',
-    notes: '',
-  });
+  const [prebookForm, setPrebookForm] = useState(emptyPrebookForm);
   const [savingPrebook, setSavingPrebook] = useState(false);
   const [lastPrebookHouseholdId, setLastPrebookHouseholdId] = useState<string | null>(null);
 
@@ -450,16 +454,7 @@ export default function StaffDashboard() {
 
     setLastPrebookHouseholdId(json.household_id ?? null);
     setMessage('Waitlist party prebooked. When they create an account with this email, the booking will attach automatically.');
-    setPrebookForm({
-      email: '',
-      household_name: '',
-      party_date: prebookForm.party_date,
-      slot: prebookForm.slot,
-      headcount_expected: '',
-      birthday_child_name: '',
-      birthday_age: '',
-      notes: '',
-    });
+    setPrebookForm(emptyPrebookForm());
     await load();
   };
 
