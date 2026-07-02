@@ -6,15 +6,6 @@ import { normalizeWaitlistEmail } from '@/lib/waitlist';
 export const dynamic = 'force-dynamic';
 
 async function attachPrebookedHousehold(admin: ReturnType<typeof createAdminSupabaseClient>, user: { id: string; email?: string | null }, normalizedEmail: string) {
-  const existingDirect = await admin
-    .from('households')
-    .select('id')
-    .eq('user_id', user.id)
-    .limit(1);
-
-  if (existingDirect.error) throw new Error(existingDirect.error.message);
-  if ((existingDirect.data ?? []).length > 0) return null;
-
   const existingMember = await admin
     .from('household_members')
     .select('household_id')
@@ -26,15 +17,24 @@ async function attachPrebookedHousehold(admin: ReturnType<typeof createAdminSupa
 
   const prebooked = await admin
     .from('households')
-    .select('id,email,user_id')
+    .select('id,email')
     .ilike('email', normalizedEmail)
-    .is('user_id', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (prebooked.error) throw new Error(prebooked.error.message);
   if (!prebooked.data?.id) return null;
+
+  const linkedMember = await admin
+    .from('household_members')
+    .select('user_id')
+    .eq('household_id', prebooked.data.id)
+    .not('user_id', 'is', null)
+    .limit(1);
+
+  if (linkedMember.error) throw new Error(linkedMember.error.message);
+  if ((linkedMember.data ?? []).length > 0) return null;
 
   const hasParty = await admin
     .from('party_bookings')
@@ -49,12 +49,10 @@ async function attachPrebookedHousehold(admin: ReturnType<typeof createAdminSupa
   const update = await admin
     .from('households')
     .update({
-      user_id: user.id,
       email: user.email ?? normalizedEmail,
       role: 'owner',
     })
-    .eq('id', prebooked.data.id)
-    .is('user_id', null);
+    .eq('id', prebooked.data.id);
 
   if (update.error) throw new Error(update.error.message);
 

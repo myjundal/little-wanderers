@@ -15,6 +15,9 @@ export default function StaffCampaignsPage() {
           <Link href="/" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
             Homepage
           </Link>
+          <Link href="/landing" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+            Customer dashboard
+          </Link>
           <Link href="/staff" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
             Staff dashboard
           </Link>
