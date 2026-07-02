@@ -484,21 +484,22 @@ export default function PartyPage() {
         </div>
       </section>
 
-      <section style={{ marginTop: 22 }}>
-        <details>
-          <summary style={{ color: '#4f3f82', cursor: 'pointer', fontWeight: 700 }}>▸ 📒 My current booking/history</summary>
-        {loading ? (
-          <p>Loading…</p>
-        ) : items.length === 0 ? (
-          <p>You do not have any party bookings yet.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: 12 }}>
-            {items.map((item) => {
-              const isUpcoming = new Date(item.start_time).getTime() > Date.now();
-              const cancellationRequested = (item.notes ?? '').includes('[Cancellation requested');
+      {isAuthenticated && (
+        <section style={{ marginTop: 22 }}>
+          <details>
+            <summary style={{ color: '#4f3f82', cursor: 'pointer', fontWeight: 700 }}>▸ 📒 My current booking/history</summary>
+          {loading ? (
+            <p>Loading…</p>
+          ) : items.length === 0 ? (
+            <p>You do not have any party bookings yet.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {items.map((item) => {
+                const isUpcoming = new Date(item.start_time).getTime() > Date.now();
+                const cancellationRequested = (item.notes ?? '').includes('[Cancellation requested');
 
-              return (
-                <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 12, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
+                return (
+                  <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 12, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <p style={{ margin: 0, fontWeight: 600 }}>
                     {new Date(item.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(item.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}
                   </p>
@@ -570,19 +571,22 @@ export default function PartyPage() {
                       </div>
                     </div>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        </details>
-      </section>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          </details>
+        </section>
+      )}
 
-      <p style={{ marginTop: 20 }}>
-        <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
-          ← Back to my dashboard
-        </Link>
-      </p>
+      {isAuthenticated && (
+        <p style={{ marginTop: 20 }}>
+          <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+            ← Back to my dashboard
+          </Link>
+        </p>
+      )}
     <style jsx>{`
   .partyIntroGrid { display:grid; grid-template-columns:minmax(280px, 0.82fr) minmax(420px, 1.18fr); gap:16px; align-items:start; margin-top:16px; }
   @media (max-width: 900px) {
