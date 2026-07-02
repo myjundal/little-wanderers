@@ -373,8 +373,9 @@ export default function AppHome() {
         )}
       </section>
 
-      <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', !SHOW_CUSTOMER_CLASS_BOOKING ? 'mobileBottomNoClasses' : ''].filter(Boolean).join(' ')}>
-        <Link href="/landing">Home</Link>
+      <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', SHOW_CUSTOMER_CLASS_BOOKING ? 'mobileBottomWithClasses' : ''].filter(Boolean).join(' ')}>
+        <Link href="/">Main</Link>
+        <Link href="/landing">My Dash</Link>
         {canUseOwnerDashboard && <Link href="/staff">Owner/Staff</Link>}
         <Link href="/landing/qr">QR Codes</Link>
         {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule">Classes</Link>}
@@ -393,8 +394,8 @@ export default function AppHome() {
           .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
           .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
           .mobileBottomStaff { grid-template-columns:repeat(5,1fr); }
-          .mobileBottomNoClasses { grid-template-columns:repeat(3,1fr); }
-          .mobileBottomStaff.mobileBottomNoClasses { grid-template-columns:repeat(4,1fr); }
+          .mobileBottomWithClasses { grid-template-columns:repeat(5,1fr); }
+          .mobileBottomStaff.mobileBottomWithClasses { grid-template-columns:repeat(6,1fr); }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;
  border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }

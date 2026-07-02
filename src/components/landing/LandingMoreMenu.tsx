@@ -23,6 +23,8 @@ export default function LandingMoreMenu() {
       </header>
       {open && (
         <section style={{ display: 'grid', gap: 10, border: '1px solid #e3d0fb', borderRadius: 14, background: '#fffdf9', padding: 12 }}>
+          <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href="/">Main Homepage</Link>
+          <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href="/landing">My Dash</Link>
           {canUseOwnerDashboard && (
             <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">Owner/Staff Dashboard</Link>
           )}
