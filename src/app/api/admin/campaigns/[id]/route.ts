@@ -48,3 +48,32 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return Response.json({ ok: false, error: message }, { status: 500 });
   }
 }
+
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const context = await requireStaffContext();
+  if (!context.ok) return context.response;
+
+  try {
+    const { error: sendsError } = await context.admin
+      .from('email_sends')
+      .delete()
+      .eq('campaign_id', params.id);
+
+    if (sendsError) throw new Error(sendsError.message);
+
+    const { data, error } = await context.admin
+      .from('email_campaigns')
+      .delete()
+      .eq('id', params.id)
+      .select('id')
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) return Response.json({ ok: false, error: 'Campaign not found.' }, { status: 404 });
+
+    return Response.json({ ok: true });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'unknown error';
+    return Response.json({ ok: false, error: message }, { status: 500 });
+  }
+}

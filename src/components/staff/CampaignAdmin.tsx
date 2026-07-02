@@ -111,6 +111,16 @@ const secondaryButton: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const dangerButton: React.CSSProperties = {
+  border: '1px solid #efb4be',
+  borderRadius: 12,
+  padding: '10px 14px',
+  background: '#fff7f8',
+  color: '#9f2d43',
+  fontWeight: 800,
+  cursor: 'pointer',
+};
+
 const iconButtonStyle: React.CSSProperties = {
   border: '1px solid #d9c8f7',
   borderRadius: 10,
@@ -173,6 +183,7 @@ export default function CampaignAdmin() {
   const [bulkContactTag, setBulkContactTag] = useState('customer');
   const [newContactEmail, setNewContactEmail] = useState('');
   const [newContactTag, setNewContactTag] = useState('customer');
+  const [showContactTools, setShowContactTools] = useState(false);
 
   const selectedCampaign = useMemo(
     () => campaigns.find((campaign) => campaign.id === selectedId) ?? null,
@@ -231,8 +242,13 @@ export default function CampaignAdmin() {
   useEffect(() => {
     void load();
     void loadTags();
-    void loadContacts('');
-  }, [load, loadTags, loadContacts]);
+  }, [load, loadTags]);
+
+  useEffect(() => {
+    if (showContactTools && contacts.length === 0) {
+      void loadContacts(contactSearch);
+    }
+  }, [showContactTools, contacts.length, contactSearch, loadContacts]);
 
   useEffect(() => {
     if (selectedCampaign) {
@@ -286,6 +302,30 @@ export default function CampaignAdmin() {
     setDraft(json.campaign);
     setBusy(null);
     setMessage('Campaign saved.');
+    await load();
+  };
+
+  const deleteCampaign = async () => {
+    if (!draft) return;
+    const ok = window.confirm(`Delete "${draft.name}"? This also removes its test/send history.`);
+    if (!ok) return;
+
+    setBusy('delete');
+    setMessage(null);
+    const res = await fetch(`/api/admin/campaigns/${draft.id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Unable to delete campaign.');
+      setBusy(null);
+      return;
+    }
+
+    setBusy(null);
+    setMessage('Campaign deleted.');
+    setSelectedId(null);
+    setDraft(null);
+    setRecipientPreview(null);
+    setConfirmed(false);
     await load();
   };
 
@@ -662,18 +702,30 @@ export default function CampaignAdmin() {
           )}
         </div>
 
-        <div style={{ marginTop: 18, borderTop: '1px solid #eadff3', paddingTop: 16 }}>
-          <h2 style={{ margin: 0, color: '#4f3f82' }}>Manual tags</h2>
-          <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-            <input
-              value={contactSearch}
-              onChange={(event) => setContactSearch(event.target.value)}
-              placeholder="Search email or name"
-              style={inputStyle}
-            />
-            <button type="button" onClick={() => void loadContacts(contactSearch)} disabled={Boolean(busy)} style={secondaryButton}>
-              Search contacts
-            </button>
+        <details
+          open={showContactTools}
+          onToggle={(event) => setShowContactTools(event.currentTarget.open)}
+          style={{ marginTop: 18, borderTop: '1px solid #eadff3', paddingTop: 16 }}
+        >
+          <summary style={{ cursor: 'pointer', color: '#4f3f82', fontWeight: 800, fontSize: 20 }}>
+            Manual tags
+            <span style={{ display: 'block', color: '#8f85a5', fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+              Search contacts only when you need to tag people.
+            </span>
+          </summary>
+
+          <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8 }}>
+              <input
+                value={contactSearch}
+                onChange={(event) => setContactSearch(event.target.value)}
+                placeholder="Search email or name"
+                style={inputStyle}
+              />
+              <button type="button" onClick={() => void loadContacts(contactSearch)} disabled={Boolean(busy)} style={secondaryButton}>
+                Search
+              </button>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gap: 8, marginTop: 12, border: '1px solid #eadff3', borderRadius: 14, padding: 10, background: '#fbf7ff' }}>
@@ -771,7 +823,7 @@ export default function CampaignAdmin() {
               </>
             )}
           </div>
-        </div>
+        </details>
       </section>
 
       <section style={{ ...panelStyle, minWidth: 0 }}>
@@ -787,9 +839,14 @@ export default function CampaignAdmin() {
                 <h2 style={{ margin: '6px 0 0', color: '#4f3f82' }}>{draft.name}</h2>
                 <p style={{ margin: '6px 0 0', color: '#6d6480' }}>Tested: {formatDate(draft.test_sent_at)} · Sent: {formatDate(draft.sent_at)}</p>
               </div>
-              <button type="button" onClick={saveCampaign} disabled={Boolean(busy)} style={primaryButton}>
-                {busy === 'save' ? 'Saving...' : 'Save'}
-              </button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button type="button" onClick={saveCampaign} disabled={Boolean(busy)} style={primaryButton}>
+                  {busy === 'save' ? 'Saving...' : 'Save'}
+                </button>
+                <button type="button" onClick={deleteCampaign} disabled={Boolean(busy)} style={dangerButton}>
+                  {busy === 'delete' ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
             </div>
 
             {message && (
