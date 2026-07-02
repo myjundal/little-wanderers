@@ -403,6 +403,13 @@ export default function PartyPage() {
           <strong>Early access party holds:</strong>
           <ul style={{ margin: '10px 0 0 20px', display: 'grid', gap: 6, lineHeight: 1.5 }}>
             <li>We are giving waitlist families first priority for party dates.</li>
+            {!loading && !isAuthenticated && (
+              <li>
+                To request a party hold, you&apos;ll need to sign in to My Little Wanderers. Early access sign-in is currently available for waitlist families, so please{' '}
+                <Link href="https://forms.gle/ucr5SGqiX6A6TJ8K7" target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>join the waitlist</Link>{' '}
+                or come back after we open.
+              </li>
+            )}
             <li>During early access, we will hold your selected party slot without collecting a deposit today.</li>
             <li>After our official opening, we will contact you so you can visit the space.</li>
             <li>If you love it and want to keep the booking, we will collect the 50% deposit ($150) then, with the remaining balance due upon arrival before setup.</li>
