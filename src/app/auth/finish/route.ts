@@ -18,6 +18,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(getRedirectUrl(request, '/login'));
   }
 
-  const redirectPath = await getPostAuthRedirectForUser(user, null, '/landing');
+  const redirectPath = await getPostAuthRedirectForUser(user, '/landing');
   return NextResponse.redirect(getRedirectUrl(request, redirectPath));
 }

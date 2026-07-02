@@ -55,32 +55,6 @@
   max-width: 520px;
 }
 
-.steps {
-  display: grid;
-  gap: 10px;
-  margin-top: 28px;
-}
-
-.step {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  color: #5f5470;
-}
-
-.stepNumber {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #f1e0bd;
-  color: #735d2c;
-  font-weight: 800;
-  font-size: 0.86rem;
-}
-
 .formCard {
   padding: clamp(18px, 3vw, 28px);
 }
@@ -135,8 +109,7 @@
   gap: 6px;
 }
 
-.field label,
-.checkLabel {
+.field label {
   color: #4f3f82;
   font-weight: 700;
   font-size: 0.9rem;
@@ -192,32 +165,6 @@
   background: transparent;
   padding-inline: 4px;
   color: #8a3f6b;
-}
-
-.waiverPanel {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid #f1cf8a;
-  border-radius: 22px;
-  background: #fff8ec;
-}
-
-.waiverActions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.checkRow {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.checkRow input {
-  margin-top: 3px;
 }
 
 .submitRow {

@@ -15,8 +15,6 @@ type ChildForm = {
   birthdate: string;
 };
 
-const WAIVER_URL = process.env.NEXT_PUBLIC_WAIVER_URL ?? 'https://docs.google.com/forms/d/e/1FAIpQLSeleoqMn8UslZs8RiEg_02Ld4t-5WuIyhhHySoyb_3mCYJMUw/viewform?usp=dialog';
-
 const genderOptions: Array<{ value: Gender; label: string }> = [
   { value: 'female', label: 'Female' },
   { value: 'male', label: 'Male' },
@@ -68,7 +66,6 @@ export default function OnboardingPage() {
   const [ready, setReady] = useState(false);
   const [isPreview, setIsPreview] = useState(false);
   const [householdId, setHouseholdId] = useState<string | null>(null);
-  const [existingPeopleCount, setExistingPeopleCount] = useState(0);
   const [authEmail, setAuthEmail] = useState('');
   const [authPhone, setAuthPhone] = useState('');
 
@@ -80,7 +77,6 @@ export default function OnboardingPage() {
   const [state, setState] = useState<UsStateCode>('CT');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [waiverConfirmed, setWaiverConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [welcome, setWelcome] = useState(false);
@@ -128,20 +124,17 @@ export default function OnboardingPage() {
       }
       setHouseholdId(hid);
 
-      const [{ data: household }, { data: people }, { data: waivers }] = await Promise.all([
+      const [{ data: household }, { data: people }] = await Promise.all([
         supabase.from('households').select('name,email,phone,city,state').eq('id', hid).maybeSingle(),
         supabase.from('people').select('id,role,first_name,last_name,gender,birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
-        supabase.from('waivers').select('signed_at,signed_date').eq('household_id', hid).order('created_at', { ascending: false }).limit(5),
       ]);
 
       const existingPeople = people ?? [];
-      const hasSignedWaiver = (waivers ?? []).some((row) => row.signed_at || row.signed_date);
-      if (existingPeople.length > 0 && hasSignedWaiver) {
+      if (existingPeople.length > 0) {
         window.location.replace('/landing');
         return;
       }
 
-      setExistingPeopleCount(existingPeople.length);
       const adult = existingPeople.find((person) => person.role === 'adult');
       if (adult) {
         setAdultFirstName(adult.first_name ?? '');
@@ -207,14 +200,8 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (!waiverConfirmed) {
-      setError('Please confirm that you have read and signed the waiver.');
-      return;
-    }
-
     setSaving(true);
 
-    const parentName = `${adultFirstName.trim()} ${adultLastName.trim()}`.trim();
     const nextRedirect = getSafeRedirect(sessionStorage.getItem('post_onboarding_redirect') || getCookieValue('post_onboarding_redirect'));
     sessionStorage.removeItem('post_onboarding_redirect');
     clearCookie('post_onboarding_redirect');
@@ -226,81 +213,32 @@ export default function OnboardingPage() {
         return;
       }
 
-      const householdName = adultLastName.trim() ? `${adultLastName.trim()} Family` : parentName;
-      const { error: householdError } = await supabase
-        .from('households')
-        .update({
-          name: householdName,
-          email: normalizedEmail,
-          phone: normalizedPhone,
-          city: cityMatch,
-          state,
-        })
-        .eq('id', householdId);
-
-      if (householdError) {
-        setError('Something went wrong while saving your household information.');
-        setSaving(false);
-        return;
-      }
-
-      if (existingPeopleCount === 0) {
-        const peopleRows = [
-          {
-            household_id: householdId,
-            role: 'adult',
-            first_name: adultFirstName.trim(),
-            last_name: adultLastName.trim(),
-            gender: adultGender,
-            birthdate: null,
-          },
-          ...childRows.map((child) => ({
-            household_id: householdId,
-            role: 'child',
-            first_name: child.firstName.trim(),
-            last_name: child.lastName.trim() || null,
+      const response = await fetch('/api/onboarding/complete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          adultFirstName: adultFirstName.trim(),
+          adultLastName: adultLastName.trim(),
+          adultGender,
+          children: childRows.map((child) => ({
+            firstName: child.firstName.trim(),
+            lastName: child.lastName.trim(),
             gender: child.gender,
             birthdate: child.birthdate,
           })),
-        ];
+          city: cityMatch,
+          state,
+          email: normalizedEmail,
+          phone: normalizedPhone,
+        }),
+      });
+      const json = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
 
-        const { error: peopleError } = await supabase.from('people').insert(peopleRows);
-        if (peopleError) {
-          setError('Something went wrong while saving your family members.');
-          setSaving(false);
-          return;
-        }
-      }
-
-      const now = new Date().toISOString();
-      const waiverPayload = {
-        household_id: householdId,
-        signed_at: now,
-        signed_date: now,
-        parent_name: parentName,
-        email: normalizedEmail,
-        phone: normalizedPhone,
-        child_1_name: childRows[0] ? `${childRows[0].firstName.trim()} ${childRows[0].lastName.trim()}`.trim() : null,
-        child_1_dob: childRows[0]?.birthdate || null,
-        child_2_name: childRows[1] ? `${childRows[1].firstName.trim()} ${childRows[1].lastName.trim()}`.trim() : null,
-        child_2_dob: childRows[1]?.birthdate || null,
-        child_3_name: childRows[2] ? `${childRows[2].firstName.trim()} ${childRows[2].lastName.trim()}`.trim() : null,
-        child_3_dob: childRows[2]?.birthdate || null,
-        additional_children: childRows.length > 3
-          ? childRows.slice(3).map((child) => `${child.firstName.trim()} ${child.lastName.trim()} (${child.birthdate})`.trim()).join('; ')
-          : null,
-        electronic_signature: parentName,
-        source: 'onboarding',
-      };
-
-      const { error: waiverError } = await supabase.from('waivers').insert(waiverPayload);
-      if (waiverError) {
-        setError('Your family was saved, but we could not confirm the waiver. Please try the confirmation again.');
+      if (!response.ok || !json?.ok) {
+        setError(json?.error ?? 'Something went wrong while saving your family setup.');
         setSaving(false);
         return;
       }
-
-      await fetch('/api/waitlist/claim', { method: 'POST' }).catch(() => null);
     }
 
     setWelcome(true);
@@ -327,13 +265,8 @@ export default function OnboardingPage() {
               <p className={styles.eyebrow}>Little Wanderers</p>
               <h1>Welcome. Let’s get your family set up.</h1>
               <p className={styles.introCopy}>
-                Add yourself, your child, your contact details, and confirm your waiver so visits, QR codes, classes, and bookings are ready from your dashboard.
+                Add yourself, your child, and your contact details so your family dashboard and early access party holds are ready.
               </p>
-            </div>
-            <div className={styles.steps} aria-label="Onboarding steps">
-              <div className={styles.step}><span className={styles.stepNumber}>1</span><span>Tell us who is in your family.</span></div>
-              <div className={styles.step}><span className={styles.stepNumber}>2</span><span>Confirm where you live and how we can reach you.</span></div>
-              <div className={styles.step}><span className={styles.stepNumber}>3</span><span>Read and sign the waiver before heading to your dashboard.</span></div>
             </div>
           </section>
 
@@ -422,22 +355,6 @@ export default function OnboardingPage() {
                   <input id="phone" type="tel" value={phone} readOnly={Boolean(authPhone)} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" placeholder="(555) 123-4567" />
                   {authPhone && <p className={styles.hint}>Pulled from your phone sign-in.</p>}
                 </div>
-              </div>
-            </div>
-
-            <div className={styles.section}>
-              <h2 className={styles.sectionTitle}>Waiver</h2>
-              <div className={styles.waiverPanel}>
-                <p className={styles.hint}>
-                  Please read and sign the current Little Wanderers waiver. When you are finished, confirm it here and we will mark your family waiver as complete.
-                </p>
-                <div className={styles.waiverActions}>
-                  <a href={WAIVER_URL} target="_blank" rel="noreferrer">Open waiver form</a>
-                </div>
-                <label className={styles.checkRow}>
-                  <input type="checkbox" checked={waiverConfirmed} onChange={(event) => setWaiverConfirmed(event.target.checked)} />
-                  <span className={styles.checkLabel}>I have read and signed the waiver for my family.</span>
-                </label>
               </div>
             </div>
 

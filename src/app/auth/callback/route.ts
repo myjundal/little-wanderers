@@ -16,7 +16,6 @@ function getRedirectUrl(request: NextRequest, path: string) {
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const mode = requestUrl.searchParams.get('mode');
   const next = getSafeNextPath(requestUrl.searchParams.get('next'));
   const response = NextResponse.redirect(getRedirectUrl(request, next));
 
@@ -52,7 +51,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const redirectPath = user
-    ? await getPostAuthRedirectForUser(user, mode, next)
+    ? await getPostAuthRedirectForUser(user, next)
     : next;
 
   if (redirectPath === '/onboarding') {
