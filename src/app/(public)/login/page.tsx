@@ -6,7 +6,7 @@ import { WAITLIST_JOIN_URL } from '@/lib/waitlist';
 
 type AuthMethod = 'phone' | 'email';
 type JourneyMode = 'new' | 'existing';
-type Step = 'collect' | 'verify';
+type Step = 'collect' | 'verify' | 'emailLinkSent';
 
 const OTP_LENGTH = 4;
 const RESEND_SECONDS = 30;
@@ -36,6 +36,19 @@ function formatAuthError(message: string) {
   return message || 'Something went wrong. Please try again.';
 }
 
+function getSafeNextPath() {
+  const next = sessionStorage.getItem('post_login_redirect') || '/landing';
+  if (!next.startsWith('/') || next.startsWith('//')) return '/landing';
+  return next;
+}
+
+function getEmailRedirectTo(mode: JourneyMode) {
+  const url = new URL('/auth/callback', window.location.origin);
+  url.searchParams.set('mode', mode);
+  url.searchParams.set('next', getSafeNextPath());
+  return url.toString();
+}
+
 export default function LoginPage() {
   const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
   const [journeyMode, setJourneyMode] = useState<JourneyMode>('existing');
@@ -60,7 +73,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (step === 'collect') {
       firstInputRef.current?.focus();
-    } else {
+    } else if (step === 'verify') {
       otpRefs.current[0]?.focus();
     }
   }, [step, authMethod]);
@@ -152,7 +165,7 @@ export default function LoginPage() {
           email: normalizedEmail,
           options: {
             shouldCreateUser,
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: getEmailRedirectTo(journeyMode),
           },
         });
 
@@ -171,14 +184,20 @@ export default function LoginPage() {
     if (authMethod === 'phone') {
       setPendingPhone(normalizedPhone);
       setMessage(reason === 'send' ? 'We sent a 4-digit code by text.' : 'We sent a new code.');
+      setStep('verify');
+      setOtpDigits(Array(OTP_LENGTH).fill(''));
+      setLastAutoSubmitToken(null);
     } else {
       setPendingEmail(normalizedEmail);
-      setMessage(reason === 'send' ? 'We sent a 4-digit code by email.' : 'We sent a new code.');
+      sessionStorage.setItem('post_login_journey', journeyMode);
+      setMessage(
+        reason === 'send'
+          ? 'Please head to your email for the login link. After sign-up, add your phone number on your family page so you can use phone login next time.'
+          : 'We sent a fresh login link. Please head to your email and open the newest link.'
+      );
+      setStep('emailLinkSent');
     }
 
-    setStep('verify');
-    setOtpDigits(Array(OTP_LENGTH).fill(''));
-    setLastAutoSubmitToken(null);
     setResendIn(RESEND_SECONDS);
   };
 
@@ -335,7 +354,27 @@ export default function LoginPage() {
               style={{ padding: '12px 14px', width: '100%', boxSizing: 'border-box', borderRadius: 12, border: '1px solid #d8c5f6' }}
             />
             <button type="button" onClick={() => requestOtp('send')} disabled={!canRequestOtp || pending} style={{ marginTop: 4, padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
-              {pending ? 'Sending…' : 'Email me a code'}
+              {pending ? 'Sending…' : 'Email me a login link'}
+            </button>
+          </div>
+        )}
+
+        {step === 'emailLinkSent' && (
+          <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>
+            <div style={{ borderRadius: 16, border: '1px solid #d6f0dc', background: '#f2fbf4', padding: 14 }}>
+              <p style={{ margin: 0, color: '#2f7a47', fontWeight: 800 }}>Check your email</p>
+              <p style={{ margin: '6px 0 0', color: '#4f3f82', lineHeight: 1.5 }}>
+                Please head to your email for the login link we sent to <strong>{pendingEmail}</strong>.
+                After sign-up, add your phone number on your family page so you can use phone login next time.
+              </p>
+            </div>
+
+            <button type="button" disabled={resendIn > 0 || pending} onClick={() => requestOtp('resend')} style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>
+              {resendIn > 0 ? `Resend login link (${resendIn}s)` : 'Resend login link'}
+            </button>
+
+            <button type="button" onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
+              Change email
             </button>
           </div>
         )}
