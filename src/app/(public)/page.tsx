@@ -1,4 +1,5 @@
 import HomeComingSoon from '@/components/home/HomeComingSoon';
+import AuthLinkLandingGuard from '@/components/auth/AuthLinkLandingGuard';
 
 export const metadata = {
   title: 'Little Wanderers — Sensory-focused Studio and Cafe',
@@ -12,5 +13,10 @@ export const metadata = {
 };
 
 export default function HomePage() {
-  return <HomeComingSoon />;
+  return (
+    <>
+      <AuthLinkLandingGuard />
+      <HomeComingSoon />
+    </>
+  );
 }

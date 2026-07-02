@@ -97,3 +97,50 @@ export async function claimWaitlistForUser(user: WaitlistUser) {
     return { claimed: Boolean(data), householdId: null };
   }
 }
+
+export async function userNeedsOnboarding(userId: string) {
+  const admin = createAdminSupabaseClient();
+  const { data: memberships, error: memberError } = await admin
+    .from('household_members')
+    .select('household_id,created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (memberError) throw memberError;
+
+  const householdId = memberships?.[0]?.household_id as string | undefined;
+  if (!householdId) return true;
+
+  const [{ data: people, error: peopleError }, { data: waivers, error: waiverError }] = await Promise.all([
+    admin
+      .from('people')
+      .select('id')
+      .eq('household_id', householdId)
+      .limit(1),
+    admin
+      .from('waivers')
+      .select('signed_at,signed_date')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ]);
+
+  if (peopleError) throw peopleError;
+  if (waiverError) throw waiverError;
+
+  const hasPeople = (people ?? []).length > 0;
+  const hasSignedWaiver = (waivers ?? []).some((row) => row.signed_at || row.signed_date);
+  return !hasPeople || !hasSignedWaiver;
+}
+
+export async function getPostAuthRedirectForUser(user: WaitlistUser, mode: string | null, next: string) {
+  if (user.email) {
+    await claimWaitlistForUser(user).catch(() => null);
+  }
+
+  if (mode === 'new') return '/onboarding';
+
+  const needsOnboarding = await userNeedsOnboarding(user.id).catch(() => false);
+  return needsOnboarding ? '/onboarding' : next;
+}

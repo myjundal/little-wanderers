@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { claimWaitlistForUser } from '@/lib/waitlist-claim';
+import { getPostAuthRedirectForUser } from '@/lib/waitlist-claim';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +18,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
   const mode = requestUrl.searchParams.get('mode');
   const next = getSafeNextPath(requestUrl.searchParams.get('next'));
-  const redirectPath = mode === 'new' ? '/onboarding' : next;
-  const response = NextResponse.redirect(getRedirectUrl(request, redirectPath));
+  const response = NextResponse.redirect(getRedirectUrl(request, next));
 
   if (!code) {
     return NextResponse.redirect(getRedirectUrl(request, '/login?error=missing-code'));
@@ -52,11 +51,11 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (mode === 'new' && user?.email) {
-    await claimWaitlistForUser(user).catch(() => null);
-  }
+  const redirectPath = user
+    ? await getPostAuthRedirectForUser(user, mode, next)
+    : next;
 
-  if (mode === 'new') {
+  if (redirectPath === '/onboarding') {
     response.cookies.set('post_onboarding_redirect', next, {
       path: '/',
       sameSite: 'lax',
@@ -64,5 +63,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  response.headers.set('location', getRedirectUrl(request, redirectPath).toString());
   return response;
 }
