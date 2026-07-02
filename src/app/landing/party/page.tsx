@@ -24,6 +24,16 @@ type PartyBooking = {
   occasion_details: string | null;
 };
 
+type PartyForm = {
+  party_date: string;
+  slot: '10:00' | '15:00';
+  headcount_expected: string;
+  notes: string;
+  birthday_child_name: string;
+  birthday_age: string;
+  occasion_details: string;
+};
+
 const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
 
 function toIsoLocal(date: string, hourLocal: number) {
@@ -54,20 +64,8 @@ function prettyNote(note: string | null) {
   );
 }
 
-export default function PartyPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [items, setItems] = useState<PartyBooking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
-  const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
-  const finalizingPaymentRef = useRef(false);
-  const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
-  const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
-  const [rescheduleSlot, setRescheduleSlot] = useState<'10:00' | '15:00'>('10:00');
-
-  const [form, setForm] = useState({
+function getDefaultPartyForm(): PartyForm {
+  return {
     party_date: getDefaultPartyDate(),
     slot: '10:00',
     headcount_expected: '',
@@ -75,7 +73,30 @@ export default function PartyPage() {
     birthday_child_name: '',
     birthday_age: '',
     occasion_details: '',
-  });
+  };
+}
+
+function formatPartySummary(startIso: string, endIso: string) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  return `${start.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}, ${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
+}
+
+export default function PartyPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [items, setItems] = useState<PartyBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
+  const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
+  const finalizingPaymentRef = useRef(false);
+  const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
+  const [rescheduleSlot, setRescheduleSlot] = useState<'10:00' | '15:00'>('10:00');
+
+  const [form, setForm] = useState<PartyForm>(() => getDefaultPartyForm());
 
   const startIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 15 : 10), [form.party_date, form.slot]);
   const endIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 18 : 13), [form.party_date, form.slot]);
@@ -114,11 +135,6 @@ export default function PartyPage() {
 
   useEffect(() => {
     load();
-    const interval = window.setInterval(() => {
-      load();
-    }, 10000);
-
-    return () => window.clearInterval(interval);
   }, [load]);
 
   useEffect(() => {
@@ -226,7 +242,9 @@ export default function PartyPage() {
       return;
     }
 
-    setMessage('Your party hold request is saved. We will contact you after our official opening so you can visit the space before deciding on the deposit.');
+    setConfirmation(formatPartySummary(startIso, endIso));
+    setMessage(null);
+    setForm(getDefaultPartyForm());
     setSubmitting(false);
     await load();
   };
@@ -356,6 +374,19 @@ export default function PartyPage() {
       <p style={{ color: '#6f628d', marginTop: 8 }}>Celebrate your little one with a calm, playful, space-inspired birthday experience designed for young children and their caregivers.</p>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
+      {confirmation && (
+        <div role="dialog" aria-modal="true" aria-labelledby="party-confirmation-title" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'grid', placeItems: 'center', padding: 18, background: 'rgba(54, 42, 77, 0.32)' }}>
+          <div style={{ width: 'min(460px, 100%)', borderRadius: 18, border: '1px solid #d6f0dc', background: '#fff', boxShadow: '0 18px 48px rgba(54, 42, 77, 0.2)', padding: 20 }}>
+            <p id="party-confirmation-title" style={{ margin: 0, color: '#2f7a47', fontWeight: 800, fontSize: 18 }}>Party hold request saved</p>
+            <p style={{ margin: '10px 0 0', color: '#4f3f82', lineHeight: 1.55 }}>
+              We saved your early access hold for <strong>{confirmation}</strong>. We will contact you after our official opening so you can visit the space before deciding on the deposit.
+            </p>
+            <button type="button" onClick={() => setConfirmation(null)} style={{ marginTop: 16, width: '100%', border: 'none', borderRadius: 12, padding: '12px 16px', background: '#5f3da4', color: '#fff', fontWeight: 800 }}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="partyIntroGrid">
         <section style={{ border: '1px solid #dfccfb', borderRadius: 16, background: '#fff', padding: 16 }}>
@@ -432,7 +463,7 @@ export default function PartyPage() {
           <label>
             Time
             <br />
-            <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value }))}>
+            <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value as '10:00' | '15:00' }))}>
               <option value="10:00">10:00 AM (ends at 1:00 PM)</option>
               <option value="15:00">3:00 PM (ends at 6:00 PM)</option>
             </select>
