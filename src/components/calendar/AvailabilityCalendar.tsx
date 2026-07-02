@@ -81,12 +81,7 @@ export default function AvailabilityCalendar({ title, subtitle, slots, showUpcom
           const d = new Date(start);
           const offset = week * 7 + ((weekday - firstVisibleWeekday + 7) % 7);
           d.setDate(start.getDate() + offset);
-          if (
-            d.getMonth() === month ||
-            (d.getTime() >= first.getTime() && d.getTime() <= new Date(year, month + 1, 6).getTime())
-          ) {
-            days.push(d);
-          }
+          days.push(d);
         });
       }
     } else {
