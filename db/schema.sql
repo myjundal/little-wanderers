@@ -411,7 +411,7 @@ begin
   values (_household_id, new.id, 'owner');
 
   insert into public.roles (id, role)
-  values (new.id, 'owner');
+  values (new.id, 'user');
 
   return new;
 end;

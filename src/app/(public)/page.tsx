@@ -1,5 +1,6 @@
 import HomeComingSoon from '@/components/home/HomeComingSoon';
 import AuthLinkLandingGuard from '@/components/auth/AuthLinkLandingGuard';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Little Wanderers — Sensory-focused Studio and Cafe',
@@ -12,7 +13,19 @@ export const metadata = {
   ],
 };
 
-export default function HomePage() {
+export default function HomePage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+  if (searchParams?.code) {
+    const params = new URLSearchParams();
+    Object.entries(searchParams).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => params.append(key, item));
+      } else if (value) {
+        params.set(key, value);
+      }
+    });
+    redirect(`/auth/callback?${params.toString()}`);
+  }
+
   return (
     <>
       <AuthLinkLandingGuard />
