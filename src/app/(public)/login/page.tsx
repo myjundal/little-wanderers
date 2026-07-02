@@ -10,6 +10,7 @@ type Step = 'collect' | 'verify' | 'emailLinkSent';
 
 const OTP_LENGTH = 4;
 const RESEND_SECONDS = 30;
+const PRODUCTION_SITE_URL = 'https://thelittlewanderers.com';
 
 const normalizeUsPhone = (input: string) => {
   const digits = input.replace(/\D/g, '');
@@ -43,7 +44,15 @@ function getSafeNextPath() {
 }
 
 function getEmailRedirectTo(mode: JourneyMode) {
-  const url = new URL('/auth/callback', window.location.origin);
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
+  const configuredIsLocal = configuredSiteUrl?.includes('localhost') || configuredSiteUrl?.includes('127.0.0.1');
+  const currentIsLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const origin = configuredSiteUrl && !configuredIsLocal
+    ? configuredSiteUrl
+    : currentIsLocal
+      ? PRODUCTION_SITE_URL
+      : window.location.origin;
+  const url = new URL('/auth/callback', origin);
   url.searchParams.set('mode', mode);
   url.searchParams.set('next', getSafeNextPath());
   return url.toString();
