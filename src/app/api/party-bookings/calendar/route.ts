@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getPartyBookingStartDate } from '@/lib/party-config';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
@@ -13,10 +14,11 @@ function isMissingColumnError(message: string) {
 export async function GET() {
   try {
     const supa = admin();
+    const lowerBound = new Date(Math.max(Date.now(), getPartyBookingStartDate().getTime())).toISOString();
     const primary = await supa
       .from('party_bookings')
       .select('id,start_time,end_time,status')
-      .gte('start_time', new Date().toISOString())
+      .gte('start_time', lowerBound)
       .neq('status', 'cancelled')
       .order('start_time', { ascending: true });
 
@@ -26,7 +28,7 @@ export async function GET() {
     const fallback = await supa
       .from('party_bookings')
       .select('id,start_time,end_time')
-      .gte('start_time', new Date().toISOString())
+      .gte('start_time', lowerBound)
       .order('start_time', { ascending: true });
 
     if (fallback.error) return Response.json({ ok: false, error: fallback.error.message }, { status: 500, headers: NO_STORE_HEADERS });

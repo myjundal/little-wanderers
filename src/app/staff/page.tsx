@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getCurrentUserRole } from '@/lib/authz';
 import StaffDashboard from '@/components/staff/StaffDashboard';
+import StaffToolNav from '@/components/staff/StaffToolNav';
 
 export default async function StaffPage() {
   const { role } = await getCurrentUserRole();
@@ -13,14 +14,14 @@ export default async function StaffPage() {
           <h1 style={{ margin: '8px 0 0', color: '#4f3f82' }}>Staff / Owner Dashboard</h1>
           <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Signed in with role: <strong>{role ?? 'unknown'}</strong></p>
         </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <StaffToolNav active="home" />
           <Link href="/staff/campaigns" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #d7c1f7', background: '#fff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Email campaigns</Link>
           <Link href="/staff/checkin" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #d7c1f7', background: '#fff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Open staff QR check-in</Link>
-          <Link href="/landing" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #e4dbf5', background: '#f8f3ff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Customer Dashboard</Link>
         </div>
       </div>
 
-      <StaffDashboard />
+      <StaffDashboard view="overview" />
     </main>
   );
 }

@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
+import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
 export const dynamic = 'force-dynamic';
@@ -155,6 +156,9 @@ export async function POST(req: Request) {
 
     if (!isPartySlot(start, end, slot)) {
       return Response.json({ ok: false, error: 'Party bookings are only available on Friday, Saturday, or Sunday at 10:00 AM or 3:00 PM.' }, { status: 400 });
+    }
+    if (!isOnOrAfterPartyBookingStart(start)) {
+      return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
     }
     if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
       return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });

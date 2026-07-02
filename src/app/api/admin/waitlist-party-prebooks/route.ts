@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,9 @@ export async function POST(req: Request) {
     const end = new Date(String(body.end_time ?? ''));
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
       return Response.json({ ok: false, error: 'Choose a valid party date and time.' }, { status: 400 });
+    }
+    if (!isOnOrAfterPartyBookingStart(start)) {
+      return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
     }
 
     const admin = context.admin;

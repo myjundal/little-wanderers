@@ -1,5 +1,6 @@
 import styles from '@/app/(public)/home.module.css';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
+import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export default async function HomeComingSoon() {
@@ -20,7 +21,7 @@ export default async function HomeComingSoon() {
             <br />
             <span className={styles.heroLocationLine}>in West Hartford</span>
           </h1>
-          <p className={styles.comingSoon}>Coming soon in late Summer 2026</p>
+          <p className={styles.comingSoon}>Coming soon in mid September 2026</p>
           <p>
             Designed for curious 0-7 year olds, Little Wanderers blends sensory-friendly play, dreamy little
             discoveries, and a cozy cafe pause where grown-ups can actually sip good coffee while the kids wander.
@@ -61,7 +62,7 @@ export default async function HomeComingSoon() {
           <p className={styles.partyEyebrow}>Early access parties</p>
           <h2>Party holds are open for waitlist families</h2>
           <p>
-            Peek at available Friday, Saturday, and Sunday party slots, then request a hold with no deposit today.
+            With our buildout and opening timeline in mind, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}. Peek at available Friday, Saturday, and Sunday slots, then request a hold with no deposit today.
           </p>
           {!isAuthenticated && (
             <p className={styles.accessNote}>

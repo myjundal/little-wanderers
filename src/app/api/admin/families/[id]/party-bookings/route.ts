@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 
 type Params = { params: { id: string } };
 
@@ -13,6 +14,9 @@ export async function POST(req: Request, { params }: Params) {
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
+  }
+  if (!isOnOrAfterPartyBookingStart(start)) {
+    return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
   }
 
   const admin = context.admin;

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 
 const admin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -42,6 +43,9 @@ export async function POST(req: Request) {
     }
     if (!isPartySlot(start, end, slot)) {
       return Response.json({ ok: false, error: 'Reschedule is only available for Friday, Saturday, or Sunday 10:00 AM or 3:00 PM slots.' }, { status: 400 });
+    }
+    if (!isOnOrAfterPartyBookingStart(start)) {
+      return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
     }
 
     const server = createServerSupabaseClient();

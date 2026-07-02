@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 import Link from 'next/link';
+import { getPartyBookingStartDate, PARTY_BOOKING_START_DATE } from '@/lib/party-config';
 
 type OccupancyEvent = {
   id: string;
@@ -75,6 +76,8 @@ type PartyBookingItem = {
   birthday_age: number | null;
   occasion_details: string | null;
 };
+
+type StaffDashboardView = 'overview' | 'classes' | 'parties';
 
 function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | 'birthday_age' | 'occasion_details'>) {
   const lines: string[] = [];
@@ -175,11 +178,15 @@ function prettyNote(note: string | null) {
   );
 }
 
+function hasCancellationRequest(item: Pick<PartyBookingItem, 'notes' | 'status'>) {
+  return item.status !== 'cancelled' && (item.notes ?? '').includes('[Cancellation requested');
+}
+
 function emptyPrebookForm() {
   return {
     email: '',
     household_name: '',
-    party_date: new Date().toISOString().slice(0, 10),
+    party_date: getPartyBookingStartDate().toISOString().slice(0, 10),
     slot: '10:00',
     headcount_expected: '',
     birthday_child_name: '',
@@ -188,7 +195,7 @@ function emptyPrebookForm() {
   };
 }
 
-export default function StaffDashboard() {
+export default function StaffDashboard({ view = 'overview' }: { view?: StaffDashboardView }) {
   const [occupancy, setOccupancy] = useState<OccupancyState | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [partyBookings, setPartyBookings] = useState<PartyBookingItem[]>([]);
@@ -211,6 +218,19 @@ export default function StaffDashboard() {
     () => partyBookings.find((item) => item.id === selectedBookingId) ?? partyBookings[0] ?? null,
     [partyBookings, selectedBookingId]
   );
+
+  const scheduledClasses = useMemo(() => classes.filter((item) => item.status !== 'cancelled'), [classes]);
+  const cancelledClasses = useMemo(() => classes.filter((item) => item.status === 'cancelled'), [classes]);
+  const partyCancellationRequests = useMemo(() => partyBookings.filter(hasCancellationRequest), [partyBookings]);
+  const partyRequests = useMemo(
+    () => partyBookings.filter((item) => !hasCancellationRequest(item) && (item.status === 'pending' || item.status === 'early_access_hold')),
+    [partyBookings]
+  );
+  const confirmedPartyBookings = useMemo(
+    () => partyBookings.filter((item) => !hasCancellationRequest(item) && item.status === 'confirmed'),
+    [partyBookings]
+  );
+  const cancelledPartyBookings = useMemo(() => partyBookings.filter((item) => item.status === 'cancelled'), [partyBookings]);
 
   useEffect(() => {
     if (!selectedBookingId && partyBookings[0]?.id) {
@@ -403,7 +423,7 @@ export default function StaffDashboard() {
     await load();
   };
 
-  const updatePartyStatus = async (bookingId: string, status: 'cancelled') => {
+  const updatePartyStatus = async (bookingId: string, status: 'confirmed' | 'cancelled') => {
     const res = await fetch(`/api/admin/party-bookings/${bookingId}/status`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -490,6 +510,8 @@ export default function StaffDashboard() {
         </div>
       )}
 
+      {view === 'overview' && (
+        <>
       <section style={{ ...sectionStyle, marginTop: 16 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner tools</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
@@ -497,8 +519,6 @@ export default function StaffDashboard() {
           <a href="#waitlist-party-prebook" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Waitlist party prebook</a>
           <a href="#manual-family-registration" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Manual family registration</a>
           <a href="#occupancy-management" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Occupancy</a>
-          <a href="#class-management" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Class management</a>
-          <a href="#party-management" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Party management</a>
         </div>
       </section>
 
@@ -512,7 +532,7 @@ export default function StaffDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 18 }}>
           <input type="email" placeholder="waitlist email" value={prebookForm.email} onChange={(e) => setPrebookForm((prev) => ({ ...prev, email: e.target.value }))} style={inputStyle} />
           <input placeholder="Family name (optional)" value={prebookForm.household_name} onChange={(e) => setPrebookForm((prev) => ({ ...prev, household_name: e.target.value }))} style={inputStyle} />
-          <input type="date" value={prebookForm.party_date} onChange={(e) => setPrebookForm((prev) => ({ ...prev, party_date: e.target.value }))} style={inputStyle} />
+          <input type="date" min={PARTY_BOOKING_START_DATE} value={prebookForm.party_date} onChange={(e) => setPrebookForm((prev) => ({ ...prev, party_date: e.target.value }))} style={inputStyle} />
           <select value={prebookForm.slot} onChange={(e) => setPrebookForm((prev) => ({ ...prev, slot: e.target.value }))} style={inputStyle}>
             <option value="10:00">10:00 AM - 1:00 PM</option>
             <option value="15:00">3:00 PM - 6:00 PM</option>
@@ -580,7 +600,10 @@ export default function StaffDashboard() {
           <button style={{ ...buttonStyle, background: '#5f3da4', color: '#fff' }} onClick={() => mutateOccupancy('reset', 1, 'Daily reset from staff dashboard')}>Reset Today</button>
         </div>
       </section>
+        </>
+      )}
 
+      {view === 'classes' && (
       <section id="class-management" style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
@@ -643,8 +666,21 @@ export default function StaffDashboard() {
           {savingClass ? 'Saving...' : editingClassId ? 'Save Changes' : 'Create Class'}
         </button>
 
-        <div style={{ marginTop: 22, display: 'grid', gap: 12 }}>
-          {classes.map((item) => (
+        <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
+          {[
+            { title: 'Scheduled classes', items: scheduledClasses, empty: 'No scheduled classes yet.' },
+            { title: 'Cancelled classes', items: cancelledClasses, empty: 'No cancelled classes.' },
+          ].map((group) => (
+            <div key={group.title} style={{ border: '1px solid #efe3ff', borderRadius: 18, padding: 14, background: '#fcf9ff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                <h3 style={{ margin: 0, color: '#4f3f82' }}>{group.title}</h3>
+                <span style={{ color: '#7a6d97', fontWeight: 700 }}>{group.items.length}</span>
+              </div>
+              {group.items.length === 0 ? (
+                <p style={{ margin: 0, color: '#7a6d97' }}>{group.empty}</p>
+              ) : (
+                <div style={{ display: 'grid', gap: 12 }}>
+          {group.items.map((item) => (
             <div key={item.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 16, background: '#fff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div>
@@ -700,17 +736,38 @@ export default function StaffDashboard() {
               </div>
             </div>
           ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </section>
+      )}
 
+      {view === 'parties' && (
       <section id="party-management" style={sectionStyle}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Party booking management</p>
         <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Review and manage scheduled party bookings</h2>
         <p style={{ margin: 0, color: '#6d6480' }}>Status changes are written back immediately so the customer view stays in sync.</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
-          <div style={{ display: 'grid', gap: 12 }}>
-            {partyBookings.map((item) => (
+          <div style={{ display: 'grid', gap: 14 }}>
+            {[
+              { title: 'Party requests / holds', items: partyRequests, empty: 'No new party requests.' },
+              { title: 'Confirmed parties', items: confirmedPartyBookings, empty: 'No confirmed parties yet.' },
+              { title: 'Cancellation requests', items: partyCancellationRequests, empty: 'No cancellation requests.' },
+              { title: 'Cancelled parties', items: cancelledPartyBookings, empty: 'No cancelled parties.' },
+            ].map((group) => (
+              <div key={group.title} style={{ border: '1px solid #efe3ff', borderRadius: 18, padding: 14, background: '#fcf9ff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <h3 style={{ margin: 0, color: '#4f3f82' }}>{group.title}</h3>
+                  <span style={{ color: '#7a6d97', fontWeight: 700 }}>{group.items.length}</span>
+                </div>
+                {group.items.length === 0 ? (
+                  <p style={{ margin: 0, color: '#7a6d97' }}>{group.empty}</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+            {group.items.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setSelectedBookingId(item.id)}
@@ -728,12 +785,17 @@ export default function StaffDashboard() {
                   <strong style={{ color: '#4f3f82' }}>{item.household_name}</strong>
                   <span style={{ color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 700, textTransform: 'capitalize' }}>{partyStatusLabel(item.status)}</span>
                 </div>
+                {hasCancellationRequest(item) && <div style={{ marginTop: 6, color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested</div>}
                 <div style={{ marginTop: 6, color: '#6d6480' }}>{new Date(item.start_time).toLocaleString()} → {new Date(item.end_time).toLocaleString()}</div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>Guests: {item.headcount_expected ?? '-'} · Quote: {dollars(item.price_quote_cents)}</div>
                 {celebrationLines(item).map((line) => (
                   <div key={`${item.id}-${line}`} style={{ marginTop: 6, color: '#6d6480' }}>{line}</div>
                 ))}
               </button>
+            ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
@@ -744,7 +806,10 @@ export default function StaffDashboard() {
               <>
                 <h3 style={{ marginTop: 0, color: '#4f3f82' }}>{selectedBooking.household_name}</h3>
                 <p style={{ color: '#6d6480' }}><strong>When:</strong> {new Date(selectedBooking.start_time).toLocaleString()} → {new Date(selectedBooking.end_time).toLocaleString()}</p>
-                <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{selectedBooking.status}</span></p>
+                <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{partyStatusLabel(selectedBooking.status)}</span></p>
+                {hasCancellationRequest(selectedBooking) && (
+                  <p style={{ color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested by family</p>
+                )}
                 <p style={{ color: '#6d6480' }}><strong>Headcount (requested):</strong> {selectedBooking.headcount_expected ?? '-'}</p>
                 <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
                 {celebrationLines(selectedBooking).map((line) => (
@@ -834,8 +899,11 @@ export default function StaffDashboard() {
                 </p>
                 <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+                  {(selectedBooking.status === 'pending' || selectedBooking.status === 'early_access_hold') && (
+                    <button style={{ ...buttonStyle, background: '#2f7a47', color: '#fff', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'confirmed')}>Confirm booking</button>
+                  )}
                   {selectedBooking.status !== 'cancelled' && (
-                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b', width: '100%' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
+                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
                   )}
                 </div>
               </>
@@ -843,11 +911,7 @@ export default function StaffDashboard() {
           </div>
         </div>
       </section>
-      <div style={{ marginTop: 16 }}>
-        <a href="/landing" style={{ display: 'inline-block', padding: '10px 14px', borderRadius: 12, background: '#f3ebff', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>
-          Return to customer dashboard
-        </a>
-      </div>
+      )}
     </>
   );
 }

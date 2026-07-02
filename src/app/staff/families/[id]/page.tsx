@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import { getPartyBookingStartDate, PARTY_BOOKING_START_DATE } from '@/lib/party-config';
 
 type Person = { id: string; first_name: string | null; last_name: string | null; gender?: string | null; birthdate?: string | null; role: 'adult' | 'child' | null };
 type FamilyDetail = {
@@ -31,7 +32,7 @@ type MemberForm = { id?: string; first_name: string; last_name: string; birthdat
 const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
 
 function emptyPartyForm() {
-  return { party_date: new Date().toISOString().slice(0, 10), slot: '10:00', headcount_expected: '', notes: '' };
+  return { party_date: getPartyBookingStartDate().toISOString().slice(0, 10), slot: '10:00', headcount_expected: '', notes: '' };
 }
 
 function waiverLabel(status: string) {
@@ -207,7 +208,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   const partySlots: CalendarSlot[] = [
     ...(() => {
       const generated: CalendarSlot[] = [];
-      const now = new Date();
+      const now = getPartyBookingStartDate();
       const blockedStarts = new Set(
         [...bookedSlots, ...(item?.upcoming_parties ?? [])].map((slot) => new Date(slot.start_time).getTime())
       );
@@ -340,9 +341,9 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
 
         <div style={{ marginTop: 18 }}>
           <h4 style={{ marginBottom: 6 }}>Book party</h4>
-          <AvailabilityCalendar title="Party calendar" slots={partySlots} />
+          <AvailabilityCalendar title="Party calendar" slots={partySlots} initialMonth={PARTY_BOOKING_START_DATE} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-            <input type="date" value={partyForm.party_date} onChange={(e) => setPartyForm((prev) => ({ ...prev, party_date: e.target.value }))} />
+            <input type="date" min={PARTY_BOOKING_START_DATE} value={partyForm.party_date} onChange={(e) => setPartyForm((prev) => ({ ...prev, party_date: e.target.value }))} />
             <select value={partyForm.slot} onChange={(e) => setPartyForm((prev) => ({ ...prev, slot: e.target.value }))}>
               <option value="10:00">10:00 AM - 1:00 PM</option>
               <option value="15:00">3:00 PM - 6:00 PM</option>

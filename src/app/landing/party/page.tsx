@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import { getPartyBookingStartDate, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_DATE, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type PartyBooking = {
@@ -41,8 +42,9 @@ function toIsoLocal(date: string, hourLocal: number) {
 }
 
 function getDefaultPartyDate() {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + 1);
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const d = tomorrow.getTime() > getPartyBookingStartDate().getTime() ? tomorrow : getPartyBookingStartDate();
   for (let i = 0; i < 14; i += 1) {
     const day = d.getUTCDay();
     if (day === 5 || day === 6 || day === 0) return d.toISOString().slice(0, 10);
@@ -54,7 +56,7 @@ function getDefaultPartyDate() {
 function isPartyDate(date: string) {
   const d = new Date(`${date}T00:00:00.000Z`);
   const day = d.getUTCDay();
-  return day === 5 || day === 6 || day === 0;
+  return isOnOrAfterPartyBookingStart(d) && (day === 5 || day === 6 || day === 0);
 }
 
 function prettyNote(note: string | null) {
@@ -200,7 +202,7 @@ export default function PartyPage() {
     setMessage(null);
 
     if (!isPartyDate(form.party_date)) {
-      setMessage('Please choose a Friday, Saturday, or Sunday.');
+      setMessage(`Please choose a Friday, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
       setSubmitting(false);
       return;
     }
@@ -280,8 +282,9 @@ export default function PartyPage() {
     ...(() => {
       const generated: CalendarSlot[] = [];
       const now = new Date();
+      const firstAvailableDate = now.getTime() > getPartyBookingStartDate().getTime() ? now : getPartyBookingStartDate();
       for (let i = 0; i < PARTY_SLOT_LOOKAHEAD_DAYS; i += 1) {
-        const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
+        const d = new Date(Date.UTC(firstAvailableDate.getUTCFullYear(), firstAvailableDate.getUTCMonth(), firstAvailableDate.getUTCDate() + i));
         const day = d.getUTCDay();
         if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
@@ -353,6 +356,10 @@ export default function PartyPage() {
   const reschedule = async (bookingId: string) => {
     const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 10);
     const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 13);
+    if (!isPartyDate(rescheduleDate)) {
+      setMessage(`Please choose a Friday, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
+      return;
+    }
     const res = await fetch('/api/party-bookings/reschedule', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -408,7 +415,7 @@ export default function PartyPage() {
             <li>A sweet group photo moment</li>
           </ul>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '12px 0 0' }}>
-            Available Friday evenings, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
+            Because our buildout and opening are still in progress, birthday parties are available starting Saturday, {PARTY_BOOKING_START_LABEL}. Available Friday evenings, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
           </p>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '8px 0 0' }}>
             For non-birthday events, larger gatherings, or special requests, please contact us at{' '}
@@ -421,10 +428,11 @@ export default function PartyPage() {
         <div>
           <AvailabilityCalendar
             title="Party booking calendar"
-            subtitle="Friday, Saturday, and Sunday slots. Select an available time to fill the booking form below."
+            subtitle={`Party holds are available starting ${PARTY_BOOKING_START_LABEL}. Select an available Friday, Saturday, or Sunday slot to fill the booking form below.`}
             slots={slots}
             onSlotSelect={selectSlot}
             visibleWeekdays={[5, 6, 0]}
+            initialMonth={PARTY_BOOKING_START_DATE}
           />
         </div>
       </div>
@@ -436,6 +444,7 @@ export default function PartyPage() {
           <strong>Early access party holds:</strong>
           <ul style={{ margin: '10px 0 0 20px', display: 'grid', gap: 6, lineHeight: 1.5 }}>
             <li>We are giving waitlist families first priority for party dates.</li>
+            <li>Because our construction schedule is still moving, party holds are available for dates starting Saturday, {PARTY_BOOKING_START_LABEL}.</li>
             {!loading && !isAuthenticated && (
               <li>
                 To request a party hold, you&apos;ll need to sign in to My Little Wanderers. Early access sign-in is currently available for waitlist families, so please{' '}
@@ -457,7 +466,7 @@ export default function PartyPage() {
           <label>
             Party date
             <br />
-            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} type="date" value={form.party_date} onChange={(e) => setForm((prev) => ({ ...prev, party_date: e.target.value }))} />
+            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} type="date" min={PARTY_BOOKING_START_DATE} value={form.party_date} onChange={(e) => setForm((prev) => ({ ...prev, party_date: e.target.value }))} />
           </label>
 
           <label>
@@ -586,7 +595,7 @@ export default function PartyPage() {
                       <label>
                         New date
                         <br />
-                        <input style={{ width: '100%' }} type="date" value={rescheduleDate} onChange={(e) => setRescheduleDate(e.target.value)} />
+                        <input style={{ width: '100%' }} type="date" min={PARTY_BOOKING_START_DATE} value={rescheduleDate} onChange={(e) => setRescheduleDate(e.target.value)} />
                       </label>
                       <label style={{ marginLeft: 10 }}>
                         New time

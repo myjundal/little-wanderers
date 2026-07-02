@@ -17,6 +17,7 @@ type Props = {
   showUpcoming?: boolean;
   onSlotSelect?: (slot: CalendarSlot) => void;
   visibleWeekdays?: number[];
+  initialMonth?: string;
 };
 
 const statusColor: Record<CalendarSlot['status'], string> = {
@@ -37,8 +38,12 @@ function ymd(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export default function AvailabilityCalendar({ title, subtitle, slots, showUpcoming = false, onSlotSelect, visibleWeekdays }: Props) {
+export default function AvailabilityCalendar({ title, subtitle, slots, showUpcoming = false, onSlotSelect, visibleWeekdays, initialMonth }: Props) {
   const [cursor, setCursor] = useState(() => {
+    if (initialMonth) {
+      const [year, month] = initialMonth.split('-').map(Number);
+      if (year && month) return new Date(year, month - 1, 1);
+    }
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
