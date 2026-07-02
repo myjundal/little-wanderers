@@ -63,7 +63,7 @@ export async function POST(req: Request) {
 
     const existingHousehold = await admin
       .from('households')
-      .select('id,name,email,user_id')
+      .select('id,name,email')
       .ilike('email', normalizedEmail)
       .order('created_at', { ascending: false })
       .limit(1)
