@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
+import {
+  SHOW_CUSTOMER_CLASS_BOOKING,
+  SHOW_CUSTOMER_CROWD_STATUS,
+  SHOW_CUSTOMER_MEMBERSHIP,
+  SHOW_CUSTOMER_WAIVER_PROMPTS,
+} from '@/lib/feature-flags';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
 import { useOwnerDashboardAccess } from '@/lib/use-owner-dashboard-access';
 import { getWaiverStatus, getWaiverStatusLabel, type WaiverStatus } from '@/lib/waivers';
@@ -117,7 +123,7 @@ export default function AppHome() {
 
   // membership widget
   useEffect(() => {
-    if (!householdId) return;
+    if (!SHOW_CUSTOMER_MEMBERSHIP || !householdId) return;
     (async () => {
       const supabase = createBrowserSupabaseClient();
       const nowISO = new Date().toISOString();
@@ -146,7 +152,7 @@ export default function AppHome() {
   }, [householdId]);
 
   useEffect(() => {
-    if (!householdId) return;
+    if (!SHOW_CUSTOMER_WAIVER_PROMPTS || !householdId) return;
     (async () => {
       const supabase = createBrowserSupabaseClient();
       const { data, error } = await supabase
@@ -246,7 +252,7 @@ export default function AppHome() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
-      {(waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
+      {SHOW_CUSTOMER_WAIVER_PROMPTS && (waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
         <section style={{ marginBottom: 14, padding: 14, borderRadius: 12, border: '1px solid #f1cf8a', background: '#fff6e8' }}>
           <p style={{ margin: 0, fontWeight: 700, color: '#7f4a04' }}>
             {waiver.status === 'completed'
@@ -263,20 +269,21 @@ export default function AppHome() {
         </section>
       )}
 
-      <section className="heroGrid" style={{ display: 'grid', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
+      <section className={SHOW_CUSTOMER_CROWD_STATUS ? 'heroGrid' : undefined} style={{ display: 'grid', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
         <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
-          <CrowdLevelCard compact showStatus={false} style={{ marginTop: 8 }} />
+          {SHOW_CUSTOMER_CROWD_STATUS && <CrowdLevelCard compact showStatus={false} style={{ marginTop: 8 }} />}
         </div>
 
-        <CrowdLevelCard compact showHours={false} style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />
+        {SHOW_CUSTOMER_CROWD_STATUS && <CrowdLevelCard compact showHours={false} style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />}
       </section>
 
 
       
 
       {/* Membership badge + CTA */}
+      {SHOW_CUSTOMER_MEMBERSHIP && (
       <section className="desktopOnly" style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between', }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -312,13 +319,14 @@ export default function AppHome() {
           {waiver.status === 'completed' && waiver.expires_at ? ` · Expires on ${new Date(waiver.expires_at).toLocaleDateString()}` : ''}
         </p>
       </section>
+      )}
 
       <section className="desktopOnly" style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
           <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
-          <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>
-          <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>
+          {SHOW_CUSTOMER_MEMBERSHIP && <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>}
+          {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>}
           <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
           {canUseOwnerDashboard && (
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
@@ -365,11 +373,11 @@ export default function AppHome() {
         )}
       </section>
 
-      <nav className={canUseOwnerDashboard ? 'mobileBottom mobileBottomStaff' : 'mobileBottom'}>
+      <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', !SHOW_CUSTOMER_CLASS_BOOKING ? 'mobileBottomNoClasses' : ''].filter(Boolean).join(' ')}>
         <Link href="/landing">Home</Link>
         {canUseOwnerDashboard && <Link href="/staff">Owner/Staff</Link>}
         <Link href="/landing/qr">QR Codes</Link>
-        <Link href="/landing/classschedule">Classes</Link>
+        {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule">Classes</Link>}
         <Link href="/landing/party">Party</Link>
       </nav>
 
@@ -385,6 +393,8 @@ export default function AppHome() {
           .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
           .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
           .mobileBottomStaff { grid-template-columns:repeat(5,1fr); }
+          .mobileBottomNoClasses { grid-template-columns:repeat(3,1fr); }
+          .mobileBottomStaff.mobileBottomNoClasses { grid-template-columns:repeat(4,1fr); }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;
  border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }

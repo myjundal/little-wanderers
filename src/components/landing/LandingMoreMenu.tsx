@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useOwnerDashboardAccess } from '@/lib/use-owner-dashboard-access';
+import { SHOW_CUSTOMER_CLASS_BOOKING, SHOW_CUSTOMER_MEMBERSHIP } from '@/lib/feature-flags';
 
 export default function LandingMoreMenu() {
   const [open, setOpen] = useState(false);
@@ -27,8 +28,12 @@ export default function LandingMoreMenu() {
           )}
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/people">My People</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/qr">My QR Codes</Link>
-          <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/membership">My Membership</Link>
-          <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">Class Schedule / My Class Booking</Link>
+          {SHOW_CUSTOMER_MEMBERSHIP && (
+            <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/membership">My Membership</Link>
+          )}
+          {SHOW_CUSTOMER_CLASS_BOOKING && (
+            <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">Class Schedule / My Class Booking</Link>
+          )}
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/party">Party Calendar / My Parties</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/contact">Contact</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/faq">FAQ</Link>
