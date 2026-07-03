@@ -14,7 +14,7 @@ export const metadata = {
 };
 
 export default function HomePage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
-  if (searchParams?.code) {
+  if (searchParams?.code || searchParams?.token_hash) {
     const params = new URLSearchParams();
     Object.entries(searchParams).forEach(([key, value]) => {
       if (Array.isArray(value)) {

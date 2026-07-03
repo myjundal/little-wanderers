@@ -124,10 +124,16 @@ export async function userNeedsOnboarding(userId: string) {
   return !hasPeople;
 }
 
-export async function getPostAuthRedirectForUser(user: WaitlistUser, next: string) {
+export async function getPostAuthRedirectForUser(
+  user: WaitlistUser,
+  next: string,
+  options: { forceOnboarding?: boolean } = {}
+) {
   if (user.email) {
     await claimWaitlistForUser(user).catch(() => null);
   }
+
+  if (options.forceOnboarding) return '/onboarding';
 
   const needsOnboarding = await userNeedsOnboarding(user.id).catch(() => false);
   return needsOnboarding ? '/onboarding' : next;

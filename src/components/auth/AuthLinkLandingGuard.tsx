@@ -7,7 +7,7 @@ export default function AuthLinkLandingGuard() {
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
 
-    if (searchParams.has('code')) {
+    if (searchParams.has('code') || searchParams.has('token_hash')) {
       window.location.replace(`/auth/callback?${searchParams.toString()}`);
       return;
     }

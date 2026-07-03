@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import type { EmailOtpType } from '@supabase/supabase-js';
 import { getPostAuthRedirectForUser } from '@/lib/waitlist-claim';
 
 export const dynamic = 'force-dynamic';
@@ -16,10 +17,13 @@ function getRedirectUrl(request: NextRequest, path: string) {
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  const tokenHash = requestUrl.searchParams.get('token_hash');
+  const type = requestUrl.searchParams.get('type');
+  const mode = requestUrl.searchParams.get('mode');
   const next = getSafeNextPath(requestUrl.searchParams.get('next'));
   const response = NextResponse.redirect(getRedirectUrl(request, next));
 
-  if (!code) {
+  if (!code && !tokenHash) {
     return NextResponse.redirect(getRedirectUrl(request, '/login?error=missing-code'));
   }
 
@@ -41,7 +45,12 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { error } = code
+    ? await supabase.auth.exchangeCodeForSession(code)
+    : await supabase.auth.verifyOtp({
+        token_hash: tokenHash!,
+        type: (type || 'email') as EmailOtpType,
+      });
   if (error) {
     return NextResponse.redirect(getRedirectUrl(request, `/login?error=${encodeURIComponent(error.message)}`));
   }
@@ -50,8 +59,9 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const forceOnboarding = mode === 'new' || type === 'signup';
   const redirectPath = user
-    ? await getPostAuthRedirectForUser(user, next)
+    ? await getPostAuthRedirectForUser(user, next, { forceOnboarding })
     : next;
 
   if (redirectPath === '/onboarding') {
