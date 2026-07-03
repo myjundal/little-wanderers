@@ -876,8 +876,8 @@ export default function CampaignAdmin() {
               </label>
               <div style={labelStyle}>
                 Body
-                <div style={{ border: '1px solid #ddd1ea', borderRadius: 14, overflow: 'hidden', background: '#fff' }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, borderBottom: '1px solid #eadff3', background: '#fbf7ff', position: 'sticky', top: 0, zIndex: 2 }}>
+                <div style={{ border: '1px solid #ddd1ea', borderRadius: 14, background: '#fff' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, borderBottom: '1px solid #eadff3', borderRadius: '14px 14px 0 0', background: '#fbf7ff', position: 'sticky', top: 12, zIndex: 10 }}>
                     <button type="button" aria-label="Bold" title="Bold" onClick={() => runEditorCommand('bold')} style={iconButtonStyle}>B</button>
                     <button type="button" aria-label="Italic" title="Italic" onClick={() => runEditorCommand('italic')} style={{ ...iconButtonStyle, fontStyle: 'italic' }}>I</button>
                     <button type="button" aria-label="Heading" title="Heading" onClick={makeHeading} style={iconButtonStyle}>H2</button>

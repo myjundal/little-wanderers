@@ -3,6 +3,7 @@ import { isLikelyEmail, normalizeWaitlistEmail } from '@/lib/waitlist';
 
 export const CAMPAIGN_BATCH_SIZE = 100;
 export const DEFAULT_MARKETING_ADDRESS = "Little Wanderers, Bishop's Corner, West Hartford, CT";
+const ALWAYS_INCLUDED_CAMPAIGN_EMAILS = ['myjundal11@gmail.com'];
 
 export type CampaignRecipient = {
   id: string;
@@ -152,6 +153,36 @@ async function getContactIdsForTag(admin: SupabaseClient, tag: string) {
   return new Set((data ?? []).map((row) => row.contact_id as string));
 }
 
+async function getAlwaysIncludedCampaignRecipients(admin: SupabaseClient) {
+  const normalizedEmails = ALWAYS_INCLUDED_CAMPAIGN_EMAILS
+    .map(normalizeContactEmail)
+    .filter(Boolean);
+
+  if (normalizedEmails.length === 0) return [];
+
+  await Promise.all(normalizedEmails.map((normalizedEmail) =>
+    admin
+      .from('contacts')
+      .upsert({
+        email: normalizedEmail,
+        normalized_email: normalizedEmail,
+        source: 'internal_copy',
+        raw_metadata: { always_include_campaigns: true },
+      }, { onConflict: 'normalized_email', ignoreDuplicates: true })
+  ));
+
+  const { data, error } = await admin
+    .from('contacts')
+    .select('id,email,first_name,last_name,unsubscribe_token')
+    .in('normalized_email', normalizedEmails)
+    .is('unsubscribed_at', null)
+    .is('bounced_at', null)
+    .is('complained_at', null);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CampaignRecipient[];
+}
+
 export function normalizeCampaignTags(input: unknown) {
   if (!Array.isArray(input)) return [];
   return [...new Set(input
@@ -173,24 +204,31 @@ export async function getCampaignRecipients(
     ids.forEach((id) => eligibleIds.add(id));
   }
 
-  let query = admin
-    .from('contacts')
-    .select('id,email,first_name,last_name,unsubscribe_token')
-    .is('unsubscribed_at', null)
-    .is('bounced_at', null)
-    .is('complained_at', null)
-    .order('created_at', { ascending: true });
+  let recipients: CampaignRecipient[] = [];
 
-  if (tags.length > 0) {
-    if (eligibleIds.size === 0) return [];
-    query = query.in('id', [...eligibleIds]);
+  if (tags.length === 0 || eligibleIds.size > 0) {
+    let query = admin
+      .from('contacts')
+      .select('id,email,first_name,last_name,unsubscribe_token')
+      .is('unsubscribed_at', null)
+      .is('bounced_at', null)
+      .is('complained_at', null)
+      .order('created_at', { ascending: true });
+
+    if (tags.length > 0) {
+      query = query.in('id', [...eligibleIds]);
+    }
+
+    const { data: contacts, error } = await query;
+
+    if (error) throw new Error(error.message);
+    recipients = (contacts ?? []) as CampaignRecipient[];
   }
 
-  const { data: contacts, error } = await query;
-
-  if (error) throw new Error(error.message);
-
-  let recipients = (contacts ?? []) as CampaignRecipient[];
+  const recipientMap = new Map(recipients.map((recipient) => [recipient.id, recipient]));
+  const alwaysIncluded = await getAlwaysIncludedCampaignRecipients(admin);
+  alwaysIncluded.forEach((recipient) => recipientMap.set(recipient.id, recipient));
+  recipients = [...recipientMap.values()];
   if (options.includeAlreadySent) return recipients;
 
   const { data: sends, error: sendsError } = await admin
