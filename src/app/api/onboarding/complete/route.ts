@@ -32,6 +32,10 @@ function normalizeCityName(input: string) {
   return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
 }
 
+function cleanCityName(input: string) {
+  return input.trim().replace(/\s+/g, ' ');
+}
+
 export async function POST(req: Request) {
   const supabase = createServerSupabaseClient();
   const {
@@ -50,11 +54,13 @@ export async function POST(req: Request) {
 
   const input = parsed.data;
   const state = input.state as UsStateCode;
+  if (!(state in US_CITIES_BY_STATE)) {
+    return NextResponse.json({ ok: false, error: 'Please choose a valid state.' }, { status: 400 });
+  }
+
   const validCities = US_CITIES_BY_STATE[state] ?? [];
   const cityMatch = validCities.find((name) => normalizeCityName(name) === normalizeCityName(input.city));
-  if (!cityMatch) {
-    return NextResponse.json({ ok: false, error: 'Please choose a city from the suggestions for the selected state.' }, { status: 400 });
-  }
+  const submittedCity = cityMatch ?? cleanCityName(input.city);
 
   const admin = createAdminSupabaseClient();
   const { data: memberships, error: memberError } = await admin
@@ -82,7 +88,7 @@ export async function POST(req: Request) {
       name: householdName,
       email: input.email,
       phone: input.phone,
-      city: cityMatch,
+      city: submittedCity,
       state,
     })
     .eq('id', householdId);
