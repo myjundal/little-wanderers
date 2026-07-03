@@ -4,11 +4,18 @@ import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
 type WaitlistUser = { id: string; email?: string | null };
 
+function getRawMetadataHouseholdId(rawMetadata: unknown) {
+  if (!rawMetadata || typeof rawMetadata !== 'object') return null;
+  const value = (rawMetadata as { household_id?: unknown }).household_id;
+  return typeof value === 'string' && value ? value : null;
+}
+
 async function attachPrebookedHousehold(
   admin: ReturnType<typeof createAdminSupabaseClient>,
   user: WaitlistUser,
   normalizedEmail: string
 ) {
+  const email = (user.email ?? normalizedEmail).trim().toLowerCase();
   const existingMember = await admin
     .from('household_members')
     .select('household_id')
@@ -17,17 +24,43 @@ async function attachPrebookedHousehold(
 
   if (existingMember.error) throw new Error(existingMember.error.message);
 
-  const prebooked = await admin
-    .from('households')
-    .select('id,email')
-    .ilike('email', normalizedEmail)
-    .order('created_at', { ascending: false })
-    .limit(1)
+  const candidateHouseholdIds = new Set<string>();
+
+  const contact = await admin
+    .from('contacts')
+    .select('raw_metadata')
+    .eq('normalized_email', normalizedEmail)
     .maybeSingle();
 
-  if (prebooked.error) throw new Error(prebooked.error.message);
-  if (!prebooked.data?.id) return null;
-  const prebookedHouseholdId = prebooked.data.id as string;
+  if (contact.error) throw new Error(contact.error.message);
+  const contactHouseholdId = getRawMetadataHouseholdId(contact.data?.raw_metadata);
+  if (contactHouseholdId) candidateHouseholdIds.add(contactHouseholdId);
+
+  const emailMatchedHouseholds = await admin
+    .from('households')
+    .select('id,email')
+    .or(`email.ilike.${email},email.ilike.${normalizedEmail}`)
+    .order('created_at', { ascending: true })
+    .limit(20);
+
+  if (emailMatchedHouseholds.error) throw new Error(emailMatchedHouseholds.error.message);
+  (emailMatchedHouseholds.data ?? []).forEach((household) => candidateHouseholdIds.add(household.id as string));
+
+  if (candidateHouseholdIds.size === 0) return null;
+
+  const activeParties = await admin
+    .from('party_bookings')
+    .select('household_id,occasion_details,created_at')
+    .in('household_id', [...candidateHouseholdIds])
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: true });
+
+  if (activeParties.error) throw new Error(activeParties.error.message);
+  const prebookedParty = (activeParties.data ?? []).find((party) =>
+    String(party.occasion_details ?? '').toLowerCase().includes('prebooked')
+  ) ?? activeParties.data?.[0];
+  if (!prebookedParty?.household_id) return null;
+  const prebookedHouseholdId = prebookedParty.household_id as string;
 
   const linkedMember = await admin
     .from('household_members')
@@ -53,7 +86,7 @@ async function attachPrebookedHousehold(
   const update = await admin
     .from('households')
     .update({
-      email: user.email ?? normalizedEmail,
+      email,
       role: FAMILY_PRIMARY_CAREGIVER_ROLE,
     })
     .eq('id', prebookedHouseholdId);

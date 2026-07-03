@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { claimWaitlistForUser } from '@/lib/waitlist-claim';
 import { US_CITIES_BY_STATE, type UsStateCode } from '@/lib/us-cities';
+import { sendNewSignupNotification } from '@/lib/admin-notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,7 +100,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Unable to check your family members.' }, { status: 500 });
   }
 
-  if ((existingPeople ?? []).length === 0) {
+  const insertedNewFamily = (existingPeople ?? []).length === 0;
+
+  if (insertedNewFamily) {
     const peopleRows = [
       {
         household_id: householdId,
@@ -126,6 +129,18 @@ export async function POST(req: Request) {
   }
 
   await claimWaitlistForUser(user).catch(() => null);
+  if (insertedNewFamily) {
+    await sendNewSignupNotification({
+      householdId,
+      householdName,
+      adultName: parentName,
+      email: input.email,
+      phone: input.phone,
+      city: cityMatch,
+      state,
+      childCount: input.children.length,
+    }).catch(() => null);
+  }
 
   return NextResponse.json({ ok: true });
 }

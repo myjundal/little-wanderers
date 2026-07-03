@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import StaffToolNav from '@/components/staff/StaffToolNav';
 
 export default function StaffFamilyMembershipPage({ params }: { params: { id: string } }) {
   const familyId = params.id;
@@ -61,7 +62,10 @@ export default function StaffFamilyMembershipPage({ params }: { params: { id: st
 
   return (
     <main style={{ padding: 24, maxWidth: 780, margin: '0 auto' }}>
-      <p style={{ marginTop: 0 }}><Link href={`/staff/families/${familyId}`}>← Back to family detail</Link></p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <StaffToolNav active="families" />
+        <p style={{ margin: 0 }}><Link href={`/staff/families/${familyId}`}>← Back to family detail</Link></p>
+      </div>
       <h1 style={{ color: '#4f3f82' }}>Manage membership</h1>
       <p style={{ color: '#6d6480' }}>Start membership goes through Square payment. Pause and end are staff manual actions.</p>
 

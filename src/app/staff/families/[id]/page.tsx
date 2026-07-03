@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import StaffToolNav from '@/components/staff/StaffToolNav';
 import { getPartyBookingStartDate, PARTY_BOOKING_START_DATE } from '@/lib/party-config';
 
 type Person = { id: string; first_name: string | null; last_name: string | null; gender?: string | null; birthdate?: string | null; role: 'adult' | 'child' | null };
@@ -239,9 +240,12 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
 
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <StaffToolNav active="families" />
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <p style={{ margin: 0 }}><Link href="/staff/families">← Back to Family Management</Link></p>
         <p style={{ margin: 0 }}><Link href="/staff">← Back to Staff Dashboard</Link></p>
+        </div>
       </div>
       <h1 style={{ color: '#4f3f82' }}>{item.household.name ?? 'Family detail'}</h1>
       <p style={{ color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {waiverLabel(item.waiver_status)} · QR: {item.qr_status}</p>
