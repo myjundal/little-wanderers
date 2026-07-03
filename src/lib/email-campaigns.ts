@@ -82,9 +82,9 @@ export function renderMarketingEmail(input: {
 
   return `<!doctype html>
 <html>
-  <body style="margin:0;padding:0;background:#fbf8f3;color:#4f3f82;font-family:Arial,sans-serif;">
+  <body style="margin:0;padding:0;background:#ffffff;color:#4f3f82;font-family:Arial,sans-serif;">
     ${preheader}
-    <main style="max-width:640px;margin:0 auto;background:#ffffff;padding:24px;line-height:1.6;">
+    <main style="max-width:640px;margin:0 auto;background:#ffffff;background-color:#ffffff;padding:24px;line-height:1.6;">
       ${input.campaign.body_html}
       <hr style="border:0;border-top:1px solid #eadff3;margin:28px 0 16px;" />
       <p style="font-size:12px;color:#6d6480;margin:0 0 8px;">
