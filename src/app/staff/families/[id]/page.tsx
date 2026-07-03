@@ -244,7 +244,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         <StaffToolNav active="families" />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <p style={{ margin: 0 }}><Link href="/staff/families">← Back to Family Management</Link></p>
-        <p style={{ margin: 0 }}><Link href="/staff">← Back to Staff Dashboard</Link></p>
+        <p style={{ margin: 0 }}><Link href="/staff">← Back to Owner/Staff Tool</Link></p>
         </div>
       </div>
       <h1 style={{ color: '#4f3f82' }}>{item.household.name ?? 'Family detail'}</h1>

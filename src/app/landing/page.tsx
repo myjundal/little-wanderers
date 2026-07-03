@@ -252,7 +252,7 @@ export default function AppHome() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
-      {SHOW_CUSTOMER_WAIVER_PROMPTS && (waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
+      {!canUseOwnerDashboard && SHOW_CUSTOMER_WAIVER_PROMPTS && (waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
         <section style={{ marginBottom: 14, padding: 14, borderRadius: 12, border: '1px solid #f1cf8a', background: '#fff6e8' }}>
           <p style={{ margin: 0, fontWeight: 700, color: '#7f4a04' }}>
             {waiver.status === 'completed'
@@ -269,21 +269,26 @@ export default function AppHome() {
         </section>
       )}
 
-      <section className={SHOW_CUSTOMER_CROWD_STATUS ? 'heroGrid' : undefined} style={{ display: 'grid', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
+      <section className={!canUseOwnerDashboard && SHOW_CUSTOMER_CROWD_STATUS ? 'heroGrid' : undefined} style={{ display: 'grid', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
         <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
-          <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>Hello, {displayName ?? 'there'} 👋</h1>
-          {SHOW_CUSTOMER_CROWD_STATUS && <CrowdLevelCard compact showStatus={false} style={{ marginTop: 8 }} />}
+          <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>
+            {canUseOwnerDashboard ? 'Owner/Staff Dashboard' : `Hello, ${displayName ?? 'there'} 👋`}
+          </h1>
+          {canUseOwnerDashboard && (
+            <p style={{ margin: 0, color: '#6d6480' }}>Hello, {displayName ?? 'there'}</p>
+          )}
+          {!canUseOwnerDashboard && SHOW_CUSTOMER_CROWD_STATUS && <CrowdLevelCard compact showStatus={false} style={{ marginTop: 8 }} />}
         </div>
 
-        {SHOW_CUSTOMER_CROWD_STATUS && <CrowdLevelCard compact showHours={false} style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />}
+        {!canUseOwnerDashboard && SHOW_CUSTOMER_CROWD_STATUS && <CrowdLevelCard compact showHours={false} style={{ maxWidth: '100%', minHeight: '100%', height: '100%' }} />}
       </section>
 
 
       
 
       {/* Membership badge + CTA */}
-      {SHOW_CUSTOMER_MEMBERSHIP && (
+      {!canUseOwnerDashboard && SHOW_CUSTOMER_MEMBERSHIP && (
       <section className="desktopOnly" style={{ marginTop: 8, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between', }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -321,27 +326,32 @@ export default function AppHome() {
       </section>
       )}
 
+      {canUseOwnerDashboard && (
+        <section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Tool</Link>
+            <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Staff QR check-in</Link>
+            <Link href="/landing/party" style={{ display: 'block' }}>Party Calendar / My Parties</Link>
+          </div>
+        </section>
+      )}
+
+      {!canUseOwnerDashboard && (
       <section className="desktopOnly" style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
-          {canUseOwnerDashboard ? (
-            <Link href="/staff/checkin" style={{ display: 'block' }}>QR Check-in</Link>
-          ) : (
-            <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
-          )}
+          <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
           {SHOW_CUSTOMER_MEMBERSHIP && <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>}
           {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>}
           <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
-          {canUseOwnerDashboard && (
-            <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Dashboard</Link>
-          )}
           <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
             UX Flows (preview)
           </Link>
         </div>
       </section>
+      )}
 
-      {/* Recent visits */}
+      {!canUseOwnerDashboard && (
       <section className="desktopOnly" style={{ marginTop: 16, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h3 style={{ margin: 0 }}>Recent visits</h3>
@@ -376,11 +386,12 @@ export default function AppHome() {
           </table>
         )}
       </section>
+      )}
 
       <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', SHOW_CUSTOMER_CLASS_BOOKING ? 'mobileBottomWithClasses' : ''].filter(Boolean).join(' ')}>
         <Link href="/">Main</Link>
-        <Link href="/landing">My Dash</Link>
-        {canUseOwnerDashboard && <Link href="/staff">Owner/Staff</Link>}
+        <Link href="/landing">{canUseOwnerDashboard ? 'Owner Dash' : 'My Dash'}</Link>
+        {canUseOwnerDashboard && <Link href="/staff">Owner Tool</Link>}
         {canUseOwnerDashboard ? (
           <Link href="/staff/checkin">QR Check-in</Link>
         ) : (

@@ -30,10 +30,10 @@ export default function StaffToolNav({ active }: StaffToolNavProps) {
         Main Homepage
       </Link>
       <Link href="/landing" style={linkStyle}>
-        My Dashboard
+        Owner/Staff Dashboard
       </Link>
       <Link href="/staff" style={styleFor(active === 'home')}>
-        Staff / owner tool
+        Owner/Staff Tool
       </Link>
       <Link href="/staff/families" style={styleFor(active === 'families')}>
         Family management

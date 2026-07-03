@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { WAITLIST_JOIN_URL } from '@/lib/waitlist';
 
@@ -113,11 +113,11 @@ export default function LoginPage() {
     ? /^\+1\d{10}$/.test(normalizedPhone)
     : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
 
-  const clearFeedback = () => {
+  const clearFeedback = useCallback(() => {
     setError(null);
     setMessage(null);
     setShowWaitlistInvite(false);
-  };
+  }, []);
 
   const requestOtp = async (reason: 'send' | 'resend') => {
     clearFeedback();
@@ -213,7 +213,7 @@ export default function LoginPage() {
     setResendIn(authMethod === 'email' ? EMAIL_RESEND_SECONDS : TEXT_RESEND_SECONDS);
   };
 
-  const verifyOtp = async () => {
+  const verifyOtp = useCallback(async () => {
     clearFeedback();
     if (otpToken.length !== OTP_LENGTH) {
       setError(`Please enter the ${OTP_LENGTH}-digit code.`);
@@ -263,7 +263,7 @@ export default function LoginPage() {
     }
 
     window.location.replace(next);
-  };
+  }, [authMethod, clearFeedback, journeyMode, otpToken, pendingEmail, pendingPhone]);
 
   const onOtpChange = (index: number, value: string) => {
     const nextDigit = value.replace(/\D/g, '').slice(-1);
@@ -290,7 +290,7 @@ export default function LoginPage() {
 
     setLastAutoSubmitToken(otpToken);
     void verifyOtp();
-  }, [step, otpToken, pending, lastAutoSubmitToken]);
+  }, [step, otpToken, pending, lastAutoSubmitToken, verifyOtp]);
 
   const switchToEmailFallback = () => {
     setAuthMethod('email');

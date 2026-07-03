@@ -2,6 +2,7 @@ import styles from '@/app/(public)/home.module.css';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
 import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import Image from 'next/image';
 
 export default async function HomeComingSoon() {
   const supabase = createServerSupabaseClient();
@@ -47,7 +48,7 @@ export default async function HomeComingSoon() {
         <div className={styles.right}>
           <PastelCard>
             <div className={styles.heroImageFrame}>
-              <img src="/Lobby.png" alt="Little Wanderers lobby" />
+              <Image src="/Lobby.png" alt="Little Wanderers lobby" width={900} height={700} priority sizes="(max-width: 980px) 100vw, 50vw" />
             </div>
           </PastelCard>
         </div>

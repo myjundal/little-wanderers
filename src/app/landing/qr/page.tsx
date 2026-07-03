@@ -9,7 +9,6 @@ import Link from 'next/link';
 type Person = { id: string; first_name: string; role: 'adult'|'child' };
 
 export default function QRPage() {
-  const supabase = createBrowserSupabaseClient();
   const [people, setPeople] = useState<Person[]>([]);
   const [qrMap, setQrMap] = useState<Record<string, string>>({}); // personId -> dataURL
   useEffect(() => {
@@ -17,6 +16,7 @@ export default function QRPage() {
     setQrMap({}); // refresh
       
      const load = async () => {
+      const supabase = createBrowserSupabaseClient();
       const { data: u } = await supabase.auth.getUser();
       const uid = u.user?.id;
       if (!uid) return;
