@@ -157,6 +157,12 @@ function tagLabel(tag: string) {
   return tag.replace(/[_:-]+/g, ' ');
 }
 
+function normalizeEditorHtml(input: string) {
+  return input
+    .replace(/font-family\s*:\s*[^;"']+;?/gi, '')
+    .replace(/\sstyle=(["'])\s*\1/gi, '');
+}
+
 export default function CampaignAdmin() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -413,7 +419,7 @@ export default function CampaignAdmin() {
   };
 
   const updateBodyFromEditor = () => {
-    const html = editorRef.current?.innerHTML ?? '';
+    const html = normalizeEditorHtml(editorRef.current?.innerHTML ?? '');
     updateDraft({ body_html: html.trim() ? html : '' });
   };
 
@@ -519,12 +525,6 @@ export default function CampaignAdmin() {
   const addLogo = () => {
     insertHtml(
       `<p style="text-align:center;"><img src="${getBrowserSiteUrl()}/logo.png" alt="Little Wanderers" style="display:inline-block;width:140px;max-width:60%;height:auto;margin:0 auto 14px;" /></p>`
-    );
-  };
-
-  const addLobbyImage = () => {
-    insertHtml(
-      `<p><img src="${getBrowserSiteUrl()}/Lobby.png" alt="Little Wanderers lobby" style="display:block;width:100%;max-width:560px;height:auto;margin:18px auto;border-radius:18px;" /></p>`
     );
   };
 
@@ -877,7 +877,7 @@ export default function CampaignAdmin() {
               <div style={labelStyle}>
                 Body
                 <div style={{ border: '1px solid #ddd1ea', borderRadius: 14, overflow: 'hidden', background: '#fff' }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, borderBottom: '1px solid #eadff3', background: '#fbf7ff' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, borderBottom: '1px solid #eadff3', background: '#fbf7ff', position: 'sticky', top: 0, zIndex: 2 }}>
                     <button type="button" aria-label="Bold" title="Bold" onClick={() => runEditorCommand('bold')} style={iconButtonStyle}>B</button>
                     <button type="button" aria-label="Italic" title="Italic" onClick={() => runEditorCommand('italic')} style={{ ...iconButtonStyle, fontStyle: 'italic' }}>I</button>
                     <button type="button" aria-label="Heading" title="Heading" onClick={makeHeading} style={iconButtonStyle}>H2</button>
@@ -889,7 +889,6 @@ export default function CampaignAdmin() {
                       {uploadingImage ? '...' : 'Upload'}
                     </button>
                     <button type="button" aria-label="Insert image URL" title="Insert image URL" onClick={addImage} style={iconButtonStyle}>URL</button>
-                    <button type="button" aria-label="Insert lobby photo" title="Insert lobby photo" onClick={addLobbyImage} style={iconButtonStyle}>Lobby</button>
                     <button type="button" aria-label="Remove formatting" title="Remove formatting" onClick={() => runEditorCommand('removeFormat')} style={iconButtonStyle}>Clear</button>
                     <button type="button" onClick={() => setShowHtml((current) => !current)} style={{ ...iconButtonStyle, marginLeft: 'auto' }}>
                       {showHtml ? 'Hide HTML' : 'HTML'}
@@ -909,6 +908,7 @@ export default function CampaignAdmin() {
                       minHeight: 280,
                       padding: 16,
                       color: '#4f3f82',
+                      fontFamily: 'Arial, Helvetica, sans-serif',
                       lineHeight: 1.65,
                       outline: 'none',
                       overflowWrap: 'anywhere',
@@ -961,7 +961,7 @@ export default function CampaignAdmin() {
                 </div>
               </details>
               <button type="button" onClick={previewRecipients} disabled={Boolean(busy)} style={secondaryButton}>
-                {busy === 'preview' ? 'Counting...' : 'Dry run'}
+                {busy === 'preview' ? 'Counting...' : 'Preview recipients'}
               </button>
               {recipientPreview && (
                 <div style={{ color: '#6d6480', lineHeight: 1.6 }}>
@@ -1008,7 +1008,7 @@ export default function CampaignAdmin() {
             <div style={{ border: '1px solid #eadff3', borderRadius: 14, padding: 12 }}>
               <h3 style={{ marginTop: 0, color: '#4f3f82' }}>Preview</h3>
               <div
-                style={{ color: '#4f3f82', borderTop: '1px solid #eadff3', paddingTop: 12, overflowWrap: 'anywhere' }}
+                style={{ color: '#4f3f82', borderTop: '1px solid #eadff3', paddingTop: 12, overflowWrap: 'anywhere', fontFamily: 'Arial, Helvetica, sans-serif' }}
                 dangerouslySetInnerHTML={{ __html: draft.body_html || '<p></p>' }}
               />
             </div>

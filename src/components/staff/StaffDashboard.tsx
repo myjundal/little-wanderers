@@ -118,6 +118,47 @@ const buttonStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+function StaffRecordGroup({
+  title,
+  count,
+  empty,
+  defaultOpen = true,
+  tone = 'active',
+  children,
+}: {
+  title: string;
+  count: number;
+  empty: string;
+  defaultOpen?: boolean;
+  tone?: 'active' | 'attention' | 'archive';
+  children: React.ReactNode;
+}) {
+  const background = tone === 'archive' ? '#fff' : tone === 'attention' ? '#fff8fb' : '#fcf9ff';
+  const border = tone === 'archive' ? '#eadff3' : tone === 'attention' ? '#f1c3da' : '#efe3ff';
+
+  return (
+    <details open={defaultOpen} style={{ border: `1px solid ${border}`, borderRadius: 18, padding: 14, background }}>
+      <summary style={{ cursor: 'pointer', listStyle: 'none' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, color: '#4f3f82' }}>{title}</h3>
+          <span style={{ borderRadius: 999, padding: '4px 10px', background: '#fff', border: '1px solid #eadff3', color: '#7a6d97', fontWeight: 800, fontSize: 13 }}>
+            {count}
+          </span>
+        </div>
+      </summary>
+      <div style={{ marginTop: 12 }}>
+        {count === 0 ? (
+          <p style={{ margin: 0, color: '#7a6d97' }}>{empty}</p>
+        ) : (
+          <div style={{ display: 'grid', gap: tone === 'archive' ? 8 : 12 }}>
+            {children}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function emptyClassForm() {
   const start = new Date();
   start.setHours(start.getHours() + 1, 0, 0, 0);
@@ -668,20 +709,19 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
 
         <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
           {[
-            { title: 'Scheduled classes', items: scheduledClasses, empty: 'No scheduled classes yet.' },
-            { title: 'Cancelled classes', items: cancelledClasses, empty: 'No cancelled classes.' },
+            { title: 'Scheduled classes', items: scheduledClasses, empty: 'No scheduled classes yet.', defaultOpen: true, tone: 'active' as const },
+            { title: 'Cancelled classes', items: cancelledClasses, empty: 'No cancelled classes.', defaultOpen: false, tone: 'archive' as const },
           ].map((group) => (
-            <div key={group.title} style={{ border: '1px solid #efe3ff', borderRadius: 18, padding: 14, background: '#fcf9ff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-                <h3 style={{ margin: 0, color: '#4f3f82' }}>{group.title}</h3>
-                <span style={{ color: '#7a6d97', fontWeight: 700 }}>{group.items.length}</span>
-              </div>
-              {group.items.length === 0 ? (
-                <p style={{ margin: 0, color: '#7a6d97' }}>{group.empty}</p>
-              ) : (
-                <div style={{ display: 'grid', gap: 12 }}>
+            <StaffRecordGroup
+              key={group.title}
+              title={group.title}
+              count={group.items.length}
+              empty={group.empty}
+              defaultOpen={group.defaultOpen}
+              tone={group.tone}
+            >
           {group.items.map((item) => (
-            <div key={item.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 16, background: '#fff' }}>
+            <div key={item.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: group.tone === 'archive' ? 12 : 16, background: '#fff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <h3 style={{ margin: 0, color: '#4f3f82' }}>{item.title}</h3>
@@ -693,7 +733,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}</p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong> · Price: {dollars(item.price_cents)}</p>
                   {item.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{item.description}</p>}
-                  <div style={{ marginTop: 12, border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
+                  {group.tone !== 'archive' && <div style={{ marginTop: 12, border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
                     <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Registrant attendance checklist</p>
                     {item.registrants.length === 0 ? (
                       <p style={{ margin: 0, color: '#7a6d97' }}>No registrants yet.</p>
@@ -723,7 +763,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                         })}
                       </div>
                     )}
-                  </div>
+                  </div>}
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => {
@@ -736,9 +776,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
               </div>
             </div>
           ))}
-                </div>
-              )}
-            </div>
+            </StaffRecordGroup>
           ))}
         </div>
       </section>
@@ -753,20 +791,19 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
           <div style={{ display: 'grid', gap: 14 }}>
             {[
-              { title: 'Party requests / holds', items: partyRequests, empty: 'No new party requests.' },
-              { title: 'Confirmed parties', items: confirmedPartyBookings, empty: 'No confirmed parties yet.' },
-              { title: 'Cancellation requests', items: partyCancellationRequests, empty: 'No cancellation requests.' },
-              { title: 'Cancelled parties', items: cancelledPartyBookings, empty: 'No cancelled parties.' },
+              { title: 'Party requests / holds', items: partyRequests, empty: 'No new party requests.', defaultOpen: true, tone: 'active' as const },
+              { title: 'Confirmed parties', items: confirmedPartyBookings, empty: 'No confirmed parties yet.', defaultOpen: true, tone: 'active' as const },
+              { title: 'Cancellation requests', items: partyCancellationRequests, empty: 'No cancellation requests.', defaultOpen: true, tone: 'attention' as const },
+              { title: 'Cancelled parties', items: cancelledPartyBookings, empty: 'No cancelled parties.', defaultOpen: false, tone: 'archive' as const },
             ].map((group) => (
-              <div key={group.title} style={{ border: '1px solid #efe3ff', borderRadius: 18, padding: 14, background: '#fcf9ff' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-                  <h3 style={{ margin: 0, color: '#4f3f82' }}>{group.title}</h3>
-                  <span style={{ color: '#7a6d97', fontWeight: 700 }}>{group.items.length}</span>
-                </div>
-                {group.items.length === 0 ? (
-                  <p style={{ margin: 0, color: '#7a6d97' }}>{group.empty}</p>
-                ) : (
-                  <div style={{ display: 'grid', gap: 12 }}>
+              <StaffRecordGroup
+                key={group.title}
+                title={group.title}
+                count={group.items.length}
+                empty={group.empty}
+                defaultOpen={group.defaultOpen}
+                tone={group.tone}
+              >
             {group.items.map((item) => (
               <button
                 key={item.id}
@@ -774,7 +811,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                 style={{
                   textAlign: 'left',
                   borderRadius: 18,
-                  padding: 16,
+                  padding: group.tone === 'archive' ? 12 : 16,
                   width: '100%',
                   border: selectedBooking?.id === item.id ? '2px solid #8a63d2' : '1px solid #eadfff',
                   background: '#fff',
@@ -793,9 +830,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                 ))}
               </button>
             ))}
-                  </div>
-                )}
-              </div>
+              </StaffRecordGroup>
             ))}
           </div>
 
