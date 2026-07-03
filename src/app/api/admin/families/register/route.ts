@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { logger } from '@/lib/logger';
 
 type MemberInput = {
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
   const { data: household, error: householdError } = await admin
     .from('households')
     .insert({
-      role: 'owner',
+      role: FAMILY_PRIMARY_CAREGIVER_ROLE,
       name: householdName,
     })
     .select('id,name')

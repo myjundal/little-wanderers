@@ -62,8 +62,8 @@ function getEmailRedirectTo(mode: JourneyMode) {
 }
 
 export default function LoginPage() {
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
-  const [journeyMode, setJourneyMode] = useState<JourneyMode>('existing');
+  const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
+  const [journeyMode, setJourneyMode] = useState<JourneyMode>('new');
   const [phoneInput, setPhoneInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [step, setStep] = useState<Step>('collect');
@@ -303,7 +303,7 @@ export default function LoginPage() {
       <section style={{ borderRadius: 24, border: '1px solid #e3d0fb', background: '#fff', boxShadow: '0 16px 28px rgba(120,87,177,0.12)', padding: 20 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
         <h1 style={{ margin: '10px 0 8px', color: '#4f3f82', fontSize: 26 }}>Sign in</h1>
-        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Use your phone for a quick sign-in, then head to your family dashboard.</p>
+        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Waitlist families can create an account with the email they used to join the list.</p>
 
         <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
           <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access is open to waitlist families first.</p>
@@ -366,7 +366,7 @@ export default function LoginPage() {
               style={{ padding: '12px 14px', width: '100%', boxSizing: 'border-box', borderRadius: 12, border: '1px solid #d8c5f6' }}
             />
             <button type="button" onClick={() => requestOtp('send')} disabled={!canRequestOtp || pending} style={{ marginTop: 4, padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
-              {pending ? 'Sending…' : 'Email me a login link'}
+              {pending ? 'Sending…' : journeyMode === 'new' ? 'Email me my early access link' : 'Email me a login link'}
             </button>
           </div>
         )}

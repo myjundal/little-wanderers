@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
       const inserted = await admin
         .from('households')
         .insert({
-          role: 'owner',
+          role: FAMILY_PRIMARY_CAREGIVER_ROLE,
           name: householdName,
           email,
         })

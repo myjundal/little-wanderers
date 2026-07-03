@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
+import { normalizeFamilyInviteRole } from '@/lib/family-roles';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-
-function normalizeHouseholdRole(inviteRole: string) {
-  return inviteRole === 'admin' ? 'admin' : 'member';
-}
 
 export async function POST(req: Request) {
   const server = createServerSupabaseClient();
@@ -49,7 +46,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'This invite belongs to a different account email.' }, { status: 403 });
   }
 
-  const mappedRole = normalizeHouseholdRole(invite.role);
+  const mappedRole = normalizeFamilyInviteRole(invite.role);
 
   const { error: memberError } = await admin.from('household_members').upsert(
     {

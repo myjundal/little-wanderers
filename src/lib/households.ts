@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { logger } from '@/lib/logger';
 
 type HouseholdMemberRow = { household_id: string; created_at: string };
@@ -46,7 +47,7 @@ export async function ensureHouseholdForUser(supabase: HouseholdClient, userId: 
 
   const { data: household, error: householdError } = await supabase
     .from('households')
-    .insert({ role: 'owner', name: fallbackName })
+    .insert({ role: FAMILY_PRIMARY_CAREGIVER_ROLE, name: fallbackName })
     .select('id')
     .single();
 
@@ -67,7 +68,7 @@ export async function ensureHouseholdForUser(supabase: HouseholdClient, userId: 
       {
         household_id: household.id,
         user_id: authenticatedUserId,
-        role: 'owner',
+        role: FAMILY_PRIMARY_CAREGIVER_ROLE,
       },
       { onConflict: 'household_id,user_id' }
     );

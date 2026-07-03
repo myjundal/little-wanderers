@@ -1,4 +1,5 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
 type WaitlistUser = { id: string; email?: string | null };
@@ -53,7 +54,7 @@ async function attachPrebookedHousehold(
     .from('households')
     .update({
       email: user.email ?? normalizedEmail,
-      role: 'owner',
+      role: FAMILY_PRIMARY_CAREGIVER_ROLE,
     })
     .eq('id', prebookedHouseholdId);
 
@@ -64,7 +65,7 @@ async function attachPrebookedHousehold(
     .upsert({
       household_id: prebookedHouseholdId,
       user_id: user.id,
-      role: 'owner',
+      role: FAMILY_PRIMARY_CAREGIVER_ROLE,
     }, { onConflict: 'household_id,user_id' });
 
   if (member.error) throw new Error(member.error.message);

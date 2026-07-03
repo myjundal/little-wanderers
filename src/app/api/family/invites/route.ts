@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
+import { isFamilyManagerRole, normalizeFamilyInviteRole } from '@/lib/family-roles';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 
-function normalizeRole(input: unknown): 'admin' | 'member' {
-  return input === 'admin' ? 'admin' : 'member';
-}
-
-async function sendInviteEmail(input: { email: string; role: 'admin' | 'member'; inviteToken: string }) {
+async function sendInviteEmail(input: { email: string; role: 'caregiver' | 'member'; inviteToken: string }) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return { ok: false, reason: 'RESEND_API_KEY is not configured' };
 
@@ -16,7 +13,7 @@ async function sendInviteEmail(input: { email: string; role: 'admin' | 'member';
 
   const html = `
     <h2>You’re invited to join a Little Wanderers family account</h2>
-    <p>Your family invited you as a <b>${input.role === 'admin' ? 'co-admin caregiver' : 'caregiver'}</b>.</p>
+    <p>Your family invited you as a <b>${input.role === 'caregiver' ? 'caregiver' : 'family member'}</b>.</p>
     <p><a href="${inviteUrl}">Accept Invite</a></p>
     <p>If you already have an account, sign in and open the link again to accept.</p>
   `;
@@ -92,7 +89,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please enter a valid email address.' }, { status: 400 });
   }
 
-  const role = normalizeRole(body?.role);
+  const role = normalizeFamilyInviteRole(body?.role);
 
   const { data: membership } = await supabase
     .from('household_members')
@@ -101,7 +98,7 @@ export async function POST(req: Request) {
     .eq('user_id', user.id)
     .maybeSingle();
 
-  if (!membership || !['owner', 'admin'].includes(membership.role)) {
+  if (!membership || !isFamilyManagerRole(membership.role)) {
     return NextResponse.json({ ok: false, error: 'This action is not allowed.' }, { status: 403 });
   }
 
