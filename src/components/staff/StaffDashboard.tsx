@@ -118,6 +118,16 @@ const buttonStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const ownerToolLinkStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: '1px solid #ddd1ea',
+  padding: '10px 12px',
+  color: '#5f3da4',
+  fontWeight: 700,
+  textDecoration: 'none',
+  background: '#fff',
+};
+
 function StaffRecordGroup({
   title,
   count,
@@ -556,10 +566,10 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
       <section style={{ ...sectionStyle, marginTop: 16 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner tools</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-          <Link href="/owner/families" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Family Management</Link>
-          <a href="#waitlist-party-prebook" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Waitlist party prebook</a>
-          <a href="#manual-family-registration" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Manual family registration</a>
-          <a href="#occupancy-management" style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>Occupancy</a>
+          <Link href="/staff/checkin" style={ownerToolLinkStyle}>QR check-in</Link>
+          <a href="#waitlist-party-prebook" style={ownerToolLinkStyle}>Waitlist party prebook</a>
+          <a href="#manual-family-registration" style={ownerToolLinkStyle}>Manual family registration</a>
+          <a href="#occupancy-management" style={ownerToolLinkStyle}>Occupancy</a>
         </div>
       </section>
 

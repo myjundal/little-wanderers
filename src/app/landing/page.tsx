@@ -324,7 +324,11 @@ export default function AppHome() {
       <section className="desktopOnly" style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
-          <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
+          {canUseOwnerDashboard ? (
+            <Link href="/staff/checkin" style={{ display: 'block' }}>QR Check-in</Link>
+          ) : (
+            <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
+          )}
           {SHOW_CUSTOMER_MEMBERSHIP && <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>}
           {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>}
           <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
@@ -377,7 +381,11 @@ export default function AppHome() {
         <Link href="/">Main</Link>
         <Link href="/landing">My Dash</Link>
         {canUseOwnerDashboard && <Link href="/staff">Owner/Staff</Link>}
-        <Link href="/landing/qr">QR Codes</Link>
+        {canUseOwnerDashboard ? (
+          <Link href="/staff/checkin">QR Check-in</Link>
+        ) : (
+          <Link href="/landing/qr">QR Codes</Link>
+        )}
         {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule">Classes</Link>}
         <Link href="/landing/party">Party</Link>
       </nav>
