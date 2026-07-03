@@ -5,6 +5,8 @@ import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
+import { sendPartyBookingNotification } from '@/lib/admin-notifications';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
@@ -110,6 +112,28 @@ async function selectPartyBookings(householdId: string) {
   }));
 }
 
+async function notifyPartyBookingSaved(input: { bookingId?: string | null; startTime: string; endTime: string; status: string }) {
+  try {
+    const notification = await sendPartyBookingNotification({
+      startTime: input.startTime,
+      endTime: input.endTime,
+      status: input.status,
+    });
+
+    if (!notification.ok) {
+      logger.error(
+        { action: 'party_booking_notification.failed', bookingId: input.bookingId ?? null, status: input.status },
+        new Error(notification.error)
+      );
+    }
+  } catch (notificationError) {
+    logger.error(
+      { action: 'party_booking_notification.failed', bookingId: input.bookingId ?? null, status: input.status },
+      notificationError
+    );
+  }
+}
+
 export async function GET() {
   try {
     const server = createServerSupabaseClient();
@@ -197,6 +221,12 @@ export async function POST(req: Request) {
         status_updated_at: new Date().toISOString(),
       }).eq('id', existingSameSlot.id).eq('household_id', householdId).select('id').maybeSingle();
       if (!updateExisting.error && updateExisting.data?.id) {
+        await notifyPartyBookingSaved({
+          bookingId: updateExisting.data.id,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          status: 'confirmed',
+        });
         return Response.json({ ok: true, id: updateExisting.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
       }
     }
@@ -243,6 +273,12 @@ export async function POST(req: Request) {
           .maybeSingle();
 
         if (updateExisting.error) return Response.json({ ok: false, error: updateExisting.error.message }, { status: 500 });
+        await notifyPartyBookingSaved({
+          bookingId: updateExisting.data?.id ?? existingSameSlot.id,
+          startTime: holdPayload.start_time,
+          endTime: holdPayload.end_time,
+          status: 'early_access_hold',
+        });
         return Response.json({ ok: true, id: updateExisting.data?.id ?? existingSameSlot.id, status: 'early_access_hold', deposit_required_now: false });
       }
 
@@ -253,6 +289,12 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (hold.error) return Response.json({ ok: false, error: hold.error.message }, { status: 500 });
+      await notifyPartyBookingSaved({
+        bookingId: hold.data?.id ?? null,
+        startTime: holdPayload.start_time,
+        endTime: holdPayload.end_time,
+        status: 'early_access_hold',
+      });
       return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'early_access_hold', deposit_required_now: false });
     }
 
@@ -368,6 +410,12 @@ export async function POST(req: Request) {
         status_updated_at: new Date().toISOString(),
       }).eq('id', bookingId).eq('household_id', householdId).select('id').maybeSingle();
       if (!primaryUpdate.error && primaryUpdate.data?.id) {
+        await notifyPartyBookingSaved({
+          bookingId: primaryUpdate.data.id,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          status: 'confirmed',
+        });
         return Response.json({ ok: true, id: primaryUpdate.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
       }
     }
@@ -411,9 +459,21 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (fallback.error) return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
+      await notifyPartyBookingSaved({
+        bookingId: fallback.data?.id ?? null,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        status: 'confirmed',
+      });
       return Response.json({ ok: true, id: fallback.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
     }
 
+    await notifyPartyBookingSaved({
+      bookingId: primary.data?.id ?? null,
+      startTime: insertPayload.start_time,
+      endTime: insertPayload.end_time,
+      status: 'confirmed',
+    });
     return Response.json({ ok: true, id: primary.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
