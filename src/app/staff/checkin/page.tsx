@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 
@@ -30,6 +31,16 @@ type Visit = {
   lineItems: LineItem[];
   membership_applied: boolean;
   price_cents: number;
+};
+
+const navLinkStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: '1px solid #d9c8f7',
+  padding: '10px 14px',
+  color: '#5f3da4',
+  textDecoration: 'none',
+  fontWeight: 700,
+  background: '#fff',
 };
 
 
@@ -150,7 +161,14 @@ const handleResetAll = () => {
 
 return (
     <main style={{ padding: 24 }}>
-      <h1>Staff Check-in</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0 }}>Staff Check-in</h1>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link href="/" style={navLinkStyle}>Main Homepage</Link>
+          <Link href="/landing" style={navLinkStyle}>My Dashboard</Link>
+          <Link href="/staff" style={navLinkStyle}>Staff / owner tool</Link>
+        </div>
+      </div>
       <div id="qr-reader" style={{ width: 360, maxWidth: '100%', marginTop: 16 }} />
       <div style={{ marginTop: 16, padding: 12, border: '1px solid #ddd' }}>
         <strong>Last Scan:</strong>
