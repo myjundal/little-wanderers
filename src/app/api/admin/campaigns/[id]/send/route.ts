@@ -10,6 +10,13 @@ import {
 } from '@/lib/email-campaigns';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
+const RESEND_REQUEST_DELAY_MS = 150;
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const context = await requireStaffContext();
@@ -67,8 +74,44 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const batches = chunkArray(recipients, CAMPAIGN_BATCH_SIZE);
 
     for (const batch of batches) {
-      await Promise.all(
-        batch.map(async (recipient) => {
+      for (const recipient of batch) {
+        const { data: existingSend, error: existingSendError } = await context.admin
+          .from('email_sends')
+          .select('id,status')
+          .eq('campaign_id', params.id)
+          .eq('contact_id', recipient.id)
+          .eq('send_type', 'campaign')
+          .maybeSingle();
+
+        if (existingSendError) {
+          failed += 1;
+          continue;
+        }
+
+        if (existingSend?.status === 'sent' || existingSend?.status === 'queued') {
+          skipped += 1;
+          continue;
+        }
+
+        let sendRowId = existingSend?.id as string | undefined;
+
+        if (sendRowId) {
+          const { error: resetError } = await context.admin
+            .from('email_sends')
+            .update({
+              status: 'queued',
+              provider_message_id: null,
+              error_message: null,
+              sent_at: null,
+              metadata: { sent_by: context.user.id, retry: true },
+            })
+            .eq('id', sendRowId);
+
+          if (resetError) {
+            failed += 1;
+            continue;
+          }
+        } else {
           const { data: sendRow, error: insertError } = await context.admin
             .from('email_sends')
             .insert({
@@ -88,29 +131,32 @@ export async function POST(req: Request, { params }: { params: { id: string } })
               return;
             }
             failed += 1;
-            return;
+            continue;
           }
+          sendRowId = sendRow.id as string;
+        }
 
-          const html = renderMarketingEmail({
-            campaign,
-            unsubscribeUrl: `${siteUrl}/unsubscribe?token=${encodeURIComponent(recipient.unsubscribe_token)}`,
-          });
-          const result = await sendResendEmail({ to: recipient.email, subject: campaign.subject, html });
+        const html = renderMarketingEmail({
+          campaign,
+          unsubscribeUrl: `${siteUrl}/unsubscribe?token=${encodeURIComponent(recipient.unsubscribe_token)}`,
+        });
+        const result = await sendResendEmail({ to: recipient.email, subject: campaign.subject, html });
 
-          await context.admin
-            .from('email_sends')
-            .update({
-              status: result.ok ? 'sent' : 'failed',
-              provider_message_id: result.ok ? result.id : null,
-              error_message: result.ok ? null : result.error,
-              sent_at: result.ok ? new Date().toISOString() : null,
-            })
-            .eq('id', sendRow.id);
+        await context.admin
+          .from('email_sends')
+          .update({
+            status: result.ok ? 'sent' : 'failed',
+            provider_message_id: result.ok ? result.id : null,
+            error_message: result.ok ? null : result.error,
+            sent_at: result.ok ? new Date().toISOString() : null,
+          })
+          .eq('id', sendRowId);
 
-          if (result.ok) sent += 1;
-          else failed += 1;
-        })
-      );
+        if (result.ok) sent += 1;
+        else failed += 1;
+
+        await wait(RESEND_REQUEST_DELAY_MS);
+      }
     }
 
     await context.admin

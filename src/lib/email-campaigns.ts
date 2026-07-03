@@ -195,15 +195,19 @@ export async function getCampaignRecipients(
 
   const { data: sends, error: sendsError } = await admin
     .from('email_sends')
-    .select('contact_id')
+    .select('contact_id,status')
     .eq('campaign_id', campaignId)
     .eq('send_type', 'campaign')
     .not('contact_id', 'is', null);
 
   if (sendsError) throw new Error(sendsError.message);
 
-  const alreadySent = new Set((sends ?? []).map((row) => row.contact_id as string));
-  recipients = recipients.filter((contact) => !alreadySent.has(contact.id));
+  const alreadyHandled = new Set(
+    (sends ?? [])
+      .filter((row) => row.status === 'sent' || row.status === 'queued')
+      .map((row) => row.contact_id as string)
+  );
+  recipients = recipients.filter((contact) => !alreadyHandled.has(contact.id));
   return recipients;
 }
 
