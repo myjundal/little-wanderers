@@ -12,10 +12,9 @@ async function attachPrebookedHousehold(
     .from('household_members')
     .select('household_id')
     .eq('user_id', user.id)
-    .limit(1);
+    .limit(10);
 
   if (existingMember.error) throw new Error(existingMember.error.message);
-  if ((existingMember.data ?? []).length > 0) return null;
 
   const prebooked = await admin
     .from('households')
@@ -27,12 +26,14 @@ async function attachPrebookedHousehold(
 
   if (prebooked.error) throw new Error(prebooked.error.message);
   if (!prebooked.data?.id) return null;
+  const prebookedHouseholdId = prebooked.data.id as string;
 
   const linkedMember = await admin
     .from('household_members')
     .select('user_id')
-    .eq('household_id', prebooked.data.id)
+    .eq('household_id', prebookedHouseholdId)
     .not('user_id', 'is', null)
+    .neq('user_id', user.id)
     .limit(1);
 
   if (linkedMember.error) throw new Error(linkedMember.error.message);
@@ -41,7 +42,7 @@ async function attachPrebookedHousehold(
   const hasParty = await admin
     .from('party_bookings')
     .select('id')
-    .eq('household_id', prebooked.data.id)
+    .eq('household_id', prebookedHouseholdId)
     .neq('status', 'cancelled')
     .limit(1);
 
@@ -54,21 +55,45 @@ async function attachPrebookedHousehold(
       email: user.email ?? normalizedEmail,
       role: 'owner',
     })
-    .eq('id', prebooked.data.id);
+    .eq('id', prebookedHouseholdId);
 
   if (update.error) throw new Error(update.error.message);
 
   const member = await admin
     .from('household_members')
     .upsert({
-      household_id: prebooked.data.id,
+      household_id: prebookedHouseholdId,
       user_id: user.id,
       role: 'owner',
     }, { onConflict: 'household_id,user_id' });
 
   if (member.error) throw new Error(member.error.message);
 
-  return prebooked.data.id as string;
+  const placeholderHouseholdIds = (existingMember.data ?? [])
+    .map((item) => item.household_id as string)
+    .filter((householdId) => householdId && householdId !== prebookedHouseholdId);
+
+  if (placeholderHouseholdIds.length > 0) {
+    const [{ data: households }, { data: people }, { data: parties }] = await Promise.all([
+      admin.from('households').select('id,name').in('id', placeholderHouseholdIds),
+      admin.from('people').select('household_id').in('household_id', placeholderHouseholdIds),
+      admin.from('party_bookings').select('household_id').in('household_id', placeholderHouseholdIds).neq('status', 'cancelled'),
+    ]);
+    const nonEmptyHouseholdIds = new Set([
+      ...(people ?? []).map((item) => item.household_id),
+      ...(parties ?? []).map((item) => item.household_id),
+    ]);
+    const emptyAutoHouseholdIds = (households ?? [])
+      .filter((household) => household.name === 'My Household' && !nonEmptyHouseholdIds.has(household.id))
+      .map((household) => household.id);
+
+    if (emptyAutoHouseholdIds.length > 0) {
+      await admin.from('household_members').delete().eq('user_id', user.id).in('household_id', emptyAutoHouseholdIds);
+      await admin.from('households').delete().in('id', emptyAutoHouseholdIds);
+    }
+  }
+
+  return prebookedHouseholdId;
 }
 
 export async function claimWaitlistForUser(user: WaitlistUser) {
