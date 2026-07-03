@@ -38,6 +38,9 @@ export default function StaffToolNav({ active }: StaffToolNavProps) {
       <Link href="/staff/families" style={styleFor(active === 'families')}>
         Family management
       </Link>
+      <Link href="/staff/campaigns" style={styleFor(active === 'campaigns')}>
+        Email campaigns
+      </Link>
       <Link href="/staff/classes" style={styleFor(active === 'classes')}>
         Class management
       </Link>

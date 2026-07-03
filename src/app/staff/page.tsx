@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { getCurrentUserRole } from '@/lib/authz';
 import StaffDashboard from '@/components/staff/StaffDashboard';
 import StaffToolNav from '@/components/staff/StaffToolNav';
@@ -16,8 +15,6 @@ export default async function StaffPage() {
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <StaffToolNav active="home" />
-          <Link href="/staff/campaigns" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #d7c1f7', background: '#fff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Email campaigns</Link>
-          <Link href="/staff/checkin" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid #d7c1f7', background: '#fff', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>Open staff QR check-in</Link>
         </div>
       </div>
 
