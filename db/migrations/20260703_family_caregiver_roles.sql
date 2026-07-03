@@ -8,9 +8,6 @@ alter table public.households
 alter table public.household_members
   drop constraint if exists household_members_role_check;
 
-alter table public.household_invites
-  drop constraint if exists household_invites_role_check;
-
 update public.households
 set role = case
   when role = 'owner' then 'primary_caregiver'
@@ -27,10 +24,6 @@ set role = case
 end
 where role in ('owner', 'admin');
 
-update public.household_invites
-set role = 'caregiver'
-where role = 'admin';
-
 alter table public.households
   add constraint households_role_check
   check (role in ('primary_caregiver', 'caregiver', 'member', 'owner', 'admin'));
@@ -38,10 +31,6 @@ alter table public.households
 alter table public.household_members
   add constraint household_members_role_check
   check (role in ('primary_caregiver', 'caregiver', 'member', 'owner', 'admin'));
-
-alter table public.household_invites
-  add constraint household_invites_role_check
-  check (role in ('caregiver', 'member', 'admin'));
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -153,95 +142,121 @@ using (
   )
 );
 
-drop policy if exists household_invites_insert_admin on public.household_invites;
-create policy household_invites_insert_admin on public.household_invites
-for insert
-with check (
-  invited_by = auth.uid()
-  and exists (
-    select 1 from public.household_members hm
-    where hm.household_id = household_invites.household_id
-      and hm.user_id = auth.uid()
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-);
+do $$
+begin
+  if to_regclass('public.household_invites') is not null then
+    alter table public.household_invites
+      drop constraint if exists household_invites_role_check;
 
-drop policy if exists household_invites_update_admin on public.household_invites;
-create policy household_invites_update_admin on public.household_invites
-for update
-using (
-  exists (
-    select 1 from public.household_members hm
-    where hm.household_id = household_invites.household_id
-      and hm.user_id = auth.uid()
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-)
-with check (
-  exists (
-    select 1 from public.household_members hm
-    where hm.household_id = household_invites.household_id
-      and hm.user_id = auth.uid()
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-);
+    update public.household_invites
+    set role = 'caregiver'
+    where role = 'admin';
 
-drop policy if exists memberships_insert_household_admin on public.memberships;
-create policy memberships_insert_household_admin on public.memberships
-for insert
-with check (
-  memberships.household_id is not null
-  and exists (
-    select 1
-    from public.household_members hm
-    where hm.user_id = auth.uid()
-      and hm.household_id = memberships.household_id
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-);
+    alter table public.household_invites
+      add constraint household_invites_role_check
+      check (role in ('caregiver', 'member', 'admin'));
 
-drop policy if exists memberships_update_household_admin on public.memberships;
-create policy memberships_update_household_admin on public.memberships
-for update
-using (
-  memberships.household_id is not null
-  and exists (
-    select 1
-    from public.household_members hm
-    where hm.user_id = auth.uid()
-      and hm.household_id = memberships.household_id
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-)
-with check (
-  memberships.household_id is not null
-  and exists (
-    select 1
-    from public.household_members hm
-    where hm.user_id = auth.uid()
-      and hm.household_id = memberships.household_id
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-);
+    drop policy if exists household_invites_insert_admin on public.household_invites;
+    create policy household_invites_insert_admin on public.household_invites
+    for insert
+    with check (
+      invited_by = auth.uid()
+      and exists (
+        select 1 from public.household_members hm
+        where hm.household_id = household_invites.household_id
+          and hm.user_id = auth.uid()
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    );
 
-drop policy if exists waivers_update_household_admin on public.waivers;
-create policy waivers_update_household_admin on public.waivers
-for update
-using (
-  exists (
-    select 1 from public.household_members hm
-    where hm.household_id = waivers.household_id
-      and hm.user_id = auth.uid()
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-)
-with check (
-  exists (
-    select 1 from public.household_members hm
-    where hm.household_id = waivers.household_id
-      and hm.user_id = auth.uid()
-      and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
-  )
-);
+    drop policy if exists household_invites_update_admin on public.household_invites;
+    create policy household_invites_update_admin on public.household_invites
+    for update
+    using (
+      exists (
+        select 1 from public.household_members hm
+        where hm.household_id = household_invites.household_id
+          and hm.user_id = auth.uid()
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    )
+    with check (
+      exists (
+        select 1 from public.household_members hm
+        where hm.household_id = household_invites.household_id
+          and hm.user_id = auth.uid()
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    );
+  end if;
+end $$;
+
+do $$
+begin
+  if to_regclass('public.memberships') is not null then
+    drop policy if exists memberships_insert_household_admin on public.memberships;
+    create policy memberships_insert_household_admin on public.memberships
+    for insert
+    with check (
+      memberships.household_id is not null
+      and exists (
+        select 1
+        from public.household_members hm
+        where hm.user_id = auth.uid()
+          and hm.household_id = memberships.household_id
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    );
+
+    drop policy if exists memberships_update_household_admin on public.memberships;
+    create policy memberships_update_household_admin on public.memberships
+    for update
+    using (
+      memberships.household_id is not null
+      and exists (
+        select 1
+        from public.household_members hm
+        where hm.user_id = auth.uid()
+          and hm.household_id = memberships.household_id
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    )
+    with check (
+      memberships.household_id is not null
+      and exists (
+        select 1
+        from public.household_members hm
+        where hm.user_id = auth.uid()
+          and hm.household_id = memberships.household_id
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    );
+  end if;
+end $$;
+
+do $$
+begin
+  if to_regclass('public.waivers') is not null then
+    drop policy if exists waivers_update_household_admin on public.waivers;
+    create policy waivers_update_household_admin on public.waivers
+    for update
+    using (
+      exists (
+        select 1 from public.household_members hm
+        where hm.household_id = waivers.household_id
+          and hm.user_id = auth.uid()
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    )
+    with check (
+      exists (
+        select 1 from public.household_members hm
+        where hm.household_id = waivers.household_id
+          and hm.user_id = auth.uid()
+          and hm.role in ('primary_caregiver', 'caregiver', 'owner', 'admin')
+      )
+    );
+  end if;
+end $$;
 
 commit;
