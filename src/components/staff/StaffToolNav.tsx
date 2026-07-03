@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 type StaffToolNavProps = {
-  active?: 'home' | 'classes' | 'parties' | 'campaigns';
+  active?: 'home' | 'families' | 'classes' | 'parties' | 'campaigns';
 };
 
 const linkStyle: CSSProperties = {
@@ -34,6 +34,9 @@ export default function StaffToolNav({ active }: StaffToolNavProps) {
       </Link>
       <Link href="/staff" style={styleFor(active === 'home')}>
         Staff / owner tool
+      </Link>
+      <Link href="/staff/families" style={styleFor(active === 'families')}>
+        Family management
       </Link>
       <Link href="/staff/classes" style={styleFor(active === 'classes')}>
         Class management
