@@ -12,6 +12,7 @@ type FamilyItem = {
   email: string | null;
   city: string | null;
   state: string | null;
+  location_needs_review: boolean;
   children_names: string[];
   membership_status: string;
   waiver_status: string;
@@ -66,7 +67,14 @@ export default function StaffFamiliesPage() {
           <article key={item.household_id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 14, background: '#fff' }}>
             <h3 style={{ margin: 0, color: '#4f3f82' }}>{item.guardian_name}</h3>
             <p style={{ margin: '6px 0', color: '#6d6480' }}>Phone: {item.phone ?? '-'} · Email: {item.email ?? '-'}</p>
-            <p style={{ margin: '6px 0', color: '#6d6480' }}>Location: {item.city || item.state ? `${item.city ?? '-'}, ${item.state ?? '-'}` : '-'}</p>
+            <p style={{ margin: '6px 0', color: '#6d6480' }}>
+              Location: {item.city || item.state ? `${item.city ?? '-'}, ${item.state ?? '-'}` : '-'}
+              {item.location_needs_review && (
+                <span style={{ display: 'inline-block', marginLeft: 8, border: '1px solid #f0c36a', borderRadius: 999, padding: '2px 8px', color: '#8a5d00', background: '#fff8df', fontSize: 12, fontWeight: 700 }}>
+                  Review town
+                </span>
+              )}
+            </p>
             <p style={{ margin: '6px 0', color: '#6d6480' }}>Children: {item.children_names.length ? item.children_names.join(', ') : '-'}</p>
             <p style={{ margin: '6px 0', color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {waiverLabel(item.waiver_status)}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

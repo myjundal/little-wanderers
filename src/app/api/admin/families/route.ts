@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { US_CITIES_BY_STATE, type UsStateCode } from '@/lib/us-cities';
 import { getWaiverStatus } from '@/lib/waivers';
 
 type HouseholdRow = {
@@ -10,6 +11,17 @@ type HouseholdRow = {
   state: string | null;
 };
 type PersonRow = { household_id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null };
+
+function normalizeCityName(input: string) {
+  return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+}
+
+function isKnownCity(city: string | null, state: string | null) {
+  if (!city || !state || !(state in US_CITIES_BY_STATE)) return false;
+  const cities = US_CITIES_BY_STATE[state as UsStateCode] ?? [];
+  const normalizedCity = normalizeCityName(city);
+  return cities.some((name) => normalizeCityName(name) === normalizedCity);
+}
 
 export async function GET(req: Request) {
   const context = await requireStaffContext();
@@ -64,6 +76,7 @@ export async function GET(req: Request) {
         email: household.email,
         city: household.city,
         state: household.state,
+        location_needs_review: Boolean(household.city && !isKnownCity(household.city, household.state)),
         children_names: children.map((p) => `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()).filter(Boolean),
         membership_status: membershipByHousehold.get(household.id) ? 'active' : 'none',
         waiver_status: getWaiverStatus(waiversByHousehold.get(household.id) ?? []).status,

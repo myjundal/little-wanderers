@@ -41,6 +41,10 @@ function normalizeCityName(input: string) {
   return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
 }
 
+function cleanCityName(input: string) {
+  return input.trim().replace(/\s+/g, ' ');
+}
+
 function getCookieValue(name: string) {
   if (typeof document === 'undefined') return null;
   const encodedName = `${encodeURIComponent(name)}=`;
@@ -173,6 +177,7 @@ export default function OnboardingPage() {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedPhone = normalizeUsPhone(phone);
     const cityMatch = stateCities.find((name) => normalizeCityName(name) === normalizeCityName(city));
+    const submittedCity = cityMatch ?? cleanCityName(city);
     const childRows = children.filter((child) => child.firstName.trim() || child.lastName.trim() || child.gender || child.birthdate);
 
     if (!adultFirstName.trim() || !adultLastName.trim() || !adultGender) {
@@ -185,8 +190,8 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (!cityMatch) {
-      setError('Please choose a city from the suggestions for the selected state.');
+    if (!submittedCity) {
+      setError('Please enter your city or town.');
       return;
     }
 
@@ -226,7 +231,7 @@ export default function OnboardingPage() {
             gender: child.gender,
             birthdate: child.birthdate,
           })),
-          city: cityMatch,
+          city: submittedCity,
           state,
           email: normalizedEmail,
           phone: normalizedPhone,
@@ -332,12 +337,12 @@ export default function OnboardingPage() {
               <h2 className={styles.sectionTitle}>Home & Contact</h2>
               <div className={`${styles.gridTwo} ${styles.contactGrid}`}>
                 <div className={styles.field}>
-                  <label htmlFor="city">City</label>
+                  <label htmlFor="city">City or town</label>
                   <input id="city" list="city-options" value={city} onChange={(event) => setCity(event.target.value)} autoComplete="address-level2" />
                   <datalist id="city-options">
                     {suggestedCities.map((name) => <option key={name} value={name} />)}
                   </datalist>
-                  <p className={styles.hint}>Start typing and choose the city that matches your selected state.</p>
+                  <p className={styles.hint}>Choose a suggestion or type your town if it is not listed.</p>
                 </div>
                 <div className={styles.field}>
                   <label htmlFor="state">State</label>

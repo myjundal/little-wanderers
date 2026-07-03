@@ -5041,6 +5041,7 @@ export const US_CITIES_BY_STATE: Record<UsStateCode, string[]> = {
     "Ridgefield",
     "Riverside",
     "Rockville",
+    "Rocky Hill",
     "Salmon Brook",
     "Saybrook Manor",
     "Sharon",
