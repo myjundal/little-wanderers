@@ -24,6 +24,10 @@ Keep the existing public waitlist count endpoint, then add the sync code below i
 const FORM_EDIT_URL = 'https://docs.google.com/forms/d/1_udlc3I0AWFZCxZIee1uzSl-ztichCuoQObTPTMYAgs/edit';
 const WAITLIST_SYNC_URL = 'https://YOUR_DOMAIN.com/api/waitlist/sync';
 const WAITLIST_SYNC_SECRET = 'PASTE_THE_SAME_SECRET_HERE';
+const WAITLIST_SYNC_CURSOR_KEY = 'waitlistSyncNextResponseIndex';
+const WAITLIST_SYNC_BATCH_SIZE = 50;
+const WAITLIST_SYNC_RECENT_RESPONSE_COUNT = 50;
+const WAITLIST_SYNC_MAX_RUNTIME_MS = 5 * 60 * 1000;
 
 function doGet() {
   const form = FormApp.openByUrl(FORM_EDIT_URL);
@@ -38,7 +42,13 @@ const EMAIL_QUESTION_TITLES = [
   'email',
   'email address',
   'e-mail',
+  'parent email',
+  'parent email address',
+  'guardian email',
+  'guardian email address',
   'what is your email?',
+  '이메일',
+  '이메일 주소',
 ];
 const FIRST_NAME_QUESTION_TITLES = [
   'first name',
@@ -59,7 +69,25 @@ function getAnswerByTitle(itemResponses, candidates) {
   const normalizedCandidates = candidates.map(normalizeTitle);
   const match = itemResponses.find((itemResponse) => {
     const title = normalizeTitle(itemResponse.getItem().getTitle());
-    return normalizedCandidates.indexOf(title) >= 0;
+    return normalizedCandidates.some((candidate) => (
+      title === candidate || title.indexOf(candidate) >= 0
+    ));
+  });
+
+  return match ? String(match.getResponse() || '').trim() : '';
+}
+
+function isLikelyEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function findEmailInResponses(itemResponses) {
+  const titledEmail = getAnswerByTitle(itemResponses, EMAIL_QUESTION_TITLES);
+  if (isLikelyEmail(titledEmail)) return titledEmail;
+
+  const match = itemResponses.find((itemResponse) => {
+    const answer = itemResponse.getResponse();
+    return isLikelyEmail(answer);
   });
 
   return match ? String(match.getResponse() || '').trim() : '';
@@ -76,7 +104,7 @@ function formResponseToEntry(response) {
   const collectedEmail = response.getRespondentEmail
     ? String(response.getRespondentEmail() || '').trim()
     : '';
-  const typedEmail = getAnswerByTitle(itemResponses, EMAIL_QUESTION_TITLES);
+  const typedEmail = findEmailInResponses(itemResponses);
 
   return {
     email: collectedEmail || typedEmail,
@@ -89,6 +117,8 @@ function formResponseToEntry(response) {
 }
 
 function syncEntries(entries) {
+  if (!entries.length) return;
+
   const response = UrlFetchApp.fetch(WAITLIST_SYNC_URL, {
     method: 'post',
     contentType: 'application/json',
@@ -109,35 +139,99 @@ function syncEntries(entries) {
   console.log(text);
 }
 
-function syncAllWaitlistRows() {
-  const form = FormApp.openByUrl(FORM_EDIT_URL);
-  const entries = form
-    .getResponses()
+function responsesToEntries(responses) {
+  return responses
     .map(formResponseToEntry)
     .filter((entry) => entry.email);
+}
 
-  Logger.log(`Found ${entries.length} waitlist emails to sync.`);
-  console.log(`Found ${entries.length} waitlist emails to sync.`);
+function syncRecentWaitlistRows(responses) {
+  const startIndex = Math.max(0, responses.length - WAITLIST_SYNC_RECENT_RESPONSE_COUNT);
+  const recentResponses = responses.slice(
+    startIndex
+  );
+  const entries = responsesToEntries(recentResponses);
 
-  const batchSize = 100;
-  for (let i = 0; i < entries.length; i += batchSize) {
-    const batch = entries.slice(i, i + batchSize);
-    Logger.log(`Syncing batch ${i + 1}-${i + batch.length}`);
-    console.log(`Syncing batch ${i + 1}-${i + batch.length}`);
-    syncEntries(batch);
+  Logger.log(`Syncing ${entries.length} recent waitlist emails from responses ${startIndex + 1}-${responses.length}.`);
+  console.log(`Syncing ${entries.length} recent waitlist emails from responses ${startIndex + 1}-${responses.length}.`);
+  syncEntries(entries);
+}
+
+function syncAllWaitlistRows() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    Logger.log('Another waitlist sync is already running; skipping this run.');
+    console.log('Another waitlist sync is already running; skipping this run.');
+    return;
   }
 
-  Logger.log('Waitlist sync complete.');
-  console.log('Waitlist sync complete.');
+  try {
+    const startedAt = Date.now();
+    const form = FormApp.openByUrl(FORM_EDIT_URL);
+    const properties = PropertiesService.getScriptProperties();
+    const responses = form.getResponses();
+    const totalResponses = responses.length;
+    const savedIndex = Number(properties.getProperty(WAITLIST_SYNC_CURSOR_KEY) || '0');
+    let nextIndex = Math.min(Math.max(0, savedIndex), totalResponses);
+
+    syncRecentWaitlistRows(responses);
+
+    Logger.log(`Resuming waitlist backfill at response ${nextIndex + 1} of ${totalResponses}.`);
+    console.log(`Resuming waitlist backfill at response ${nextIndex + 1} of ${totalResponses}.`);
+
+    while (nextIndex < totalResponses) {
+      if (Date.now() - startedAt > WAITLIST_SYNC_MAX_RUNTIME_MS) {
+        Logger.log(`Stopping before Apps Script timeout. Next response index: ${nextIndex}.`);
+        console.log(`Stopping before Apps Script timeout. Next response index: ${nextIndex}.`);
+        return;
+      }
+
+      const batchEnd = Math.min(nextIndex + WAITLIST_SYNC_BATCH_SIZE, totalResponses);
+      const batchResponses = responses.slice(nextIndex, batchEnd);
+      const entries = responsesToEntries(batchResponses);
+
+      Logger.log(`Syncing response batch ${nextIndex + 1}-${batchEnd}.`);
+      console.log(`Syncing response batch ${nextIndex + 1}-${batchEnd}.`);
+      syncEntries(entries);
+
+      nextIndex = batchEnd;
+      properties.setProperty(WAITLIST_SYNC_CURSOR_KEY, String(nextIndex));
+    }
+
+    Logger.log(`Waitlist sync complete. Synced through ${totalResponses} responses.`);
+    console.log(`Waitlist sync complete. Synced through ${totalResponses} responses.`);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function onWaitlistFormSubmit(event) {
   if (event && event.response) {
-    syncEntries([formResponseToEntry(event.response)]);
+    const entry = formResponseToEntry(event.response);
+    if (entry.email) syncEntries([entry]);
     return;
   }
 
   syncAllWaitlistRows();
+}
+
+function resetWaitlistSyncCursor() {
+  PropertiesService.getScriptProperties().deleteProperty(WAITLIST_SYNC_CURSOR_KEY);
+  Logger.log('Waitlist sync cursor reset.');
+  console.log('Waitlist sync cursor reset.');
+}
+
+function logRecentWaitlistEntries() {
+  const form = FormApp.openByUrl(FORM_EDIT_URL);
+  const responses = form.getResponses();
+  const startIndex = Math.max(0, responses.length - 10);
+
+  responses.slice(startIndex).forEach((response, offset) => {
+    const entry = formResponseToEntry(response);
+    const index = startIndex + offset + 1;
+    Logger.log(`Recent response ${index}: email=${entry.email || '(missing)'} id=${entry.external_id}`);
+    console.log(`Recent response ${index}: email=${entry.email || '(missing)'} id=${entry.external_id}`);
+  });
 }
 ```
 
@@ -150,9 +244,9 @@ In Apps Script, open **Triggers** and add:
   - Event type: On form submit
 - `syncAllWaitlistRows`
   - Event source: Time-driven
-  - Run daily
+  - Run hourly while backfilling, then daily after the cursor has caught up
 
-After setting the code, run `syncAllWaitlistRows()` once manually to backfill the existing waitlist.
+After setting the code, run `syncAllWaitlistRows()` once manually to backfill the existing waitlist. If the newest rows still do not appear, run `logRecentWaitlistEntries()` and confirm the newest responses show an email instead of `(missing)`. If you ever need to force a complete backfill from the beginning, run `resetWaitlistSyncCursor()` once and then run `syncAllWaitlistRows()` again.
 
 ## Deployment check
 
