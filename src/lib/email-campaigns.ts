@@ -62,6 +62,119 @@ export function chunkArray<T>(items: T[], size: number) {
   return chunks;
 }
 
+type WaitlistContactInput = {
+  email: string;
+  normalized_email: string;
+  first_name: string | null;
+  last_name: string | null;
+  source?: string | null;
+  id?: string | null;
+};
+
+type ContactLookupRow = {
+  id: string;
+  normalized_email: string;
+};
+
+function toWaitlistContactRows(rows: WaitlistContactInput[]) {
+  const rowsByEmail = new Map<string, {
+    email: string;
+    normalized_email: string;
+    first_name: string | null;
+    last_name: string | null;
+    source: string;
+    raw_metadata: Record<string, unknown>;
+  }>();
+
+  rows.forEach((row) => {
+    if (!row.normalized_email || !row.email) return;
+    rowsByEmail.set(row.normalized_email, {
+      email: row.email,
+      normalized_email: row.normalized_email,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      source: 'waitlist',
+      raw_metadata: {
+        waitlist_entry_id: row.id ?? undefined,
+        waitlist_source: row.source ?? 'waitlist',
+      },
+    });
+  });
+
+  return [...rowsByEmail.values()];
+}
+
+export async function syncWaitlistContacts(
+  admin: SupabaseClient,
+  waitlistRows?: WaitlistContactInput[]
+) {
+  let sourceRows = waitlistRows;
+
+  if (!sourceRows) {
+    const allRows: WaitlistContactInput[] = [];
+    const pageSize = 1000;
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await admin
+        .from('waitlist_entries')
+        .select('id,email,normalized_email,first_name,last_name,source')
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw new Error(error.message);
+
+      const page = (data ?? []) as WaitlistContactInput[];
+      allRows.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    sourceRows = allRows;
+  }
+
+  const contactRows = toWaitlistContactRows(sourceRows);
+  if (contactRows.length === 0) {
+    return { waitlist_count: sourceRows.length, contact_count: 0, tagged_count: 0 };
+  }
+
+  const { error: insertError } = await admin
+    .from('contacts')
+    .upsert(contactRows, { onConflict: 'normalized_email', ignoreDuplicates: true });
+
+  if (insertError) throw new Error(insertError.message);
+
+  const contactsByEmail = new Map<string, ContactLookupRow>();
+  for (const chunk of chunkArray(contactRows, 500)) {
+    const { data, error } = await admin
+      .from('contacts')
+      .select('id,normalized_email')
+      .in('normalized_email', chunk.map((row) => row.normalized_email));
+
+    if (error) throw new Error(error.message);
+    ((data ?? []) as ContactLookupRow[]).forEach((contact) => {
+      contactsByEmail.set(contact.normalized_email, contact);
+    });
+  }
+
+  const tagRows = [...contactsByEmail.values()].map((contact) => ({
+    contact_id: contact.id,
+    tag: 'waitlist',
+  }));
+
+  if (tagRows.length > 0) {
+    const { error: tagError } = await admin
+      .from('contact_tags')
+      .upsert(tagRows, { onConflict: 'contact_id,tag' });
+
+    if (tagError) throw new Error(tagError.message);
+  }
+
+  return {
+    waitlist_count: sourceRows.length,
+    contact_count: contactsByEmail.size,
+    tagged_count: tagRows.length,
+  };
+}
+
 function escapeHtml(input: string) {
   return input
     .replace(/&/g, '&amp;')

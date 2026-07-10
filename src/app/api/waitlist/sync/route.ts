@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { syncWaitlistContacts } from '@/lib/email-campaigns';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { isLikelyEmail, normalizeWaitlistEmail } from '@/lib/waitlist';
 
@@ -91,6 +92,13 @@ export async function POST(req: Request) {
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  try {
+    await syncWaitlistContacts(admin, rows);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'unknown error';
+    return NextResponse.json({ ok: false, error: `Waitlist synced, but contact tags failed: ${message}` }, { status: 500 });
   }
 
   return NextResponse.json({
