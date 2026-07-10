@@ -49,6 +49,14 @@ type ContactTagsResponse = {
   error?: string;
 };
 
+type AudienceRefreshResponse = ContactTagsResponse & {
+  sync?: {
+    waitlist_count: number;
+    contact_count: number;
+    tagged_count: number;
+  };
+};
+
 type ContactItem = {
   id: string;
   email: string;
@@ -66,6 +74,15 @@ type ContactsResponse = {
   items?: ContactItem[];
   error?: string;
 };
+
+type ImageBox = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+type ImageResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
 
 const panelStyle: React.CSSProperties = {
   border: '1px solid #eadff3',
@@ -164,6 +181,7 @@ function normalizeEditorHtml(input: string) {
 }
 
 export default function CampaignAdmin() {
+  const editorShellRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -190,6 +208,8 @@ export default function CampaignAdmin() {
   const [newContactEmail, setNewContactEmail] = useState('');
   const [newContactTag, setNewContactTag] = useState('customer');
   const [showContactTools, setShowContactTools] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [imageBox, setImageBox] = useState<ImageBox | null>(null);
 
   const selectedCampaign = useMemo(
     () => campaigns.find((campaign) => campaign.id === selectedId) ?? null,
@@ -197,6 +217,37 @@ export default function CampaignAdmin() {
   );
   const draftId = draft?.id;
   const draftBodyHtml = draft?.body_html ?? '';
+
+  const measureImageBox = useCallback((image: HTMLImageElement | null) => {
+    const shell = editorShellRef.current;
+    const editor = editorRef.current;
+    if (!image || !shell || !editor || !editor.contains(image)) return null;
+
+    const imageRect = image.getBoundingClientRect();
+    const shellRect = shell.getBoundingClientRect();
+    return {
+      top: imageRect.top - shellRect.top,
+      left: imageRect.left - shellRect.left,
+      width: imageRect.width,
+      height: imageRect.height,
+    };
+  }, []);
+
+  const syncSelectedImageBox = useCallback(() => {
+    if (!selectedImage) {
+      setImageBox(null);
+      return;
+    }
+
+    const nextBox = measureImageBox(selectedImage);
+    if (!nextBox) {
+      setSelectedImage(null);
+      setImageBox(null);
+      return;
+    }
+
+    setImageBox(nextBox);
+  }, [measureImageBox, selectedImage]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -261,6 +312,8 @@ export default function CampaignAdmin() {
       setDraft(selectedCampaign);
       setConfirmed(false);
       setRecipientPreview(null);
+      setSelectedImage(null);
+      setImageBox(null);
     }
   }, [selectedCampaign]);
 
@@ -269,6 +322,22 @@ export default function CampaignAdmin() {
     if (document.activeElement === editorRef.current) return;
     editorRef.current.innerHTML = draftBodyHtml;
   }, [draftId, draftBodyHtml]);
+
+  useEffect(() => {
+    syncSelectedImageBox();
+  }, [draftBodyHtml, syncSelectedImageBox]);
+
+  useEffect(() => {
+    if (!selectedImage) return;
+
+    window.addEventListener('resize', syncSelectedImageBox);
+    window.addEventListener('scroll', syncSelectedImageBox, true);
+
+    return () => {
+      window.removeEventListener('resize', syncSelectedImageBox);
+      window.removeEventListener('scroll', syncSelectedImageBox, true);
+    };
+  }, [selectedImage, syncSelectedImageBox]);
 
   const createCampaign = async () => {
     setBusy('create');
@@ -423,6 +492,64 @@ export default function CampaignAdmin() {
     updateDraft({ body_html: html.trim() ? html : '' });
   };
 
+  const handleEditorClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (target instanceof HTMLImageElement) {
+      setSelectedImage(target);
+      setImageBox(measureImageBox(target));
+      return;
+    }
+
+    setSelectedImage(null);
+    setImageBox(null);
+  };
+
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!selectedImage) return;
+    if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+
+    event.preventDefault();
+    selectedImage.remove();
+    setSelectedImage(null);
+    setImageBox(null);
+    updateBodyFromEditor();
+  };
+
+  const startImageResize = (corner: ImageResizeCorner) => (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!selectedImage) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const image = selectedImage;
+    const startX = event.clientX;
+    const startWidth = image.getBoundingClientRect().width;
+    const maxWidth = Math.max(120, editorRef.current?.clientWidth ?? 560);
+    const minWidth = Math.min(120, maxWidth);
+    const isLeftHandle = corner.includes('w');
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = Math.round(Math.min(maxWidth, Math.max(minWidth, startWidth + (isLeftHandle ? -delta : delta))));
+
+      image.style.width = `${nextWidth}px`;
+      image.style.maxWidth = '100%';
+      image.style.height = 'auto';
+      setImageBox(measureImageBox(image));
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      setImageBox(measureImageBox(image));
+      updateBodyFromEditor();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  };
+
   const runEditorCommand = (command: string, value?: string) => {
     editorRef.current?.focus();
     document.execCommand(command, false, value);
@@ -554,6 +681,35 @@ export default function CampaignAdmin() {
     await Promise.all([loadTags(), loadContacts(query)]);
     setRecipientPreview(null);
     setConfirmed(false);
+  };
+
+  const refreshAudience = async () => {
+    setBusy('refresh-audience');
+    setMessage(null);
+
+    const res = await fetch('/api/admin/contact-tags', { method: 'POST', cache: 'no-store' });
+    const json = (await res.json()) as AudienceRefreshResponse;
+    setBusy(null);
+
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Unable to refresh audience.');
+      return;
+    }
+
+    setContactTags(json.tags ?? []);
+    setTotalContactCount(json.total_count ?? 0);
+    setRecipientPreview(null);
+    setConfirmed(false);
+
+    if (showContactTools) {
+      await loadContacts(contactSearch);
+    }
+
+    const sync = json.sync;
+    setMessage(sync
+      ? `Audience refreshed. Checked ${sync.waitlist_count} waitlist emails and confirmed ${sync.tagged_count} waitlist tags.`
+      : 'Audience refreshed.'
+    );
   };
 
   const normalizeTagDraft = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
@@ -895,25 +1051,70 @@ export default function CampaignAdmin() {
                     </button>
                     <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={handleImageInputChange} hidden />
                   </div>
-                  <div
-                    ref={editorRef}
-                    contentEditable
-                    suppressContentEditableWarning
-                    onInput={updateBodyFromEditor}
-                    onBlur={updateBodyFromEditor}
-                    onPaste={handleEditorPaste}
-                    onDrop={handleEditorDrop}
-                    onDragOver={(event) => event.preventDefault()}
-                    style={{
-                      minHeight: 280,
-                      padding: 16,
-                      color: '#4f3f82',
-                      fontFamily: 'Arial, Helvetica, sans-serif',
-                      lineHeight: 1.65,
-                      outline: 'none',
-                      overflowWrap: 'anywhere',
-                    }}
-                  />
+                  <div ref={editorShellRef} style={{ position: 'relative' }}>
+                    <div
+                      ref={editorRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={updateBodyFromEditor}
+                      onBlur={updateBodyFromEditor}
+                      onClick={handleEditorClick}
+                      onKeyDown={handleEditorKeyDown}
+                      onPaste={handleEditorPaste}
+                      onDrop={handleEditorDrop}
+                      onDragOver={(event) => event.preventDefault()}
+                      style={{
+                        minHeight: 280,
+                        padding: 16,
+                        color: '#4f3f82',
+                        fontFamily: 'Arial, Helvetica, sans-serif',
+                        lineHeight: 1.65,
+                        outline: 'none',
+                        overflowWrap: 'anywhere',
+                      }}
+                    />
+                    {imageBox && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: imageBox.top,
+                          left: imageBox.left,
+                          width: imageBox.width,
+                          height: imageBox.height,
+                          border: '2px solid #5f3da4',
+                          borderRadius: 6,
+                          pointerEvents: 'none',
+                          zIndex: 5,
+                        }}
+                      >
+                        {(['nw', 'ne', 'sw', 'se'] as ImageResizeCorner[]).map((corner) => (
+                          <button
+                            key={corner}
+                            type="button"
+                            aria-label={`Resize image ${corner}`}
+                            onPointerDown={startImageResize(corner)}
+                            style={{
+                              position: 'absolute',
+                              width: 12,
+                              height: 12,
+                              padding: 0,
+                              border: '2px solid #fff',
+                              borderRadius: 999,
+                              background: '#5f3da4',
+                              boxShadow: '0 2px 6px rgba(79,63,130,0.35)',
+                              cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize',
+                              pointerEvents: 'auto',
+                              touchAction: 'none',
+                              userSelect: 'none',
+                              top: corner.startsWith('n') ? 0 : '100%',
+                              left: corner.endsWith('w') ? 0 : '100%',
+                              transform: 'translate(-50%, -50%)',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <span style={{ color: '#6d6480', fontSize: 13, fontWeight: 500 }}>
                   Paste a screenshot directly into the editor, drag an image in, or use Upload.
@@ -930,7 +1131,12 @@ export default function CampaignAdmin() {
             </div>
 
             <div style={{ display: 'grid', gap: 10, border: '1px solid #eadff3', borderRadius: 14, padding: 12 }}>
-              <h3 style={{ margin: 0, color: '#4f3f82' }}>Recipients</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0, color: '#4f3f82' }}>Recipients</h3>
+                <button type="button" onClick={refreshAudience} disabled={Boolean(busy)} style={secondaryButton}>
+                  {busy === 'refresh-audience' ? 'Refreshing...' : 'Refresh audience'}
+                </button>
+              </div>
               <details style={{ border: '1px solid #ddd1ea', borderRadius: 12, padding: 10, background: '#fff' }}>
                 <summary style={{ cursor: 'pointer', color: '#4f3f82', fontWeight: 800 }}>
                   Audience: {audienceLabel}
@@ -960,9 +1166,11 @@ export default function CampaignAdmin() {
                   ))}
                 </div>
               </details>
-              <button type="button" onClick={previewRecipients} disabled={Boolean(busy)} style={secondaryButton}>
-                {busy === 'preview' ? 'Counting...' : 'Preview recipients'}
-              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 8 }}>
+                <button type="button" onClick={previewRecipients} disabled={Boolean(busy)} style={secondaryButton}>
+                  {busy === 'preview' ? 'Counting...' : 'Preview recipients'}
+                </button>
+              </div>
               {recipientPreview && (
                 <div style={{ color: '#6d6480', lineHeight: 1.6 }}>
                   <strong style={{ color: '#4f3f82' }}>{recipientPreview.count}</strong> recipients · {recipientPreview.batches ?? 0} batches of {recipientPreview.batch_size ?? 100}
