@@ -1,12 +1,19 @@
 export const PRODUCTION_HOSTNAME = 'thelittlewanderers.com';
 const PRODUCTION_HOSTNAME_ALIASES = new Set([PRODUCTION_HOSTNAME, `www.${PRODUCTION_HOSTNAME}`]);
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+const EXCLUDED_PATH_PREFIXES = ['/analytics-opt-out', '/owner', '/staff'];
 
 const OPT_OUT_COOKIE = 'lw_ignore_analytics=true';
 const OPT_OUT_COOKIE_CLEAR = 'lw_ignore_analytics=; Max-Age=0; Path=/; SameSite=Lax';
 const OPT_OUT_STORAGE_KEY = 'lw_ignore_analytics';
 const OPT_OUT_STORAGE_VALUE = 'true';
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 10;
+
+declare global {
+  interface Window {
+    'ga-disable-G-RHZ3580FJ8'?: boolean;
+  }
+}
 
 function hasIgnoreCookie() {
   if (typeof document === 'undefined') return false;
@@ -20,12 +27,14 @@ function hasIgnoreLocalStorage() {
 
 export function setAnalyticsOptOut() {
   if (typeof window === 'undefined') return;
+  window['ga-disable-G-RHZ3580FJ8'] = true;
   document.cookie = `${OPT_OUT_COOKIE}; Max-Age=${COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`;
   window.localStorage.setItem(OPT_OUT_STORAGE_KEY, OPT_OUT_STORAGE_VALUE);
 }
 
 export function clearAnalyticsOptOut() {
   if (typeof window === 'undefined') return;
+  window['ga-disable-G-RHZ3580FJ8'] = false;
   document.cookie = OPT_OUT_COOKIE_CLEAR;
   window.localStorage.removeItem(OPT_OUT_STORAGE_KEY);
 }
@@ -52,6 +61,8 @@ export function shouldLoadAnalytics() {
   if (typeof window === 'undefined') return false;
 
   syncAnalyticsOptPreferenceFromUrl();
+
+  if (EXCLUDED_PATH_PREFIXES.some((prefix) => window.location.pathname.startsWith(prefix))) return false;
 
   if (hasIgnoreCookie() || hasIgnoreLocalStorage()) return false;
 
