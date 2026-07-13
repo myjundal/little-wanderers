@@ -1,14 +1,19 @@
 import styles from '@/app/(public)/home.module.css';
+import WaitlistCountCard from '@/components/home/WaitlistCountCard';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
 import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
 
 export default async function HomeComingSoon() {
   const supabase = createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [
+    {
+      data: { user },
+    },
+    waitlistCount,
+  ] = await Promise.all([supabase.auth.getUser(), getWaitlistCount()]);
   const isAuthenticated = Boolean(user);
 
   return (
@@ -32,6 +37,13 @@ export default async function HomeComingSoon() {
             Forty One, with Marshalls, Chopt, Koma, and more neighborhood favorites nearby.
           </p>
           <div className={styles.actions}>
+            <div className={styles.waitlistAction}>
+              <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
+                <span>Join waitlist</span>
+                <small>Early access families hear first</small>
+              </PastelButton>
+              <WaitlistCountCard initialCount={{ displayCount: waitlistCount.displayCount }} />
+            </div>
             <div className={styles.secondaryActions}>
               <PastelButton href="https://www.instagram.com/littlewanderers.weha" secondary external>
                 <span>Follow on Instagram</span>

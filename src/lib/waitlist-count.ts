@@ -1,4 +1,4 @@
-export const WAITLIST_COUNT_FALLBACK = 360;
+export const WAITLIST_COUNT_FALLBACK = 370;
 
 export type WaitlistDisplayCount = {
   displayCount: number;

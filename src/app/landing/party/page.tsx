@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import { getPartyBookingStartDate, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_DATE, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
@@ -395,6 +396,30 @@ export default function PartyPage() {
         </div>
       )}
 
+      <section className="partyRenderingCard">
+        <div>
+          <p style={{ margin: 0, color: '#7a63a5', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 12 }}>Planned party room rendering</p>
+          <h2 style={{ margin: '8px 0 0', color: '#4f3f82', fontSize: 22 }}>This is the party room we are building.</h2>
+          <p style={{ color: '#6f628d', lineHeight: 1.55, margin: '10px 0 0' }}>
+            This image is a rendering of our planned party room. We are creating a soft, space-inspired celebration space with long party tables, gentle lighting, and a small photo moment wall for birthdays and family celebrations.
+          </p>
+          <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '8px 0 0' }}>
+            Final finishes may shift as construction continues, but this is the look and feeling we are designing for Little Wanderers parties.
+          </p>
+        </div>
+        <div className="partyRenderingImage">
+          <Image
+            src="/party-room-rendering.jpg"
+            alt="Rendering of the planned Little Wanderers party room"
+            width={1536}
+            height={1024}
+            priority
+            sizes="(max-width: 900px) 100vw, 380px"
+            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </div>
+      </section>
+
       <div className="partyIntroGrid">
         <section style={{ border: '1px solid #dfccfb', borderRadius: 16, background: '#fff', padding: 16 }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 12 }}>Founding Birthday Package</p>
@@ -403,7 +428,7 @@ export default function PartyPage() {
             <span style={{ color: '#6f628d', fontWeight: 700 }}>3 hours semi-private party time</span>
           </div>
           <p style={{ color: '#6f628d', lineHeight: 1.55, margin: '10px 0 0' }}>
-            Your party includes 3 hours of semi-private celebration time, plus a separate 30-minute family setup window before the party and cleanup by our team afterward. Parties are limited to 30 guests total.
+            Your party includes 3 hours of semi-private celebration time in our party area, which is separated from the main play space by barn doors while still allowing play area access during the party. You will also have a separate 30-minute family setup window before the party and cleanup by our team afterward. Parties are limited to 30 guests total.
           </p>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What is included</h3>
           <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
@@ -628,8 +653,12 @@ export default function PartyPage() {
         </p>
       )}
     <style jsx>{`
+  .partyRenderingCard { display:grid; grid-template-columns:minmax(0, 1fr) minmax(240px, 380px); gap:16px; align-items:center; margin-top:16px; padding:16px; overflow:hidden; border:1px solid #dfccfb; border-radius:18px; background:#fff; box-shadow:0 12px 26px rgba(120,87,177,0.1); }
+  .partyRenderingImage { overflow:hidden; height:240px; border:1px solid #eadfff; border-radius:14px; background:#faf5ff; }
   .partyIntroGrid { display:grid; grid-template-columns:minmax(280px, 0.82fr) minmax(420px, 1.18fr); gap:16px; align-items:start; margin-top:16px; }
   @media (max-width: 900px) {
+    .partyRenderingCard { grid-template-columns:1fr; }
+    .partyRenderingImage { height:220px; }
     .partyIntroGrid { grid-template-columns:1fr; }
   }
 `}</style>
