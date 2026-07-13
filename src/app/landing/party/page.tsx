@@ -413,6 +413,7 @@ export default function PartyPage() {
             alt="Rendering of the planned Little Wanderers party room"
             width={1536}
             height={1024}
+            quality={92}
             priority
             sizes="(max-width: 900px) 100vw, 380px"
             style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
