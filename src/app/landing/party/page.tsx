@@ -60,6 +60,27 @@ function isPartyDate(date: string) {
   return isOnOrAfterPartyBookingStart(d) && (day === 5 || day === 6 || day === 0);
 }
 
+function getPartyBlackoutSlots(): CalendarSlot[] {
+  const start = getPartyBookingStartDate();
+  const monthStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+  const slots: CalendarSlot[] = [];
+
+  for (let d = new Date(monthStart); d.getTime() < start.getTime(); d.setUTCDate(d.getUTCDate() + 1)) {
+    const day = d.getUTCDay();
+    if (day !== 5 && day !== 6 && day !== 0) continue;
+    const dayStr = d.toISOString().slice(0, 10);
+    slots.push({
+      id: `blackout-${dayStr}`,
+      start: toIsoLocal(dayStr, 10),
+      end: toIsoLocal(dayStr, 18),
+      label: 'Unavailable before opening',
+      status: 'full',
+    });
+  }
+
+  return slots;
+}
+
 function prettyNote(note: string | null) {
   if (!note) return '-';
   return note.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (iso) =>
@@ -280,6 +301,7 @@ export default function PartyPage() {
   };
 
   const slots: CalendarSlot[] = [
+    ...getPartyBlackoutSlots(),
     ...(() => {
       const generated: CalendarSlot[] = [];
       const now = new Date();
@@ -441,7 +463,7 @@ export default function PartyPage() {
             <li>A sweet group photo moment</li>
           </ul>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '12px 0 0' }}>
-            Because our buildout and opening are still in progress, birthday parties are available starting Saturday, {PARTY_BOOKING_START_LABEL}. Available Friday evenings, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
+            Because our buildout and opening are still in progress, birthday parties are available starting {PARTY_BOOKING_START_LABEL}. Available Friday evenings, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
           </p>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '8px 0 0' }}>
             For non-birthday events, larger gatherings, or special requests, please contact us at{' '}
@@ -470,7 +492,7 @@ export default function PartyPage() {
           <strong>Early access party holds:</strong>
           <ul style={{ margin: '10px 0 0 20px', display: 'grid', gap: 6, lineHeight: 1.5 }}>
             <li>We are giving waitlist families first priority for party dates.</li>
-            <li>Because our construction schedule is still moving, party holds are available for dates starting Saturday, {PARTY_BOOKING_START_LABEL}.</li>
+            <li>Because our construction schedule is still moving, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}.</li>
             {!loading && !isAuthenticated && (
               <li>
                 To request a party hold, you&apos;ll need to sign in to My Little Wanderers. Early access sign-in is currently available for waitlist families, so please{' '}

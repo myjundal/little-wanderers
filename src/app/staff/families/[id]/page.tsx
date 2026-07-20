@@ -46,6 +46,27 @@ function toIsoLocal(date: string, hourLocal: number) {
   return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
 
+function getPartyBlackoutSlots(): CalendarSlot[] {
+  const start = getPartyBookingStartDate();
+  const monthStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+  const slots: CalendarSlot[] = [];
+
+  for (let d = new Date(monthStart); d.getTime() < start.getTime(); d.setUTCDate(d.getUTCDate() + 1)) {
+    const day = d.getUTCDay();
+    if (day !== 5 && day !== 6 && day !== 0) continue;
+    const dayStr = d.toISOString().slice(0, 10);
+    slots.push({
+      id: `blackout-${dayStr}`,
+      start: toIsoLocal(dayStr, 10),
+      end: toIsoLocal(dayStr, 18),
+      label: 'Unavailable before opening',
+      status: 'full',
+    });
+  }
+
+  return slots;
+}
+
 export default function StaffFamilyDetailPage({ params }: { params: { id: string } }) {
   const familyId = params.id;
   const searchParams = useSearchParams();
@@ -207,6 +228,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   };
 
   const partySlots: CalendarSlot[] = [
+    ...getPartyBlackoutSlots(),
     ...(() => {
       const generated: CalendarSlot[] = [];
       const now = getPartyBookingStartDate();
