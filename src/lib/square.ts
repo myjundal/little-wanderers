@@ -1,6 +1,13 @@
 import { logger } from '@/lib/logger';
 
 const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const SQUARE_API_VERSION = process.env.SQUARE_API_VERSION ?? '2026-07-15';
+
+export function getSquareBaseUrl() {
+  if (process.env.SQUARE_BASE_URL) return process.env.SQUARE_BASE_URL;
+  const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
+  return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
+}
 
 export function normalizeEmail(input: string | null | undefined) {
   if (!input) return null;

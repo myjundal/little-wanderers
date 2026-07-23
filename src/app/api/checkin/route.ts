@@ -1,65 +1,41 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import { callOccupancyRpc } from '@/lib/occupancy';
 import { requireStaffContext } from '@/lib/authz';
+import { loadCheckinCandidates } from '@/lib/checkin-flow';
 
-type PersonRow = {
-  id: string;
-  household_id: string;
-  role: 'adult' | 'child';
-  first_name: string | null;
-  last_name: string | null;
-  birthdate: string | null;
+type PaymentStatus = 'membership' | 'prepaid' | 'walkin_paid' | 'square_pos_paid' | 'included';
+
+type CheckinBody = {
+  mode?: 'preview' | 'finalize';
+  person_id?: string;
+  person_ids?: string[];
+  source?: string;
+  group_size?: number;
+  created_by_user_id?: string;
+  created_by_role?: string;
+  payment_status?: PaymentStatus;
+  session_id?: string;
+  square_pos_transaction_id?: string | null;
+  square_pos_client_transaction_id?: string | null;
 };
 
-type PricingRule = {
-  id: string;
-  role: 'adult' | 'child' | null;
-  min_months: number | null;
-  max_months: number | null;
-  price_cents: number;
-  active_from: string | null;
-  active_to: string | null;
-};
-
-function monthsBetween(birthISO: string | null): number | null {
-  if (!birthISO) return null;
-  const b = new Date(birthISO);
-  const now = new Date();
-  let months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
-  if (now.getDate() < b.getDate()) months -= 1;
-  return Math.max(months, 0);
+function personIdsFromBody(body: CheckinBody) {
+  if (Array.isArray(body.person_ids) && body.person_ids.length > 0) return body.person_ids;
+  return body.person_id ? [body.person_id] : [];
 }
 
-function ruleApplies(rule: PricingRule, role: 'adult' | 'child', ageMonths: number | null): boolean {
-  const today = new Date();
-  const af = rule.active_from ? new Date(rule.active_from) : null;
-  const at = rule.active_to ? new Date(rule.active_to) : null;
-  if (af && af > today) return false;
-  if (at && at < new Date(today.toDateString())) return false;
-  if (rule.role && rule.role !== role) return false;
-  if (rule.min_months != null && (ageMonths == null || ageMonths < rule.min_months)) return false;
-  if (rule.max_months != null && (ageMonths == null || ageMonths > rule.max_months)) return false;
-  return true;
-}
-
-function pickBestRule(rules: PricingRule[], role: 'adult' | 'child', ageMonths: number | null): PricingRule | null {
-  const candidates = rules.filter((rule) => ruleApplies(rule, role, ageMonths));
-  if (candidates.length === 0) return null;
-
-  return candidates.sort((a, b) => {
-    const aRole = a.role ? 1 : 0;
-    const bRole = b.role ? 1 : 0;
-    if (bRole !== aRole) return bRole - aRole;
-
-    const aSpan = (a.max_months ?? 99999) - (a.min_months ?? 0);
-    const bSpan = (b.max_months ?? 99999) - (b.min_months ?? 0);
-    if (aSpan !== bSpan) return aSpan - bSpan;
-
-    const aFrom = a.active_from ? new Date(a.active_from).getTime() : 0;
-    const bFrom = b.active_from ? new Date(b.active_from).getTime() : 0;
-    return bFrom - aFrom;
-  })[0];
+function normalizePaymentStatus(input: unknown): PaymentStatus | null {
+  if (
+    input === 'membership' ||
+    input === 'prepaid' ||
+    input === 'walkin_paid' ||
+    input === 'square_pos_paid' ||
+    input === 'included'
+  ) {
+    return input;
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -67,99 +43,100 @@ export async function POST(req: NextRequest) {
   if (!context.ok) return context.response;
 
   try {
-    const { person_id, source = 'qr', group_size, created_by_user_id, created_by_role } = await req.json();
+    const body = (await req.json()) as CheckinBody;
+    const mode = body.mode ?? 'finalize';
+    const personIds = personIdsFromBody(body);
 
-    if (!person_id) {
-      return new Response(JSON.stringify({ ok: false, error: 'person_id required' }), { status: 400 });
+    if (personIds.length === 0) {
+      return Response.json({ ok: false, error: 'person_id required' }, { status: 400 });
     }
 
-    const occupancyDelta = Math.max(1, Math.trunc(Number(group_size) || 1));
-    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const candidates = await loadCheckinCandidates(context.admin, personIds);
 
-    const { data: person, error: personErr } = await supabaseAdmin
-      .from('people')
-      .select('id, household_id, role, first_name, last_name, birthdate')
-      .eq('id', person_id)
-      .maybeSingle();
-
-    if (personErr || !person) {
-      return new Response(JSON.stringify({ ok: false, error: 'person not found' }), { status: 404 });
+    if (mode === 'preview') {
+      return Response.json({
+        ok: true,
+        candidates,
+        candidate: candidates[0] ?? null,
+      });
     }
 
-    const nowISO = new Date().toISOString();
-    const { data: memberships, error: memErr } = await supabaseAdmin
-      .from('memberships')
-      .select('id,renews_at')
-      .or(`household_id.eq.${(person as PersonRow).household_id},person_id.eq.${person_id}`)
-      .or(`renews_at.is.null,renews_at.gt.${nowISO}`);
-
-    if (memErr) {
-      return new Response(JSON.stringify({ ok: false, error: 'membership check failed' }), { status: 500 });
+    const requestedPaymentStatus = normalizePaymentStatus(body.payment_status);
+    const hasChargeableGuests = candidates.some((candidate) => !candidate.membership_applied && candidate.price_cents > 0);
+    if (hasChargeableGuests && !requestedPaymentStatus) {
+      return Response.json({ ok: false, error: 'payment_status required' }, { status: 400 });
     }
 
-    let price_cents = 0;
-    let membership_applied = false;
+    const sessionId = body.session_id || crypto.randomUUID();
+    const source = body.source ?? 'qr';
 
-    if (memberships && memberships.length > 0) {
-      membership_applied = true;
-    } else {
-      const { data: rules, error: rulesErr } = await supabaseAdmin.from('pricing_rules').select('*');
+    const rows = candidates.map((candidate) => {
+      const rowPaymentStatus: PaymentStatus = candidate.membership_applied
+        ? 'membership'
+        : candidate.price_cents <= 0
+          ? 'included'
+          : requestedPaymentStatus ?? 'walkin_paid';
 
-      if (rulesErr) {
-        return new Response(JSON.stringify({ ok: false, error: 'pricing rules load failed' }), { status: 500 });
-      }
-
-      const ageMonths = monthsBetween((person as PersonRow).birthdate);
-      const best = pickBestRule(rules as PricingRule[], (person as PersonRow).role, ageMonths);
-
-      if (!best) {
-        return new Response(JSON.stringify({ ok: false, error: 'no applicable pricing rule' }), { status: 422 });
-      }
-
-      price_cents = best.price_cents;
-    }
-
-    const { data: inserted, error: insErr } = await supabaseAdmin
-      .from('checkins')
-      .insert({
-        person_id,
-        household_id: person.household_id,
-        child_id: person.role === 'child' ? person.id : null,
-        created_by_user_id: created_by_user_id ?? context.user.id,
-        created_by_role: created_by_role ?? 'owner',
+      return {
+        person_id: candidate.person_id,
+        household_id: candidate.household_id,
+        child_id: candidate.role === 'child' ? candidate.person_id : null,
+        created_by_user_id: body.created_by_user_id ?? context.user.id,
+        created_by_role: body.created_by_role ?? context.role ?? 'owner',
         source,
-        price_cents,
-        membership_applied,
-        notes: null,
-      })
-      .select('id')
-      .maybeSingle();
+        price_cents: rowPaymentStatus === 'included' ? 0 : candidate.price_cents,
+        membership_applied: candidate.membership_applied,
+        notes: body.square_pos_transaction_id
+          ? `session=${sessionId}; square_pos_transaction_id=${body.square_pos_transaction_id}`
+          : `session=${sessionId}`,
+        checkin_session_id: sessionId,
+        payment_status: rowPaymentStatus,
+        square_pos_transaction_id: body.square_pos_transaction_id ?? null,
+        square_pos_client_transaction_id: body.square_pos_client_transaction_id ?? null,
+        payment_recorded_at: rowPaymentStatus === 'included' ? null : new Date().toISOString(),
+      };
+    });
 
-    if (insErr) {
-      return new Response(JSON.stringify({ ok: false, error: 'insert failed' }), { status: 500 });
+    const { data: inserted, error: insertError } = await context.admin
+      .from('checkins')
+      .insert(rows)
+      .select('id');
+
+    if (insertError) {
+      return Response.json({ ok: false, error: 'insert failed' }, { status: 500 });
     }
+
+    const occupancyDelta = Math.max(
+      1,
+      Math.trunc(Number(body.group_size) || candidates.length || 1)
+    );
 
     try {
-      await callOccupancyRpc(supabaseAdmin, 'record_checkin', occupancyDelta);
+      await callOccupancyRpc(context.admin, 'record_checkin', occupancyDelta);
     } catch {
-      await supabaseAdmin.from('checkins').delete().eq('id', inserted?.id ?? '');
-      return new Response(JSON.stringify({ ok: false, error: 'occupancy update failed' }), { status: 500 });
+      const insertedIds = (inserted ?? []).map((row: { id: string }) => row.id);
+      if (insertedIds.length > 0) {
+        await context.admin.from('checkins').delete().in('id', insertedIds);
+      }
+      return Response.json({ ok: false, error: 'occupancy update failed' }, { status: 500 });
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        checkin_id: inserted?.id,
-        membership_applied,
-        price_cents,
-        first_name: person.first_name,
-        last_name: person.last_name,
-        birthdate: person.birthdate,
-      }),
-      { status: 200 }
-    );
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'unknown error';
-    return new Response(JSON.stringify({ ok: false, error: message }), { status: 500 });
+    return Response.json({
+      ok: true,
+      session_id: sessionId,
+      checkin_ids: (inserted ?? []).map((row: { id: string }) => row.id),
+      checkin_id: inserted?.[0]?.id,
+      candidates,
+      membership_applied: candidates.every((candidate) => candidate.membership_applied),
+      price_cents: candidates.reduce((sum, candidate) => sum + candidate.price_cents, 0),
+      first_name: candidates[0]?.first_name ?? null,
+      last_name: candidates[0]?.last_name ?? null,
+      birthdate: candidates[0]?.birthdate ?? null,
+      lineItems: candidates.flatMap((candidate) => candidate.lineItems),
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'unknown error';
+    const status = message.includes('not found') ? 404 : message.includes('pricing') ? 422 : 500;
+    return Response.json({ ok: false, error: message }, { status });
   }
 }
