@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
-export const metadata = { title: 'Contact — Little Wanderers' };
+export const metadata = {
+  title: 'Contact — Little Wanderers',
+  description: 'Contact Little Wanderers Play Studio & Cafe in West Hartford, CT.',
+};
 const iconWrap: CSSProperties = { display: 'inline-flex', width: 18, height: 18, marginRight: 8, verticalAlign: 'middle' };
 
 export default function PublicContactPage() {

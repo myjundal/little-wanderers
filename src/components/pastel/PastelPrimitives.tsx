@@ -40,7 +40,7 @@ export function PastelHeader({ isAuthenticated = false, waitlistCount }: { isAut
         <Image src="/logo.png" alt="Little Wanderers logo" width={72} height={72} className={styles.logo} priority />
         <div className={styles.wordmark}>
           <strong>Little Wanderers</strong>
-          <span>Sensory Play Studio and Cafe</span>
+          <span>Play Studio & Cafe</span>
         </div>
       </Link>
 

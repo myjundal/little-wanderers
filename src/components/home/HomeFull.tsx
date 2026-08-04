@@ -4,7 +4,7 @@ import Link from 'next/link';
 import styles from '@/app/(public)/home.module.css';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 
-const LOGO_SRC = '/brand-mark.svg';
+const LOGO_SRC = '/logo.png';
 const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 export default function HomeFull() {
@@ -27,12 +27,12 @@ export default function HomeFull() {
               />
               <div className={styles.titleCopy}>
                 <p className={styles.brandLine}>Little Wanderers: West Hartford</p>
-                <h1>Take a breath while little wanderers explore a sensory adventure.</h1>
+                <h1>Take a breath while little wanderers explore our West Hartford play studio and cafe.</h1>
               </div>
             </div>
             <p className={styles.subtitle}>
-              A calm, dreamy space designed and crafted for 0-7 year olds for sensory exploration, plus a break in
-              the day and coffee-in-hand moments that feel restorative for parents too.
+              A calm, dreamy indoor play cafe in West Hartford, CT, designed and crafted for 0-7 year olds, plus a
+              break in the day and coffee-in-hand moments that feel restorative for parents too.
             </p>
             <p className={styles.subline}>Take a deep breath and a sip of your drink.</p>
 
@@ -46,9 +46,9 @@ export default function HomeFull() {
             </div>
 
             <div className={styles.chips}>
-              <span>✦ sensory-led</span>
+              <span>✦ play studio</span>
               <span>☾ calm</span>
-              <span>♡ breathe</span>
+              <span>♡ cafe pause</span>
             </div>
           </div>
 
@@ -57,7 +57,7 @@ export default function HomeFull() {
             <div className={styles.visualCard} aria-label="Today at Little Wanderers placeholder">
               <span className={styles.visualEyebrow}>Today at Little Wanderers</span>
               <div className={styles.placeholderList}>
-                <p>Today&apos;s sensory material:</p>
+                <p>Today&apos;s play setup:</p>
                 <p>Today&apos;s class:</p>
                 <p>Scheduled party:</p>
               </div>

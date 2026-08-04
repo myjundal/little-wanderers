@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Little Wanderers',
     short_name: 'Little Wanderers',
-    description: 'Family play space scheduling and check-in.',
+    description: 'Little Wanderers Play Studio & Cafe in West Hartford, CT.',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',

@@ -6,6 +6,40 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://thelittlewanderers.com';
+
+const localBusinessJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: 'Little Wanderers Play Studio & Cafe',
+  alternateName: 'Little Wanderers West Hartford',
+  url: siteUrl,
+  logo: `${siteUrl}/logo.png`,
+  image: `${siteUrl}/Lobby.png`,
+  description:
+    'Little Wanderers Play Studio & Cafe is an indoor play cafe for kids ages 0-7 and their grown-ups in Bishop’s Corner, West Hartford, CT.',
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'West Hartford',
+    addressRegion: 'CT',
+    addressCountry: 'US',
+  },
+  areaServed: [
+    {
+      '@type': 'City',
+      name: 'West Hartford',
+    },
+    {
+      '@type': 'State',
+      name: 'Connecticut',
+    },
+  ],
+  sameAs: [
+    'https://www.instagram.com/littlewanderers.weha',
+    'https://facebook.com/littlewanderers.weha',
+  ],
+};
+
 export default async function HomeComingSoon() {
   const supabase = createServerSupabaseClient();
   const [
@@ -18,6 +52,10 @@ export default async function HomeComingSoon() {
 
   return (
     <main className={styles.page}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+      />
       <section className={styles.hero}>
         <div className={styles.left}>
           <h1>
@@ -27,14 +65,14 @@ export default async function HomeComingSoon() {
             <br />
             <span className={styles.heroLocationLine}>in West Hartford</span>
           </h1>
-          <p className={styles.comingSoon}>Coming soon in mid September 2026</p>
+          <p className={styles.comingSoon}>Coming soon end of September/early October 2026</p>
           <p>
-            Designed for curious 0-7 year olds, Little Wanderers blends sensory-friendly play, dreamy little
-            discoveries, and a cozy cafe pause where grown-ups can actually sip good coffee while the kids wander.
+            Designed for curious 0-7 year olds, Little Wanderers Play Studio & Cafe brings imaginative indoor play,
+            dreamy little discoveries, and a cozy cafe pause to families in West Hartford, CT.
           </p>
           <p>
             We&apos;re opening in Bishop&apos;s Corner plaza on the Target side, tucked between The Paper Store and Float
-            Forty One, with Marshalls, Chopt, Koma, and more neighborhood favorites nearby.
+            Forty One, with Marshalls, Chopt, Koma, and more West Hartford neighborhood favorites nearby.
           </p>
           <div className={styles.actions}>
             <div className={styles.waitlistAction}>
@@ -92,10 +130,10 @@ export default async function HomeComingSoon() {
       <div className={styles.softBand} />
 
       <section className={styles.values}>
-        <div>🌿 Sensory play for little explorers</div>
+        <div>🌿 Creative play for little explorers</div>
         <div>🤍 A gentle pause for parents</div>
         <div>☕ Cafe with good coffee</div>
-        <div>✨ Connection & community</div>
+        <div>✨ West Hartford community</div>
       </section>
     </main>
   );

@@ -1,7 +1,10 @@
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 
-export const metadata = { title: 'Pricing — Little Wanderers' };
+export const metadata = {
+  title: 'Pricing — Little Wanderers',
+  description: 'Open play pricing and membership details for Little Wanderers Play Studio & Cafe in West Hartford, CT.',
+};
 
 const openPlayItems = [
   {

@@ -1,4 +1,7 @@
-export const metadata = { title: 'FAQ — Little Wanderers' };
+export const metadata = {
+  title: 'FAQ — Little Wanderers',
+  description: 'FAQ for Little Wanderers Play Studio & Cafe in West Hartford, CT.',
+};
 
 function QA({ q, a }: { q: string; a: string }) {
   return (
@@ -20,8 +23,8 @@ function QA({ q, a }: { q: string; a: string }) {
 }
 
 const faqItems = [
-  { q: 'What is Little Wanderers?', a: 'Little Wanderers is a thoughtfully designed play studio and café for children ages 0–7, centered around sensory exploration and gentle, restorative moments for parents.' },
-  { q: 'What do you offer?', a: 'We offer open play focused on sensory development, a variety of classes (including Mommy & Me and kids-only), party and event rentals, and more.' },
+  { q: 'What is Little Wanderers?', a: 'Little Wanderers Play Studio & Cafe is a thoughtfully designed indoor play cafe in West Hartford, CT for children ages 0–7, with gentle, restorative moments for parents.' },
+  { q: 'What do you offer?', a: 'We offer open play, a variety of classes (including Mommy & Me and kids-only), party and event rentals, coffee, drinks, snacks, and more.' },
   { q: 'Is drop-off permitted for open play?', a: 'No. Little Wanderers is a caregiver-accompanied space, so children must be with a caregiver at all times. For kids-only classes, caregivers should remain onsite outside the classroom.' },
   { q: 'Are there time limits for open play?', a: 'Open play is unlimited, with no time limits.' },
   { q: 'Do I need to reserve in advance?', a: 'We do not require booking in advance, but we do plan to limit capacity for comfort. Walk-ins are welcome, and we encourage checking the live occupancy status on our website before visiting.' },
@@ -34,7 +37,7 @@ const faqItems = [
   { q: 'How do you keep the space clean?', a: 'We clean and sanitize toys and surfaces throughout the day (approximately every 30 minutes) and thoughtfully curate materials to keep the environment safe and comfortable.' },
   { q: 'Do we need socks?', a: 'Yes, socks are required for both children and adults in the play area. Shoes are not allowed; cubbies for shoes and belongings are provided at the entrance.' },
   { q: 'Can I bring my child who is over 7 years old?', a: 'Children of all ages are welcome. However, our space is thoughtfully designed for younger children, and the experience is best suited for ages 0–7.' },
-  { q: 'Will you offer sensory-friendly hours?', a: 'Yes, we plan to offer dedicated sensory-friendly sessions designed to create a calmer, more supportive environment for children with different needs.' },
+  { q: 'Will you offer calmer hours?', a: 'Yes, we plan to offer dedicated calmer sessions designed to create a more supportive environment for children with different needs.' },
 ] as const;
 
 export default function FaqPage() {
@@ -42,7 +45,7 @@ export default function FaqPage() {
     <main style={{ maxWidth: 980, margin: '20px auto', padding: 24, background: '#F7F4EF', border: '1px solid #ece2d8', borderRadius: 32 }}>
       <h1 style={{ margin: 0, color: '#A78BCB', fontSize: 'clamp(2rem,4vw,3rem)' }}>FAQ</h1>
       <p style={{ color: '#4A4A4A', maxWidth: 720, lineHeight: 1.8, marginTop: 12 }}>
-        Quick answers to common questions from families visiting Little Wanderers.
+        Quick answers to common questions from families visiting Little Wanderers Play Studio & Cafe in West Hartford, CT.
       </p>
       <section style={{ marginTop: 18, minWidth: 0 }}>{faqItems.map((item) => <QA key={item.q} q={item.q} a={item.a} />)}</section>
     </main>
