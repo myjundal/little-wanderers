@@ -2,6 +2,26 @@ import { requireStaffContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
+const SENDS_PAGE_SIZE = 1000;
+
+type SendCounts = { sent: number; failed: number; queued: number };
+type SendStatusRow = {
+  campaign_id: string;
+  status: string;
+};
+
+function emptyCounts(): SendCounts {
+  return { sent: 0, failed: 0, queued: 0 };
+}
+
+function addSendCount(sendCounts: Map<string, SendCounts>, row: SendStatusRow) {
+  const current = sendCounts.get(row.campaign_id) ?? emptyCounts();
+  if (row.status === 'sent') current.sent += 1;
+  if (row.status === 'failed') current.failed += 1;
+  if (row.status === 'queued') current.queued += 1;
+  sendCounts.set(row.campaign_id, current);
+}
+
 export async function GET() {
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
@@ -18,22 +38,24 @@ export async function GET() {
     const sendCounts = new Map<string, { sent: number; failed: number; queued: number }>();
 
     if (campaignIds.length > 0) {
-      const { data: sends, error: sendsError } = await context.admin
-        .from('email_sends')
-        .select('campaign_id,status')
-        .in('campaign_id', campaignIds)
-        .eq('send_type', 'campaign');
+      let from = 0;
+      let hasMore = true;
 
-      if (sendsError) throw new Error(sendsError.message);
+      while (hasMore) {
+        const { data: sends, error: sendsError } = await context.admin
+          .from('email_sends')
+          .select('id,campaign_id,status')
+          .in('campaign_id', campaignIds)
+          .eq('send_type', 'campaign')
+          .order('created_at', { ascending: true })
+          .range(from, from + SENDS_PAGE_SIZE - 1);
 
-      (sends ?? []).forEach((row) => {
-        const key = row.campaign_id as string;
-        const current = sendCounts.get(key) ?? { sent: 0, failed: 0, queued: 0 };
-        if (row.status === 'sent') current.sent += 1;
-        if (row.status === 'failed') current.failed += 1;
-        if (row.status === 'queued') current.queued += 1;
-        sendCounts.set(key, current);
-      });
+        if (sendsError) throw new Error(sendsError.message);
+
+        (sends ?? []).forEach((row) => addSendCount(sendCounts, row as SendStatusRow));
+        hasMore = (sends ?? []).length === SENDS_PAGE_SIZE;
+        from += SENDS_PAGE_SIZE;
+      }
     }
 
     const items = (data ?? []).map((item) => ({

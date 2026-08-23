@@ -30,6 +30,11 @@ type CampaignListResponse = {
   error?: string;
 };
 
+type LoadCampaignOptions = {
+  preserveDraft?: boolean;
+  silent?: boolean;
+};
+
 type RecipientPreview = {
   count: number;
   sample: string[];
@@ -184,6 +189,7 @@ export default function CampaignAdmin() {
   const editorShellRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const lastDraftSelectionRef = useRef<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Campaign | null>(null);
@@ -249,14 +255,19 @@ export default function CampaignAdmin() {
     setImageBox(nextBox);
   }, [measureImageBox, selectedImage]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setMessage(null);
+  const load = useCallback(async (options: LoadCampaignOptions = {}) => {
+    if (!options.silent) {
+      setLoading(true);
+      setMessage(null);
+    }
+
     const res = await fetch('/api/admin/campaigns', { cache: 'no-store' });
     const json = (await res.json()) as CampaignListResponse;
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Unable to load campaigns.');
-      setLoading(false);
+      if (!options.silent) {
+        setMessage(json.error ?? 'Unable to load campaigns.');
+        setLoading(false);
+      }
       return;
     }
 
@@ -268,8 +279,11 @@ export default function CampaignAdmin() {
 
     const nextSelected = selectedId && items.some((item) => item.id === selectedId) ? selectedId : items[0]?.id ?? null;
     setSelectedId(nextSelected);
-    setDraft(items.find((item) => item.id === nextSelected) ?? null);
-    setLoading(false);
+    if (!options.preserveDraft) {
+      lastDraftSelectionRef.current = nextSelected;
+      setDraft(items.find((item) => item.id === nextSelected) ?? null);
+    }
+    if (!options.silent) setLoading(false);
   }, [selectedId]);
 
   const loadTags = useCallback(async () => {
@@ -302,6 +316,14 @@ export default function CampaignAdmin() {
   }, [load, loadTags]);
 
   useEffect(() => {
+    const refresh = window.setInterval(() => {
+      void load({ preserveDraft: true, silent: true });
+    }, 10000);
+
+    return () => window.clearInterval(refresh);
+  }, [load]);
+
+  useEffect(() => {
     if (showContactTools && contacts.length === 0) {
       void loadContacts(contactSearch);
     }
@@ -309,6 +331,8 @@ export default function CampaignAdmin() {
 
   useEffect(() => {
     if (selectedCampaign) {
+      if (lastDraftSelectionRef.current === selectedCampaign.id) return;
+      lastDraftSelectionRef.current = selectedCampaign.id;
       setDraft(selectedCampaign);
       setConfirmed(false);
       setRecipientPreview(null);
