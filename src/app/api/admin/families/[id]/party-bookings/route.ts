@@ -1,5 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
-import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
+import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 
 type Params = { params: { id: string } };
 
@@ -17,6 +17,9 @@ export async function POST(req: Request, { params }: Params) {
   }
   if (!isOnOrAfterPartyBookingStart(start)) {
     return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
+  }
+  if (!isBookablePartySlot(start, end)) {
+    return Response.json({ ok: false, error: 'Party bookings are only available on Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
   }
 
   const admin = context.admin;

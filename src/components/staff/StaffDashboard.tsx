@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 import Link from 'next/link';
-import { getPartyBookingStartDate, PARTY_BOOKING_START_DATE } from '@/lib/party-config';
+import {
+  getDefaultPartyBookingSlot,
+  getPartyBookingSlotOptionsForDate,
+  getPartyBookingStartDate,
+  PARTY_BOOKING_START_DATE,
+  PARTY_BOOKING_SLOTS,
+  type PartyBookingSlot,
+} from '@/lib/party-config';
 
 type OccupancyEvent = {
   id: string;
@@ -78,6 +85,7 @@ type PartyBookingItem = {
 };
 
 type StaffDashboardView = 'overview' | 'classes' | 'parties';
+type ClassRepeatMode = 'weekly' | 'daily' | 'weekdays';
 
 function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | 'birthday_age' | 'occasion_details'>) {
   const lines: string[] = [];
@@ -89,7 +97,7 @@ function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | '
 }
 
 function partyStatusLabel(status: PartyBookingItem['status']) {
-  if (status === 'early_access_hold') return 'Early access hold';
+  if (status === 'early_access_hold') return 'Confirmed';
   return status;
 }
 
@@ -190,8 +198,49 @@ function emptyClassForm() {
   };
 }
 
+type ClassForm = ReturnType<typeof emptyClassForm>;
+
 function toDateTimeISO(date: string, time: string) {
   return new Date(`${date}T${time}:00`).toISOString();
+}
+
+function addDaysToDate(date: string, days: number) {
+  const next = new Date(`${date}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+function buildRepeatDates(startDate: string, mode: ClassRepeatMode, count: number) {
+  const dates: string[] = [];
+  const safeCount = Math.min(Math.max(count, 1), 120);
+  const cursor = new Date(`${startDate}T00:00:00.000Z`);
+  let guard = 0;
+
+  while (dates.length < safeCount && guard < 370) {
+    const day = cursor.getUTCDay();
+    if (mode !== 'weekdays' || (day !== 0 && day !== 6)) {
+      dates.push(cursor.toISOString().slice(0, 10));
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + (mode === 'weekly' ? 7 : 1));
+    guard += 1;
+  }
+
+  return dates;
+}
+
+function classPayloadFromForm(form: ClassForm, date = form.date, status = form.status) {
+  return {
+    title: form.title,
+    category: form.category,
+    start_time: toDateTimeISO(date, form.start_time),
+    end_time: toDateTimeISO(date, form.end_time),
+    instructor_name: form.instructor_name,
+    age_range: form.age_range,
+    capacity: form.capacity,
+    price_cents: Math.round(Number(form.price_dollars || '0') * 100),
+    description: form.description,
+    status,
+  };
 }
 
 function toPartySlotISO(date: string, hourLocal: number) {
@@ -234,11 +283,12 @@ function hasCancellationRequest(item: Pick<PartyBookingItem, 'notes' | 'status'>
 }
 
 function emptyPrebookForm() {
+  const partyDate = getPartyBookingStartDate().toISOString().slice(0, 10);
   return {
     email: '',
     household_name: '',
-    party_date: getPartyBookingStartDate().toISOString().slice(0, 10),
-    slot: '10:00',
+    party_date: partyDate,
+    slot: getDefaultPartyBookingSlot(partyDate),
     headcount_expected: '',
     birthday_child_name: '',
     birthday_age: '',
@@ -256,6 +306,8 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
   const [classForm, setClassForm] = useState(emptyClassForm());
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [savingClass, setSavingClass] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<ClassRepeatMode>('weekly');
+  const [repeatCount, setRepeatCount] = useState('4');
   const [statusNote, setStatusNote] = useState<Record<string, string>>({});
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [savingAttendanceKey, setSavingAttendanceKey] = useState<string | null>(null);
@@ -272,13 +324,17 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
 
   const scheduledClasses = useMemo(() => classes.filter((item) => item.status !== 'cancelled'), [classes]);
   const cancelledClasses = useMemo(() => classes.filter((item) => item.status === 'cancelled'), [classes]);
+  const repeatDates = useMemo(
+    () => buildRepeatDates(classForm.date, repeatMode, Math.max(Number(repeatCount) || 1, 1)),
+    [classForm.date, repeatCount, repeatMode]
+  );
   const partyCancellationRequests = useMemo(() => partyBookings.filter(hasCancellationRequest), [partyBookings]);
   const partyRequests = useMemo(
-    () => partyBookings.filter((item) => !hasCancellationRequest(item) && (item.status === 'pending' || item.status === 'early_access_hold')),
+    () => partyBookings.filter((item) => !hasCancellationRequest(item) && item.status === 'pending'),
     [partyBookings]
   );
   const confirmedPartyBookings = useMemo(
-    () => partyBookings.filter((item) => !hasCancellationRequest(item) && item.status === 'confirmed'),
+    () => partyBookings.filter((item) => !hasCancellationRequest(item) && (item.status === 'confirmed' || item.status === 'early_access_hold')),
     [partyBookings]
   );
   const cancelledPartyBookings = useMemo(() => partyBookings.filter((item) => item.status === 'cancelled'), [partyBookings]);
@@ -368,18 +424,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     setSavingClass(true);
     setMessage(null);
 
-    const payload = {
-      title: classForm.title,
-      category: classForm.category,
-      start_time: toDateTimeISO(classForm.date, classForm.start_time),
-      end_time: toDateTimeISO(classForm.date, classForm.end_time),
-      instructor_name: classForm.instructor_name,
-      age_range: classForm.age_range,
-      capacity: classForm.capacity,
-      price_cents: Math.round(Number(classForm.price_dollars || '0') * 100),
-      description: classForm.description,
-      status: classForm.status,
-    };
+    const payload = classPayloadFromForm(classForm);
 
     const endpoint = editingClassId ? `/api/admin/classes/${editingClassId}` : '/api/admin/classes';
     const method = editingClassId ? 'PATCH' : 'POST';
@@ -403,18 +448,54 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     await load();
   };
 
-  const deleteClass = async (classId: string) => {
-    if (!window.confirm('Delete this class schedule item?')) return;
+  const createRepeatedClasses = async () => {
+    if (editingClassId) return;
+    setSavingClass(true);
+    setMessage(null);
 
-    const res = await fetch(`/api/admin/classes/${classId}`, { method: 'DELETE' });
+    const res = await fetch('/api/admin/classes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ items: repeatDates.map((date) => classPayloadFromForm(classForm, date, 'scheduled')) }),
+    });
     const json = await res.json();
+
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Could not delete class.');
+      setMessage(json.error ?? 'Could not create repeated classes.');
+      setSavingClass(false);
       return;
     }
 
-    setMessage('Class deleted.');
-    if (editingClassId === classId) {
+    setClassForm(emptyClassForm());
+    setSavingClass(false);
+    setMessage(`Created ${json.created_count ?? repeatDates.length} classes.`);
+    await load();
+  };
+
+  const copyClassToNew = (item: ClassItem) => {
+    const next = fromClass(item);
+    setEditingClassId(null);
+    setClassForm({ ...next, date: addDaysToDate(next.date, 7), status: 'scheduled' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const updateClassStatus = async (item: ClassItem, status: 'scheduled' | 'cancelled') => {
+    if (status === 'cancelled' && !window.confirm('Cancel this class schedule item? Existing registrations will stay in the history.')) return;
+
+    const form = fromClass(item);
+    const res = await fetch(`/api/admin/classes/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(classPayloadFromForm({ ...form, status }, form.date, status)),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      setMessage(json.error ?? 'Could not update class status.');
+      return;
+    }
+
+    setMessage(status === 'cancelled' ? 'Class cancelled.' : 'Class restored.');
+    if (editingClassId === item.id) {
       setEditingClassId(null);
       setClassForm(emptyClassForm());
     }
@@ -493,8 +574,13 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
   };
 
   const submitWaitlistPartyPrebook = async () => {
-    const startIso = toPartySlotISO(prebookForm.party_date, prebookForm.slot === '15:00' ? 15 : 10);
-    const endIso = toPartySlotISO(prebookForm.party_date, prebookForm.slot === '15:00' ? 18 : 13);
+    const slotOption = PARTY_BOOKING_SLOTS.find((slot) => slot.value === prebookForm.slot);
+    if (!slotOption || !getPartyBookingSlotOptionsForDate(prebookForm.party_date).some((slot) => slot.value === prebookForm.slot)) {
+      setMessage('Choose an available Friday afternoon, Saturday, or Sunday party slot.');
+      return;
+    }
+    const startIso = toPartySlotISO(prebookForm.party_date, slotOption.startHour);
+    const endIso = toPartySlotISO(prebookForm.party_date, slotOption.endHour);
 
     setSavingPrebook(true);
     setMessage(null);
@@ -553,6 +639,8 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     return <div style={{ marginTop: 24 }}>Loading operator dashboard…</div>;
   }
 
+  const prebookSlotOptions = getPartyBookingSlotOptionsForDate(prebookForm.party_date);
+
   return (
     <>
       {message && (
@@ -583,10 +671,20 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 18 }}>
           <input type="email" placeholder="waitlist email" value={prebookForm.email} onChange={(e) => setPrebookForm((prev) => ({ ...prev, email: e.target.value }))} style={inputStyle} />
           <input placeholder="Family name (optional)" value={prebookForm.household_name} onChange={(e) => setPrebookForm((prev) => ({ ...prev, household_name: e.target.value }))} style={inputStyle} />
-          <input type="date" min={PARTY_BOOKING_START_DATE} value={prebookForm.party_date} onChange={(e) => setPrebookForm((prev) => ({ ...prev, party_date: e.target.value }))} style={inputStyle} />
-          <select value={prebookForm.slot} onChange={(e) => setPrebookForm((prev) => ({ ...prev, slot: e.target.value }))} style={inputStyle}>
-            <option value="10:00">10:00 AM - 1:00 PM</option>
-            <option value="15:00">3:00 PM - 6:00 PM</option>
+          <input type="date" min={PARTY_BOOKING_START_DATE} value={prebookForm.party_date} onChange={(e) => {
+            const partyDate = e.target.value;
+            setPrebookForm((prev) => ({
+              ...prev,
+              party_date: partyDate,
+              slot: getPartyBookingSlotOptionsForDate(partyDate).some((slot) => slot.value === prev.slot)
+                ? prev.slot
+                : getDefaultPartyBookingSlot(partyDate),
+            }));
+          }} style={inputStyle} />
+          <select value={prebookForm.slot} onChange={(e) => setPrebookForm((prev) => ({ ...prev, slot: e.target.value as PartyBookingSlot }))} style={inputStyle}>
+            {prebookSlotOptions.map((slot) => (
+              <option key={slot.value} value={slot.value}>{slot.label}</option>
+            ))}
           </select>
           <input type="number" min={0} placeholder="Headcount" value={prebookForm.headcount_expected} onChange={(e) => setPrebookForm((prev) => ({ ...prev, headcount_expected: e.target.value }))} style={inputStyle} />
           <input placeholder="Birthday child (optional)" value={prebookForm.birthday_child_name} onChange={(e) => setPrebookForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} style={inputStyle} />
@@ -707,15 +805,41 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
               style={{ ...inputStyle, paddingTop: 24, paddingLeft: 28 }}
             />
           </div>
-          <select value={classForm.status} onChange={(e) => setClassForm((prev) => ({ ...prev, status: e.target.value }))} style={inputStyle}>
-            <option value="scheduled">Scheduled</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+          {editingClassId && (
+            <select value={classForm.status} onChange={(e) => setClassForm((prev) => ({ ...prev, status: e.target.value }))} style={inputStyle}>
+              <option value="scheduled">Scheduled</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          )}
         </div>
         <textarea rows={4} placeholder="Notes / description (optional)" value={classForm.description} onChange={(e) => setClassForm((prev) => ({ ...prev, description: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
-        <button style={{ ...buttonStyle, background: '#5f3da4', color: '#fff', marginTop: 14 }} disabled={savingClass} onClick={submitClass}>
-          {savingClass ? 'Saving...' : editingClassId ? 'Save Changes' : 'Create Class'}
-        </button>
+        {!editingClassId && (
+          <div style={{ marginTop: 12, border: '1px solid #eadfff', borderRadius: 14, padding: 12, background: '#fcf9ff' }}>
+            <p style={{ margin: '0 0 10px', color: '#5f3da4', fontWeight: 800 }}>Repeat schedule</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+              <select value={repeatMode} onChange={(e) => setRepeatMode(e.target.value as ClassRepeatMode)} style={inputStyle}>
+                <option value="weekly">Weekly</option>
+                <option value="daily">Daily</option>
+                <option value="weekdays">Weekdays only</option>
+              </select>
+              <input type="number" min={1} max={120} value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} style={inputStyle} />
+            </div>
+            <p style={{ margin: '10px 0 0', color: '#6d6480', fontSize: 13 }}>
+              Preview: {repeatDates.slice(0, 8).map((date) => new Date(`${date}T00:00:00`).toLocaleDateString()).join(', ')}
+              {repeatDates.length > 8 ? `, +${repeatDates.length - 8} more` : ''}
+            </p>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+          <button style={{ ...buttonStyle, background: '#5f3da4', color: '#fff' }} disabled={savingClass} onClick={submitClass}>
+            {savingClass ? 'Saving...' : editingClassId ? 'Save Changes' : 'Create Class'}
+          </button>
+          {!editingClassId && (
+            <button style={{ ...buttonStyle, background: '#e8dcff', color: '#5f3da4' }} disabled={savingClass || repeatDates.length <= 1} onClick={createRepeatedClasses}>
+              {savingClass ? 'Saving...' : `Create ${repeatDates.length} Classes`}
+            </button>
+          )}
+        </div>
 
         <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
           {[
@@ -781,7 +905,12 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                     setClassForm(fromClass(item));
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}>Edit</button>
-                  <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => deleteClass(item.id)}>Delete</button>
+                  <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => copyClassToNew(item)}>Duplicate</button>
+                  {item.status === 'cancelled' ? (
+                    <button style={{ ...buttonStyle, background: '#e8f6ee', color: '#2f7a47' }} onClick={() => updateClassStatus(item, 'scheduled')}>Restore</button>
+                  ) : (
+                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updateClassStatus(item, 'cancelled')}>Cancel</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -801,7 +930,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
           <div style={{ display: 'grid', gap: 14 }}>
             {[
-              { title: 'Party requests / holds', items: partyRequests, empty: 'No new party requests.', defaultOpen: true, tone: 'active' as const },
+              { title: 'Party requests', items: partyRequests, empty: 'No new party requests.', defaultOpen: true, tone: 'active' as const },
               { title: 'Confirmed parties', items: confirmedPartyBookings, empty: 'No confirmed parties yet.', defaultOpen: true, tone: 'active' as const },
               { title: 'Cancellation requests', items: partyCancellationRequests, empty: 'No cancellation requests.', defaultOpen: true, tone: 'attention' as const },
               { title: 'Cancelled parties', items: cancelledPartyBookings, empty: 'No cancelled parties.', defaultOpen: false, tone: 'archive' as const },
@@ -944,7 +1073,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                 </p>
                 <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
-                  {(selectedBooking.status === 'pending' || selectedBooking.status === 'early_access_hold') && (
+                  {selectedBooking.status === 'pending' && (
                     <button style={{ ...buttonStyle, background: '#2f7a47', color: '#fff', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'confirmed')}>Confirm booking</button>
                   )}
                   {selectedBooking.status !== 'cancelled' && (

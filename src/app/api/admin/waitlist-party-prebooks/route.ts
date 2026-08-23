@@ -1,6 +1,6 @@
 import { requireStaffContext } from '@/lib/authz';
 import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
-import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
+import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +43,9 @@ export async function POST(req: Request) {
     }
     if (!isOnOrAfterPartyBookingStart(start)) {
       return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
+    }
+    if (!isBookablePartySlot(start, end)) {
+      return Response.json({ ok: false, error: 'Party bookings are only available on Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
     }
 
     const admin = context.admin;

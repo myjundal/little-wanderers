@@ -90,6 +90,17 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (!context.ok) return context.response;
 
   try {
+    const { data: registrations, error: registrationErr } = await context.admin
+      .from('class_registrations')
+      .select('id')
+      .eq('class_id', params.id)
+      .limit(1);
+
+    if (registrationErr) return Response.json({ ok: false, error: registrationErr.message }, { status: 500 });
+    if ((registrations ?? []).length > 0) {
+      return Response.json({ ok: false, error: 'This class has registrations. Cancel it instead of deleting it.' }, { status: 409 });
+    }
+
     const { error } = await context.admin.from('classes').delete().eq('id', params.id);
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
     return Response.json({ ok: true });

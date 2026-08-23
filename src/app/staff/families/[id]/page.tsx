@@ -7,7 +7,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import StaffToolNav from '@/components/staff/StaffToolNav';
-import { getPartyBookingStartDate, PARTY_BOOKING_START_DATE } from '@/lib/party-config';
+import {
+  getDefaultPartyBookingSlot,
+  getPartyBookingSlotOptionsForDate,
+  getPartyBookingStartDate,
+  isVisiblePartyCalendarSlot,
+  PARTY_BOOKING_START_DATE,
+  PARTY_BOOKING_SLOTS,
+  type PartyBookingSlot,
+} from '@/lib/party-config';
 
 type Person = { id: string; first_name: string | null; last_name: string | null; gender?: string | null; birthdate?: string | null; role: 'adult' | 'child' | null };
 type FamilyDetail = {
@@ -33,7 +41,8 @@ type MemberForm = { id?: string; first_name: string; last_name: string; birthdat
 const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
 
 function emptyPartyForm() {
-  return { party_date: getPartyBookingStartDate().toISOString().slice(0, 10), slot: '10:00', headcount_expected: '', notes: '' };
+  const partyDate = getPartyBookingStartDate().toISOString().slice(0, 10);
+  return { party_date: partyDate, slot: getDefaultPartyBookingSlot(partyDate), headcount_expected: '', notes: '' };
 }
 
 function waiverLabel(status: string) {
@@ -205,8 +214,13 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   };
 
   const submitParty = async () => {
-    const startIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 15 : 10);
-    const endIso = toIsoLocal(partyForm.party_date, partyForm.slot === '15:00' ? 18 : 13);
+    const slotOption = PARTY_BOOKING_SLOTS.find((slot) => slot.value === partyForm.slot);
+    if (!slotOption || !getPartyBookingSlotOptionsForDate(partyForm.party_date).some((slot) => slot.value === partyForm.slot)) {
+      setMessage('Choose an available Friday afternoon, Saturday, or Sunday party slot.');
+      return;
+    }
+    const startIso = toIsoLocal(partyForm.party_date, slotOption.startHour);
+    const endIso = toIsoLocal(partyForm.party_date, slotOption.endHour);
 
     const res = await fetch(`/api/admin/families/${familyId}/party-bookings`, {
       method: 'POST',
@@ -241,22 +255,22 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         const day = d.getUTCDay();
         if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const start10 = toIsoLocal(dayStr, 10);
-        const start15 = toIsoLocal(dayStr, 15);
-        if (!blockedStarts.has(new Date(start10).getTime())) {
-          generated.push({ id: `avail-${dayStr}-10`, start: start10, end: toIsoLocal(dayStr, 13), label: 'Available party slot', status: 'available' });
-        }
-        if (!blockedStarts.has(new Date(start15).getTime())) {
-          generated.push({ id: `avail-${dayStr}-15`, start: start15, end: toIsoLocal(dayStr, 18), label: 'Available party slot', status: 'available' });
+        for (const slot of getPartyBookingSlotOptionsForDate(dayStr)) {
+          const start = toIsoLocal(dayStr, slot.startHour);
+          if (blockedStarts.has(new Date(start).getTime())) continue;
+          generated.push({ id: `avail-${dayStr}-${slot.value}`, start, end: toIsoLocal(dayStr, slot.endHour), label: 'Available party slot', status: 'available' });
         }
       }
       return generated;
     })(),
     ...bookedSlots.map((slot) => ({ id: `booked-${slot.id}`, start: slot.start_time, end: slot.end_time, label: 'Reserved slot', status: 'booked' as const })),
-    ...(item?.upcoming_parties ?? []).map((party) => ({ id: `mine-${party.id}`, start: party.start_time, end: party.end_time, label: 'This family party', status: 'mine' as const })),
+    ...(item?.upcoming_parties ?? [])
+      .filter((party) => isVisiblePartyCalendarSlot(party.start_time))
+      .map((party) => ({ id: `mine-${party.id}`, start: party.start_time, end: party.end_time, label: 'This family party', status: 'mine' as const })),
   ];
 
   if (!item) return <main style={{ padding: 24 }}>Loading family…</main>;
+  const partySlotOptions = getPartyBookingSlotOptionsForDate(partyForm.party_date);
   const waiver = item.waiver ?? { status: item.waiver_status, signed_at: null, expires_at: null, days_until_expiration: null };
   const waiverUrl = process.env.NEXT_PUBLIC_WAIVER_URL ?? 'https://docs.google.com/forms/d/e/1FAIpQLSeleoqMn8UslZs8RiEg_02Ld4t-5WuIyhhHySoyb_3mCYJMUw/viewform?usp=dialog';
 
@@ -374,10 +388,20 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
           <h4 style={{ marginBottom: 6 }}>Book party</h4>
           <AvailabilityCalendar title="Party calendar" slots={partySlots} initialMonth={PARTY_BOOKING_START_DATE} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-            <input type="date" min={PARTY_BOOKING_START_DATE} value={partyForm.party_date} onChange={(e) => setPartyForm((prev) => ({ ...prev, party_date: e.target.value }))} />
-            <select value={partyForm.slot} onChange={(e) => setPartyForm((prev) => ({ ...prev, slot: e.target.value }))}>
-              <option value="10:00">10:00 AM - 1:00 PM</option>
-              <option value="15:00">3:00 PM - 6:00 PM</option>
+            <input type="date" min={PARTY_BOOKING_START_DATE} value={partyForm.party_date} onChange={(e) => {
+              const partyDate = e.target.value;
+              setPartyForm((prev) => ({
+                ...prev,
+                party_date: partyDate,
+                slot: getPartyBookingSlotOptionsForDate(partyDate).some((slot) => slot.value === prev.slot)
+                  ? prev.slot
+                  : getDefaultPartyBookingSlot(partyDate),
+              }));
+            }} />
+            <select value={partyForm.slot} onChange={(e) => setPartyForm((prev) => ({ ...prev, slot: e.target.value as PartyBookingSlot }))}>
+              {partySlotOptions.map((slot) => (
+                <option key={slot.value} value={slot.value}>{slot.label}</option>
+              ))}
             </select>
             <input type="number" min={0} value={partyForm.headcount_expected} placeholder="Headcount" onChange={(e) => setPartyForm((prev) => ({ ...prev, headcount_expected: e.target.value }))} />
             <input value={partyForm.notes} placeholder="Notes" onChange={(e) => setPartyForm((prev) => ({ ...prev, notes: e.target.value }))} />

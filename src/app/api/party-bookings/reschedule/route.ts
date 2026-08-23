@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
-import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
+import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 
 const admin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -12,13 +12,6 @@ type ReschedulePayload = {
   end_time?: string;
   slot?: '10:00' | '15:00';
 };
-
-function isPartySlot(start: Date, end: Date, slot?: string) {
-  const day = start.getUTCDay();
-  const isPartyDay = day === 5 || day === 6 || day === 0;
-  const durationHours = (end.getTime() - start.getTime()) / 3_600_000;
-  return isPartyDay && (slot === '10:00' || slot === '15:00') && durationHours === 3;
-}
 
 async function getHouseholdIdForUser(userId: string) {
   return getLatestHouseholdIdForUser(admin(), userId);
@@ -41,11 +34,11 @@ export async function POST(req: Request) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
       return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
     }
-    if (!isPartySlot(start, end, slot)) {
-      return Response.json({ ok: false, error: 'Reschedule is only available for Friday, Saturday, or Sunday 10:00 AM or 3:00 PM slots.' }, { status: 400 });
-    }
     if (!isOnOrAfterPartyBookingStart(start)) {
       return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
+    }
+    if (!isBookablePartySlot(start, end, slot)) {
+      return Response.json({ ok: false, error: 'Reschedule is only available for Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
     }
 
     const server = createServerSupabaseClient();

@@ -41,6 +41,7 @@ function parseClassPayload(body: Record<string, unknown>) {
   const end_time = typeof body.end_time === 'string' ? body.end_time : '';
   const capacity = body.capacity == null || body.capacity === '' ? null : Number(body.capacity);
   const price_cents = body.price_cents == null || body.price_cents === '' ? 0 : Number(body.price_cents);
+  const status = body.status === 'cancelled' ? 'cancelled' : 'scheduled';
 
   const start = new Date(start_time);
   const end = new Date(end_time);
@@ -63,7 +64,7 @@ function parseClassPayload(body: Record<string, unknown>) {
     end_time: end.toISOString(),
     capacity,
     price_cents: Math.round(price_cents),
-    status: 'scheduled',
+    status,
   };
 
   return {
@@ -178,12 +179,14 @@ async function loadClasses(admin: SupabaseClient) {
   });
 }
 
-async function insertClass(admin: SupabaseClient, payload: ReturnType<typeof parseClassPayload> & { error?: never }) {
-  const primary = await admin.from('classes').insert(payload.data);
+type ParsedClassPayload = Exclude<ReturnType<typeof parseClassPayload>, { error: string }>;
+
+async function insertClasses(admin: SupabaseClient, payloads: ParsedClassPayload[]) {
+  const primary = await admin.from('classes').insert(payloads.map((payload) => payload.data));
   if (!primary.error) return;
   if (!isMissingColumnError(primary.error.message)) throw new Error(primary.error.message);
 
-  const fallback = await admin.from('classes').insert(payload.fallbackData);
+  const fallback = await admin.from('classes').insert(payloads.map((payload) => payload.fallbackData));
   if (fallback.error) throw new Error(fallback.error.message);
 }
 
@@ -205,12 +208,25 @@ export async function POST(req: Request) {
   if (!context.ok) return context.response;
 
   try {
-    const parsed = parseClassPayload((await req.json()) as Record<string, unknown>);
-    if ('error' in parsed) return Response.json({ ok: false, error: parsed.error }, { status: 400 });
+    const body = (await req.json()) as Record<string, unknown>;
+    const rawItems = Array.isArray(body.items) ? body.items : [body];
+    if (rawItems.length === 0) return Response.json({ ok: false, error: 'At least one class is required.' }, { status: 400 });
+    if (rawItems.length > 120) return Response.json({ ok: false, error: 'Create 120 or fewer classes at a time.' }, { status: 400 });
 
-    await insertClass(context.admin, parsed);
+    const parsedItems: ParsedClassPayload[] = [];
+    for (const [index, item] of rawItems.entries()) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return Response.json({ ok: false, error: `Class ${index + 1}: invalid class payload` }, { status: 400 });
+      }
+
+      const parsed = parseClassPayload(item as Record<string, unknown>);
+      if ('error' in parsed) return Response.json({ ok: false, error: `Class ${index + 1}: ${parsed.error}` }, { status: 400 });
+      parsedItems.push(parsed);
+    }
+
+    await insertClasses(context.admin, parsedItems);
     const items = await loadClasses(context.admin);
-    return Response.json({ ok: true, items });
+    return Response.json({ ok: true, items, created_count: parsedItems.length });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

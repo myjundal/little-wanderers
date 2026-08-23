@@ -3,7 +3,13 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
-import { isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
+import {
+  isBookablePartySlot,
+  isGrandfatheredFridayMorningPartySlot,
+  isOnOrAfterPartyBookingStart,
+  isRecognizedPartySlot,
+  PARTY_BOOKING_START_LABEL,
+} from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 import { sendPartyBookingNotification } from '@/lib/admin-notifications';
 import { logger } from '@/lib/logger';
@@ -40,14 +46,6 @@ function isMissingColumnError(message: string) {
 function getSquareBaseUrl() {
   const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
   return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
-}
-
-function isPartySlot(start: Date, end: Date, slot?: string) {
-  const day = start.getUTCDay();
-  const isPartyDay = day === 5 || day === 6 || day === 0;
-  const durationHours = (end.getTime() - start.getTime()) / 3_600_000;
-  const validSlot = slot === '10:00' || slot === '15:00';
-  return isPartyDay && validSlot && durationHours === 3;
 }
 
 async function getHouseholdIdForUser(userId: string) {
@@ -178,11 +176,15 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
     }
 
-    if (!isPartySlot(start, end, slot)) {
-      return Response.json({ ok: false, error: 'Party bookings are only available on Friday, Saturday, or Sunday at 10:00 AM or 3:00 PM.' }, { status: 400 });
+    const isGrandfatheredSlot = isGrandfatheredFridayMorningPartySlot(start, slot);
+    if (!isRecognizedPartySlot(start, end, slot)) {
+      return Response.json({ ok: false, error: 'Party bookings are only available on Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
     }
     if (!isOnOrAfterPartyBookingStart(start)) {
       return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
+    }
+    if (!isBookablePartySlot(start, end, slot) && !isGrandfatheredSlot) {
+      return Response.json({ ok: false, error: 'Friday morning party slots are no longer available.' }, { status: 400 });
     }
     if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
       return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });
@@ -209,6 +211,10 @@ export async function POST(req: Request) {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (isGrandfatheredSlot && !existingSameSlot) {
+      return Response.json({ ok: false, error: 'This Friday morning slot is grandfathered for an existing booking only.' }, { status: 400 });
+    }
 
     if (mode === 'finalize' && existingSameSlot) {
       const updateExisting = await supa.from('party_bookings').update({
@@ -256,7 +262,7 @@ export async function POST(req: Request) {
         birthday_child_name: birthdayChildName,
         birthday_age: birthdayAge,
         occasion_details: occasionDetails,
-        status: 'early_access_hold',
+        status: 'confirmed',
         status_updated_at: new Date().toISOString(),
         price_quote_cents: PARTY_TOTAL_FEE_CENTS,
         created_by_user_id: user.id,
@@ -277,9 +283,9 @@ export async function POST(req: Request) {
           bookingId: updateExisting.data?.id ?? existingSameSlot.id,
           startTime: holdPayload.start_time,
           endTime: holdPayload.end_time,
-          status: 'early_access_hold',
+          status: 'confirmed',
         });
-        return Response.json({ ok: true, id: updateExisting.data?.id ?? existingSameSlot.id, status: 'early_access_hold', deposit_required_now: false });
+        return Response.json({ ok: true, id: updateExisting.data?.id ?? existingSameSlot.id, status: 'confirmed', deposit_required_now: false });
       }
 
       const hold = await supa
@@ -293,9 +299,9 @@ export async function POST(req: Request) {
         bookingId: hold.data?.id ?? null,
         startTime: holdPayload.start_time,
         endTime: holdPayload.end_time,
-        status: 'early_access_hold',
+        status: 'confirmed',
       });
-      return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'early_access_hold', deposit_required_now: false });
+      return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'confirmed', deposit_required_now: false });
     }
 
     if (mode === 'create_payment_link') {

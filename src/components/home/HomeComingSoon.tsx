@@ -113,7 +113,7 @@ export default async function HomeComingSoon() {
           <p className={styles.partyEyebrow}>Early access parties</p>
           <h2>Party holds are open for waitlist families</h2>
           <p>
-            With our buildout and opening timeline in mind, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}. Peek at available Friday, Saturday, and Sunday slots, then request a hold with no deposit today.
+            With our buildout and opening timeline in mind, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}. Peek at available Friday afternoon, Saturday, and Sunday slots, then request a hold with no deposit today.
           </p>
           {!isAuthenticated && (
             <p className={styles.accessNote}>

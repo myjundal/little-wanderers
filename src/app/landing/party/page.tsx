@@ -4,7 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
-import { getPartyBookingStartDate, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_DATE, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
+import {
+  getDefaultPartyBookingSlot,
+  getPartyBookingSlotOptionsForDate,
+  getPartyBookingStartDate,
+  isPartyBookingDate,
+  isVisiblePartyCalendarSlot,
+  PARTY_BOOKING_START_DATE,
+  PARTY_BOOKING_START_LABEL,
+  PARTY_BOOKING_SLOTS,
+  type PartyBookingSlot,
+} from '@/lib/party-config';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type PartyBooking = {
@@ -28,7 +38,7 @@ type PartyBooking = {
 
 type PartyForm = {
   party_date: string;
-  slot: '10:00' | '15:00';
+  slot: PartyBookingSlot;
   headcount_expected: string;
   notes: string;
   birthday_child_name: string;
@@ -52,12 +62,6 @@ function getDefaultPartyDate() {
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return new Date().toISOString().slice(0, 10);
-}
-
-function isPartyDate(date: string) {
-  const d = new Date(`${date}T00:00:00.000Z`);
-  const day = d.getUTCDay();
-  return isOnOrAfterPartyBookingStart(d) && (day === 5 || day === 6 || day === 0);
 }
 
 function getPartyBlackoutSlots(): CalendarSlot[] {
@@ -89,9 +93,10 @@ function prettyNote(note: string | null) {
 }
 
 function getDefaultPartyForm(): PartyForm {
+  const partyDate = getDefaultPartyDate();
   return {
-    party_date: getDefaultPartyDate(),
-    slot: '10:00',
+    party_date: partyDate,
+    slot: getDefaultPartyBookingSlot(partyDate),
     headcount_expected: '',
     notes: '',
     birthday_child_name: '',
@@ -118,12 +123,15 @@ export default function PartyPage() {
   const finalizingPaymentRef = useRef(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
-  const [rescheduleSlot, setRescheduleSlot] = useState<'10:00' | '15:00'>('10:00');
+  const [rescheduleSlot, setRescheduleSlot] = useState<PartyBookingSlot>(() => getDefaultPartyBookingSlot(getDefaultPartyDate()));
 
   const [form, setForm] = useState<PartyForm>(() => getDefaultPartyForm());
 
-  const startIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 15 : 10), [form.party_date, form.slot]);
-  const endIso = useMemo(() => toIsoLocal(form.party_date, form.slot === '15:00' ? 18 : 13), [form.party_date, form.slot]);
+  const selectedSlotOption = PARTY_BOOKING_SLOTS.find((slot) => slot.value === form.slot) ?? PARTY_BOOKING_SLOTS[1];
+  const partySlotOptions = getPartyBookingSlotOptionsForDate(form.party_date);
+  const rescheduleSlotOptions = getPartyBookingSlotOptionsForDate(rescheduleDate);
+  const startIso = useMemo(() => toIsoLocal(form.party_date, selectedSlotOption.startHour), [form.party_date, selectedSlotOption.startHour]);
+  const endIso = useMemo(() => toIsoLocal(form.party_date, selectedSlotOption.endHour), [form.party_date, selectedSlotOption.endHour]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,8 +231,8 @@ export default function PartyPage() {
     setSubmitting(true);
     setMessage(null);
 
-    if (!isPartyDate(form.party_date)) {
-      setMessage(`Please choose a Friday, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
+    if (!isPartyBookingDate(form.party_date) || !partySlotOptions.some((slot) => slot.value === form.slot)) {
+      setMessage(`Please choose an available Friday afternoon, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
       setSubmitting(false);
       return;
     }
@@ -311,27 +319,18 @@ export default function PartyPage() {
         const day = d.getUTCDay();
         if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const start10 = toIsoLocal(dayStr, 10);
-        const start15 = toIsoLocal(dayStr, 15);
         const blockedStarts = new Set(
           [...bookedSlots, ...items.filter((item) => item.status !== 'cancelled')].map((item) =>
             new Date(item.start_time).getTime()
           )
         );
-        if (!blockedStarts.has(new Date(start10).getTime())) {
+        for (const slot of getPartyBookingSlotOptionsForDate(dayStr)) {
+          const start = toIsoLocal(dayStr, slot.startHour);
+          if (blockedStarts.has(new Date(start).getTime())) continue;
           generated.push({
-            id: `avail-${dayStr}-10`,
-            start: start10,
-            end: toIsoLocal(dayStr, 13),
-            label: 'Available party slot',
-            status: 'available',
-          });
-        }
-        if (!blockedStarts.has(new Date(start15).getTime())) {
-          generated.push({
-            id: `avail-${dayStr}-15`,
-            start: start15,
-            end: toIsoLocal(dayStr, 18),
+            id: `avail-${dayStr}-${slot.value}`,
+            start,
+            end: toIsoLocal(dayStr, slot.endHour),
             label: 'Available party slot',
             status: 'available',
           });
@@ -355,7 +354,7 @@ export default function PartyPage() {
       label: 'Reserved slot',
       status: 'booked' as const,
       })),
-    ...items.filter((item) => item.status !== 'cancelled').map((item) => ({
+    ...items.filter((item) => item.status !== 'cancelled' && isVisiblePartyCalendarSlot(item.start_time)).map((item) => ({
       id: `mine-${item.id}`,
       start: item.start_time,
       end: item.end_time,
@@ -377,10 +376,11 @@ export default function PartyPage() {
   };
 
   const reschedule = async (bookingId: string) => {
-    const nextStart = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 15 : 10);
-    const nextEnd = toIsoLocal(rescheduleDate, rescheduleSlot === '15:00' ? 18 : 13);
-    if (!isPartyDate(rescheduleDate)) {
-      setMessage(`Please choose a Friday, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
+    const nextSlotOption = PARTY_BOOKING_SLOTS.find((slot) => slot.value === rescheduleSlot) ?? PARTY_BOOKING_SLOTS[1];
+    const nextStart = toIsoLocal(rescheduleDate, nextSlotOption.startHour);
+    const nextEnd = toIsoLocal(rescheduleDate, nextSlotOption.endHour);
+    if (!isPartyBookingDate(rescheduleDate) || !rescheduleSlotOptions.some((slot) => slot.value === rescheduleSlot)) {
+      setMessage(`Please choose an available Friday afternoon, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
       return;
     }
     const res = await fetch('/api/party-bookings/reschedule', {
@@ -407,9 +407,9 @@ export default function PartyPage() {
       {confirmation && (
         <div role="dialog" aria-modal="true" aria-labelledby="party-confirmation-title" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'grid', placeItems: 'center', padding: 18, background: 'rgba(54, 42, 77, 0.32)' }}>
           <div style={{ width: 'min(460px, 100%)', borderRadius: 18, border: '1px solid #d6f0dc', background: '#fff', boxShadow: '0 18px 48px rgba(54, 42, 77, 0.2)', padding: 20 }}>
-            <p id="party-confirmation-title" style={{ margin: 0, color: '#2f7a47', fontWeight: 800, fontSize: 18 }}>Party hold request saved</p>
+            <p id="party-confirmation-title" style={{ margin: 0, color: '#2f7a47', fontWeight: 800, fontSize: 18 }}>Party booking saved</p>
             <p style={{ margin: '10px 0 0', color: '#4f3f82', lineHeight: 1.55 }}>
-              We saved your early access hold for <strong>{confirmation}</strong>. We will contact you after our official opening so you can visit the space before deciding on the deposit.
+              We saved your party booking for <strong>{confirmation}</strong>. We will contact you after our official opening so you can visit the space before deciding on the deposit.
             </p>
             <button type="button" onClick={() => setConfirmation(null)} style={{ marginTop: 16, width: '100%', border: 'none', borderRadius: 12, padding: '12px 16px', background: '#5f3da4', color: '#fff', fontWeight: 800 }}>
               Done
@@ -476,7 +476,7 @@ export default function PartyPage() {
         <div>
           <AvailabilityCalendar
             title="Party booking calendar"
-            subtitle={`Party holds are available starting ${PARTY_BOOKING_START_LABEL}. Select an available Friday, Saturday, or Sunday slot to fill the booking form below.`}
+            subtitle={`Party holds are available starting ${PARTY_BOOKING_START_LABEL}. Select an available Friday afternoon, Saturday, or Sunday slot to fill the booking form below.`}
             slots={slots}
             onSlotSelect={selectSlot}
             visibleWeekdays={[5, 6, 0]}
@@ -514,15 +514,25 @@ export default function PartyPage() {
           <label>
             Party date
             <br />
-            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} type="date" min={PARTY_BOOKING_START_DATE} value={form.party_date} onChange={(e) => setForm((prev) => ({ ...prev, party_date: e.target.value }))} />
+            <input style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} type="date" min={PARTY_BOOKING_START_DATE} value={form.party_date} onChange={(e) => {
+              const partyDate = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                party_date: partyDate,
+                slot: getPartyBookingSlotOptionsForDate(partyDate).some((slot) => slot.value === prev.slot)
+                  ? prev.slot
+                  : getDefaultPartyBookingSlot(partyDate),
+              }));
+            }} />
           </label>
 
           <label>
             Time
             <br />
-            <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value as '10:00' | '15:00' }))}>
-              <option value="10:00">10:00 AM (ends at 1:00 PM)</option>
-              <option value="15:00">3:00 PM (ends at 6:00 PM)</option>
+            <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.slot} onChange={(e) => setForm((prev) => ({ ...prev, slot: e.target.value as PartyBookingSlot }))}>
+              {partySlotOptions.map((slot) => (
+                <option key={slot.value} value={slot.value}>{slot.label}</option>
+              ))}
             </select>
             <span style={{ display: 'block', marginTop: 6, color: '#6f628d', fontSize: 13 }}>Times are flexible. Tell us what you have in mind in the notes.</span>
           </label>
@@ -616,10 +626,9 @@ export default function PartyPage() {
                     </div>
                   )}
                   <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
-                    Status: {item.status === 'confirmed' ? 'Party scheduled' : item.status === 'early_access_hold' ? 'Early access hold' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending cancel' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
+                    Status: {item.status === 'confirmed' || item.status === 'early_access_hold' ? 'Party scheduled' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending cancel' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
                   </p>
-                  {item.status === 'confirmed' && <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Deposit paid</p>}
-                  {item.status === 'early_access_hold' && <p style={{ margin: '6px 0', color: '#87631d', fontWeight: 700 }}>Deposit not collected yet</p>}
+                  {(item.status === 'confirmed' || item.status === 'early_access_hold') && <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Confirmed booking</p>}
                   {item.status !== 'cancelled' && isUpcoming && !cancellationRequested && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <button onClick={() => requestCancel(item.id)} disabled={requestingCancelId === item.id}>
@@ -643,14 +652,23 @@ export default function PartyPage() {
                       <label>
                         New date
                         <br />
-                        <input style={{ width: '100%' }} type="date" min={PARTY_BOOKING_START_DATE} value={rescheduleDate} onChange={(e) => setRescheduleDate(e.target.value)} />
+                        <input style={{ width: '100%' }} type="date" min={PARTY_BOOKING_START_DATE} value={rescheduleDate} onChange={(e) => {
+                          const partyDate = e.target.value;
+                          setRescheduleDate(partyDate);
+                          setRescheduleSlot((prev) => (
+                            getPartyBookingSlotOptionsForDate(partyDate).some((slot) => slot.value === prev)
+                              ? prev
+                              : getDefaultPartyBookingSlot(partyDate)
+                          ));
+                        }} />
                       </label>
                       <label style={{ marginLeft: 10 }}>
                         New time
                         <br />
-                        <select style={{ width: '100%' }} value={rescheduleSlot} onChange={(e) => setRescheduleSlot(e.target.value as '10:00' | '15:00')}>
-                          <option value="10:00">10:00 AM</option>
-                          <option value="15:00">3:00 PM</option>
+                        <select style={{ width: '100%' }} value={rescheduleSlot} onChange={(e) => setRescheduleSlot(e.target.value as PartyBookingSlot)}>
+                          {rescheduleSlotOptions.map((slot) => (
+                            <option key={slot.value} value={slot.value}>{slot.label}</option>
+                          ))}
                         </select>
                       </label>
                       <div style={{ marginTop: 8 }}>
