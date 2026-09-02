@@ -1,5 +1,5 @@
-export const PARTY_BOOKING_START_DATE = '2026-10-16';
-export const PARTY_BOOKING_START_LABEL = 'October 16, 2026';
+export const PARTY_BOOKING_START_DATE = '2026-10-23';
+export const PARTY_BOOKING_START_LABEL = 'October 23, 2026';
 export const GRANDFATHERED_FRIDAY_MORNING_PARTY_DATE = '2027-01-29';
 
 export type PartyBookingSlot = '10:00' | '15:00';

@@ -180,12 +180,6 @@ export async function POST(req: Request) {
     if (!isRecognizedPartySlot(start, end, slot)) {
       return Response.json({ ok: false, error: 'Party bookings are only available on Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
     }
-    if (!isOnOrAfterPartyBookingStart(start)) {
-      return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
-    }
-    if (!isBookablePartySlot(start, end, slot) && !isGrandfatheredSlot) {
-      return Response.json({ ok: false, error: 'Friday morning party slots are no longer available.' }, { status: 400 });
-    }
     if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
       return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });
     }
@@ -214,6 +208,12 @@ export async function POST(req: Request) {
 
     if (isGrandfatheredSlot && !existingSameSlot) {
       return Response.json({ ok: false, error: 'This Friday morning slot is grandfathered for an existing booking only.' }, { status: 400 });
+    }
+    if (!isOnOrAfterPartyBookingStart(start) && !existingSameSlot) {
+      return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
+    }
+    if (!existingSameSlot && !isBookablePartySlot(start, end, slot) && !isGrandfatheredSlot) {
+      return Response.json({ ok: false, error: 'Friday morning party slots are no longer available.' }, { status: 400 });
     }
 
     if (mode === 'finalize' && existingSameSlot) {

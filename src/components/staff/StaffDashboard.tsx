@@ -3,14 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 import Link from 'next/link';
-import {
-  getDefaultPartyBookingSlot,
-  getPartyBookingSlotOptionsForDate,
-  getPartyBookingStartDate,
-  PARTY_BOOKING_START_DATE,
-  PARTY_BOOKING_SLOTS,
-  type PartyBookingSlot,
-} from '@/lib/party-config';
 
 type OccupancyEvent = {
   id: string;
@@ -243,10 +235,6 @@ function classPayloadFromForm(form: ClassForm, date = form.date, status = form.s
   };
 }
 
-function toPartySlotISO(date: string, hourLocal: number) {
-  return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
-}
-
 function fromClass(item: ClassItem) {
   const start = new Date(item.start_time);
   const end = new Date(item.end_time);
@@ -282,20 +270,6 @@ function hasCancellationRequest(item: Pick<PartyBookingItem, 'notes' | 'status'>
   return item.status !== 'cancelled' && (item.notes ?? '').includes('[Cancellation requested');
 }
 
-function emptyPrebookForm() {
-  const partyDate = getPartyBookingStartDate().toISOString().slice(0, 10);
-  return {
-    email: '',
-    household_name: '',
-    party_date: partyDate,
-    slot: getDefaultPartyBookingSlot(partyDate),
-    headcount_expected: '',
-    birthday_child_name: '',
-    birthday_age: '',
-    notes: '',
-  };
-}
-
 export default function StaffDashboard({ view = 'overview' }: { view?: StaffDashboardView }) {
   const [occupancy, setOccupancy] = useState<OccupancyState | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -313,9 +287,6 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
   const [savingAttendanceKey, setSavingAttendanceKey] = useState<string | null>(null);
   const [partyAttendanceNotes, setPartyAttendanceNotes] = useState<Record<string, string>>({});
   const [partyCountDrafts, setPartyCountDrafts] = useState<Record<string, { child: string; adult: string; total: string }>>({});
-  const [prebookForm, setPrebookForm] = useState(emptyPrebookForm);
-  const [savingPrebook, setSavingPrebook] = useState(false);
-  const [lastPrebookHouseholdId, setLastPrebookHouseholdId] = useState<string | null>(null);
 
   const selectedBooking = useMemo(
     () => partyBookings.find((item) => item.id === selectedBookingId) ?? partyBookings[0] ?? null,
@@ -573,48 +544,6 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     await load();
   };
 
-  const submitWaitlistPartyPrebook = async () => {
-    const slotOption = PARTY_BOOKING_SLOTS.find((slot) => slot.value === prebookForm.slot);
-    if (!slotOption || !getPartyBookingSlotOptionsForDate(prebookForm.party_date).some((slot) => slot.value === prebookForm.slot)) {
-      setMessage('Choose an available Friday afternoon, Saturday, or Sunday party slot.');
-      return;
-    }
-    const startIso = toPartySlotISO(prebookForm.party_date, slotOption.startHour);
-    const endIso = toPartySlotISO(prebookForm.party_date, slotOption.endHour);
-
-    setSavingPrebook(true);
-    setMessage(null);
-    setLastPrebookHouseholdId(null);
-
-    const res = await fetch('/api/admin/waitlist-party-prebooks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email: prebookForm.email,
-        household_name: prebookForm.household_name,
-        start_time: startIso,
-        end_time: endIso,
-        headcount_expected: prebookForm.headcount_expected,
-        birthday_child_name: prebookForm.birthday_child_name,
-        birthday_age: prebookForm.birthday_age,
-        notes: prebookForm.notes,
-      }),
-    });
-    const json = await res.json();
-
-    setSavingPrebook(false);
-
-    if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Could not prebook this party.');
-      return;
-    }
-
-    setLastPrebookHouseholdId(json.household_id ?? null);
-    setMessage('Waitlist party prebooked. When they create an account with this email, the booking will attach automatically.');
-    setPrebookForm(emptyPrebookForm());
-    await load();
-  };
-
   const updatePartyDraft = (bookingId: string, next: Partial<{ child: string; adult: string; total: string }>) => {
     setPartyCountDrafts((prev) => {
       const current = prev[bookingId] ?? { child: '0', adult: '0', total: '0' };
@@ -639,8 +568,6 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     return <div style={{ marginTop: 24 }}>Loading operator dashboard…</div>;
   }
 
-  const prebookSlotOptions = getPartyBookingSlotOptionsForDate(prebookForm.party_date);
-
   return (
     <>
       {message && (
@@ -655,52 +582,8 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner tools</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
           <Link href="/staff/checkin" style={ownerToolLinkStyle}>QR check-in</Link>
-          <a href="#waitlist-party-prebook" style={ownerToolLinkStyle}>Waitlist party prebook</a>
           <a href="#manual-family-registration" style={ownerToolLinkStyle}>Manual family registration</a>
           <a href="#occupancy-management" style={ownerToolLinkStyle}>Occupancy</a>
-        </div>
-      </section>
-
-      <section id="waitlist-party-prebook" style={sectionStyle}>
-        <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Waitlist party prebook</p>
-        <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Hold a birthday party slot before they sign in</h2>
-        <p style={{ margin: 0, color: '#6d6480' }}>
-          Use the exact waitlist email. The family and confirmed party booking will be ready, then attach automatically when they create their account.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 18 }}>
-          <input type="email" placeholder="waitlist email" value={prebookForm.email} onChange={(e) => setPrebookForm((prev) => ({ ...prev, email: e.target.value }))} style={inputStyle} />
-          <input placeholder="Family name (optional)" value={prebookForm.household_name} onChange={(e) => setPrebookForm((prev) => ({ ...prev, household_name: e.target.value }))} style={inputStyle} />
-          <input type="date" min={PARTY_BOOKING_START_DATE} value={prebookForm.party_date} onChange={(e) => {
-            const partyDate = e.target.value;
-            setPrebookForm((prev) => ({
-              ...prev,
-              party_date: partyDate,
-              slot: getPartyBookingSlotOptionsForDate(partyDate).some((slot) => slot.value === prev.slot)
-                ? prev.slot
-                : getDefaultPartyBookingSlot(partyDate),
-            }));
-          }} style={inputStyle} />
-          <select value={prebookForm.slot} onChange={(e) => setPrebookForm((prev) => ({ ...prev, slot: e.target.value as PartyBookingSlot }))} style={inputStyle}>
-            {prebookSlotOptions.map((slot) => (
-              <option key={slot.value} value={slot.value}>{slot.label}</option>
-            ))}
-          </select>
-          <input type="number" min={0} placeholder="Headcount" value={prebookForm.headcount_expected} onChange={(e) => setPrebookForm((prev) => ({ ...prev, headcount_expected: e.target.value }))} style={inputStyle} />
-          <input placeholder="Birthday child (optional)" value={prebookForm.birthday_child_name} onChange={(e) => setPrebookForm((prev) => ({ ...prev, birthday_child_name: e.target.value }))} style={inputStyle} />
-          <input type="number" min={0} placeholder="Turning age" value={prebookForm.birthday_age} onChange={(e) => setPrebookForm((prev) => ({ ...prev, birthday_age: e.target.value }))} style={inputStyle} />
-          <input placeholder="Notes" value={prebookForm.notes} onChange={(e) => setPrebookForm((prev) => ({ ...prev, notes: e.target.value }))} style={inputStyle} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 14 }}>
-          <button type="button" onClick={submitWaitlistPartyPrebook} disabled={savingPrebook || !prebookForm.email || !prebookForm.party_date} style={{ ...buttonStyle, background: '#5f3da4', color: '#fff' }}>
-            {savingPrebook ? 'Saving...' : 'Prebook party'}
-          </button>
-          {lastPrebookHouseholdId && (
-            <Link href={`/staff/families/${lastPrebookHouseholdId}`} style={{ borderRadius: 12, border: '1px solid #ddd1ea', padding: '10px 12px', color: '#5f3da4', fontWeight: 700, textDecoration: 'none' }}>
-              View prebooked family
-            </Link>
-          )}
         </div>
       </section>
 

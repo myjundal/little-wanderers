@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { getPartyBookingStartDate, isVisiblePartyCalendarSlot } from '@/lib/party-config';
+import { isVisiblePartyCalendarSlot } from '@/lib/party-config';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
@@ -14,7 +14,7 @@ function isMissingColumnError(message: string) {
 export async function GET() {
   try {
     const supa = admin();
-    const lowerBound = new Date(Math.max(Date.now(), getPartyBookingStartDate().getTime())).toISOString();
+    const lowerBound = new Date().toISOString();
     const primary = await supa
       .from('party_bookings')
       .select('id,start_time,end_time,status')
