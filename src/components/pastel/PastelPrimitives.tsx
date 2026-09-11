@@ -48,6 +48,7 @@ export function PastelHeader({ isAuthenticated = false, waitlistCount }: { isAut
         <Link href="/party">Party Booking</Link>
         <Link href="/membership">Membership</Link>
         <Link href="/classes">Classes</Link>
+        <Link href="/cafe">Cafe</Link>
         <Link href="/faq">FAQ</Link>
         <Link href="/visit-us">Find Us</Link>
         <Link href="/contact">Say Hello</Link>
