@@ -14,7 +14,7 @@ self.addEventListener('push', (event) => {
     icon: '/logo.png',
     badge: '/logo.png',
     data: {
-      url: data.url || '/landing/visit',
+      url: data.url || '/landing',
     },
   };
 
@@ -23,6 +23,6 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || '/landing/visit';
+  const targetUrl = event.notification?.data?.url || '/landing';
   event.waitUntil(clients.openWindow(targetUrl));
 });

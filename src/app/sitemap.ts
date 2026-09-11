@@ -10,6 +10,5 @@ export default async function sitemap() {
     { url: `${base}/cafe`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${base}/faq`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${base}/contact`, changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${base}/app`, changeFrequency: 'weekly', priority: 0.5 },
   ];
 }

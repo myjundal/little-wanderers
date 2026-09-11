@@ -97,7 +97,7 @@ async function notifyIfLessCrowded(admin: SupabaseClient, beforeLevel: string, a
   const { sent } = await sendPushBatch(filtered, {
     title: 'Little Wanderers',
     body: 'It’s quieter now — a great time to stop by!',
-    url: '/landing/visit',
+    url: '/landing',
   });
 
   if (sent > 0) {
