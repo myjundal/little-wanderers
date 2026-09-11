@@ -41,12 +41,6 @@ type ReservationResponse = {
   ok?: boolean;
   allowed?: boolean;
   error?: string;
-  access?: {
-    email?: string | null;
-    on_wanderlist?: boolean;
-    party_early_access?: boolean;
-    has_party_booking?: boolean;
-  };
   slots?: Slot[];
   reservations?: Reservation[];
 };
@@ -61,14 +55,6 @@ function formatWindow(startIso: string, endIso: string) {
   const start = new Date(startIso);
   const end = new Date(endIso);
   return `${start.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric' }).toLowerCase()}`;
-}
-
-function AccessBadge({ children }: { children: string }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 999, background: '#f7efff', border: '1px solid #dfccfb', color: '#5f3da4', padding: '6px 10px', fontSize: 13, fontWeight: 800 }}>
-      {children}
-    </span>
-  );
 }
 
 export default function SoftOpeningReservationPage() {
@@ -115,13 +101,6 @@ export default function SoftOpeningReservationPage() {
   useEffect(() => {
     if (!selectedSlotId && selectedSlot?.id) setSelectedSlotId(selectedSlot.id);
   }, [selectedSlot?.id, selectedSlotId]);
-
-  const accessLabels = useMemo(() => {
-    const labels: string[] = [];
-    if (data?.access?.on_wanderlist) labels.push('Wanderlist');
-    if (labels.length === 0 && (data?.access?.party_early_access || data?.access?.has_party_booking)) labels.push('Private access');
-    return [...new Set(labels)];
-  }, [data]);
 
   const reserve = async () => {
     if (!selectedSlot) return;
@@ -231,9 +210,6 @@ export default function SoftOpeningReservationPage() {
               The window you choose helps us manage capacity, but it is not a strict arrival or departure time. For example,
               if you reserve 9:00-11:00, you can arrive any time during that window and stay later while capacity allows.
             </p>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {accessLabels.length > 0 ? accessLabels.map((label) => <AccessBadge key={label}>{label}</AccessBadge>) : <AccessBadge>Early access</AccessBadge>}
           </div>
         </div>
 
