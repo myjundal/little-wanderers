@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import { WAITLIST_JOIN_URL } from '@/lib/waitlist';
 
 type Slot = {
@@ -12,6 +13,11 @@ type Slot = {
   capacity_children: number;
   capacity_total: number | null;
   notes: string | null;
+  occupancy?: {
+    children: number;
+    adults: number;
+    total: number;
+  };
   remaining_children: number;
   remaining_total: number | null;
   is_full: boolean;
@@ -49,6 +55,12 @@ function formatVisitRange(startIso: string, endIso: string) {
   return `${start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}, ${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
 }
 
+function formatWindow(startIso: string, endIso: string) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  return `${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
+}
+
 function AccessBadge({ children }: { children: string }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 999, background: '#f7efff', border: '1px solid #dfccfb', color: '#5f3da4', padding: '6px 10px', fontSize: 13, fontWeight: 800 }}>
@@ -79,11 +91,22 @@ export default function SoftOpeningReservationPage() {
     void load();
   }, [load]);
 
-  const slots = data?.slots ?? [];
-  const reservations = data?.reservations ?? [];
-  const activeReservations = reservations.filter((item) => item.status !== 'cancelled');
+  const slots = useMemo(() => data?.slots ?? [], [data?.slots]);
+  const reservations = useMemo(() => data?.reservations ?? [], [data?.reservations]);
+  const activeReservations = useMemo(() => reservations.filter((item) => item.status !== 'cancelled'), [reservations]);
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? slots.find((slot) => !slot.is_full && !slot.reserved_by_household) ?? null;
   const activeReservation = activeReservations[0] ?? null;
+  const calendarSlots = useMemo<CalendarSlot[]>(() => slots.map((slot) => ({
+    id: slot.id,
+    start: slot.starts_at,
+    end: slot.ends_at,
+    label: slot.reserved_by_household
+      ? 'My booking'
+      : slot.is_full
+        ? 'Taken'
+        : `${slot.remaining_children} spots left`,
+    status: slot.reserved_by_household ? 'mine' : slot.is_full ? 'full' : 'available',
+  })), [slots]);
 
   useEffect(() => {
     if (!selectedSlotId && selectedSlot?.id) setSelectedSlotId(selectedSlot.id);
@@ -200,6 +223,10 @@ export default function SoftOpeningReservationPage() {
               Choose a soft opening Open Play time before Little Wanderers opens to the public. Reservations are limited
               so the space stays comfortable while our team practices the daily flow.
             </p>
+            <p style={{ margin: '10px 0 0', color: '#5f5570', fontSize: 'clamp(1rem,2vw,1.16rem)', lineHeight: 1.7 }}>
+              The window you choose helps us manage capacity, but it is not a strict arrival or departure time. For example,
+              if you reserve 9:00-11:00, you can arrive any time during that window and stay later while capacity allows.
+            </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {accessLabels.length > 0 ? accessLabels.map((label) => <AccessBadge key={label}>{label}</AccessBadge>) : <AccessBadge>Early access</AccessBadge>}
@@ -227,44 +254,36 @@ export default function SoftOpeningReservationPage() {
           </section>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-          {slots.length === 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12 }}>
+          {[
+            ['Open Play flow', 'Arrive during your selected 2-hour window, then stay and play at an easy pace.'],
+            ['Soft opening note', 'This is our test period, so service may be slower or a little imperfect while we learn. Your encouragement will mean a lot to us.'],
+            ['Window options', 'Soft opening windows are 9-11, 11-1, 1-3, and 3-5 from October 15-31, 2026.'],
+          ].map(([title, copy]) => (
+            <article key={title} style={{ border: '1px solid #eadfff', borderRadius: 16, background: '#faf7ff', padding: 16 }}>
+              <strong style={{ display: 'block', color: '#4f3f82' }}>{title}</strong>
+              <p style={{ margin: '8px 0 0', color: '#6d6480', lineHeight: 1.55 }}>{copy}</p>
+            </article>
+          ))}
+        </div>
+
+        {slots.length === 0 ? (
             <article style={{ gridColumn: '1 / -1', border: '1px solid #f0d89b', borderRadius: 18, background: '#fff8e6', padding: 16 }}>
               <strong style={{ display: 'block', color: '#6b4d12' }}>Times coming soon</strong>
               <p style={{ margin: '8px 0 0', color: '#6d6480', lineHeight: 1.55 }}>
                 Soft opening reservation times will appear here once they are released.
               </p>
             </article>
-          ) : slots.map((slot) => {
-            const selected = selectedSlot?.id === slot.id;
-            const disabled = slot.is_full || slot.reserved_by_household || Boolean(activeReservation);
-            return (
-              <button
-                key={slot.id}
-                type="button"
-                onClick={() => !disabled && setSelectedSlotId(slot.id)}
-                disabled={disabled}
-                style={{
-                  minHeight: 170,
-                  textAlign: 'left',
-                  border: selected ? '2px solid #A78BCB' : '1px solid #eadfff',
-                  borderRadius: 18,
-                  background: selected ? '#fbf8ff' : '#fff',
-                  padding: 16,
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  opacity: disabled && !selected ? 0.62 : 1,
-                  boxShadow: selected ? '0 12px 24px rgba(125,103,156,.14)' : 'none',
-                }}
-              >
-                <strong style={{ display: 'block', color: '#4f3f82', fontSize: 18 }}>{slot.label}</strong>
-                <p style={{ margin: '8px 0 10px', color: '#6d6480', lineHeight: 1.5 }}>{formatVisitRange(slot.starts_at, slot.ends_at)}</p>
-                <span style={{ display: 'inline-flex', borderRadius: 999, background: slot.is_full ? '#fff0fb' : '#fff8e6', border: '1px solid #f0d89b', color: slot.is_full ? '#8a3f6b' : '#7f4a04', padding: '5px 9px', fontSize: 12, fontWeight: 800 }}>
-                  {slot.reserved_by_household ? 'You reserved this' : slot.is_full ? 'Full' : `${slot.remaining_children} child spots left`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        ) : (
+          <AvailabilityCalendar
+            title="Soft opening calendar"
+            subtitle="Choose one 2-hour arrival window. Taken and full windows stay visible so you can see the full soft opening schedule."
+            slots={calendarSlots}
+            onSlotSelect={(slot) => setSelectedSlotId(slot.id)}
+            initialMonth="2026-10"
+            showUpcoming
+          />
+        )}
 
         {!activeReservation && selectedSlot && (
           <section style={{ display: 'grid', gap: 14, border: '1px solid #dfccfb', borderRadius: 18, background: '#faf7ff', padding: 16 }}>
@@ -276,6 +295,16 @@ export default function SoftOpeningReservationPage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+              <label style={{ display: 'grid', gap: 6, color: '#4f3f82', fontWeight: 700 }}>
+                Window
+                <select value={selectedSlot.id} onChange={(event) => setSelectedSlotId(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 12, padding: '12px 14px', color: '#4f3f82', background: '#fff' }}>
+                  {slots.map((slot) => (
+                    <option key={slot.id} value={slot.id} disabled={slot.is_full || slot.reserved_by_household}>
+                      {formatVisitRange(slot.starts_at, slot.ends_at)} {slot.is_full ? '(taken)' : `(${slot.remaining_children} child spots left)`}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label style={{ display: 'grid', gap: 6, color: '#4f3f82', fontWeight: 700 }}>
                 Children
                 <input type="number" min={1} max={6} value={childrenCount} onChange={(event) => setChildrenCount(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 12, padding: '12px 14px', color: '#4f3f82', background: '#fff' }} />
@@ -300,6 +329,9 @@ export default function SoftOpeningReservationPage() {
         <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.55, fontSize: 14 }}>
           Soft opening admission is limited by occupancy and safety needs. If plans change, please cancel your reservation
           so another family can use the spot.
+        </p>
+        <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.55, fontSize: 14 }}>
+          Your selected window is an arrival window, not a checkout time. {selectedSlot ? `For ${formatWindow(selectedSlot.starts_at, selectedSlot.ends_at)}, you can arrive during that window and stay longer as capacity allows.` : 'You can arrive during your reserved window and stay longer as capacity allows.'}
         </p>
       </section>
     </main>

@@ -24,6 +24,9 @@ type ReservationPayload = {
   notes?: string | null;
 };
 
+const SOFT_OPENING_START = '2026-10-15T00:00:00-04:00';
+const SOFT_OPENING_END = '2026-11-01T00:00:00-04:00';
+
 async function getCurrentReservationContext() {
   const server = createServerSupabaseClient();
   const {
@@ -59,6 +62,8 @@ export async function GET() {
         .select(OPEN_PLAY_SLOT_SELECT)
         .eq('is_soft_opening', true)
         .eq('status', 'open')
+        .gte('starts_at', SOFT_OPENING_START)
+        .lt('starts_at', SOFT_OPENING_END)
         .gte('ends_at', new Date().toISOString())
         .order('starts_at', { ascending: true }),
       context.admin
@@ -136,6 +141,19 @@ export async function POST(req: Request) {
     const adultCount = sanitizeReservationCount(body?.adult_count, 1, 2);
     const notes = typeof body?.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 500) : null;
 
+    const { data: existingActive, error: existingActiveError } = await context.admin
+      .from('open_play_reservations')
+      .select('id')
+      .eq('household_id', context.householdId)
+      .neq('status', 'cancelled')
+      .limit(1)
+      .maybeSingle();
+
+    if (existingActiveError) throw new Error(existingActiveError.message);
+    if (existingActive) {
+      return NextResponse.json({ ok: false, error: 'You already have a soft opening reservation. Please cancel it before choosing another time.' }, { status: 409, headers: NO_STORE_HEADERS });
+    }
+
     const { data: slot, error: slotError } = await context.admin
       .from('open_play_reservation_slots')
       .select(OPEN_PLAY_SLOT_SELECT)
@@ -149,6 +167,10 @@ export async function POST(req: Request) {
     }
     if (slot.status !== 'open') {
       return NextResponse.json({ ok: false, error: 'This soft opening visit time is not open for reservations.' }, { status: 409, headers: NO_STORE_HEADERS });
+    }
+    const slotStartMs = new Date(slot.starts_at as string).getTime();
+    if (slotStartMs < new Date(SOFT_OPENING_START).getTime() || slotStartMs >= new Date(SOFT_OPENING_END).getTime()) {
+      return NextResponse.json({ ok: false, error: 'This visit time is outside the soft opening reservation window.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
     if (new Date(slot.ends_at as string).getTime() <= Date.now()) {
       return NextResponse.json({ ok: false, error: 'This soft opening visit time has already passed.' }, { status: 409, headers: NO_STORE_HEADERS });

@@ -36,13 +36,19 @@ export default function SoftOpeningInvitePage() {
             We are preparing a small soft opening window before Little Wanderers opens to the public. Wanderlist families
             and birthday party early access families will be invited to choose a visit time first.
           </p>
+          <p style={{ margin: 0, color: '#5f5570', fontSize: 'clamp(1.02rem,2vw,1.22rem)', lineHeight: 1.7 }}>
+            Reservation windows help us manage capacity, but they are not strict arrival and departure times. If you choose
+            a 9:00-11:00 window, you can arrive any time during that window and stay later while the space remains within
+            capacity.
+          </p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12 }}>
           {[
             ['Limited preview visits', 'A calmer first look at the play studio while we fine-tune opening flow.'],
             ['Wanderlist first', 'Access will be reserved for families already on the Wanderlist or connected to party early access.'],
-            ['Reservation required', 'Soft opening visits will be scheduled by time window so the space stays comfortable.'],
+            ['Flexible visit windows', 'Choose from 9-11, 11-1, 1-3, or 3-5. Come during your window, then enjoy your visit at an easy pace.'],
+            ['Soft opening period', 'This is a test period, so service may be slower or a little imperfect while we learn. Your encouragement will mean a lot to us.'],
           ].map(([title, copy]) => (
             <article key={title} style={{ border: '1px solid #eadfff', borderRadius: 16, background: '#faf7ff', padding: 16 }}>
               <strong style={{ display: 'block', color: '#4f3f82' }}>{title}</strong>
@@ -75,7 +81,8 @@ export default function SoftOpeningInvitePage() {
         </div>
 
         <p style={{ margin: 0, color: '#7b7188', fontSize: 14, lineHeight: 1.6 }}>
-          Please use the same email you used for the Wanderlist or your party early access request.
+          Please use the same email you used for the Wanderlist or your party early access request. Soft opening windows
+          are planned from October 15-31, 2026.
         </p>
       </section>
     </main>
