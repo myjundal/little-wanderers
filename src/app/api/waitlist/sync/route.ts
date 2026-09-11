@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       : [];
 
   if (entries.length === 0) {
-    return NextResponse.json({ ok: false, error: 'No waitlist entries provided.' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'No Wanderlist entries provided.' }, { status: 400 });
   }
 
   const invalid: string[] = [];
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
   const rows = Array.from(rowsByEmail.values());
 
   if (rows.length === 0) {
-    return NextResponse.json({ ok: false, error: 'No valid waitlist emails provided.', invalid }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'No valid Wanderlist emails provided.', invalid }, { status: 400 });
   }
 
   const admin = createAdminSupabaseClient();
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
     await syncWaitlistContacts(admin, rows);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
-    return NextResponse.json({ ok: false, error: `Waitlist synced, but contact tags failed: ${message}` }, { status: 500 });
+    return NextResponse.json({ ok: false, error: `Wanderlist synced, but contact tags failed: ${message}` }, { status: 500 });
   }
 
   return NextResponse.json({

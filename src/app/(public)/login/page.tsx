@@ -127,7 +127,7 @@ export default function LoginPage() {
 
     if (shouldCreateUser && authMethod === 'phone') {
       setShowWaitlistInvite(true);
-      setError('Early access sign-up is currently available by waitlist email only. Please continue with the email you used for the waitlist.');
+      setError('Early access sign-up is currently available by Wanderlist email only. Please continue with the email you used for the Wanderlist.');
       return;
     }
 
@@ -147,7 +147,7 @@ export default function LoginPage() {
           setShowWaitlistInvite(true);
           setError(
             checkJson.error ||
-            'We are currently opening sign-ups to families on our waitlist first. Please join the waitlist and come back here to log in, or feel free to revisit us after opening.'
+            'We are currently opening sign-ups to Wanderlist families first. Please join the Wanderlist and come back here to log in, or feel free to revisit us after opening.'
           );
           return;
         }
@@ -155,12 +155,12 @@ export default function LoginPage() {
         if (checkJson.claimed) {
           setPending(false);
           setJourneyMode('existing');
-          setError('This waitlist email already has an account. Please choose “I already have an account” and sign in.');
+          setError('This Wanderlist email already has an account. Please choose “I already have an account” and sign in.');
           return;
         }
       } catch {
         setPending(false);
-        setError('Unable to check waitlist access right now. Please try again soon.');
+        setError('Unable to check Wanderlist access right now. Please try again soon.');
         return;
       }
     }
@@ -303,17 +303,17 @@ export default function LoginPage() {
       <section style={{ borderRadius: 24, border: '1px solid #e3d0fb', background: '#fff', boxShadow: '0 16px 28px rgba(120,87,177,0.12)', padding: 20 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
         <h1 style={{ margin: '10px 0 8px', color: '#4f3f82', fontSize: 26 }}>Sign in</h1>
-        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Waitlist families can create an account with the email they used to join the list.</p>
+        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Wanderlist families can create an account with the email they used to join the Wanderlist.</p>
 
         <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
-          <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access is open to waitlist families first.</p>
+          <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access is open to Wanderlist families first.</p>
           <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
-            To create your account, choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong> and enter the same email you used for the waitlist.
+            To create your account, choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong> and enter the same email you used for the Wanderlist.
           </p>
           <p style={{ margin: '8px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
-            Not on the waitlist yet?{' '}
+            Not on the Wanderlist yet?{' '}
             <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>
-              Join the waitlist
+              Join the Wanderlist
             </a>
             {' '}and come back here to log in, or feel free to revisit us after opening.
           </p>
@@ -435,9 +435,9 @@ export default function LoginPage() {
         {error && <p style={{ marginTop: 14, color: '#8a3f6b' }}>{error}</p>}
         {showWaitlistInvite && (
           <p style={{ marginTop: 10, color: '#6d6480', lineHeight: 1.5 }}>
-            Already joined the waitlist? Try the email you used. Otherwise,{' '}
+            Already joined the Wanderlist? Try the email you used. Otherwise,{' '}
             <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 700 }}>
-              join the waitlist here
+              join the Wanderlist here
             </a>
             {' '}and come back here to log in, or feel free to revisit us after opening.
           </p>

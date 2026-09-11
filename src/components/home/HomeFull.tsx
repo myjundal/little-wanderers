@@ -31,14 +31,14 @@ export default function HomeFull() {
               </div>
             </div>
             <p className={styles.subtitle}>
-              A calm, dreamy indoor play cafe in West Hartford, CT, designed and crafted for 0-7 year olds, plus a
+              A calm, dreamy indoor play cafe in West Hartford, CT, designed and crafted for 0-5 year olds, plus a
               break in the day and coffee-in-hand moments that feel restorative for parents too.
             </p>
             <p className={styles.subline}>Take a deep breath and a sip of your drink.</p>
 
             <div className={styles.ctaRow}>
               <Link href={WAITLIST_URL} className={styles.primaryBtn} target="_blank" rel="noreferrer">
-                Join Waitlist
+                Join the Wanderlist
               </Link>
               <Link href="/faq" className={styles.secondaryBtn}>
                 FAQ

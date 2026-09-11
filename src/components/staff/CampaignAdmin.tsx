@@ -174,7 +174,7 @@ function isSafeImageUrl(input: string) {
 
 function tagLabel(tag: string) {
   if (tag === 'customer') return 'Customers';
-  if (tag === 'waitlist') return 'Waitlist';
+  if (tag === 'waitlist') return 'Wanderlist';
   if (tag === 'party_early_access') return 'Party early access';
   return tag.replace(/[_:-]+/g, ' ');
 }
@@ -731,7 +731,7 @@ export default function CampaignAdmin() {
 
     const sync = json.sync;
     setMessage(sync
-      ? `Audience refreshed. Checked ${sync.waitlist_count} waitlist emails and confirmed ${sync.tagged_count} waitlist tags.`
+      ? `Audience refreshed. Checked ${sync.waitlist_count} Wanderlist emails and confirmed ${sync.tagged_count} Wanderlist tags.`
       : 'Audience refreshed.'
     );
   };

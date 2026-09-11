@@ -19,6 +19,6 @@ export async function POST() {
     const result = await claimWaitlistForUser(user);
     return NextResponse.json({ ok: true, claimed: result.claimed, household_id: result.householdId });
   } catch {
-    return NextResponse.json({ ok: false, error: 'Unable to mark waitlist access as claimed.' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'Unable to mark Wanderlist access as claimed.' }, { status: 500 });
   }
 }

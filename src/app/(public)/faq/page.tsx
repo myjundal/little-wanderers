@@ -23,12 +23,12 @@ function QA({ q, a }: { q: string; a: string }) {
 }
 
 const faqItems = [
-  { q: 'What is Little Wanderers?', a: 'Little Wanderers Play Studio & Cafe is a thoughtfully designed indoor play cafe in West Hartford, CT for children ages 0–7, with gentle, restorative moments for parents.' },
+  { q: 'What is Little Wanderers?', a: 'Little Wanderers Play Studio & Cafe is a thoughtfully designed indoor play cafe in West Hartford, CT for children ages 0–5, with gentle, restorative moments for parents.' },
   { q: 'What do you offer?', a: 'We offer open play, a variety of classes (including Mommy & Me and kids-only), party and event rentals, coffee, drinks, snacks, and more.' },
   { q: 'Is drop-off permitted for open play?', a: 'No. Little Wanderers is a caregiver-accompanied space, so children must be with a caregiver at all times. For kids-only classes, caregivers should remain onsite outside the classroom.' },
   { q: 'Are there time limits for open play?', a: 'Open play is unlimited, with no time limits.' },
   { q: 'Do I need to reserve in advance?', a: 'We do not require booking in advance, but we do plan to limit capacity for comfort. Walk-ins are welcome, and we encourage checking the live occupancy status on our website before visiting.' },
-  { q: 'How does payment work?', a: 'During early access, waitlist families can request a party hold without paying a deposit today. After our official opening, we will contact you so you can visit the space. If you love it and want to keep the booking, we will collect the 50% party deposit then; otherwise, you can release the hold. Walk-in payment onsite is also available for open play.' },
+  { q: 'How does payment work?', a: 'During early access, Wanderlist families can request a party hold without paying a deposit today. After our official opening, we will contact you so you can visit the space. If you love it and want to keep the booking, we will collect the 50% party deposit then; otherwise, you can release the hold. Walk-in payment onsite is also available for open play.' },
   { q: 'What is your cancellation policy?', a: 'For classes (typically in collaboration with external instructors), cancellation, refund, or reschedule requests are available up to 3 days in advance. For early access party holds, no deposit is collected yet, so you can release the hold when we contact you after opening. Once a party deposit is paid, the 50% deposit is nonrefundable and the remaining 50% is paid upon arrival. One reschedule is allowed; if there is severe weather or an issue on our side, the booking can be rescheduled or refunded. Cancellation requests can also be discussed with us directly.' },
   { q: 'Do you offer food and drinks?', a: 'Yes. We offer hot and cold coffee and drinks, along with pre-packaged snacks and bakery items, with a focus on healthier options.' },
   { q: 'Can I bring outside food?', a: 'Outside food is not permitted, except for private events or specific dietary needs. Small outside snacks are allowed.' },
@@ -36,7 +36,7 @@ const faqItems = [
   { q: 'What are your operating hours?', a: 'We plan to be open year-round: Sunday through Thursday from 9:00 AM to 6:00 PM, and Friday through Saturday from 9:00 AM to 7:00 PM. Hours may be adjusted based on demand.' },
   { q: 'How do you keep the space clean?', a: 'We clean and sanitize toys and surfaces throughout the day (approximately every 30 minutes) and thoughtfully curate materials to keep the environment safe and comfortable.' },
   { q: 'Do we need socks?', a: 'Yes, socks are required for both children and adults in the play area. Shoes are not allowed; cubbies for shoes and belongings are provided at the entrance.' },
-  { q: 'Can I bring my child who is over 7 years old?', a: 'Children of all ages are welcome. However, our space is thoughtfully designed for younger children, and the experience is best suited for ages 0–7.' },
+  { q: 'Can I bring my child who is over 5 years old?', a: 'Children of all ages are welcome. However, our space is thoughtfully designed for younger children, and the experience is best suited for ages 0–5.' },
   { q: 'Will you offer calmer hours?', a: 'Yes, we plan to offer dedicated calmer sessions designed to create a more supportive environment for children with different needs.' },
 ] as const;
 

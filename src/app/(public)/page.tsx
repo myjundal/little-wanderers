@@ -7,7 +7,7 @@ export const metadata = {
     absolute: 'Little Wanderers Play Studio & Cafe | West Hartford, CT',
   },
   description:
-    'Little Wanderers Play Studio & Cafe is a West Hartford, CT indoor play cafe for kids ages 0-7 and their grown-ups in Bishop’s Corner.',
+    'Little Wanderers Play Studio & Cafe is a West Hartford, CT indoor play cafe for kids ages 0-5 and their grown-ups in Bishop’s Corner.',
   keywords: [
     'Little Wanderers West Hartford',
     'Little Wanderers Play Studio',

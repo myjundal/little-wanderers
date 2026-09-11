@@ -17,7 +17,7 @@ const localBusinessJsonLd = {
   logo: `${siteUrl}/logo.png`,
   image: `${siteUrl}/Lobby.png`,
   description:
-    'Little Wanderers Play Studio & Cafe is an indoor play cafe for kids ages 0-7 and their grown-ups in Bishop’s Corner, West Hartford, CT.',
+    'Little Wanderers Play Studio & Cafe is an indoor play cafe for kids ages 0-5 and their grown-ups in Bishop’s Corner, West Hartford, CT.',
   address: {
     '@type': 'PostalAddress',
     addressLocality: 'West Hartford',
@@ -65,10 +65,11 @@ export default async function HomeComingSoon() {
             <br />
             <span className={styles.heroLocationLine}>in West Hartford</span>
           </h1>
-          <p className={styles.comingSoon}>Coming soon end of September/early October 2026</p>
+          <p className={styles.comingSoon}>Coming soon early October 2026</p>
           <p>
-            Designed for curious 0-7 year olds, Little Wanderers Play Studio & Cafe brings imaginative indoor play,
-            dreamy little discoveries, and a cozy cafe pause to families in West Hartford, CT.
+            We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
+            in West Hartford, CT. Join the Wanderlist for opening updates, and when we&apos;re ready, we&apos;ll send priority
+            reservation access before we open to the public!
           </p>
           <p>
             We&apos;re opening in Bishop&apos;s Corner plaza on the Target side, tucked between The Paper Store and Float
@@ -77,8 +78,8 @@ export default async function HomeComingSoon() {
           <div className={styles.actions}>
             <div className={styles.waitlistAction}>
               <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-                <span>Join waitlist</span>
-                <small>Early access families hear first</small>
+                <span>Join the Wanderlist</span>
+                <small>Get opening updates and priority booking access before we open to the public</small>
               </PastelButton>
               <WaitlistCountCard initialCount={{ displayCount: waitlistCount.displayCount }} />
             </div>
@@ -111,13 +112,13 @@ export default async function HomeComingSoon() {
       <section className={styles.partyFeature}>
         <div>
           <p className={styles.partyEyebrow}>Early access parties</p>
-          <h2>Party holds are open for waitlist families</h2>
+          <h2>Party holds are open for Wanderlist families</h2>
           <p>
             With our buildout and opening timeline in mind, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}. Peek at available Friday afternoon, Saturday, and Sunday slots, then request a hold with no deposit today.
           </p>
           {!isAuthenticated && (
             <p className={styles.accessNote}>
-              Requesting a party hold requires My Little Wanderers access. Early access accounts are currently available for waitlist families.
+              Requesting a party hold requires My Little Wanderers access. Early access accounts are currently available for Wanderlist families.
             </p>
           )}
         </div>

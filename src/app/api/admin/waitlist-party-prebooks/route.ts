@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const email = String(body.email ?? '').trim().toLowerCase();
     const normalizedEmail = normalizeWaitlistEmail(email);
     if (!normalizedEmail) {
-      return Response.json({ ok: false, error: 'Enter a valid waitlist email.' }, { status: 400 });
+      return Response.json({ ok: false, error: 'Enter a valid Wanderlist email.' }, { status: 400 });
     }
 
     const start = new Date(String(body.start_time ?? ''));
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
     if (waitlist.error) throw new Error(waitlist.error.message);
     if (!waitlist.data) {
-      return Response.json({ ok: false, error: 'This email is not on the waitlist yet.' }, { status: 404 });
+      return Response.json({ ok: false, error: 'This email is not on the Wanderlist yet.' }, { status: 404 });
     }
 
     const conflicts = await admin
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
       created_by_role: 'owner',
       birthday_child_name: birthdayChildName,
       birthday_age: birthdayAge,
-      occasion_details: 'Prebooked by staff for waitlist party access',
+      occasion_details: 'Prebooked by staff for Wanderlist party access',
     };
 
     let booking = await admin.from('party_bookings').insert(bookingPayload).select('id').maybeSingle();

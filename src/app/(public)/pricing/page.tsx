@@ -184,7 +184,7 @@ export default function PricingPage() {
           Infant siblings are free when listed under the sibling option. For the latest updates and opening info, you
           can also{' '}
           <Link href="https://forms.gle/ucr5SGqiX6A6TJ8K7" target="_blank" rel="noreferrer">
-            join the waitlist here
+            join the Wanderlist here
           </Link>
           .
         </p>

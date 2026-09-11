@@ -39,7 +39,7 @@ export default function WaitlistCountCard({ initialCount, variant = 'default' }:
   return (
     <aside
       className={`${styles.waitlistCountCard} ${variant === 'compact' ? styles.waitlistCountCardCompact : ''}`}
-      aria-label={`${count.displayCount} plus local families have joined the waitlist`}
+      aria-label={`${count.displayCount} plus local families have joined the Wanderlist`}
     >
       <div className={styles.waitlistNumberStage} aria-live="polite" aria-atomic="true">
         <strong key={count.displayCount} className={styles.waitlistNumber}>
@@ -48,7 +48,7 @@ export default function WaitlistCountCard({ initialCount, variant = 'default' }:
       </div>
       <div className={styles.waitlistCountCopy}>
         <span className={styles.waitlistCountEyebrow}>
-          {variant === 'compact' ? 'waitlist families' : 'Families already joined on the waitlist!'}
+          {variant === 'compact' ? 'Wanderlist families' : 'Families already joined the Wanderlist!'}
         </span>
       </div>
     </aside>

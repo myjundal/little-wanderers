@@ -57,7 +57,7 @@ export function PastelHeader({ isAuthenticated = false, waitlistCount }: { isAut
         </PastelButton>
         <div className={styles.waitlistCluster}>
           <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
-            <span>Join waitlist</span>
+            <span>Join the Wanderlist</span>
           </PastelButton>
           {waitlistCount && <WaitlistCountCard initialCount={waitlistCount} variant="compact" />}
         </div>

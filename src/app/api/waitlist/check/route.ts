@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ ok: false, allowed: false, error: 'Unable to check waitlist access right now.' }, { status: 500 });
+    return NextResponse.json({ ok: false, allowed: false, error: 'Unable to check Wanderlist access right now.' }, { status: 500 });
   }
 
   const claimed = Boolean(data?.claimed_user_id);
