@@ -31,6 +31,7 @@ export default function LandingMoreMenu() {
             <>
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">Owner/Staff Tool</Link>
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff/checkin">Staff QR check-in</Link>
+              <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/staff/open-play-reservations">Open Play Reservations</Link>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/party">Party Calendar / My Parties</Link>
             </>
           )}
