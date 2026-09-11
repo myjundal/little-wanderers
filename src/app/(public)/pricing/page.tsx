@@ -32,7 +32,7 @@ const openPlayItems = [
 const membershipItems = [
   {
     title: 'Monthly membership',
-    detail: '$60 per child · unlimited visits for one month',
+    detail: '$60/month for the first child, with unlimited open play during regular open play hours.',
   },
   {
     title: 'Included adults',
@@ -40,11 +40,11 @@ const membershipItems = [
   },
   {
     title: 'Sibling add-on',
-    detail: 'Add a sibling membership for $30 per child.',
+    detail: 'Add a sibling 6 months or older for $20/month.',
   },
   {
     title: 'Infant sibling note',
-    detail: 'If a sibling is 6 months or younger, they are included in the $60 membership. Infant-only memberships are not offered.',
+    detail: 'Babies under 6 months may be added to an existing sibling membership at no additional charge.',
   },
 ];
 
@@ -147,9 +147,9 @@ export default function PricingPage() {
         >
           Monthly Membership
         </p>
-        <h2 style={{ margin: '12px 0 0', color: '#4b4360', fontSize: '1.8rem' }}>$60 per child</h2>
+        <h2 style={{ margin: '12px 0 0', color: '#4b4360', fontSize: '1.8rem' }}>$60/month for the first child</h2>
         <p style={{ margin: '10px 0 0', color: '#7e7695', lineHeight: 1.75 }}>
-          Unlimited visits for one month, with up to 2 adults per family included each time you come.
+          Unlimited open play during regular open play hours, with up to 2 adults per family included each time you come.
         </p>
 
         <div style={{ marginTop: 18, display: 'grid', gap: 14 }}>

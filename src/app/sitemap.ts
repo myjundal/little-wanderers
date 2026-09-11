@@ -5,6 +5,7 @@ export default async function sitemap() {
     { url: `${base}/visit-us`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${base}/pricing`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${base}/party`, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${base}/membership`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${base}/classes`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${base}/faq`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${base}/contact`, changeFrequency: 'monthly', priority: 0.6 },
