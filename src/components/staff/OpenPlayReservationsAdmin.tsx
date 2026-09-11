@@ -49,6 +49,8 @@ type SlotActionInput = {
   window_end?: string;
 };
 
+type UpdateScope = 'window' | 'day' | 'week' | 'range' | 'timeRange';
+
 const SOFT_OPENING_START_DATE = '2026-10-15';
 const SOFT_OPENING_END_DATE = '2026-10-31';
 
@@ -135,6 +137,7 @@ export default function OpenPlayReservationsAdmin() {
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const [rangeStart, setRangeStart] = useState(SOFT_OPENING_START_DATE);
   const [rangeEnd, setRangeEnd] = useState(SOFT_OPENING_END_DATE);
+  const [updateScope, setUpdateScope] = useState<UpdateScope>('window');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,6 +170,13 @@ export default function OpenPlayReservationsAdmin() {
     return map;
   }, [reservations]);
 
+  const selectedDaySlots = useMemo(
+    () => slots.filter((slot) => easternYmd(slot.starts_at) === selectedDate),
+    [selectedDate, slots]
+  );
+  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? selectedDaySlots[0] ?? null;
+  const selectedWeek = getWeekRange(selectedDate);
+
   const calendarSlots = useMemo<CalendarSlot[]>(() => slots.map((slot) => {
     const slotReservations = reservationsBySlot.get(slot.id) ?? [];
     const active = slotReservations.filter((reservation) => reservation.status !== 'cancelled');
@@ -191,11 +201,9 @@ export default function OpenPlayReservationsAdmin() {
     };
   }), [reservationsBySlot, slots]);
 
-  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? slots.find((slot) => easternYmd(slot.starts_at) === selectedDate) ?? null;
-  const selectedDaySlots = slots.filter((slot) => easternYmd(slot.starts_at) === selectedDate);
-  const selectedDayReservations = reservations
+  const selectedDayReservations = useMemo(() => reservations
     .filter((reservation) => selectedDaySlots.some((slot) => slot.id === reservation.slot_id))
-    .sort((a, b) => new Date(a.slot?.starts_at ?? a.created_at).getTime() - new Date(b.slot?.starts_at ?? b.created_at).getTime());
+    .sort((a, b) => new Date(a.slot?.starts_at ?? a.created_at).getTime() - new Date(b.slot?.starts_at ?? b.created_at).getTime()), [reservations, selectedDaySlots]);
   const selectedDayTotals = reservationTotals(selectedDayReservations);
   const allTotals = reservationTotals(reservations);
 
@@ -203,7 +211,41 @@ export default function OpenPlayReservationsAdmin() {
     if (!selectedSlotId && selectedSlot?.id) setSelectedSlotId(selectedSlot.id);
   }, [selectedSlot?.id, selectedSlotId]);
 
-  const updateSlots = async (input: SlotActionInput, label: string) => {
+  const buildSlotAction = (status: 'open' | 'closed'): SlotActionInput | null => {
+    if (updateScope === 'window') {
+      if (!selectedSlot) return null;
+      return { status, starts_at: selectedSlot.starts_at, ends_at: selectedSlot.ends_at };
+    }
+
+    if (updateScope === 'day') return { status, date: selectedDate };
+    if (updateScope === 'week') return { status, start_date: selectedWeek.startDate, end_date: selectedWeek.endDate };
+    if (updateScope === 'range') return { status, start_date: rangeStart, end_date: rangeEnd };
+    if (!selectedSlot) return null;
+    return {
+      status,
+      start_date: rangeStart,
+      end_date: rangeEnd,
+      window_start: easternTimeKey(selectedSlot.starts_at),
+      window_end: easternTimeKey(selectedSlot.ends_at),
+    };
+  };
+
+  const scopeSummary = () => {
+    if (updateScope === 'window' && selectedSlot) return `${formatRange(selectedSlot.starts_at, selectedSlot.ends_at)}`;
+    if (updateScope === 'day') return `All windows on ${selectedDate}`;
+    if (updateScope === 'week') return `All windows from ${selectedWeek.startDate} to ${selectedWeek.endDate}`;
+    if (updateScope === 'range') return `All windows from ${rangeStart} to ${rangeEnd}`;
+    if (updateScope === 'timeRange' && selectedSlot) return `${formatWindow(selectedSlot.starts_at, selectedSlot.ends_at)} from ${rangeStart} to ${rangeEnd}`;
+    return 'Choose a window first';
+  };
+
+  const updateSlots = async (status: 'open' | 'closed') => {
+    const input = buildSlotAction(status);
+    if (!input) {
+      setMessage('Choose a window first.');
+      return;
+    }
+
     setSubmitting(true);
     setMessage(null);
 
@@ -215,12 +257,12 @@ export default function OpenPlayReservationsAdmin() {
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; updated_count?: number };
 
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? `Could not ${label}.`);
+      setMessage(json.error ?? 'Could not update windows.');
       setSubmitting(false);
       return;
     }
 
-    setMessage(`${label}: ${json.updated_count ?? 0} window${json.updated_count === 1 ? '' : 's'} updated.`);
+    setMessage(`${status === 'closed' ? 'Closed' : 'Reopened'} ${json.updated_count ?? 0} window${json.updated_count === 1 ? '' : 's'}.`);
     setSubmitting(false);
     await load();
   };
@@ -246,8 +288,6 @@ export default function OpenPlayReservationsAdmin() {
     setSubmitting(false);
     await load();
   };
-
-  const selectedWeek = getWeekRange(selectedDate);
 
   return (
     <div style={{ display: 'grid', gap: 18, marginTop: 20 }}>
@@ -328,67 +368,6 @@ export default function OpenPlayReservationsAdmin() {
         </div>
       </section>
 
-      <section style={{ border: '1px solid #e8dfef', borderRadius: 18, background: '#fffdf9', padding: 16 }}>
-        <h2 style={{ margin: 0, color: '#4f3f82' }}>Close or reopen windows</h2>
-        <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.5 }}>
-          Closing a window makes it unavailable on the family reservation calendar. Existing reservations stay visible here.
-        </p>
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-          {selectedSlot && (
-            <>
-              <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'closed', starts_at: selectedSlot.starts_at, ends_at: selectedSlot.ends_at }, 'Close selected window')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff0fb', color: '#8a3f6b', padding: '9px 13px', fontWeight: 800 }}>
-                Close selected window
-              </button>
-              <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'open', starts_at: selectedSlot.starts_at, ends_at: selectedSlot.ends_at }, 'Reopen selected window')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff', color: '#5f3da4', padding: '9px 13px', fontWeight: 800 }}>
-                Reopen selected window
-              </button>
-            </>
-          )}
-          <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'closed', date: selectedDate }, 'Close selected day')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff0fb', color: '#8a3f6b', padding: '9px 13px', fontWeight: 800 }}>
-            Close selected day
-          </button>
-          <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'open', date: selectedDate }, 'Reopen selected day')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff', color: '#5f3da4', padding: '9px 13px', fontWeight: 800 }}>
-            Reopen selected day
-          </button>
-          <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'closed', start_date: selectedWeek.startDate, end_date: selectedWeek.endDate }, 'Close selected week')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff0fb', color: '#8a3f6b', padding: '9px 13px', fontWeight: 800 }}>
-            Close selected week
-          </button>
-          <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'open', start_date: selectedWeek.startDate, end_date: selectedWeek.endDate }, 'Reopen selected week')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff', color: '#5f3da4', padding: '9px 13px', fontWeight: 800 }}>
-            Reopen selected week
-          </button>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginTop: 14 }}>
-          <label style={{ display: 'grid', gap: 6, color: '#4f3f82', fontWeight: 700 }}>
-            Range start
-            <input type="date" min={SOFT_OPENING_START_DATE} max={SOFT_OPENING_END_DATE} value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} style={{ border: '1px solid #d8c5f6', borderRadius: 12, padding: '10px 12px', color: '#4f3f82', background: '#fff' }} />
-          </label>
-          <label style={{ display: 'grid', gap: 6, color: '#4f3f82', fontWeight: 700 }}>
-            Range end
-            <input type="date" min={SOFT_OPENING_START_DATE} max={SOFT_OPENING_END_DATE} value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} style={{ border: '1px solid #d8c5f6', borderRadius: 12, padding: '10px 12px', color: '#4f3f82', background: '#fff' }} />
-          </label>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-          <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'closed', start_date: rangeStart, end_date: rangeEnd }, 'Close date range')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff0fb', color: '#8a3f6b', padding: '9px 13px', fontWeight: 800 }}>
-            Close date range
-          </button>
-          <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'open', start_date: rangeStart, end_date: rangeEnd }, 'Reopen date range')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff', color: '#5f3da4', padding: '9px 13px', fontWeight: 800 }}>
-            Reopen date range
-          </button>
-          {selectedSlot && (
-            <>
-              <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'closed', start_date: rangeStart, end_date: rangeEnd, window_start: easternTimeKey(selectedSlot.starts_at), window_end: easternTimeKey(selectedSlot.ends_at) }, `Close ${formatWindow(selectedSlot.starts_at, selectedSlot.ends_at)} in range`)} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff0fb', color: '#8a3f6b', padding: '9px 13px', fontWeight: 800 }}>
-                Close this time in range
-              </button>
-              <button type="button" disabled={submitting} onClick={() => updateSlots({ status: 'open', start_date: rangeStart, end_date: rangeEnd, window_start: easternTimeKey(selectedSlot.starts_at), window_end: easternTimeKey(selectedSlot.ends_at) }, `Reopen ${formatWindow(selectedSlot.starts_at, selectedSlot.ends_at)} in range`)} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff', color: '#5f3da4', padding: '9px 13px', fontWeight: 800 }}>
-                Reopen this time in range
-              </button>
-            </>
-          )}
-        </div>
-      </section>
-
       <section style={{ display: 'grid', gap: 12 }}>
         <h2 style={{ margin: 0, color: '#4f3f82' }}>Reservations for {selectedDate}</h2>
         {selectedDayReservations.length === 0 ? (
@@ -421,6 +400,54 @@ export default function OpenPlayReservationsAdmin() {
             </div>
           </article>
         ))}
+      </section>
+
+      <section style={{ border: '1px solid #e8dfef', borderRadius: 18, background: '#fffdf9', padding: 16 }}>
+        <h2 style={{ margin: 0, color: '#4f3f82' }}>Close or reopen windows</h2>
+        <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.5 }}>
+          Closing windows makes them unavailable on the family calendar. Existing reservations stay visible above.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12, marginTop: 14 }}>
+          <label style={{ display: 'grid', gap: 6, color: '#4f3f82', fontWeight: 700 }}>
+            Update
+            <select value={updateScope} onChange={(event) => setUpdateScope(event.target.value as UpdateScope)} style={{ border: '1px solid #d8c5f6', borderRadius: 12, padding: '10px 12px', color: '#4f3f82', background: '#fff' }}>
+              <option value="window">Selected window only</option>
+              <option value="day">Selected day</option>
+              <option value="week">Selected week</option>
+              <option value="range">Date range</option>
+              <option value="timeRange">Selected time across date range</option>
+            </select>
+          </label>
+
+          {(updateScope === 'range' || updateScope === 'timeRange') && (
+            <>
+              <label style={{ display: 'grid', gap: 6, color: '#4f3f82', fontWeight: 700 }}>
+                Range start
+                <input type="date" min={SOFT_OPENING_START_DATE} max={SOFT_OPENING_END_DATE} value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} style={{ border: '1px solid #d8c5f6', borderRadius: 12, padding: '10px 12px', color: '#4f3f82', background: '#fff' }} />
+              </label>
+              <label style={{ display: 'grid', gap: 6, color: '#4f3f82', fontWeight: 700 }}>
+                Range end
+                <input type="date" min={SOFT_OPENING_START_DATE} max={SOFT_OPENING_END_DATE} value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} style={{ border: '1px solid #d8c5f6', borderRadius: 12, padding: '10px 12px', color: '#4f3f82', background: '#fff' }} />
+              </label>
+            </>
+          )}
+        </div>
+
+        <div style={{ marginTop: 12, borderRadius: 14, border: '1px solid #eadfff', background: '#faf7ff', padding: 12 }}>
+          <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.5 }}>
+            Target: <strong style={{ color: '#4f3f82' }}>{scopeSummary()}</strong>
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+          <button type="button" disabled={submitting} onClick={() => updateSlots('closed')} style={{ border: '1px solid #e5bad1', borderRadius: 999, background: '#fff0fb', color: '#8a3f6b', padding: '11px 18px', fontWeight: 900 }}>
+            Close target
+          </button>
+          <button type="button" disabled={submitting} onClick={() => updateSlots('open')} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff', color: '#5f3da4', padding: '11px 18px', fontWeight: 900 }}>
+            Reopen target
+          </button>
+        </div>
       </section>
     </div>
   );

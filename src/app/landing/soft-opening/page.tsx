@@ -119,7 +119,7 @@ export default function SoftOpeningReservationPage() {
   const accessLabels = useMemo(() => {
     const labels: string[] = [];
     if (data?.access?.on_wanderlist) labels.push('Wanderlist');
-    if (data?.access?.party_early_access || data?.access?.has_party_booking) labels.push('Party early access');
+    if (labels.length === 0 && (data?.access?.party_early_access || data?.access?.has_party_booking)) labels.push('Private access');
     return [...new Set(labels)];
   }, [data]);
 
