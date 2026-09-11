@@ -101,10 +101,10 @@ export default function SoftOpeningReservationPage() {
     start: slot.starts_at,
     end: slot.ends_at,
     label: slot.reserved_by_household
-      ? 'My booking'
+      ? `${formatWindow(slot.starts_at, slot.ends_at)} mine`
       : slot.is_full
-        ? 'Taken'
-        : `${slot.remaining_children} spots left`,
+        ? `${formatWindow(slot.starts_at, slot.ends_at)} taken`
+        : formatWindow(slot.starts_at, slot.ends_at),
     status: slot.reserved_by_household ? 'mine' : slot.is_full ? 'full' : 'available',
   })), [slots]);
 
@@ -254,19 +254,6 @@ export default function SoftOpeningReservationPage() {
           </section>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12 }}>
-          {[
-            ['Open Play flow', 'Arrive during your selected 2-hour window, then stay and play at an easy pace.'],
-            ['Soft opening note', 'This is our test period, so service may be slower or a little imperfect while we learn. Your encouragement will mean a lot to us.'],
-            ['Window options', 'Soft opening windows are 9-11, 11-1, 1-3, and 3-5 from October 15-31, 2026.'],
-          ].map(([title, copy]) => (
-            <article key={title} style={{ border: '1px solid #eadfff', borderRadius: 16, background: '#faf7ff', padding: 16 }}>
-              <strong style={{ display: 'block', color: '#4f3f82' }}>{title}</strong>
-              <p style={{ margin: '8px 0 0', color: '#6d6480', lineHeight: 1.55 }}>{copy}</p>
-            </article>
-          ))}
-        </div>
-
         {slots.length === 0 ? (
             <article style={{ gridColumn: '1 / -1', border: '1px solid #f0d89b', borderRadius: 18, background: '#fff8e6', padding: 16 }}>
               <strong style={{ display: 'block', color: '#6b4d12' }}>Times coming soon</strong>
@@ -277,13 +264,22 @@ export default function SoftOpeningReservationPage() {
         ) : (
           <AvailabilityCalendar
             title="Soft opening calendar"
-            subtitle="Choose one 2-hour arrival window. Taken and full windows stay visible so you can see the full soft opening schedule."
+            subtitle="October 15-31, 2026. Choose one 2-hour arrival window: 9-11, 11-1, 1-3, or 3-5."
             slots={calendarSlots}
             onSlotSelect={(slot) => setSelectedSlotId(slot.id)}
             initialMonth="2026-10"
-            showUpcoming
+            maxVisibleSlotsPerDay={4}
+            formatSlotPillLabel={(slot) => slot.label}
           />
         )}
+
+        <section style={{ border: '1px solid #eadfff', borderRadius: 16, background: '#faf7ff', padding: 16 }}>
+          <strong style={{ display: 'block', color: '#4f3f82' }}>About the visit window</strong>
+          <p style={{ margin: '8px 0 0', color: '#6d6480', lineHeight: 1.55 }}>
+            Arrive during your selected 2-hour window, then stay and play at an easy pace. This is our test period, so
+            service may be slower or a little imperfect while we learn. Your encouragement will mean a lot to us.
+          </p>
+        </section>
 
         {!activeReservation && selectedSlot && (
           <section style={{ display: 'grid', gap: 14, border: '1px solid #dfccfb', borderRadius: 18, background: '#faf7ff', padding: 16 }}>
