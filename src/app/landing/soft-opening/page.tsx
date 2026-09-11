@@ -12,6 +12,7 @@ type Slot = {
   ends_at: string;
   capacity_children: number;
   capacity_total: number | null;
+  status: 'open' | 'hidden' | 'closed';
   notes: string | null;
   occupancy?: {
     children: number;
@@ -20,6 +21,7 @@ type Slot = {
   };
   remaining_children: number;
   remaining_total: number | null;
+  is_closed: boolean;
   is_full: boolean;
   reserved_by_household: boolean;
 };
@@ -52,13 +54,13 @@ type ReservationResponse = {
 function formatVisitRange(startIso: string, endIso: string) {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  return `${start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}, ${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
+  return `${start.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' })}, ${start.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
 }
 
 function formatWindow(startIso: string, endIso: string) {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  return `${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
+  return `${start.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric' }).toLowerCase()}`;
 }
 
 function AccessBadge({ children }: { children: string }) {
@@ -94,18 +96,20 @@ export default function SoftOpeningReservationPage() {
   const slots = useMemo(() => data?.slots ?? [], [data?.slots]);
   const reservations = useMemo(() => data?.reservations ?? [], [data?.reservations]);
   const activeReservations = useMemo(() => reservations.filter((item) => item.status !== 'cancelled'), [reservations]);
-  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? slots.find((slot) => !slot.is_full && !slot.reserved_by_household) ?? null;
+  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId && !slot.is_closed && !slot.is_full) ?? slots.find((slot) => !slot.is_closed && !slot.is_full && !slot.reserved_by_household) ?? null;
   const activeReservation = activeReservations[0] ?? null;
   const calendarSlots = useMemo<CalendarSlot[]>(() => slots.map((slot) => ({
     id: slot.id,
     start: slot.starts_at,
     end: slot.ends_at,
-    label: slot.reserved_by_household
+    label: slot.is_closed
+        ? `${formatWindow(slot.starts_at, slot.ends_at)} closed`
+        : slot.reserved_by_household
       ? `${formatWindow(slot.starts_at, slot.ends_at)} mine`
-      : slot.is_full
+        : slot.is_full
         ? `${formatWindow(slot.starts_at, slot.ends_at)} taken`
         : formatWindow(slot.starts_at, slot.ends_at),
-    status: slot.reserved_by_household ? 'mine' : slot.is_full ? 'full' : 'available',
+    status: slot.is_closed ? 'closed' : slot.reserved_by_household ? 'mine' : slot.is_full ? 'full' : 'available',
   })), [slots]);
 
   useEffect(() => {
@@ -248,6 +252,11 @@ export default function SoftOpeningReservationPage() {
             <p style={{ margin: 0, color: '#6d6480', lineHeight: 1.55 }}>
               {activeReservation.child_count} child{activeReservation.child_count === 1 ? '' : 'ren'} and {activeReservation.adult_count} adult{activeReservation.adult_count === 1 ? '' : 's'}.
             </p>
+            {activeReservation.slot.status === 'closed' && (
+              <p style={{ margin: '8px 0 0', color: '#8a3f6b', lineHeight: 1.55, fontWeight: 800 }}>
+                This visit window is currently closed. We will follow up if your reservation needs to change.
+              </p>
+            )}
             <button type="button" onClick={() => cancelReservation(activeReservation.id)} disabled={submitting} style={{ marginTop: 14, border: '1px solid #d9c8f7', borderRadius: 999, background: '#fff', color: '#8a3f6b', padding: '10px 18px', fontWeight: 900 }}>
               {submitting ? 'Cancelling...' : 'Cancel reservation'}
             </button>
@@ -295,8 +304,8 @@ export default function SoftOpeningReservationPage() {
                 Window
                 <select value={selectedSlot.id} onChange={(event) => setSelectedSlotId(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 12, padding: '12px 14px', color: '#4f3f82', background: '#fff' }}>
                   {slots.map((slot) => (
-                    <option key={slot.id} value={slot.id} disabled={slot.is_full || slot.reserved_by_household}>
-                      {formatVisitRange(slot.starts_at, slot.ends_at)} {slot.is_full ? '(taken)' : `(${slot.remaining_children} child spots left)`}
+                    <option key={slot.id} value={slot.id} disabled={slot.is_closed || slot.is_full || slot.reserved_by_household}>
+                      {formatVisitRange(slot.starts_at, slot.ends_at)} {slot.is_closed ? '(closed)' : slot.is_full ? '(taken)' : `(${slot.remaining_children} child spots left)`}
                     </option>
                   ))}
                 </select>

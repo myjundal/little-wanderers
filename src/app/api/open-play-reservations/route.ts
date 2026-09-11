@@ -61,7 +61,7 @@ export async function GET() {
         .from('open_play_reservation_slots')
         .select(OPEN_PLAY_SLOT_SELECT)
         .eq('is_soft_opening', true)
-        .eq('status', 'open')
+        .neq('status', 'hidden')
         .gte('starts_at', SOFT_OPENING_START)
         .lt('starts_at', SOFT_OPENING_END)
         .gte('ends_at', new Date().toISOString())
@@ -114,6 +114,7 @@ export async function GET() {
         occupancy,
         remaining_children: remainingChildren,
         remaining_total: remainingTotal,
+        is_closed: slot.status === 'closed',
         is_full: remainingChildren <= 0 || (remainingTotal != null && remainingTotal <= 0),
       };
     });

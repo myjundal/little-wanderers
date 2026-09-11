@@ -14,7 +14,7 @@ select
   'Soft Opening Open Play',
   (day::date + window_start::time) at time zone 'America/New_York',
   (day::date + window_end::time) at time zone 'America/New_York',
-  8,
+  10,
   null,
   'open',
   'Two-hour arrival window. Families may arrive any time during the window and stay beyond the window as capacity allows.',

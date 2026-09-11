@@ -7,7 +7,7 @@ export type CalendarSlot = {
   start: string;
   end: string;
   label: string;
-  status: 'available' | 'booked' | 'full' | 'mine';
+  status: 'available' | 'booked' | 'full' | 'mine' | 'closed';
 };
 
 type Props = {
@@ -20,6 +20,7 @@ type Props = {
   initialMonth?: string;
   maxVisibleSlotsPerDay?: number;
   formatSlotPillLabel?: (slot: CalendarSlot) => string;
+  selectableStatuses?: CalendarSlot['status'][];
 };
 
 const statusColor: Record<CalendarSlot['status'], string> = {
@@ -27,6 +28,7 @@ const statusColor: Record<CalendarSlot['status'], string> = {
   booked: '#f39db0',
   full: '#7f7f9b',
   mine: '#5f9df3',
+  closed: '#a79fb3',
 };
 
 const statusLabel: Record<CalendarSlot['status'], string> = {
@@ -34,6 +36,7 @@ const statusLabel: Record<CalendarSlot['status'], string> = {
   booked: 'Booked',
   full: 'Full',
   mine: 'My booking',
+  closed: 'Closed',
 };
 
 function ymd(date: Date) {
@@ -50,6 +53,7 @@ export default function AvailabilityCalendar({
   initialMonth,
   maxVisibleSlotsPerDay = 2,
   formatSlotPillLabel,
+  selectableStatuses = ['available'],
 }: Props) {
   const [cursor, setCursor] = useState(() => {
     if (initialMonth) {
@@ -65,6 +69,10 @@ export default function AvailabilityCalendar({
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
       .filter((slot) => new Date(slot.start).getTime() >= Date.now())
       .slice(0, 8),
+    [slots]
+  );
+  const legendEntries = useMemo(
+    () => Object.entries(statusLabel).filter(([status]) => status !== 'closed' || slots.some((slot) => slot.status === 'closed')),
     [slots]
   );
 
@@ -212,7 +220,7 @@ export default function AvailabilityCalendar({
               <div style={{ fontSize: 12, fontWeight: 800, color: '#5d4f88' }}>{d.getDate()}</div>
               <div style={{ display: 'grid', gap: 4, marginTop: 5 }}>
                 {displaySlots.slice(0, maxVisibleSlotsPerDay).map((slot) => {
-                  const selectable = slot.status === 'available' && Boolean(onSlotSelect);
+                  const selectable = selectableStatuses.includes(slot.status) && Boolean(onSlotSelect);
                   const pillLabel = formatSlotPillLabel
                     ? formatSlotPillLabel(slot)
                     : `${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} ${slot.label}${slot.count > 1 ? ` (${slot.count})` : ''}`;
@@ -288,7 +296,7 @@ export default function AvailabilityCalendar({
           </div>
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
             {(dayMap.get(expandedDayKey) ?? []).map((slot) => {
-              const selectable = slot.status === 'available' && Boolean(onSlotSelect);
+              const selectable = selectableStatuses.includes(slot.status) && Boolean(onSlotSelect);
               const label = `${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} · ${slot.label} (${statusLabel[slot.status]})`;
               return selectable ? (
                 <button
@@ -309,7 +317,7 @@ export default function AvailabilityCalendar({
       )}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
-        {Object.entries(statusLabel).map(([k, v]) => (
+        {legendEntries.map(([k, v]) => (
           <span key={k} style={{ fontSize: 12, color: '#55417f', fontWeight: 700 }}>
             <span
               style={{
