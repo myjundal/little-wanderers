@@ -7,6 +7,7 @@ import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://thelittlewanderers.com';
+const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
 
 const localBusinessJsonLd = {
   '@context': 'https://schema.org',
@@ -65,11 +66,15 @@ export default async function HomeComingSoon() {
             <br />
             <span className={styles.heroLocationLine}>in West Hartford</span>
           </h1>
-          <p className={styles.comingSoon}>Coming soon early October 2026</p>
+          <p className={styles.comingSoon}>Soft opening mid-October 2026 · Grand opening early November</p>
           <p>
             We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
-            in West Hartford, CT. Join the Wanderlist for opening updates, and when we&apos;re ready, we&apos;ll send priority
-            reservation access before we open to the public!
+            in West Hartford, CT. Soft opening invitations will go to Wanderlist families first, so if you&apos;d like to
+            join us for soft opening,{' '}
+            <a href={WAITLIST_URL} className={styles.inlineLink} target="_blank" rel="noreferrer">
+              join our Wanderlist
+            </a>{' '}
+            and we&apos;ll send opening updates and priority reservation access before we open to the public!
           </p>
           <p>
             We&apos;re opening in Bishop&apos;s Corner plaza on the Target side, tucked between The Paper Store and Float
@@ -77,7 +82,7 @@ export default async function HomeComingSoon() {
           </p>
           <div className={styles.actions}>
             <div className={styles.waitlistAction}>
-              <PastelButton href="https://forms.gle/ucr5SGqiX6A6TJ8K7" external>
+              <PastelButton href={WAITLIST_URL} external>
                 <span>Join the Wanderlist</span>
                 <small>Get opening updates and priority booking access before we open to the public</small>
               </PastelButton>

@@ -6,6 +6,7 @@
 .heroLocationLine{display:inline-block;font-size:.82em;line-height:1.02}
 .comingSoon{color:#9E8FBF;font-weight:600;letter-spacing:.02em;margin:18px 0 8px}
 .left p{max-width:520px;color:#4A4A4A;line-height:1.8;font-size:1.04rem;margin-top:10px}
+.inlineLink{color:#8d65bd;font-weight:800;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
 .subline{color:#8f85a5;font-size:1rem;font-style:italic}
 .actions{display:grid;gap:14px;margin-top:24px}
 .waitlistAction{display:flex;align-items:stretch;gap:12px;width:100%;max-width:520px}
