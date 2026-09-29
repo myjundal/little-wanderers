@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: Params) {
         household_id: householdId,
         child_id: person.role === 'child' ? person.id : null,
         created_by_user_id: context.user.id,
-        created_by_role: 'owner',
+        created_by_role: context.role,
       })
       .eq('id', existing.id);
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
@@ -74,7 +74,7 @@ export async function POST(req: Request, { params }: Params) {
       household_id: householdId,
       child_id: person.role === 'child' ? person.id : null,
       created_by_user_id: context.user.id,
-      created_by_role: 'owner',
+      created_by_role: context.role,
     })
     .select('id')
     .maybeSingle();

@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: Params) {
       action: eventAction,
       notes: notes ?? null,
       created_by_user_id: context.user.id,
-      created_by_role: 'owner',
+      created_by_role: context.role,
     });
   };
 
