@@ -67,7 +67,15 @@ async function getAuthUserEmail(admin: SupabaseClient, userId: string | null | u
   return authUser.user?.email?.trim() ?? '';
 }
 
-async function getHouseholdRecipientEmail(admin: SupabaseClient, householdId: string, preferredUserId?: string | null) {
+async function getHouseholdRecipientEmail(
+  admin: SupabaseClient,
+  householdId: string,
+  preferredUserId?: string | null,
+  preferredEmail?: string | null
+) {
+  const directEmail = typeof preferredEmail === 'string' ? preferredEmail.trim() : '';
+  if (directEmail) return directEmail;
+
   const { data: household, error: householdError } = await admin
     .from('households')
     .select('email,user_id')
@@ -157,7 +165,8 @@ export async function countWaitlistRegistrations(admin: SupabaseClient, classId:
 export async function sendClassRegistrationEmail(
   admin: SupabaseClient,
   registrationId: string,
-  status: 'scheduled' | 'waitlist'
+  status: 'scheduled' | 'waitlist',
+  fallbackEmail?: string | null
 ) {
   const { data: reg, error: regError } = await admin
     .from('class_registrations')
@@ -186,7 +195,7 @@ export async function sendClassRegistrationEmail(
   if (personError) throw new Error(personError.message);
   if (!person?.household_id) return { ok: false as const, error: 'person household not found' };
 
-  const to = await getHouseholdRecipientEmail(admin, person.household_id, reg.created_by_user_id);
+  const to = await getHouseholdRecipientEmail(admin, person.household_id, reg.created_by_user_id, fallbackEmail);
   if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
 
   const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';
@@ -243,7 +252,7 @@ export async function sendClassRegistrationEmail(
   });
 }
 
-export async function sendClassCancellationEmail(admin: SupabaseClient, registrationId: string) {
+export async function sendClassCancellationEmail(admin: SupabaseClient, registrationId: string, fallbackEmail?: string | null) {
   const { data: reg, error: regError } = await admin
     .from('class_registrations')
     .select('id,class_id,person_id,created_by_user_id')
@@ -271,7 +280,7 @@ export async function sendClassCancellationEmail(admin: SupabaseClient, registra
   if (personError) throw new Error(personError.message);
   if (!person?.household_id) return { ok: false as const, error: 'person household not found' };
 
-  const to = await getHouseholdRecipientEmail(admin, person.household_id, reg.created_by_user_id);
+  const to = await getHouseholdRecipientEmail(admin, person.household_id, reg.created_by_user_id, fallbackEmail);
   if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
 
   const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';

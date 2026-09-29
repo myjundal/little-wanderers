@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { offerNextWaitlistSpot, sendClassCancellationEmail } from '@/lib/class-waitlist';
+import { logger } from '@/lib/logger';
 
 const admin = () =>
   createClient(
@@ -73,15 +74,22 @@ export async function POST(req: Request) {
       .eq('id', registrationId);
 
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-    const cancellationEmail = await sendClassCancellationEmail(supa, registrationId).catch((emailError) => ({
+    const cancellationEmail = await sendClassCancellationEmail(supa, registrationId, user.email).catch((emailError) => ({
       ok: false as const,
       error: emailError instanceof Error ? emailError.message : 'Unable to send cancellation email.',
     }));
+    if (!cancellationEmail.ok || 'skipped' in cancellationEmail) {
+      logger.warn({ action: 'class.cancellation_email_not_sent', userId: user.id, householdId, registrationId, result: cancellationEmail });
+    }
 
     const waitlistOffer = await offerNextWaitlistSpot(supa, reg.class_id, new URL(req.url).origin).catch((offerError) => ({
       ok: false as const,
       error: offerError instanceof Error ? offerError.message : 'Unable to send waitlist offer.',
     }));
+    const waitlistOfferEmailFailed = waitlistOffer.ok && 'email' in waitlistOffer && waitlistOffer.email && !waitlistOffer.email.ok;
+    if (!waitlistOffer.ok || waitlistOfferEmailFailed) {
+      logger.warn({ action: 'class.waitlist_offer_email_not_sent', userId: user.id, householdId, registrationId, result: waitlistOffer });
+    }
 
     return Response.json({ ok: true, cancellation_email: cancellationEmail, waitlist_offer: waitlistOffer });
   } catch (e: unknown) {

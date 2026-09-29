@@ -8,6 +8,7 @@ import {
   isUserOnWanderlist,
   sendClassRegistrationEmail,
 } from '@/lib/class-waitlist';
+import { logger } from '@/lib/logger';
 
 const admin = () =>
   createClient(
@@ -108,10 +109,13 @@ export async function POST(req: Request) {
         .eq('id', already.id);
       if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
-      const email = await sendClassRegistrationEmail(supa, already.id, nextStatus).catch((emailError) => ({
+      const email = await sendClassRegistrationEmail(supa, already.id, nextStatus, user.email).catch((emailError) => ({
         ok: false as const,
         error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
       }));
+      if (!email.ok || 'skipped' in email) {
+        logger.warn({ action: 'class.registration_email_not_sent', userId: user.id, householdId, registrationId: already.id, status: nextStatus, result: email });
+      }
 
       return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email });
     }
@@ -133,11 +137,14 @@ export async function POST(req: Request) {
     if (insertErr) return Response.json({ ok: false, error: insertErr.message }, { status: 500 });
 
     const email = inserted?.id
-      ? await sendClassRegistrationEmail(supa, inserted.id, nextStatus).catch((emailError) => ({
+      ? await sendClassRegistrationEmail(supa, inserted.id, nextStatus, user.email).catch((emailError) => ({
           ok: false as const,
           error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
         }))
       : { ok: false as const, error: 'registration id missing' };
+    if (!email.ok || 'skipped' in email) {
+      logger.warn({ action: 'class.registration_email_not_sent', userId: user.id, householdId, registrationId: inserted?.id ?? null, status: nextStatus, result: email });
+    }
 
     return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email });
   } catch (e: unknown) {

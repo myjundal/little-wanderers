@@ -373,7 +373,16 @@ export default function ClassSchedulePage() {
       return;
     }
 
-    setMessage(json.status === 'waitlist' ? 'Class is full. You are on the waitlist.' : 'Pre-registration complete.');
+    const emailFailed = json.email && (!json.email.ok || json.email.skipped);
+    setMessage(
+      emailFailed
+        ? json.status === 'waitlist'
+          ? 'Class is full. You are on the waitlist, but we could not send the confirmation email yet.'
+          : 'Pre-registration complete, but we could not send the confirmation email yet.'
+        : json.status === 'waitlist'
+          ? 'Class is full. You are on the waitlist. Confirmation email sent.'
+          : 'Pre-registration complete. Confirmation email sent.'
+    );
     await load(false);
   };
 
@@ -394,7 +403,12 @@ export default function ClassSchedulePage() {
       return;
     }
 
-    setMessage('Paid class booking has been cancelled.');
+    const cancellationEmailFailed = json.cancellation_email && (!json.cancellation_email.ok || json.cancellation_email.skipped);
+    setMessage(
+      cancellationEmailFailed
+        ? 'Class booking has been cancelled, but we could not send the cancellation email yet.'
+        : 'Class booking has been cancelled. Cancellation email sent.'
+    );
     setCancellingId(null);
     await load(false);
   };
