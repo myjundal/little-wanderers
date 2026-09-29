@@ -135,6 +135,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           caregiver_participation: parsed.data.caregiver_participation,
           schedule_note: parsed.data.schedule_note,
           schedule_label: parsed.data.schedule_label,
+          status: parsed.data.status,
         };
         const seriesUpdate = await context.admin.from('classes').update(seriesData).in('id', seriesIds);
         if (seriesUpdate.error) {

@@ -606,14 +606,25 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const updateClassStatus = async (item: ClassItem, status: 'scheduled' | 'cancelled') => {
-    if (status === 'cancelled' && !window.confirm('Cancel this class schedule item? Existing registrations will stay in the history.')) return;
+  const updateClassStatus = async (
+    item: ClassItem,
+    status: 'scheduled' | 'cancelled',
+    options?: { applyToSeries?: boolean; occurrenceCount?: number }
+  ) => {
+    const applyToSeries = Boolean(options?.applyToSeries);
+    const scope = applyToSeries && (options?.occurrenceCount ?? 0) > 1
+      ? `all ${options?.occurrenceCount} dates for this class`
+      : 'this class schedule item';
+    if (status === 'cancelled' && !window.confirm(`Cancel ${scope}? Existing registrations will stay in the history.`)) return;
 
     const form = fromClass(item);
     const res = await fetch(`/api/admin/classes/${item.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(classPayloadFromForm({ ...form, status }, form.date, status)),
+      body: JSON.stringify({
+        ...classPayloadFromForm({ ...form, status }, form.date, status),
+        apply_to_series: applyToSeries,
+      }),
     });
     const json = await res.json();
     if (!res.ok || !json.ok) {
@@ -621,7 +632,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
       return;
     }
 
-    setMessage(status === 'cancelled' ? 'Class cancelled.' : 'Class restored.');
+    setMessage(status === 'cancelled' ? (applyToSeries ? 'Class series cancelled.' : 'Class cancelled.') : 'Class restored.');
     if (editingClassId === item.id) {
       setEditingClassId(null);
       setClassForm(emptyClassForm());
@@ -977,6 +988,12 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}>Edit info</button>
                     <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => copyClassToNew(series)}>Duplicate</button>
+                    <button
+                      style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }}
+                      onClick={() => updateClassStatus(series, 'cancelled', { applyToSeries: true, occurrenceCount: series.occurrences.length })}
+                    >
+                      Cancel class
+                    </button>
                   </div>
                 </div>
               </div>
