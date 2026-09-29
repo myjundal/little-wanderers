@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendResendEmail } from '@/lib/email-campaigns';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 
-const WAITLIST_OFFER_HOURS = 48;
+const WAITLIST_OFFER_HOURS = 24;
 
 function escapeHtml(input: string) {
   return input
