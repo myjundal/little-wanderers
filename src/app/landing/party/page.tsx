@@ -486,22 +486,13 @@ export default function PartyPage() {
             <li>A sweet group photo moment</li>
           </ul>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What to bring</h3>
-          <div style={{ display: 'grid', border: '1px solid #eadfff', borderRadius: 14, overflow: 'hidden', background: '#fffdf9' }}>
-            {PARTY_BRING_GROUPS.map((item, index) => (
-              <div
-                key={item.title}
-                style={{
-                  display: 'grid',
-                  gap: 4,
-                  padding: '12px 14px',
-                  borderTop: index === 0 ? 'none' : '1px solid #f0e7fb',
-                }}
-              >
-                <strong style={{ color: '#4f3f82', fontSize: 15 }}>{item.title}</strong>
-                <span style={{ color: '#6f628d', lineHeight: 1.55 }}>{item.detail}</span>
-              </div>
+          <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
+            {PARTY_BRING_GROUPS.map((item) => (
+              <li key={item.title}>
+                <strong>{item.title}:</strong> {item.detail}
+              </li>
             ))}
-          </div>
+          </ul>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>Final details</h3>
           <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
             {PARTY_FINAL_DETAILS.map((item) => <li key={item}>{item}</li>)}
