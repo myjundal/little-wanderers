@@ -67,6 +67,7 @@ export default function AppHome() {
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
+  const showClassBookingLink = canUseOwnerDashboard || SHOW_CUSTOMER_CLASS_BOOKING;
 
   useEffect(() => {
     const run = async () => {
@@ -331,7 +332,7 @@ export default function AppHome() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Tool</Link>
             <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Staff QR check-in</Link>
-            {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
+            {showClassBookingLink && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
             <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
           </div>
         </section>
@@ -343,7 +344,7 @@ export default function AppHome() {
           <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
           <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
           {SHOW_CUSTOMER_MEMBERSHIP && <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>}
-          {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
+          {showClassBookingLink && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
           <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
           <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
             UX Flows (preview)
@@ -389,7 +390,7 @@ export default function AppHome() {
       </section>
       )}
 
-      <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', SHOW_CUSTOMER_CLASS_BOOKING ? 'mobileBottomWithClasses' : ''].filter(Boolean).join(' ')}>
+      <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', showClassBookingLink ? 'mobileBottomWithClasses' : ''].filter(Boolean).join(' ')}>
         <Link href="/">Main</Link>
         <Link href="/landing">{canUseOwnerDashboard ? 'Staff Dash' : 'My Dash'}</Link>
         {canUseOwnerDashboard && <Link href="/staff">Staff Tool</Link>}
@@ -398,7 +399,7 @@ export default function AppHome() {
         ) : (
           <Link href="/landing/qr">QR Codes</Link>
         )}
-        {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule">Classes</Link>}
+        {showClassBookingLink && <Link href="/landing/classschedule">Classes</Link>}
         <Link href="/landing/party">Party</Link>
       </nav>
 
