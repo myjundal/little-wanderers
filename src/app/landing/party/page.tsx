@@ -16,7 +16,7 @@ import {
   PARTY_BOOKING_SLOTS,
   type PartyBookingSlot,
 } from '@/lib/party-config';
-import { PARTY_FINAL_DETAILS, PARTY_WHAT_TO_BRING, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
+import { PARTY_FINAL_DETAILS, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type PartyBooking = {
@@ -49,6 +49,20 @@ type PartyForm = {
 };
 
 const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
+const PARTY_BRING_GROUPS = [
+  {
+    title: 'Food',
+    detail: 'Please be allergy mindful. Ready-to-serve food only; no onsite cooking or heating, no Sterno, and no open flame.',
+  },
+  {
+    title: 'Cake or cookies',
+    detail: 'Please be allergy mindful.',
+  },
+  {
+    title: 'Decorations',
+    detail: 'No confetti, glitter, silly string, nails, staples, or anything that may damage walls. Banners and balloon decor are welcome, and we provide wall-safe adhesive.',
+  },
+];
 
 function toIsoLocal(date: string, hourLocal: number) {
   return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
@@ -472,9 +486,22 @@ export default function PartyPage() {
             <li>A sweet group photo moment</li>
           </ul>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What to bring</h3>
-          <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
-            {PARTY_WHAT_TO_BRING.map((item) => <li key={item}>{item}</li>)}
-          </ul>
+          <div style={{ display: 'grid', border: '1px solid #eadfff', borderRadius: 14, overflow: 'hidden', background: '#fffdf9' }}>
+            {PARTY_BRING_GROUPS.map((item, index) => (
+              <div
+                key={item.title}
+                style={{
+                  display: 'grid',
+                  gap: 4,
+                  padding: '12px 14px',
+                  borderTop: index === 0 ? 'none' : '1px solid #f0e7fb',
+                }}
+              >
+                <strong style={{ color: '#4f3f82', fontSize: 15 }}>{item.title}</strong>
+                <span style={{ color: '#6f628d', lineHeight: 1.55 }}>{item.detail}</span>
+              </div>
+            ))}
+          </div>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>Final details</h3>
           <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
             {PARTY_FINAL_DETAILS.map((item) => <li key={item}>{item}</li>)}
