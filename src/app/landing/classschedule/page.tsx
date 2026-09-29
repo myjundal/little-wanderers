@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -151,6 +151,7 @@ export default function ClassSchedulePage() {
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
   const [registeringClassId, setRegisteringClassId] = useState<string | null>(null);
   const [claimingWaitlist, setClaimingWaitlist] = useState(false);
+  const claimingWaitlistTokenRef = useRef<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
@@ -236,9 +237,10 @@ export default function ClassSchedulePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const waitlistToken = params.get('waitlist_token');
-    if (!waitlistToken || claimingWaitlist) return;
+    if (!waitlistToken || claimingWaitlist || claimingWaitlistTokenRef.current === waitlistToken) return;
 
     const claim = async () => {
+      claimingWaitlistTokenRef.current = waitlistToken;
       const supabase = createBrowserSupabaseClient();
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
@@ -255,18 +257,23 @@ export default function ClassSchedulePage() {
         body: JSON.stringify({ token: waitlistToken }),
       });
       const json = await res.json();
+      window.history.replaceState({}, '', '/landing/classschedule');
       if (!res.ok || !json.ok) {
-        setMessage(json.error ?? 'Could not claim waitlist spot.');
+        const quietAlreadyHandled =
+          json.error === 'waitlist offer not found' ||
+          json.error === 'waitlist offer is no longer available';
+        if (!quietAlreadyHandled) {
+          setMessage(json.error ?? 'Could not claim waitlist spot.');
+        }
         setClaimingWaitlist(false);
-        window.history.replaceState({}, '', '/landing/classschedule');
         return;
       }
 
-      setMessage('Spot claimed. You are registered for the class.');
-      setToast({ message: 'Class spot claimed. You are registered.', tone: 'success' });
+      const childName = typeof json.person_name === 'string' && json.person_name.trim() ? json.person_name.trim() : 'Your child';
+      setMessage(null);
+      setToast({ message: `${childName} automatically registered.`, tone: 'success' });
       setClaimingWaitlist(false);
       await load(false);
-      window.history.replaceState({}, '', '/landing/classschedule');
     };
 
     void claim();

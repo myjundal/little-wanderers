@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
     const { data: person, error: personError } = await supa
       .from('people')
-      .select('id,household_id')
+      .select('id,first_name,last_name,household_id')
       .eq('id', reg.person_id)
       .maybeSingle();
 
@@ -81,7 +81,9 @@ export async function POST(req: Request) {
       .eq('status', 'waitlist');
 
     if (updateError) return Response.json({ ok: false, error: updateError.message }, { status: 500 });
-    return Response.json({ ok: true, registration_id: reg.id });
+
+    const personName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim();
+    return Response.json({ ok: true, registration_id: reg.id, person_name: personName || null });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
