@@ -60,6 +60,26 @@ async function getWaitlistPosition(admin: SupabaseClient, classId: string, regis
   return index >= 0 ? index + 1 : null;
 }
 
+async function getHouseholdRecipientEmail(admin: SupabaseClient, householdId: string) {
+  const { data: household, error: householdError } = await admin
+    .from('households')
+    .select('email,user_id')
+    .eq('id', householdId)
+    .maybeSingle();
+
+  if (householdError) throw new Error(householdError.message);
+
+  const householdEmail = typeof household?.email === 'string' ? household.email.trim() : '';
+  if (householdEmail) return householdEmail;
+
+  const userId = typeof household?.user_id === 'string' ? household.user_id : '';
+  if (!userId) return '';
+
+  const { data: authUser, error: authError } = await admin.auth.admin.getUserById(userId);
+  if (authError) throw new Error(authError.message);
+  return authUser.user?.email?.trim() ?? '';
+}
+
 export async function isUserOnWanderlist(admin: SupabaseClient, email: string | null | undefined) {
   const normalizedEmail = normalizeWaitlistEmail(email ?? '');
   if (!normalizedEmail) return false;
@@ -144,14 +164,7 @@ export async function sendClassRegistrationEmail(
   if (personError) throw new Error(personError.message);
   if (!person?.household_id) return { ok: false as const, error: 'person household not found' };
 
-  const { data: household, error: householdError } = await admin
-    .from('households')
-    .select('email,name')
-    .eq('id', person.household_id)
-    .maybeSingle();
-
-  if (householdError) throw new Error(householdError.message);
-  const to = typeof household?.email === 'string' ? household.email.trim() : '';
+  const to = await getHouseholdRecipientEmail(admin, person.household_id);
   if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
 
   const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';
@@ -254,14 +267,7 @@ export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: stri
   if (personError) throw new Error(personError.message);
   if (!person?.household_id) return { ok: true as const, offered: false, reason: 'missing_household' };
 
-  const { data: household, error: householdError } = await admin
-    .from('households')
-    .select('email,name')
-    .eq('id', person.household_id)
-    .maybeSingle();
-
-  if (householdError) throw new Error(householdError.message);
-  const to = typeof household?.email === 'string' ? household.email.trim() : '';
+  const to = await getHouseholdRecipientEmail(admin, person.household_id);
   if (!to) return { ok: true as const, offered: false, reason: 'missing_email' };
 
   const token = crypto.randomUUID();
