@@ -3,7 +3,7 @@ import { requireStaffContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
-const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,capacity,price_cents,status,created_at,updated_at';
+const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status,created_at,updated_at';
 const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status,created_at,updated_at';
 
 type AttendanceStatus = 'unknown' | 'attended' | 'cancelled' | 'no_show';
@@ -18,6 +18,9 @@ type ClassRow = {
   instructor_name?: string | null;
   description?: string | null;
   age_range?: string | null;
+  caregiver_participation?: string | null;
+  schedule_note?: string | null;
+  schedule_label?: string | null;
   capacity: number | null;
   price_cents: number;
   status: string;
@@ -37,6 +40,9 @@ function parseClassPayload(body: Record<string, unknown>) {
   const instructor_name = normalizeOptionalText(body.instructor_name);
   const description = normalizeOptionalText(body.description);
   const age_range = normalizeOptionalText(body.age_range);
+  const caregiver_participation = normalizeOptionalText(body.caregiver_participation);
+  const schedule_note = normalizeOptionalText(body.schedule_note);
+  const schedule_label = normalizeOptionalText(body.schedule_label);
   const start_time = typeof body.start_time === 'string' ? body.start_time : '';
   const end_time = typeof body.end_time === 'string' ? body.end_time : '';
   const capacity = body.capacity == null || body.capacity === '' ? null : Number(body.capacity);
@@ -74,6 +80,9 @@ function parseClassPayload(body: Record<string, unknown>) {
       instructor_name,
       description,
       age_range,
+      caregiver_participation,
+      schedule_note,
+      schedule_label,
     },
     fallbackData: baseData,
   } as const;
@@ -139,7 +148,7 @@ async function loadClasses(admin: SupabaseClient) {
   const registrantsByClass = new Map<string, Array<Record<string, unknown>>>();
 
   regs.forEach((row) => {
-    if (row.status !== 'cancelled') {
+    if (row.status === 'scheduled' || row.status === 'attended') {
       bookedCounts.set(row.class_id, (bookedCounts.get(row.class_id) ?? 0) + 1);
     }
 
@@ -172,6 +181,9 @@ async function loadClasses(admin: SupabaseClient) {
       instructor_name: item.instructor_name ?? null,
       description: item.description ?? null,
       age_range: item.age_range ?? null,
+      caregiver_participation: item.caregiver_participation ?? null,
+      schedule_note: item.schedule_note ?? null,
+      schedule_label: item.schedule_label ?? null,
       booked_count: booked,
       seats_left: item.capacity == null ? null : Math.max(item.capacity - booked, 0),
       registrants,

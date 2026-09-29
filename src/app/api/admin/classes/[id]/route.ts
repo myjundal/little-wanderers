@@ -16,6 +16,9 @@ function parseClassPayload(body: Record<string, unknown>) {
   const instructor_name = normalizeOptionalText(body.instructor_name);
   const description = normalizeOptionalText(body.description);
   const age_range = normalizeOptionalText(body.age_range);
+  const caregiver_participation = normalizeOptionalText(body.caregiver_participation);
+  const schedule_note = normalizeOptionalText(body.schedule_note);
+  const schedule_label = normalizeOptionalText(body.schedule_label);
   const start_time = typeof body.start_time === 'string' ? body.start_time : '';
   const end_time = typeof body.end_time === 'string' ? body.end_time : '';
   const capacity = body.capacity == null || body.capacity === '' ? null : Number(body.capacity);
@@ -53,6 +56,9 @@ function parseClassPayload(body: Record<string, unknown>) {
       instructor_name,
       description,
       age_range,
+      caregiver_participation,
+      schedule_note,
+      schedule_label,
     },
     fallbackData: baseData,
   } as const;

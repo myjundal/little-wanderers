@@ -35,6 +35,9 @@ type ClassItem = {
   instructor_name: string | null;
   description: string | null;
   age_range: string | null;
+  caregiver_participation: string | null;
+  schedule_note: string | null;
+  schedule_label: string | null;
   capacity: number | null;
   price_cents: number;
   status: 'scheduled' | 'cancelled' | 'completed';
@@ -118,6 +121,21 @@ const buttonStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const classFormPanelStyle: React.CSSProperties = {
+  border: '1px solid #eadfff',
+  borderRadius: 18,
+  padding: 14,
+  background: '#fff',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 6,
+  color: '#5f5278',
+  fontSize: 13,
+  fontWeight: 800,
+};
+
 const ownerToolLinkStyle: React.CSSProperties = {
   borderRadius: 12,
   border: '1px solid #ddd1ea',
@@ -183,6 +201,9 @@ function emptyClassForm() {
     end_time: end.toISOString().slice(11, 16),
     instructor_name: '',
     age_range: '',
+    caregiver_participation: '',
+    schedule_note: '',
+    schedule_label: '',
     capacity: '12',
     price_dollars: '0',
     description: '',
@@ -228,6 +249,9 @@ function classPayloadFromForm(form: ClassForm, date = form.date, status = form.s
     end_time: toDateTimeISO(date, form.end_time),
     instructor_name: form.instructor_name,
     age_range: form.age_range,
+    caregiver_participation: form.caregiver_participation,
+    schedule_note: form.schedule_note,
+    schedule_label: form.schedule_label,
     capacity: form.capacity,
     price_cents: Math.round(Number(form.price_dollars || '0') * 100),
     description: form.description,
@@ -247,6 +271,9 @@ function fromClass(item: ClassItem) {
     end_time: end.toISOString().slice(11, 16),
     instructor_name: item.instructor_name ?? '',
     age_range: item.age_range ?? '',
+    caregiver_participation: item.caregiver_participation ?? '',
+    schedule_note: item.schedule_note ?? '',
+    schedule_label: item.schedule_label ?? '',
     capacity: item.capacity == null ? '' : String(item.capacity),
     price_dollars: (item.price_cents / 100).toFixed(2),
     description: item.description ?? '',
@@ -651,51 +678,115 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 18 }}>
-          <input placeholder="Class title" value={classForm.title} onChange={(e) => setClassForm((prev) => ({ ...prev, title: e.target.value }))} style={inputStyle} />
-          <input placeholder="Category" value={classForm.category} onChange={(e) => setClassForm((prev) => ({ ...prev, category: e.target.value }))} style={inputStyle} />
-          <input type="date" value={classForm.date} onChange={(e) => setClassForm((prev) => ({ ...prev, date: e.target.value }))} style={inputStyle} />
-          <input
-            type="time"
-            value={classForm.start_time}
-            onChange={(e) => {
-              const startValue = e.target.value;
-              const [h, m] = startValue.split(':').map(Number);
-              if (Number.isNaN(h) || Number.isNaN(m)) {
-                setClassForm((prev) => ({ ...prev, start_time: startValue }));
-                return;
-              }
-              const nextEndHour = (h + 1) % 24;
-              const nextEnd = `${String(nextEndHour).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-              setClassForm((prev) => ({ ...prev, start_time: startValue, end_time: nextEnd }));
-            }}
-            style={inputStyle}
-          />
-          <input type="time" value={classForm.end_time} onChange={(e) => setClassForm((prev) => ({ ...prev, end_time: e.target.value }))} style={inputStyle} />
-          <input placeholder="Instructor (optional)" value={classForm.instructor_name} onChange={(e) => setClassForm((prev) => ({ ...prev, instructor_name: e.target.value }))} style={inputStyle} />
-          <input placeholder="Age(s) (optional, e.g. 2-4 years)" value={classForm.age_range} onChange={(e) => setClassForm((prev) => ({ ...prev, age_range: e.target.value }))} style={inputStyle} />
-          <input type="number" min={0} placeholder="Capacity" value={classForm.capacity} onChange={(e) => setClassForm((prev) => ({ ...prev, capacity: e.target.value }))} style={inputStyle} />
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 12, top: 8, color: '#9b90b6', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em' }}>Price</span>
-            <span style={{ position: 'absolute', left: 12, top: 28, color: '#6d6480', fontWeight: 700 }}>$</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder="0.00"
-              value={classForm.price_dollars}
-              onChange={(e) => setClassForm((prev) => ({ ...prev, price_dollars: e.target.value }))}
-              style={{ ...inputStyle, paddingTop: 24, paddingLeft: 28 }}
-            />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14, marginTop: 18 }}>
+          <div style={classFormPanelStyle}>
+            <p style={{ margin: '0 0 12px', color: '#5f3da4', fontWeight: 900 }}>Class details</p>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <label style={labelStyle}>
+                Class name
+                <input placeholder="Music & Movement" value={classForm.title} onChange={(e) => setClassForm((prev) => ({ ...prev, title: e.target.value }))} style={inputStyle} />
+              </label>
+              <label style={labelStyle}>
+                Instructor
+                <input placeholder="Instructor name" value={classForm.instructor_name} onChange={(e) => setClassForm((prev) => ({ ...prev, instructor_name: e.target.value }))} style={inputStyle} />
+              </label>
+              <label style={labelStyle}>
+                Subject / category optional
+                <input placeholder="Music, art, movement..." value={classForm.category} onChange={(e) => setClassForm((prev) => ({ ...prev, category: e.target.value }))} style={inputStyle} />
+              </label>
+              <label style={labelStyle}>
+                Class description
+                <textarea rows={5} placeholder="Short parent-facing description" value={classForm.description} onChange={(e) => setClassForm((prev) => ({ ...prev, description: e.target.value }))} style={inputStyle} />
+              </label>
+            </div>
           </div>
-          {editingClassId && (
-            <select value={classForm.status} onChange={(e) => setClassForm((prev) => ({ ...prev, status: e.target.value }))} style={inputStyle}>
-              <option value="scheduled">Scheduled</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          )}
+
+          <div style={classFormPanelStyle}>
+            <p style={{ margin: '0 0 12px', color: '#5f3da4', fontWeight: 900 }}>Schedule</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
+              <label style={labelStyle}>
+                Date
+                <input type="date" value={classForm.date} onChange={(e) => setClassForm((prev) => ({ ...prev, date: e.target.value }))} style={inputStyle} />
+              </label>
+              <label style={labelStyle}>
+                Start
+                <input
+                  type="time"
+                  value={classForm.start_time}
+                  onChange={(e) => {
+                    const startValue = e.target.value;
+                    const [h, m] = startValue.split(':').map(Number);
+                    if (Number.isNaN(h) || Number.isNaN(m)) {
+                      setClassForm((prev) => ({ ...prev, start_time: startValue }));
+                      return;
+                    }
+                    const nextEndHour = (h + 1) % 24;
+                    const nextEnd = `${String(nextEndHour).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                    setClassForm((prev) => ({ ...prev, start_time: startValue, end_time: nextEnd }));
+                  }}
+                  style={inputStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                End
+                <input type="time" value={classForm.end_time} onChange={(e) => setClassForm((prev) => ({ ...prev, end_time: e.target.value }))} style={inputStyle} />
+              </label>
+            </div>
+            <p style={{ margin: '10px 0 0', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
+              Class length is calculated from start and end time.
+            </p>
+            <label style={{ ...labelStyle, marginTop: 12 }}>
+              Public date note
+              <input placeholder="Date announced soon or Starts Nov 12" value={classForm.schedule_note} onChange={(e) => setClassForm((prev) => ({ ...prev, schedule_note: e.target.value }))} style={inputStyle} />
+            </label>
+            <label style={{ ...labelStyle, marginTop: 12 }}>
+              Regular schedule
+              <input placeholder="Mondays at 10:30 AM" value={classForm.schedule_label} onChange={(e) => setClassForm((prev) => ({ ...prev, schedule_label: e.target.value }))} style={inputStyle} />
+            </label>
+          </div>
+
+          <div style={classFormPanelStyle}>
+            <p style={{ margin: '0 0 12px', color: '#5f3da4', fontWeight: 900 }}>Registration</p>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <label style={labelStyle}>
+                Age group
+                <input placeholder="2-4 years" value={classForm.age_range} onChange={(e) => setClassForm((prev) => ({ ...prev, age_range: e.target.value }))} style={inputStyle} />
+              </label>
+              <label style={labelStyle}>
+                Caregiver participation
+                <input placeholder="Caregiver required, drop-off, optional..." value={classForm.caregiver_participation} onChange={(e) => setClassForm((prev) => ({ ...prev, caregiver_participation: e.target.value }))} style={inputStyle} />
+              </label>
+              <label style={labelStyle}>
+                Max # of kids
+                <input type="number" min={0} placeholder="12" value={classForm.capacity} onChange={(e) => setClassForm((prev) => ({ ...prev, capacity: e.target.value }))} style={inputStyle} />
+              </label>
+              <label style={labelStyle}>
+                Price
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 12, top: 11, color: '#6d6480', fontWeight: 700 }}>$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                    value={classForm.price_dollars}
+                    onChange={(e) => setClassForm((prev) => ({ ...prev, price_dollars: e.target.value }))}
+                    style={{ ...inputStyle, paddingLeft: 28 }}
+                  />
+                </div>
+              </label>
+              {editingClassId && (
+                <label style={labelStyle}>
+                  Status
+                  <select value={classForm.status} onChange={(e) => setClassForm((prev) => ({ ...prev, status: e.target.value }))} style={inputStyle}>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </label>
+              )}
+            </div>
+          </div>
         </div>
-        <textarea rows={4} placeholder="Notes / description (optional)" value={classForm.description} onChange={(e) => setClassForm((prev) => ({ ...prev, description: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
         {!editingClassId && (
           <div style={{ marginTop: 12, border: '1px solid #eadfff', borderRadius: 14, padding: 12, background: '#fcf9ff' }}>
             <p style={{ margin: '0 0 10px', color: '#5f3da4', fontWeight: 800 }}>Repeat schedule</p>
@@ -745,8 +836,10 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>
                     {new Date(item.start_time).toLocaleString()} — {new Date(item.end_time).toLocaleTimeString()} · {item.duration_minutes ?? 0} min
                   </p>
+                  {item.schedule_note && <p style={{ margin: '6px 0', color: '#6d6480' }}>Public date note: {item.schedule_note}</p>}
+                  {item.schedule_label && <p style={{ margin: '6px 0', color: '#6d6480' }}>Regular schedule: {item.schedule_label}</p>}
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {item.instructor_name ?? '-'} · Category: {item.category ?? '-'}</p>
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Age(s): {item.age_range ?? '-'}</p>
+                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Age group: {item.age_range ?? '-'} · Caregiver: {item.caregiver_participation ?? '-'}</p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}</p>
                   <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong> · Price: {dollars(item.price_cents)}</p>
                   {item.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{item.description}</p>}

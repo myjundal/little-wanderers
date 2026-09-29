@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import { countConfirmedClassRegistrations, countWaitlistRegistrations, hasActiveWaitlistOffer, isUserOnWanderlist } from '@/lib/class-waitlist';
 
 const admin = () =>
   createClient(
@@ -38,6 +39,14 @@ export async function POST(req: Request) {
 
     const supa = admin();
 
+    const onWanderlist = await isUserOnWanderlist(supa, user.email);
+    if (!onWanderlist) {
+      return Response.json(
+        { ok: false, error: 'Class pre-registration is open to Wanderlist families first.' },
+        { status: 403 }
+      );
+    }
+
     const { data: person } = await supa
       .from('people')
       .select('id,role')
@@ -71,26 +80,24 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'already registered' }, { status: 409 });
     }
 
-    if (klass.capacity != null) {
-      const { data: regs } = await supa
-        .from('class_registrations')
-        .select('id,status')
-        .eq('class_id', classId)
-        .neq('status', 'cancelled');
-
-      const booked = (regs ?? []).length;
-      if (booked >= klass.capacity) {
-        return Response.json({ ok: false, error: 'class is full' }, { status: 409 });
-      }
-    }
+    const booked = await countConfirmedClassRegistrations(supa, classId);
+    const isFull = klass.capacity != null && booked >= klass.capacity;
+    const offerPending = !isFull && (await hasActiveWaitlistOffer(supa, classId));
+    const waitlistExists = !isFull && (await countWaitlistRegistrations(supa, classId)) > 0;
+    const shouldWaitlist = isFull || offerPending || waitlistExists;
 
     if (already && already.status === 'cancelled') {
       const { error } = await supa
         .from('class_registrations')
-        .update({ status: 'scheduled' })
+        .update({
+          status: shouldWaitlist ? 'waitlist' : 'scheduled',
+          waitlist_offer_token: null,
+          waitlist_offer_expires_at: null,
+          waitlist_offered_at: null,
+        })
         .eq('id', already.id);
       if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-      return Response.json({ ok: true, id: already.id, restored: true });
+      return Response.json({ ok: true, id: already.id, restored: true, status: shouldWaitlist ? 'waitlist' : 'scheduled' });
     }
 
     const { data: inserted, error: insertErr } = await supa
@@ -98,7 +105,7 @@ export async function POST(req: Request) {
       .insert({
         class_id: classId,
         person_id: personId,
-        status: 'scheduled',
+        status: shouldWaitlist ? 'waitlist' : 'scheduled',
         household_id: householdId,
         child_id: person.role === 'child' ? person.id : null,
         created_by_user_id: user.id,
@@ -109,7 +116,7 @@ export async function POST(req: Request) {
 
     if (insertErr) return Response.json({ ok: false, error: insertErr.message }, { status: 500 });
 
-    return Response.json({ ok: true, id: inserted?.id ?? null });
+    return Response.json({ ok: true, id: inserted?.id ?? null, status: shouldWaitlist ? 'waitlist' : 'scheduled' });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

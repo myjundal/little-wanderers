@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -22,10 +22,15 @@ type ClassItem = {
   instructor_name: string | null;
   description: string | null;
   age_range: string | null;
+  caregiver_participation: string | null;
+  schedule_note: string | null;
+  schedule_label: string | null;
   capacity: number | null;
   price_cents: number;
   booked_count: number;
   seats_left: number | null;
+  waitlist_offer_pending?: boolean;
+  waitlist_count?: number;
   is_popular: boolean;
   recommended_class_ids: string[];
 };
@@ -52,11 +57,6 @@ type RegistrationItem = {
   } | null;
 };
 
-type CartItemState = {
-  class_id: string;
-  quantity: number;
-};
-
 const historyTabButtonStyle: React.CSSProperties = {
   borderRadius: 12,
   border: '1px solid #d9c8f7',
@@ -74,48 +74,20 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
 };
 
 export default function ClassSchedulePage() {
-  const checkoutFinalizingRef = useRef(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
-  const [cartItems, setCartItems] = useState<CartItemState[]>([]);
-  const [recentlyPaidRegistrationIds, setRecentlyPaidRegistrationIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
-  const [checkouting, setCheckouting] = useState(false);
+  const [registeringClassId, setRegisteringClassId] = useState<string | null>(null);
+  const [claimingWaitlist, setClaimingWaitlist] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
-  const [cartHydrated, setCartHydrated] = useState(false);
-  const [cartAssignments, setCartAssignments] = useState<Record<string, string[]>>({});
-  const CART_STORAGE_KEY = 'lw_class_cart_v1';
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(CART_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as CartItemState[];
-      const safe = (parsed ?? [])
-        .filter((item) => item?.class_id)
-        .map((item) => ({
-          class_id: item.class_id,
-          quantity: Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
-        }));
-      setCartItems(safe);
-    } catch {
-      // ignore malformed saved cart
-    }
-    setCartHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!cartHydrated) return;
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-  }, [cartHydrated, cartItems]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -149,7 +121,6 @@ export default function ClassSchedulePage() {
     const loadedClasses = (classJson.items ?? []) as ClassItem[];
     setClasses(loadedClasses);
     setMyItems(myJson.items ?? []);
-    setCartItems((prev) => prev.filter((item) => loadedClasses.some((loaded) => loaded.id === item.class_id)));
 
     const supabase = createBrowserSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
@@ -194,73 +165,51 @@ export default function ClassSchedulePage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const checkout = params.get('checkout');
-    const personId = params.get('person_id');
-    const itemsRaw = params.get('items');
+    const waitlistToken = params.get('waitlist_token');
+    if (!waitlistToken || claimingWaitlist) return;
 
-    if (checkout !== 'success' || !personId || checkoutFinalizingRef.current) return;
-    const safeItems = (itemsRaw
-      ? itemsRaw
-          .split(',')
-          .map((token) => token.trim())
-          .filter(Boolean)
-          .map((token) => {
-            const [classId, qtyRaw] = token.split(':');
-            const qty = Number(qtyRaw);
-            return {
-              class_id: classId,
-              quantity: Number.isInteger(qty) && qty > 0 ? qty : 1,
-            };
-          })
-          .filter((item) => item.class_id)
-      : cartItems
-    );
-    if (safeItems.length === 0) return;
-
-    const finalize = async () => {
-      checkoutFinalizingRef.current = true;
-      setCheckouting(true);
-      const res = await fetch('/api/classes/checkout', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode: 'finalize', items: safeItems, person_id: personId }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setMessage(json.error ?? 'Could not finalize checkout after payment.');
-        setCheckouting(false);
-        checkoutFinalizingRef.current = false;
+    const claim = async () => {
+      const supabase = createBrowserSupabaseClient();
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        sessionStorage.setItem('post_login_redirect', `/landing/classschedule?waitlist_token=${encodeURIComponent(waitlistToken)}`);
+        window.location.assign('/login');
         return;
       }
 
-      const total = Number(json.checkout_summary?.total_price_cents ?? 0);
-      setMessage(`Payment complete and classes booked: ${safeItems.reduce((sum, item) => sum + item.quantity, 0)} seat(s), total $${(total / 100).toFixed(2)}.`);
-      setRecentlyPaidRegistrationIds((json.checkout_summary?.registration_ids ?? []) as string[]);
-      setCartItems([]);
-      setCheckouting(false);
-      checkoutFinalizingRef.current = false;
+      setClaimingWaitlist(true);
+      setMessage(null);
+      const res = await fetch('/api/classes/waitlist/claim', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: waitlistToken }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setMessage(json.error ?? 'Could not claim waitlist spot.');
+        setClaimingWaitlist(false);
+        window.history.replaceState({}, '', '/landing/classschedule');
+        return;
+      }
+
+      setMessage('Spot claimed. You are registered for the class.');
+      setClaimingWaitlist(false);
       await load();
       window.history.replaceState({}, '', '/landing/classschedule');
     };
 
-    void finalize();
-  }, [cartItems, load]);
+    void claim();
+  }, [claimingWaitlist, load]);
 
-  const classById = useMemo(() => new Map(classes.map((item) => [item.id, item])), [classes]);
-  const paidClassIds = useMemo(
+  const registrationStatusByClassId = useMemo(
     () =>
-      new Set(
+      new Map(
         myItems
-          .filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled')
-          .map((item) => item.class?.id)
-          .filter((id): id is string => Boolean(id))
+          .filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled' && item.class?.id)
+          .map((item) => [item.class!.id, item.status])
       ),
     [myItems]
   );
-
-  useEffect(() => {
-    setCartItems((prev) => prev.filter((item) => !paidClassIds.has(item.class_id)));
-  }, [paidClassIds]);
 
   useEffect(() => {
     setNoteDrafts((prev) => {
@@ -327,97 +276,35 @@ export default function ClassSchedulePage() {
     [activeItems]
   );
 
-  const cartClassDetails = useMemo(
-    () =>
-      cartItems
-        .map((item) => ({ ...item, classInfo: classById.get(item.class_id) }))
-        .filter((item): item is CartItemState & { classInfo: ClassItem } => Boolean(item.classInfo)),
-    [cartItems, classById]
-  );
-
-  const cartTotalCents = useMemo(
-    () => cartClassDetails.reduce((sum, item) => sum + item.classInfo.price_cents * item.quantity, 0),
-    [cartClassDetails]
-  );
-
-  const recommendedForCart = useMemo(() => {
-    const scores = new Map<string, number>();
-    cartClassDetails.forEach((item) => {
-      item.classInfo.recommended_class_ids.forEach((id, index) => {
-        if (cartItems.some((cartItem) => cartItem.class_id === id)) return;
-        const weight = Math.max(3 - index, 1);
-        scores.set(id, (scores.get(id) ?? 0) + weight);
-      });
-    });
-
-    return [...scores.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([id]) => classById.get(id))
-      .filter((item): item is ClassItem => Boolean(item))
-      .slice(0, 4);
-  }, [cartClassDetails, cartItems, classById]);
-
-  const addToCart = (classId: string) => {
-    if (paidClassIds.has(classId)) {
-      setMessage("A class you've already registered for won't be added to the cart. To modify a booking, please cancel and rebook.");
-      return;
-    }
-    setCartItems((prev) => {
-      const found = prev.find((item) => item.class_id === classId);
-      if (found) return prev;
-      return [...prev, { class_id: classId, quantity: 1 }];
-    });
-  };
-
-  const updateCartQuantity = (classId: string, nextQty: number) => {
-    if (nextQty <= 0) {
-      setCartItems((prev) => prev.filter((item) => item.class_id !== classId));
-      return;
-    }
-    setCartItems((prev) =>
-      prev.map((item) => (item.class_id === classId ? { ...item, quantity: Math.max(nextQty, 1) } : item))
-    );
-  };
-
-  const checkoutCart = async () => {
+  const preRegisterClass = async (classId: string) => {
     if (!isAuthenticated) {
-      sessionStorage.setItem('post_login_redirect', '/classes');
+      sessionStorage.setItem('post_login_redirect', '/landing/classschedule');
       window.location.assign('/login');
       return;
     }
-    if (!selectedPersonId || cartItems.length === 0) return;
-    setCheckouting(true);
-    setMessage(null);
-    const filteredItems = cartItems.filter((item) => !paidClassIds.has(item.class_id));
-    if (filteredItems.length === 0) {
-      setMessage("A class you've already registered for won't be added to the cart. To modify a booking, please cancel and rebook.");
-      setCheckouting(false);
+    if (!selectedPersonId) {
+      setMessage('Please add/select a child before pre-registering.');
       return;
     }
 
-    const firstSelectedPerson = cartClassDetails
-      .map((item) => cartAssignments[item.class_id]?.[0])
-      .find(Boolean) ?? selectedPersonId;
+    setRegisteringClassId(classId);
+    setMessage(null);
 
-    const res = await fetch('/api/classes/checkout', {
+    const res = await fetch('/api/classes/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mode: 'create_payment_link', items: filteredItems, person_id: firstSelectedPerson }),
+      body: JSON.stringify({ class_id: classId, person_id: selectedPersonId }),
     });
-
     const json = await res.json();
+    setRegisteringClassId(null);
+
     if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Checkout failed.');
-      setCheckouting(false);
+      setMessage(json.error ?? 'Pre-registration failed.');
       return;
     }
 
-    if (!json.payment_url) {
-      setMessage('Payment URL was not returned.');
-      setCheckouting(false);
-      return;
-    }
-    window.location.assign(json.payment_url);
+    setMessage(json.status === 'waitlist' ? 'Class is full. You are on the waitlist.' : 'Pre-registration complete.');
+    await load();
   };
 
   const cancelRegistration = async (registrationId: string) => {
@@ -463,72 +350,26 @@ export default function ClassSchedulePage() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>🛸 Class Adventures / Cart Checkout</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Add classes, edit your cart, and pay once with Square. You can also cancel booked classes.</p>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Pre-registration</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Wanderlist families get first access. Register for available spots or join the waitlist when a class is full.</p>
 
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
+      {claimingWaitlist && <p style={{ marginTop: 12, color: '#5a4a8f' }}>Claiming your waitlist spot...</p>}
 
       <div className="desktopCalendar"><AvailabilityCalendar title="Class calendar" slots={classSlots} showUpcoming /></div>
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>🛒 Cart</h2>
-        <p style={{ marginTop: -2, color: '#6f628d', fontSize: 13 }}>
-          A class you&apos;ve already registered for won&apos;t be added to the cart. To modify a booking, please cancel and rebook.
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
+        <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
+          Pre-registration is free for now. If a class is full, you can join the waitlist. When a spot opens, the next waitlisted family gets a private claim link before the spot returns to general registration.
         </p>
-        {cartClassDetails.length === 0 ? (
-          <p>Your cart is empty.</p>
-        ) : (
-          <>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {cartClassDetails.map((item) => (
-                <div key={item.class_id} style={{ border: '1px solid #e9dcfb', borderRadius: 10, padding: 10 }}>
-                  <strong>{item.classInfo.title}</strong> · ${(item.classInfo.price_cents / 100).toFixed(2)} each
-                  <div style={{ color: '#6d6480', marginTop: 4 }}>Seats left: {item.classInfo.seats_left == null ? 'Unlimited' : item.classInfo.seats_left}</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                    <button onClick={() => updateCartQuantity(item.class_id, item.quantity - 1)}>-</button>
-                    <span>Qty: {item.quantity}</span>
-                    <button onClick={() => updateCartQuantity(item.class_id, item.quantity + 1)}>+</button>
-                    <button onClick={() => updateCartQuantity(item.class_id, 0)} style={{ marginLeft: 8 }}>Remove</button>
-                  </div>
-                  <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
-                    {Array.from({ length: item.quantity }).map((_, seatIndex) => (
-                      <label key={`assign-${item.class_id}-${seatIndex}`} style={{ fontSize: 13, color: '#6f628d' }}>
-                        Register {item.classInfo.title} for:
-                        <select
-                          value={cartAssignments[item.class_id]?.[seatIndex] ?? selectedPersonId}
-                          onChange={(e) => setCartAssignments((prev) => {
-                            const next = [...(prev[item.class_id] ?? Array.from({ length: item.quantity }, () => selectedPersonId))];
-                            next[seatIndex] = e.target.value;
-                            return { ...prev, [item.class_id]: next };
-                          })}
-                          style={{ marginLeft: 8, padding: '4px 6px', borderRadius: 8 }}
-                        >
-                          {people.map((p) => <option key={`${item.class_id}-p-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
-                        </select>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p style={{ marginTop: 12, fontWeight: 700 }}>Total: ${(cartTotalCents / 100).toFixed(2)}</p>
-            <button onClick={checkoutCart} disabled={!selectedPersonId || checkouting}>
-              {checkouting ? 'Processing...' : 'Checkout all'}
-            </button>
-          </>
-        )}
-
-        {recommendedForCart.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <h3 style={{ margin: '0 0 8px' }}>Frequently bundled class picks</h3>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {recommendedForCart.map((item) => (
-                <button key={item.id} onClick={() => addToCart(item.id)} style={{ borderRadius: 999, border: '1px solid #d7c5f8', background: '#f7f1ff', padding: '6px 10px' }}>
-                  + {item.title}
-                </button>
-              ))}
-            </div>
-          </div>
+        {people.length > 0 && (
+          <label style={{ display: 'block', marginTop: 12, color: '#6f628d', fontWeight: 700 }}>
+            Register for
+            <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)} style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8 }}>
+              {people.map((p) => <option key={`register-person-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+            </select>
+          </label>
         )}
       </section>
 
@@ -542,8 +383,9 @@ export default function ClassSchedulePage() {
           <div style={{ display: 'grid', gap: 12 }}>
             {classes.map((c) => {
               const isFull = c.seats_left != null && c.seats_left <= 0;
-              const inCart = cartItems.some((item) => item.class_id === c.id);
-              const alreadyBooked = paidClassIds.has(c.id);
+              const shouldWaitlist = isFull || Boolean(c.waitlist_offer_pending) || (c.waitlist_count ?? 0) > 0;
+              const existingStatus = registrationStatusByClassId.get(c.id);
+              const alreadyBooked = Boolean(existingStatus);
               return (
                 <div key={c.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <h3 style={{ margin: 0 }}>
@@ -555,20 +397,27 @@ export default function ClassSchedulePage() {
                     )}
                   </h3>
                   <p style={{ margin: '8px 0', color: '#666' }}>
-                    {new Date(c.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(c.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}
+                    {c.schedule_note && c.schedule_label
+                      ? `${c.schedule_note} · ${c.schedule_label}`
+                      : c.schedule_note ?? c.schedule_label ?? `${new Date(c.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ ${new Date(c.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`}
                   </p>
                   <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Instructor: {c.instructor_name ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Age(s): {c.age_range ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Caregiver: {c.caregiver_participation ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Duration: {c.duration_minutes ?? Math.round((new Date(c.end_time).getTime() - new Date(c.start_time).getTime()) / 60000)} min</p>
                   <p style={{ margin: '6px 0' }}>Price: ${(c.price_cents / 100).toFixed(2)}</p>
                   <p style={{ margin: '6px 0' }}>
                     Seats: {c.capacity == null ? 'Unlimited' : `${c.booked_count}/${c.capacity}`}{' '}
-                    {c.seats_left != null && `(Left: ${c.seats_left})`}
+                    {c.waitlist_offer_pending
+                      ? '(Waitlist offer pending)'
+                      : (c.waitlist_count ?? 0) > 0
+                        ? `(Waitlist: ${c.waitlist_count})`
+                        : c.seats_left != null && `(Left: ${c.seats_left})`}
                   </p>
                   {c.description && <p style={{ margin: '6px 0', color: '#666' }}>{c.description}</p>}
-                  <button onClick={() => addToCart(c.id)} disabled={isFull || inCart || alreadyBooked || !selectedPersonId}>
-                    {alreadyBooked ? 'Booked' : inCart ? 'Added' : isFull ? 'Full' : 'Add to cart'}
+                  <button onClick={() => preRegisterClass(c.id)} disabled={registeringClassId === c.id || alreadyBooked || !selectedPersonId}>
+                    {registeringClassId === c.id ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
                   </button>
                 </div>
               );
@@ -634,9 +483,6 @@ export default function ClassSchedulePage() {
                     {item.attendance_display_status}
                   </b>
                 </p>
-                {recentlyPaidRegistrationIds.includes(item.id) && (
-                  <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Payment completed</p>
-                )}
                 <p style={{ margin: '6px 0' }}>
                   Time: {item.class?.start_time ? new Date(item.class.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase() : '-'}
                 </p>
