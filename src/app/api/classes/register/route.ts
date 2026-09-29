@@ -39,7 +39,9 @@ export async function POST(req: Request) {
 
     const supa = admin();
 
-    const onWanderlist = await isUserOnWanderlist(supa, user.email);
+    const { data: roleRow } = await supa.from('roles').select('role').eq('id', user.id).maybeSingle();
+    const isOperator = roleRow?.role === 'owner' || roleRow?.role === 'staff' || roleRow?.role === 'admin';
+    const onWanderlist = isOperator || (await isUserOnWanderlist(supa, user.email));
     if (!onWanderlist) {
       return Response.json(
         { ok: false, error: 'Class pre-registration is open to Wanderlist families first.' },

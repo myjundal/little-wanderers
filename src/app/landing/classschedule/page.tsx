@@ -155,9 +155,11 @@ export default function ClassSchedulePage() {
   const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setMessage(null);
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+      setMessage(null);
+    }
     const requestKey = Date.now();
 
     const [classRes, myRes] = await Promise.all([
@@ -223,7 +225,7 @@ export default function ClassSchedulePage() {
   useEffect(() => {
     load();
     const interval = window.setInterval(() => {
-      load();
+      load(false);
     }, 10000);
 
     return () => window.clearInterval(interval);
@@ -260,7 +262,7 @@ export default function ClassSchedulePage() {
 
       setMessage('Spot claimed. You are registered for the class.');
       setClaimingWaitlist(false);
-      await load();
+      await load(false);
       window.history.replaceState({}, '', '/landing/classschedule');
     };
 
@@ -372,7 +374,7 @@ export default function ClassSchedulePage() {
     }
 
     setMessage(json.status === 'waitlist' ? 'Class is full. You are on the waitlist.' : 'Pre-registration complete.');
-    await load();
+    await load(false);
   };
 
   const cancelRegistration = async (registrationId: string) => {
@@ -394,7 +396,7 @@ export default function ClassSchedulePage() {
 
     setMessage('Paid class booking has been cancelled.');
     setCancellingId(null);
-    await load();
+    await load(false);
   };
 
   const saveClassReflection = async (registrationId: string, favorite: boolean, note: string) => {
@@ -413,7 +415,7 @@ export default function ClassSchedulePage() {
     }
 
     setMessage('Class favorite/note saved.');
-    await load();
+    await load(false);
   };
 
   return (

@@ -200,9 +200,9 @@ function emptyClassForm() {
   return {
     title: '',
     category: '',
-    date: start.toISOString().slice(0, 10),
-    start_time: start.toISOString().slice(11, 16),
-    end_time: end.toISOString().slice(11, 16),
+    date: localDateInputValue(start),
+    start_time: localTimeInputValue(start),
+    end_time: localTimeInputValue(end),
     instructor_name: '',
     age_range: '',
     caregiver_participation: '',
@@ -217,28 +217,41 @@ function emptyClassForm() {
 
 type ClassForm = ReturnType<typeof emptyClassForm>;
 
+function localDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeInputValue(date: Date) {
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${hour}:${minute}`;
+}
+
 function toDateTimeISO(date: string, time: string) {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
 function addDaysToDate(date: string, days: number) {
-  const next = new Date(`${date}T00:00:00.000Z`);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next.toISOString().slice(0, 10);
+  const next = new Date(`${date}T00:00:00`);
+  next.setDate(next.getDate() + days);
+  return localDateInputValue(next);
 }
 
 function buildRepeatDates(startDate: string, mode: ClassRepeatMode, count: number) {
   const dates: string[] = [];
   const safeCount = Math.min(Math.max(count, 1), 120);
-  const cursor = new Date(`${startDate}T00:00:00.000Z`);
+  const cursor = new Date(`${startDate}T00:00:00`);
   let guard = 0;
 
   while (dates.length < safeCount && guard < 370) {
-    const day = cursor.getUTCDay();
+    const day = cursor.getDay();
     if (mode !== 'weekdays' || (day !== 0 && day !== 6)) {
-      dates.push(cursor.toISOString().slice(0, 10));
+      dates.push(localDateInputValue(cursor));
     }
-    cursor.setUTCDate(cursor.getUTCDate() + (mode === 'weekly' ? 7 : 1));
+    cursor.setDate(cursor.getDate() + (mode === 'weekly' ? 7 : 1));
     guard += 1;
   }
 
@@ -270,9 +283,9 @@ function fromClass(item: ClassItem) {
   return {
     title: item.title,
     category: item.category ?? '',
-    date: start.toISOString().slice(0, 10),
-    start_time: start.toISOString().slice(11, 16),
-    end_time: end.toISOString().slice(11, 16),
+    date: localDateInputValue(start),
+    start_time: localTimeInputValue(start),
+    end_time: localTimeInputValue(end),
     instructor_name: item.instructor_name ?? '',
     age_range: item.age_range ?? '',
     caregiver_participation: item.caregiver_participation ?? '',
