@@ -29,22 +29,9 @@ type ClassSeries = ClassItem & {
   occurrences: ClassItem[];
 };
 
-const eyebrowStyle: CSSProperties = {
-  margin: 0,
-  color: '#7b6aa8',
-  fontSize: 13,
-  fontWeight: 700,
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase',
-};
-
 const sectionStyle: CSSProperties = {
-  marginTop: 28,
-  padding: 'clamp(20px, 4vw, 26px)',
-  borderRadius: 28,
-  background: 'rgba(255,255,255,0.62)',
-  border: '1px solid rgba(255,255,255,0.74)',
-  boxShadow: '0 16px 32px rgba(123, 106, 168, 0.06)',
+  display: 'grid',
+  gap: 14,
 };
 
 const classCardStyle: CSSProperties = {
@@ -85,7 +72,7 @@ function formatPrice(cents: number) {
 }
 
 function formatStartLabel(item: Pick<ClassItem, 'schedule_note' | 'schedule_label' | 'start_time' | 'end_time'>) {
-  if (item.schedule_note && item.schedule_label) return `${item.schedule_note} · ${item.schedule_label}`;
+  if (item.schedule_note) return item.schedule_note;
   return item.schedule_note ?? item.schedule_label ?? formatClassTime(item.start_time, item.end_time);
 }
 
@@ -197,15 +184,7 @@ export default function PublicUpcomingClasses() {
 
   return (
     <section style={sectionStyle}>
-      <p style={eyebrowStyle}>Upcoming schedule</p>
-      <h2 style={{ margin: '12px 0 0', color: '#4b4360', fontSize: 'clamp(1.75rem, 3vw, 2.25rem)' }}>
-        Classes will appear here as they are added.
-      </h2>
-      <p style={{ margin: '10px 0 0', color: '#7e7695', lineHeight: 1.75 }}>
-        We&apos;ll share dates, age groups, instructors, and registration details once each program is ready.
-      </p>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 14, marginTop: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 14 }}>
         {visibleClasses.map((item) => (
           <article key={item.id} style={classCardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -256,8 +235,8 @@ export default function PublicUpcomingClasses() {
               </div>
             )}
             {item.instructor_name && (
-              <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
-                With {item.instructor_name}
+              <p style={{ margin: 0, color: '#4b4360', lineHeight: 1.6, fontWeight: 800 }}>
+                {item.instructor_name}
               </p>
             )}
             {item.description && <p style={{ margin: 0, color: '#6f628d', lineHeight: 1.7 }}>{item.description}</p>}

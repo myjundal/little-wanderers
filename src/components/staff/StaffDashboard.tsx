@@ -364,6 +364,13 @@ function weekRangeLabel(weekStart: Date) {
   return `${startLabel} - ${endLabel}`;
 }
 
+function dateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function classTimeLabel(item: ClassItem) {
   const start = new Date(item.start_time);
   const end = new Date(item.end_time);
@@ -413,6 +420,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
 
   const scheduledClasses = useMemo(() => classes.filter((item) => item.status !== 'cancelled'), [classes]);
   const cancelledClasses = useMemo(() => classes.filter((item) => item.status === 'cancelled'), [classes]);
+  const scheduledClassSeries = useMemo(() => groupClassSeries(scheduledClasses), [scheduledClasses]);
   const cancelledClassSeries = useMemo(() => groupClassSeries(cancelledClasses), [cancelledClasses]);
   const classWeekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addCalendarDays(classWeekStart, index)),
@@ -924,6 +932,44 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         </div>
 
         <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
+          <StaffRecordGroup
+            title="Active classes"
+            count={scheduledClassSeries.length}
+            empty="No active classes yet."
+            defaultOpen
+            tone="active"
+          >
+            {scheduledClassSeries.map((series) => (
+              <div key={series.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 16, background: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#4f3f82' }}>{series.title}</h3>
+                    <p style={{ margin: '6px 0', color: '#6d6480' }}>
+                      {series.occurrences.map((item) => new Date(item.start_time).toLocaleDateString()).join(', ')}
+                    </p>
+                    {(series.instructor_name || series.category) && (
+                      <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {series.instructor_name ?? '-'} · Category: {series.category ?? '-'}</p>
+                    )}
+                    {(series.age_range || series.caregiver_participation) && (
+                      <p style={{ margin: '6px 0', color: '#6d6480' }}>Age group: {series.age_range ?? '-'} · Caregiver: {series.caregiver_participation ?? '-'}</p>
+                    )}
+                    <p style={{ margin: '6px 0', color: '#6d6480' }}>
+                      {series.schedule_label ? `${series.schedule_label} · ` : ''}{series.duration_minutes ?? 0} min · {dollars(series.price_cents)}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => {
+                      setEditingClassId(series.id);
+                      setClassForm(fromClass(series));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}>Edit info</button>
+                    <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => copyClassToNew(series)}>Duplicate</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </StaffRecordGroup>
+
           <div style={{ border: '1px solid #eadfff', borderRadius: 18, background: '#fff', padding: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => setClassWeekStart((prev) => addCalendarDays(prev, -7))}>
@@ -934,6 +980,15 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                 <p style={{ margin: '4px 0 0', color: '#7a6d97', fontSize: 13 }}>{classesThisWeek.length} scheduled class{classesThisWeek.length === 1 ? '' : 'es'}</p>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  type="date"
+                  value={dateInputValue(classWeekStart)}
+                  onChange={(e) => {
+                    const selected = new Date(`${e.target.value}T00:00:00`);
+                    if (!Number.isNaN(selected.getTime())) setClassWeekStart(startOfWeek(selected));
+                  }}
+                  style={{ ...inputStyle, width: 165 }}
+                />
                 <button style={{ ...buttonStyle, background: '#fff', color: '#5f3da4', border: '1px solid #eadfff' }} onClick={() => setClassWeekStart(startOfWeek(new Date()))}>
                   This week
                 </button>

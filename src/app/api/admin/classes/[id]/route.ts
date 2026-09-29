@@ -124,14 +124,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         .map((row) => row.id);
 
       if (seriesIds.length > 0) {
-        const seriesUpdate = await context.admin.from('classes').update(parsed.data).in('id', seriesIds);
+        const seriesData = {
+          title: parsed.data.title,
+          category: parsed.data.category,
+          capacity: parsed.data.capacity,
+          price_cents: parsed.data.price_cents,
+          instructor_name: parsed.data.instructor_name,
+          description: parsed.data.description,
+          age_range: parsed.data.age_range,
+          caregiver_participation: parsed.data.caregiver_participation,
+          schedule_note: parsed.data.schedule_note,
+          schedule_label: parsed.data.schedule_label,
+        };
+        const seriesUpdate = await context.admin.from('classes').update(seriesData).in('id', seriesIds);
         if (seriesUpdate.error) {
-          if (isMissingDurationColumn(seriesUpdate.error.message)) {
-            const fallback = await context.admin.from('classes').update(parsed.dataWithoutDuration).in('id', seriesIds);
-            if (fallback.error) return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
-          } else {
-            return Response.json({ ok: false, error: seriesUpdate.error.message }, { status: 500 });
-          }
+          return Response.json({ ok: false, error: seriesUpdate.error.message }, { status: 500 });
         }
       }
     }
