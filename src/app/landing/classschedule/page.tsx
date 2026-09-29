@@ -269,12 +269,12 @@ export default function ClassSchedulePage() {
     void claim();
   }, [claimingWaitlist, load]);
 
-  const registrationStatusByClassId = useMemo(
+  const registrationStatusByClassAndPerson = useMemo(
     () =>
       new Map(
         myItems
           .filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled' && item.class?.id)
-          .map((item) => [item.class!.id, item.status])
+          .map((item) => [`${item.class!.id}:${item.person_id}`, item.status])
       ),
     [myItems]
   );
@@ -476,7 +476,7 @@ export default function ClassSchedulePage() {
                     {series.occurrences.map((c) => {
                       const isFull = c.seats_left != null && c.seats_left <= 0;
                       const shouldWaitlist = isFull || Boolean(c.waitlist_offer_pending) || (c.waitlist_count ?? 0) > 0;
-                      const existingStatus = registrationStatusByClassId.get(c.id);
+                      const existingStatus = selectedPersonId ? registrationStatusByClassAndPerson.get(`${c.id}:${selectedPersonId}`) : undefined;
                       const alreadyBooked = Boolean(existingStatus);
                       return (
                         <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
