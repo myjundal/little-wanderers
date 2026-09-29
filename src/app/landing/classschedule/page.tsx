@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import ActionToast from '@/components/ui/ActionToast';
 
 type Person = {
   id: string;
@@ -147,6 +148,7 @@ export default function ClassSchedulePage() {
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
   const [registeringClassId, setRegisteringClassId] = useState<string | null>(null);
   const [claimingWaitlist, setClaimingWaitlist] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -374,15 +376,16 @@ export default function ClassSchedulePage() {
     }
 
     const emailFailed = json.email && (!json.email.ok || json.email.skipped);
-    setMessage(
+    const doneMessage =
       emailFailed
         ? json.status === 'waitlist'
           ? 'Class is full. You are on the waitlist, but we could not send the confirmation email yet.'
           : 'Pre-registration complete, but we could not send the confirmation email yet.'
         : json.status === 'waitlist'
           ? 'Class is full. You are on the waitlist. Confirmation email sent.'
-          : 'Pre-registration complete. Confirmation email sent.'
-    );
+          : 'Pre-registration complete. Confirmation email sent.';
+    setMessage(doneMessage);
+    setToast({ message: json.status === 'waitlist' ? 'Waitlist joined.' : 'Pre-registration complete.', tone: emailFailed ? 'warning' : 'success' });
     await load(false);
   };
 
@@ -404,11 +407,12 @@ export default function ClassSchedulePage() {
     }
 
     const cancellationEmailFailed = json.cancellation_email && (!json.cancellation_email.ok || json.cancellation_email.skipped);
-    setMessage(
+    const doneMessage =
       cancellationEmailFailed
         ? 'Class booking has been cancelled, but we could not send the cancellation email yet.'
-        : 'Class booking has been cancelled. Cancellation email sent.'
-    );
+        : 'Class booking has been cancelled. Cancellation email sent.';
+    setMessage(doneMessage);
+    setToast({ message: 'Class booking cancelled.', tone: cancellationEmailFailed ? 'warning' : 'success' });
     setCancellingId(null);
     await load(false);
   };
@@ -434,6 +438,7 @@ export default function ClassSchedulePage() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
+      <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Pre-registration</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Wanderlist families get first access. Register for available spots or join the waitlist when a class is full.</p>
 

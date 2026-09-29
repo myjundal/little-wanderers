@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import ActionToast from '@/components/ui/ActionToast';
 import {
   getDefaultPartyBookingSlot,
   getPartyBookingSlotOptionsForDate,
@@ -15,6 +16,7 @@ import {
   PARTY_BOOKING_SLOTS,
   type PartyBookingSlot,
 } from '@/lib/party-config';
+import { PARTY_FINAL_DETAILS, PARTY_WHAT_TO_BRING, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type PartyBooking = {
@@ -117,6 +119,7 @@ export default function PartyPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
   const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
@@ -212,7 +215,9 @@ export default function PartyPage() {
         return;
       }
 
-      setMessage('Deposit paid. Your party is scheduled.');
+      const emailFailed = json.party_email && (!json.party_email.ok || json.party_email.skipped);
+      setMessage(emailFailed ? 'Deposit paid. Your party is scheduled, but we could not send the confirmation email yet.' : 'Deposit paid. Your party is scheduled. Confirmation email sent.');
+      setToast({ message: 'Party booking complete.', tone: emailFailed ? 'warning' : 'success' });
       setSubmitting(false);
       finalizingPaymentRef.current = false;
       await load();
@@ -274,7 +279,9 @@ export default function PartyPage() {
       return;
     }
 
+    const emailFailed = json.party_email && (!json.party_email.ok || json.party_email.skipped);
     setConfirmation(formatPartySummary(startIso, endIso));
+    setToast({ message: 'Party booking saved.', tone: emailFailed ? 'warning' : 'success' });
     setMessage(null);
     setForm(getDefaultPartyForm());
     setSubmitting(false);
@@ -300,8 +307,10 @@ export default function PartyPage() {
 
     if (json.email_sent === false) {
       setMessage('Cancellation requested. Booking updated, but email sending is not configured yet.');
+      setToast({ message: 'Cancellation requested.', tone: 'warning' });
     } else {
       setMessage('Cancellation requested. We sent a cancellation request email to the admin.');
+      setToast({ message: 'Cancellation requested.' });
     }
 
     setRequestingCancelId(null);
@@ -394,12 +403,14 @@ export default function PartyPage() {
       return;
     }
     setMessage('Party booking rescheduled.');
+    setToast({ message: 'Party booking rescheduled.' });
     setRescheduleBookingId(null);
     await load();
   };
 
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 1160, margin: '0 auto', boxSizing: 'border-box', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
+      <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>Birthday Parties at Little Wanderers</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Celebrate your little one with a calm, playful, space-inspired birthday experience designed for young children and their caregivers.</p>
 
@@ -455,12 +466,18 @@ export default function PartyPage() {
           </p>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What is included</h3>
           <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
-            <li>Basic Little Wanderers table setup with neutral, soft space-inspired touches</li>
-            <li>Disposable plates, cups, napkins, and utensils</li>
+            {PARTY_WHAT_WE_PROVIDE.map((item) => <li key={item}>{item}</li>)}
             <li>Staff support for setup and party flow</li>
-            <li>Full cleanup after the party</li>
             <li><strong>Our signature Little Wanderers Birthday Galaxy activity</strong></li>
             <li>A sweet group photo moment</li>
+          </ul>
+          <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What to bring</h3>
+          <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
+            {PARTY_WHAT_TO_BRING.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+          <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>Final details</h3>
+          <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
+            {PARTY_FINAL_DETAILS.map((item) => <li key={item}>{item}</li>)}
           </ul>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '12px 0 0' }}>
             Because our buildout and opening are still in progress, birthday parties are available starting {PARTY_BOOKING_START_LABEL}. Available Friday evenings, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
@@ -502,8 +519,8 @@ export default function PartyPage() {
             )}
             <li>During early access, we will hold your selected party slot without collecting a deposit today.</li>
             <li>After our official opening, we will contact you so you can visit the space.</li>
-            <li>If you love it and want to keep the booking, we will collect the 50% deposit ($150) then, with the remaining balance due upon arrival before setup.</li>
-            <li>Final guest count is due 3 days before party day.</li>
+            <li>If you love it and want to keep the booking, we will collect the 50% deposit ($150) then.</li>
+            {PARTY_FINAL_DETAILS.map((item) => <li key={item}>{item}</li>)}
           </ul>
         </div>
 

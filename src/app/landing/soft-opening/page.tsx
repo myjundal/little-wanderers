@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import ActionToast from '@/components/ui/ActionToast';
 import { WAITLIST_JOIN_URL } from '@/lib/waitlist';
 
 type Slot = {
@@ -62,6 +63,7 @@ export default function SoftOpeningReservationPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const [childrenCount, setChildrenCount] = useState('1');
   const [adultCount, setAdultCount] = useState('1');
@@ -126,6 +128,7 @@ export default function SoftOpeningReservationPage() {
     }
 
     setMessage('Your soft opening visit is reserved.');
+    setToast({ message: 'Open Play reservation saved.' });
     setNotes('');
     setSubmitting(false);
     await load();
@@ -149,6 +152,7 @@ export default function SoftOpeningReservationPage() {
     }
 
     setMessage('Your reservation has been cancelled.');
+    setToast({ message: 'Open Play reservation cancelled.' });
     setSubmitting(false);
     await load();
   };
@@ -193,6 +197,7 @@ export default function SoftOpeningReservationPage() {
 
   return (
     <main style={{ padding: '16px clamp(12px,4vw,24px)', maxWidth: 1120, margin: '0 auto 88px' }}>
+      <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
       <section style={{ display: 'grid', gap: 18, border: '1px solid #e8dfef', borderRadius: 28, background: '#fffdf9', boxShadow: '0 18px 34px rgba(158,143,191,.12)', padding: 'clamp(20px,4vw,34px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ maxWidth: 720 }}>

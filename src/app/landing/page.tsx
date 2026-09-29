@@ -331,7 +331,8 @@ export default function AppHome() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Tool</Link>
             <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Staff QR check-in</Link>
-            <Link href="/landing/party" style={{ display: 'block' }}>Party Calendar / My Parties</Link>
+            {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
+            <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
           </div>
         </section>
       )}
@@ -342,8 +343,8 @@ export default function AppHome() {
           <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
           <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
           {SHOW_CUSTOMER_MEMBERSHIP && <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>}
-          {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>View Class Schedule / My Classes</Link>}
-          <Link href="/landing/party" style={{ display: 'block' }}>My Party Bookings</Link>
+          {SHOW_CUSTOMER_CLASS_BOOKING && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
+          <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
           <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
             UX Flows (preview)
           </Link>

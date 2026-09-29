@@ -13,15 +13,14 @@ import {
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 import { sendPartyBookingNotification } from '@/lib/admin-notifications';
 import { logger } from '@/lib/logger';
+import { PARTY_DEPOSIT_CENTS, PARTY_TOTAL_FEE_CENTS } from '@/lib/party-info';
+import { sendPartyConfirmationEmail } from '@/lib/party-emails';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,birthday_child_name,birthday_age,occasion_details';
 const PARTY_SELECT_FALLBACK = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at';
-
-const PARTY_TOTAL_FEE_CENTS = 30000;
-const PARTY_DEPOSIT_CENTS = 15000;
 
 type PartyPayload = {
   start_time?: string;
@@ -132,6 +131,20 @@ async function notifyPartyBookingSaved(input: { bookingId?: string | null; start
   }
 }
 
+async function notifyPartyCustomerConfirmation(input: { admin: ReturnType<typeof admin>; bookingId?: string | null; fallbackEmail?: string | null }) {
+  if (!input.bookingId) return { ok: false as const, error: 'booking id missing' };
+  try {
+    const result = await sendPartyConfirmationEmail(input.admin, input.bookingId, input.fallbackEmail);
+    if (!result.ok || 'skipped' in result) {
+      logger.warn({ action: 'party_confirmation_email.not_sent', bookingId: input.bookingId, result });
+    }
+    return result;
+  } catch (emailError) {
+    logger.error({ action: 'party_confirmation_email.failed', bookingId: input.bookingId }, emailError);
+    return { ok: false as const, error: emailError instanceof Error ? emailError.message : 'Unable to send party confirmation email.' };
+  }
+}
+
 export async function GET() {
   try {
     const server = createServerSupabaseClient();
@@ -233,7 +246,8 @@ export async function POST(req: Request) {
           endTime: end.toISOString(),
           status: 'confirmed',
         });
-        return Response.json({ ok: true, id: updateExisting.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+        const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: updateExisting.data.id, fallbackEmail: user.email });
+        return Response.json({ ok: true, id: updateExisting.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
       }
     }
 
@@ -285,7 +299,9 @@ export async function POST(req: Request) {
           endTime: holdPayload.end_time,
           status: 'confirmed',
         });
-        return Response.json({ ok: true, id: updateExisting.data?.id ?? existingSameSlot.id, status: 'confirmed', deposit_required_now: false });
+        const bookingIdForEmail = updateExisting.data?.id ?? existingSameSlot.id;
+        const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: bookingIdForEmail, fallbackEmail: user.email });
+        return Response.json({ ok: true, id: bookingIdForEmail, status: 'confirmed', deposit_required_now: false, party_email });
       }
 
       const hold = await supa
@@ -301,7 +317,8 @@ export async function POST(req: Request) {
         endTime: holdPayload.end_time,
         status: 'confirmed',
       });
-      return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'confirmed', deposit_required_now: false });
+      const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: hold.data?.id ?? null, fallbackEmail: user.email });
+      return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'confirmed', deposit_required_now: false, party_email });
     }
 
     if (mode === 'create_payment_link') {
@@ -422,7 +439,8 @@ export async function POST(req: Request) {
           endTime: end.toISOString(),
           status: 'confirmed',
         });
-        return Response.json({ ok: true, id: primaryUpdate.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+        const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: primaryUpdate.data.id, fallbackEmail: user.email });
+        return Response.json({ ok: true, id: primaryUpdate.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
       }
     }
 
@@ -471,7 +489,8 @@ export async function POST(req: Request) {
         endTime: end.toISOString(),
         status: 'confirmed',
       });
-      return Response.json({ ok: true, id: fallback.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+      const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: fallback.data?.id ?? null, fallbackEmail: user.email });
+      return Response.json({ ok: true, id: fallback.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
     }
 
     await notifyPartyBookingSaved({
@@ -480,7 +499,8 @@ export async function POST(req: Request) {
       endTime: insertPayload.end_time,
       status: 'confirmed',
     });
-    return Response.json({ ok: true, id: primary.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS });
+    const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: primary.data?.id ?? null, fallbackEmail: user.email });
+    return Response.json({ ok: true, id: primary.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
