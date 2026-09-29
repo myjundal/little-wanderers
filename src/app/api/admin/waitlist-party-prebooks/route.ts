@@ -133,7 +133,7 @@ export async function POST(req: Request) {
       status: 'confirmed',
       status_updated_at: new Date().toISOString(),
       created_by_user_id: context.user.id,
-      created_by_role: 'owner',
+      created_by_role: context.role,
       birthday_child_name: birthdayChildName,
       birthday_age: birthdayAge,
       occasion_details: 'Prebooked by staff for Wanderlist party access',

@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { countWaitlistRegistrations, hasActiveWaitlistOffer } from '@/lib/class-waitlist';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
-const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,capacity,price_cents,status';
+const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
 const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status';
 
 type ClassRow = {
@@ -17,6 +18,9 @@ type ClassRow = {
   instructor_name?: string | null;
   description?: string | null;
   age_range?: string | null;
+  caregiver_participation?: string | null;
+  schedule_note?: string | null;
+  schedule_label?: string | null;
   capacity: number | null;
   price_cents: number;
   status: string;
@@ -72,7 +76,7 @@ export async function GET(req: NextRequest) {
     if (ids.length > 0) {
       const { data: regs } = await supa.from('class_registrations').select('class_id,person_id,status').in('class_id', ids);
       countsByClass = (regs ?? []).reduce((map, row) => {
-        if (row.status !== 'cancelled') {
+        if (row.status === 'scheduled' || row.status === 'attended') {
           map.set(row.class_id, (map.get(row.class_id) ?? 0) + 1);
           if (!registrationsByPerson.has(row.person_id)) {
             registrationsByPerson.set(row.person_id, new Set());
@@ -101,7 +105,7 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.booked - a.booked);
     const popularThreshold = sortedByPopularity[Math.floor(sortedByPopularity.length * 0.25) - 1]?.booked ?? 0;
 
-    const items = classes.map((c) => {
+    const items = await Promise.all(classes.map(async (c) => {
       const booked = countsByClass.get(c.id) ?? 0;
       const recommendations = classes
         .filter((candidate) => candidate.id !== c.id)
@@ -119,12 +123,17 @@ export async function GET(req: NextRequest) {
         instructor_name: c.instructor_name ?? null,
         description: c.description ?? null,
         age_range: c.age_range ?? null,
+        caregiver_participation: c.caregiver_participation ?? null,
+        schedule_note: c.schedule_note ?? null,
+        schedule_label: c.schedule_label ?? null,
         booked_count: booked,
         seats_left: c.capacity == null ? null : Math.max(c.capacity - booked, 0),
+        waitlist_offer_pending: await hasActiveWaitlistOffer(supa, c.id).catch(() => false),
+        waitlist_count: await countWaitlistRegistrations(supa, c.id).catch(() => 0),
         is_popular: booked > 0 && booked >= popularThreshold,
         recommended_class_ids: recommendations.map((entry) => entry.class_id),
       };
-    });
+    }));
 
     return Response.json({ ok: true, items }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {

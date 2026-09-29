@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 type ClassItem = {
@@ -13,10 +14,15 @@ type ClassItem = {
   instructor_name: string | null;
   description: string | null;
   age_range: string | null;
+  caregiver_participation: string | null;
+  schedule_note: string | null;
+  schedule_label: string | null;
   capacity: number | null;
   price_cents: number;
   booked_count: number;
   seats_left: number | null;
+  waitlist_offer_pending?: boolean;
+  waitlist_count?: number;
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -74,6 +80,15 @@ function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function formatStartLabel(item: Pick<ClassItem, 'schedule_note' | 'schedule_label' | 'start_time' | 'end_time'>) {
+  if (item.schedule_note && item.schedule_label) return `${item.schedule_note} · ${item.schedule_label}`;
+  return item.schedule_note ?? item.schedule_label ?? formatClassTime(item.start_time, item.end_time);
+}
+
+function formatCapacity(capacity: number | null) {
+  return capacity == null ? 'Class size varies' : `Max ${capacity} kids`;
+}
+
 export default function PublicUpcomingClasses() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,7 +138,7 @@ export default function PublicUpcomingClasses() {
         We&apos;ll share dates, age groups, instructors, and registration details once each program is ready.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginTop: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 14, marginTop: 18 }}>
         {visibleClasses.map((item) => (
           <article key={item.id} style={classCardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -142,26 +157,62 @@ export default function PublicUpcomingClasses() {
                   {item.category}
                 </span>
               )}
-              {item.age_range && (
-                <span style={{ color: '#8f85a5', fontSize: 13, fontWeight: 700 }}>{item.age_range}</span>
-              )}
             </div>
 
             <h3 style={{ margin: 0, color: '#4b4360', fontSize: '1.25rem' }}>{item.title}</h3>
             <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
-              {formatClassTime(item.start_time, item.end_time)}
+              {formatStartLabel(item)}
             </p>
             <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
               {item.instructor_name ? `With ${item.instructor_name}` : 'Instructor to be announced'}
             </p>
             {item.description && <p style={{ margin: 0, color: '#6f628d', lineHeight: 1.7 }}>{item.description}</p>}
 
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginTop: 2 }}>
+              <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
+                {item.age_range ?? 'Ages TBA'}
+              </span>
+              <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
+                {item.caregiver_participation ?? 'Caregiver info TBA'}
+              </span>
+              <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
+                {item.duration_minutes ? `${item.duration_minutes} min` : 'Length TBA'}
+              </span>
+              <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
+                {formatCapacity(item.capacity)}
+              </span>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
               <strong style={{ color: '#7b6aa8' }}>{formatPrice(item.price_cents)}</strong>
               <span style={{ color: '#8f85a5', fontSize: 13, fontWeight: 700 }}>
-                {item.seats_left == null ? 'Capacity varies' : `${item.seats_left} spots left`}
+                {item.waitlist_offer_pending
+                  ? 'Waitlist offer pending'
+                  : (item.waitlist_count ?? 0) > 0
+                    ? 'Waitlist open'
+                    : item.seats_left == null
+                      ? 'Capacity varies'
+                      : item.seats_left > 0
+                        ? `${item.seats_left} spots left`
+                        : 'Waitlist open'}
               </span>
             </div>
+            <Link
+              href="/landing/classschedule"
+              style={{
+                display: 'inline-flex',
+                justifyContent: 'center',
+                marginTop: 4,
+                borderRadius: 14,
+                background: '#5f3da4',
+                color: '#fff',
+                padding: '11px 14px',
+                textDecoration: 'none',
+                fontWeight: 800,
+              }}
+            >
+              Pre-register
+            </Link>
           </article>
         ))}
       </div>

@@ -61,6 +61,22 @@ No service-role key is used in client auth flows.
    - existing user sign-in (`shouldCreateUser = false`)
    - new user onboarding (`shouldCreateUser = true`)
 
+### Staff access setup
+
+Staff and owners use the same `/login` page. Do not create a separate staff login unless the staff workflow needs a different sign-in policy later.
+
+Operator access is controlled by `public.roles`, not by household membership roles. After the staff member has an Auth user, set their role row to `staff`, `owner`, or `admin`:
+
+```sql
+insert into public.roles (id, role)
+select id, 'staff'
+from auth.users
+where email = 'staff@example.com'
+on conflict (id) do update set role = excluded.role, updated_at = now();
+```
+
+Existing staff should choose **I already have an account** on `/login`. If a new staff member is not on the Wanderlist, create or invite their Auth user from Supabase first, then apply the role update above.
+
 ## Workflow
 1) `git checkout -b feat/<feature>`
 2) Build small scope; keep changes focused

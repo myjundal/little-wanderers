@@ -449,6 +449,9 @@ alter table public.classes add column if not exists duration_minutes integer;
 alter table public.classes add column if not exists instructor_name text;
 alter table public.classes add column if not exists description text;
 alter table public.classes add column if not exists age_range text;
+alter table public.classes add column if not exists caregiver_participation text;
+alter table public.classes add column if not exists schedule_note text;
+alter table public.classes add column if not exists schedule_label text;
 
 alter table public.classes
   add constraint classes_duration_minutes_check
@@ -490,7 +493,10 @@ alter table public.class_registrations
   add column if not exists attendance_marked_by uuid,
   add column if not exists customer_favorite boolean not null default false,
   add column if not exists customer_note text,
-  add column if not exists customer_note_updated_at timestamptz;
+  add column if not exists customer_note_updated_at timestamptz,
+  add column if not exists waitlist_offer_token uuid,
+  add column if not exists waitlist_offer_expires_at timestamptz,
+  add column if not exists waitlist_offered_at timestamptz;
 
 alter table public.class_registrations
   drop constraint if exists class_registrations_attendance_status_check;
@@ -507,6 +513,9 @@ alter table public.class_registrations
   foreign key (attendance_marked_by) references auth.users(id) on delete set null;
 
 create index if not exists idx_class_registrations_attendance_status on public.class_registrations(attendance_status);
+create unique index if not exists class_registrations_waitlist_offer_token_key
+on public.class_registrations(waitlist_offer_token)
+where waitlist_offer_token is not null;
 
 -- =========================================
 -- PARTY ATTENDANCE TRACKING

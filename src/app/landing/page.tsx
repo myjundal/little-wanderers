@@ -390,8 +390,8 @@ export default function AppHome() {
 
       <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', SHOW_CUSTOMER_CLASS_BOOKING ? 'mobileBottomWithClasses' : ''].filter(Boolean).join(' ')}>
         <Link href="/">Main</Link>
-        <Link href="/landing">{canUseOwnerDashboard ? 'Owner Dash' : 'My Dash'}</Link>
-        {canUseOwnerDashboard && <Link href="/staff">Owner Tool</Link>}
+        <Link href="/landing">{canUseOwnerDashboard ? 'Staff Dash' : 'My Dash'}</Link>
+        {canUseOwnerDashboard && <Link href="/staff">Staff Tool</Link>}
         {canUseOwnerDashboard ? (
           <Link href="/staff/checkin">QR Check-in</Link>
         ) : (
