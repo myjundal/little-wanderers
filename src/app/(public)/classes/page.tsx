@@ -21,6 +21,17 @@ const pageStyle = {
 export default function ClassesPage() {
   return (
     <main style={pageStyle}>
+      <section style={{ marginBottom: 24 }}>
+        <p style={{ margin: '0 0 8px', color: '#7b6aa8', fontSize: 13, fontWeight: 900, letterSpacing: 0, textTransform: 'uppercase' }}>
+          Classes & Events
+        </p>
+        <h1 style={{ margin: 0, color: '#4b4360', fontSize: 'clamp(2rem, 5vw, 3.7rem)', lineHeight: 1.05 }}>
+          Little Wanderers Classes & Events
+        </h1>
+        <p style={{ maxWidth: 740, margin: '14px 0 0', color: '#6f628d', fontSize: '1.05rem', lineHeight: 1.75 }}>
+          Playful small-group programs for curious kids and families. Browse what is opening first, then join the Wanderlist to get early access to class pre-registration.
+        </p>
+      </section>
       <PublicUpcomingClasses />
     </main>
   );

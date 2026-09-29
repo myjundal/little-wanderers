@@ -140,6 +140,13 @@ function classScheduleLabel(item: ClassItem) {
   return item.schedule_note ?? item.schedule_label ?? classDateLabel(item);
 }
 
+function seatsLine(item: ClassItem) {
+  if (item.capacity == null) return 'Seats: Unlimited';
+  if (item.waitlist_offer_pending) return `Seats: ${item.booked_count}/${item.capacity} (waitlist offer pending)`;
+  if ((item.waitlist_count ?? 0) > 0) return `Seats: ${item.booked_count}/${item.capacity} (waitlist: ${item.waitlist_count})`;
+  return `Seats: ${item.booked_count}/${item.capacity} (left: ${item.seats_left ?? 0})`;
+}
+
 export default function ClassSchedulePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -496,6 +503,15 @@ export default function ClassSchedulePage() {
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             {classSeries.map((series) => {
+              const target = series.occurrences[0] ?? series;
+              const isFull = target.seats_left != null && target.seats_left <= 0;
+              const shouldWaitlist = isFull || Boolean(target.waitlist_offer_pending) || (target.waitlist_count ?? 0) > 0;
+              const existingStatus = selectedPersonId
+                ? series.occurrences
+                    .map((occurrence) => registrationStatusByClassAndPerson.get(`${occurrence.id}:${selectedPersonId}`))
+                    .find(Boolean)
+                : undefined;
+              const alreadyBooked = Boolean(existingStatus);
               return (
                 <div key={series.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <h3 style={{ margin: 0 }}>
@@ -516,31 +532,13 @@ export default function ClassSchedulePage() {
                   <p style={{ margin: '6px 0' }}>Duration: {series.duration_minutes ?? Math.round((new Date(series.end_time).getTime() - new Date(series.start_time).getTime()) / 60000)} min</p>
                   <p style={{ margin: '6px 0' }}>Price: ${(series.price_cents / 100).toFixed(2)}</p>
                   {series.description && <p style={{ margin: '6px 0', color: '#666' }}>{series.description}</p>}
-                  <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-                    {series.occurrences.map((c) => {
-                      const isFull = c.seats_left != null && c.seats_left <= 0;
-                      const shouldWaitlist = isFull || Boolean(c.waitlist_offer_pending) || (c.waitlist_count ?? 0) > 0;
-                      const existingStatus = selectedPersonId ? registrationStatusByClassAndPerson.get(`${c.id}:${selectedPersonId}`) : undefined;
-                      const alreadyBooked = Boolean(existingStatus);
-                      return (
-                        <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
-                          <div style={{ minWidth: 220, flex: '1 1 240px' }}>
-                            <div style={{ color: '#4f3f82', fontWeight: 800 }}>{classDateLabel(c)}</div>
-                            <div style={{ color: '#7a6d97', fontSize: 13 }}>
-                              Seats: {c.capacity == null ? 'Unlimited' : `${c.booked_count}/${c.capacity}`}{' '}
-                              {c.waitlist_offer_pending
-                                ? '(Waitlist offer pending)'
-                                : (c.waitlist_count ?? 0) > 0
-                                  ? `(Waitlist: ${c.waitlist_count})`
-                                  : c.seats_left != null && `(Left: ${c.seats_left})`}
-                            </div>
-                          </div>
-                          <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(c.id)} disabled={registeringClassId === c.id || alreadyBooked || !selectedPersonId}>
-                            {registeringClassId === c.id ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
-                          </button>
-                        </div>
-                      );
-                    })}
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff', marginTop: 12 }}>
+                    <div style={{ minWidth: 220, flex: '1 1 240px', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
+                      {seatsLine(target)}
+                    </div>
+                    <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId === target.id || alreadyBooked || !selectedPersonId}>
+                      {registeringClassId === target.id ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
+                    </button>
                   </div>
                 </div>
               );

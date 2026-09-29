@@ -134,6 +134,13 @@ function seatLabel(item: ClassItem) {
   return item.seats_left > 0 ? `${item.seats_left} left` : 'waitlist';
 }
 
+function seatsLine(item: ClassItem) {
+  if (item.capacity == null) return 'Seats: Unlimited';
+  if (item.waitlist_offer_pending) return `Seats: ${item.booked_count}/${item.capacity} (waitlist offer pending)`;
+  if ((item.waitlist_count ?? 0) > 0) return `Seats: ${item.booked_count}/${item.capacity} (waitlist: ${item.waitlist_count})`;
+  return `Seats: ${item.booked_count}/${item.capacity} (left: ${item.seats_left ?? 0})`;
+}
+
 function shouldShowPublicDates(item: ClassSeries) {
   return !item.schedule_note;
 }
@@ -276,9 +283,7 @@ export default function PublicUpcomingClasses() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
               <strong style={{ color: '#7b6aa8' }}>{formatPrice(item.price_cents)}</strong>
               <span style={{ color: '#8f85a5', fontSize: 13, fontWeight: 700 }}>
-                {shouldShowPublicDates(item)
-                  ? item.occurrences.length === 1 ? seatLabel(item) : `${item.occurrences.length} upcoming dates`
-                  : 'Pre-registration open'}
+                {seatsLine(item)}
               </span>
             </div>
             <Link
