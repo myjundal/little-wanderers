@@ -35,6 +35,10 @@ type ClassItem = {
   recommended_class_ids: string[];
 };
 
+type ClassSeries = ClassItem & {
+  occurrences: ClassItem[];
+};
+
 type RegistrationItem = {
   id: string;
   person_id: string;
@@ -72,6 +76,51 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
   border: '1px solid #b897ec',
   boxShadow: '0 2px 8px rgba(95,61,164,0.12)',
 };
+
+function classSeriesKey(item: ClassItem) {
+  return [
+    item.title,
+    item.category ?? '',
+    item.instructor_name ?? '',
+    item.description ?? '',
+    item.age_range ?? '',
+    item.caregiver_participation ?? '',
+    item.schedule_label ?? '',
+    item.duration_minutes ?? '',
+    item.capacity ?? '',
+    item.price_cents,
+  ].join('::');
+}
+
+function groupClassSeries(items: ClassItem[]) {
+  const groups = new Map<string, ClassItem[]>();
+  items.forEach((item) => {
+    const key = classSeriesKey(item);
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  });
+
+  return Array.from(groups.values()).map((occurrences) => {
+    const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return { ...sorted[0], occurrences: sorted } satisfies ClassSeries;
+  });
+}
+
+function classDateLabel(item: ClassItem) {
+  const start = new Date(item.start_time);
+  const end = new Date(item.end_time);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Date TBA';
+  const date = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  return `${date} · ${startTime}-${endTime}`;
+}
+
+function classScheduleLabel(item: ClassItem) {
+  if (item.schedule_note && item.schedule_label) return `${item.schedule_note} · ${item.schedule_label}`;
+  return item.schedule_note ?? item.schedule_label ?? classDateLabel(item);
+}
 
 export default function ClassSchedulePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -210,6 +259,8 @@ export default function ClassSchedulePage() {
       ),
     [myItems]
   );
+
+  const classSeries = useMemo(() => groupClassSeries(classes), [classes]);
 
   useEffect(() => {
     setNoteDrafts((prev) => {
@@ -381,44 +432,53 @@ export default function ClassSchedulePage() {
           <p>No upcoming classes yet.</p>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {classes.map((c) => {
-              const isFull = c.seats_left != null && c.seats_left <= 0;
-              const shouldWaitlist = isFull || Boolean(c.waitlist_offer_pending) || (c.waitlist_count ?? 0) > 0;
-              const existingStatus = registrationStatusByClassId.get(c.id);
-              const alreadyBooked = Boolean(existingStatus);
+            {classSeries.map((series) => {
               return (
-                <div key={c.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
+                <div key={series.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <h3 style={{ margin: 0 }}>
-                    {c.title}{' '}
-                    {c.is_popular && (
+                    {series.title}{' '}
+                    {series.occurrences.some((item) => item.is_popular) && (
                       <span style={{ fontSize: 12, padding: '3px 7px', borderRadius: 999, background: '#ffe4f1', color: '#9d2f65' }}>
                         Popular
                       </span>
                     )}
                   </h3>
                   <p style={{ margin: '8px 0', color: '#666' }}>
-                    {c.schedule_note && c.schedule_label
-                      ? `${c.schedule_note} · ${c.schedule_label}`
-                      : c.schedule_note ?? c.schedule_label ?? `${new Date(c.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ ${new Date(c.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`}
+                    {classScheduleLabel(series)}
                   </p>
-                  <p style={{ margin: '6px 0' }}>Category: {c.category ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Instructor: {c.instructor_name ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Age(s): {c.age_range ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Caregiver: {c.caregiver_participation ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Duration: {c.duration_minutes ?? Math.round((new Date(c.end_time).getTime() - new Date(c.start_time).getTime()) / 60000)} min</p>
-                  <p style={{ margin: '6px 0' }}>Price: ${(c.price_cents / 100).toFixed(2)}</p>
-                  <p style={{ margin: '6px 0' }}>
-                    Seats: {c.capacity == null ? 'Unlimited' : `${c.booked_count}/${c.capacity}`}{' '}
-                    {c.waitlist_offer_pending
-                      ? '(Waitlist offer pending)'
-                      : (c.waitlist_count ?? 0) > 0
-                        ? `(Waitlist: ${c.waitlist_count})`
-                        : c.seats_left != null && `(Left: ${c.seats_left})`}
-                  </p>
-                  {c.description && <p style={{ margin: '6px 0', color: '#666' }}>{c.description}</p>}
-                  <button onClick={() => preRegisterClass(c.id)} disabled={registeringClassId === c.id || alreadyBooked || !selectedPersonId}>
-                    {registeringClassId === c.id ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
-                  </button>
+                  <p style={{ margin: '6px 0' }}>Category: {series.category ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Instructor: {series.instructor_name ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Age(s): {series.age_range ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Caregiver: {series.caregiver_participation ?? '-'}</p>
+                  <p style={{ margin: '6px 0' }}>Duration: {series.duration_minutes ?? Math.round((new Date(series.end_time).getTime() - new Date(series.start_time).getTime()) / 60000)} min</p>
+                  <p style={{ margin: '6px 0' }}>Price: ${(series.price_cents / 100).toFixed(2)}</p>
+                  {series.description && <p style={{ margin: '6px 0', color: '#666' }}>{series.description}</p>}
+                  <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                    {series.occurrences.map((c) => {
+                      const isFull = c.seats_left != null && c.seats_left <= 0;
+                      const shouldWaitlist = isFull || Boolean(c.waitlist_offer_pending) || (c.waitlist_count ?? 0) > 0;
+                      const existingStatus = registrationStatusByClassId.get(c.id);
+                      const alreadyBooked = Boolean(existingStatus);
+                      return (
+                        <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
+                          <div style={{ minWidth: 220, flex: '1 1 240px' }}>
+                            <div style={{ color: '#4f3f82', fontWeight: 800 }}>{classDateLabel(c)}</div>
+                            <div style={{ color: '#7a6d97', fontSize: 13 }}>
+                              Seats: {c.capacity == null ? 'Unlimited' : `${c.booked_count}/${c.capacity}`}{' '}
+                              {c.waitlist_offer_pending
+                                ? '(Waitlist offer pending)'
+                                : (c.waitlist_count ?? 0) > 0
+                                  ? `(Waitlist: ${c.waitlist_count})`
+                                  : c.seats_left != null && `(Left: ${c.seats_left})`}
+                            </div>
+                          </div>
+                          <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(c.id)} disabled={registeringClassId === c.id || alreadyBooked || !selectedPersonId}>
+                            {registeringClassId === c.id ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}

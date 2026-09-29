@@ -25,6 +25,10 @@ type ClassItem = {
   waitlist_count?: number;
 };
 
+type ClassSeries = ClassItem & {
+  occurrences: ClassItem[];
+};
+
 const eyebrowStyle: CSSProperties = {
   margin: 0,
   color: '#7b6aa8',
@@ -89,6 +93,49 @@ function formatCapacity(capacity: number | null) {
   return capacity == null ? 'Class size varies' : `Max ${capacity} kids`;
 }
 
+function seriesKey(item: ClassItem) {
+  return [
+    item.title,
+    item.category ?? '',
+    item.instructor_name ?? '',
+    item.description ?? '',
+    item.age_range ?? '',
+    item.caregiver_participation ?? '',
+    item.schedule_label ?? '',
+    item.duration_minutes ?? '',
+    item.capacity ?? '',
+    item.price_cents,
+  ].join('::');
+}
+
+function groupClassSeries(items: ClassItem[]) {
+  const groups = new Map<string, ClassItem[]>();
+  items.forEach((item) => {
+    const key = seriesKey(item);
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  });
+
+  return Array.from(groups.values()).map((occurrences) => {
+    const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return { ...sorted[0], occurrences: sorted } satisfies ClassSeries;
+  });
+}
+
+function formatOccurrenceDate(item: ClassItem) {
+  const start = new Date(item.start_time);
+  if (Number.isNaN(start.getTime())) return 'Date TBA';
+  return start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function seatLabel(item: ClassItem) {
+  if (item.waitlist_offer_pending) return 'offer pending';
+  if ((item.waitlist_count ?? 0) > 0) return 'waitlist';
+  if (item.seats_left == null) return 'open';
+  return item.seats_left > 0 ? `${item.seats_left} left` : 'waitlist';
+}
+
 export default function PublicUpcomingClasses() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +171,7 @@ export default function PublicUpcomingClasses() {
     };
   }, []);
 
-  const visibleClasses = useMemo(() => classes.slice(0, 6), [classes]);
+  const visibleClasses = useMemo(() => groupClassSeries(classes).slice(0, 6), [classes]);
 
   if (loading || error || visibleClasses.length === 0) return null;
 
@@ -163,6 +210,29 @@ export default function PublicUpcomingClasses() {
             <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
               {formatStartLabel(item)}
             </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {item.occurrences.slice(0, 6).map((occurrence) => (
+                <span
+                  key={occurrence.id}
+                  style={{
+                    borderRadius: 999,
+                    border: '1px solid #eadff3',
+                    background: '#fff',
+                    color: '#6f628d',
+                    padding: '6px 9px',
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  {formatOccurrenceDate(occurrence)} · {seatLabel(occurrence)}
+                </span>
+              ))}
+              {item.occurrences.length > 6 && (
+                <span style={{ color: '#8f85a5', fontSize: 12, fontWeight: 800, alignSelf: 'center' }}>
+                  +{item.occurrences.length - 6} more
+                </span>
+              )}
+            </div>
             <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
               {item.instructor_name ? `With ${item.instructor_name}` : 'Instructor to be announced'}
             </p>
@@ -186,15 +256,7 @@ export default function PublicUpcomingClasses() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
               <strong style={{ color: '#7b6aa8' }}>{formatPrice(item.price_cents)}</strong>
               <span style={{ color: '#8f85a5', fontSize: 13, fontWeight: 700 }}>
-                {item.waitlist_offer_pending
-                  ? 'Waitlist offer pending'
-                  : (item.waitlist_count ?? 0) > 0
-                    ? 'Waitlist open'
-                    : item.seats_left == null
-                      ? 'Capacity varies'
-                      : item.seats_left > 0
-                        ? `${item.seats_left} spots left`
-                        : 'Waitlist open'}
+                {item.occurrences.length === 1 ? seatLabel(item) : `${item.occurrences.length} upcoming dates`}
               </span>
             </div>
             <Link

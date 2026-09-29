@@ -55,6 +55,10 @@ type ClassItem = {
   }[];
 };
 
+type ClassSeries = ClassItem & {
+  occurrences: ClassItem[];
+};
+
 type PartyBookingItem = {
   id: string;
   household_id: string;
@@ -281,6 +285,44 @@ function fromClass(item: ClassItem) {
   };
 }
 
+function classSeriesKey(item: ClassItem) {
+  return [
+    item.title,
+    item.category ?? '',
+    item.instructor_name ?? '',
+    item.description ?? '',
+    item.age_range ?? '',
+    item.caregiver_participation ?? '',
+    item.schedule_label ?? '',
+    item.duration_minutes ?? '',
+    item.capacity ?? '',
+    item.price_cents,
+    item.status,
+  ].join('::');
+}
+
+function groupClassSeries(items: ClassItem[]) {
+  const groups = new Map<string, ClassItem[]>();
+  items.forEach((item) => {
+    const key = classSeriesKey(item);
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  });
+
+  return Array.from(groups.values()).map((occurrences) => {
+    const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return { ...sorted[0], occurrences: sorted } satisfies ClassSeries;
+  });
+}
+
+function classDateLabel(item: ClassItem) {
+  const start = new Date(item.start_time);
+  const end = new Date(item.end_time);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Date TBA';
+  return `${start.toLocaleDateString()} · ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}-${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 function dollars(cents: number | null) {
   if (cents == null) return '-';
   return `$${(cents / 100).toFixed(2)}`;
@@ -322,6 +364,8 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
 
   const scheduledClasses = useMemo(() => classes.filter((item) => item.status !== 'cancelled'), [classes]);
   const cancelledClasses = useMemo(() => classes.filter((item) => item.status === 'cancelled'), [classes]);
+  const scheduledClassSeries = useMemo(() => groupClassSeries(scheduledClasses), [scheduledClasses]);
+  const cancelledClassSeries = useMemo(() => groupClassSeries(cancelledClasses), [cancelledClasses]);
   const repeatDates = useMemo(
     () => buildRepeatDates(classForm.date, repeatMode, Math.max(Number(repeatCount) || 1, 1)),
     [classForm.date, repeatCount, repeatMode]
@@ -817,8 +861,8 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
 
         <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
           {[
-            { title: 'Scheduled classes', items: scheduledClasses, empty: 'No scheduled classes yet.', defaultOpen: true, tone: 'active' as const },
-            { title: 'Cancelled classes', items: cancelledClasses, empty: 'No cancelled classes.', defaultOpen: false, tone: 'archive' as const },
+            { title: 'Scheduled classes', items: scheduledClassSeries, empty: 'No scheduled classes yet.', defaultOpen: true, tone: 'active' as const },
+            { title: 'Cancelled classes', items: cancelledClassSeries, empty: 'No cancelled classes.', defaultOpen: false, tone: 'archive' as const },
           ].map((group) => (
             <StaffRecordGroup
               key={group.title}
@@ -828,66 +872,82 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
               defaultOpen={group.defaultOpen}
               tone={group.tone}
             >
-          {group.items.map((item) => (
-            <div key={item.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: group.tone === 'archive' ? 12 : 16, background: '#fff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <div>
-                  <h3 style={{ margin: 0, color: '#4f3f82' }}>{item.title}</h3>
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>
-                    {new Date(item.start_time).toLocaleString()} — {new Date(item.end_time).toLocaleTimeString()} · {item.duration_minutes ?? 0} min
-                  </p>
-                  {item.schedule_note && <p style={{ margin: '6px 0', color: '#6d6480' }}>Public date note: {item.schedule_note}</p>}
-                  {item.schedule_label && <p style={{ margin: '6px 0', color: '#6d6480' }}>Regular schedule: {item.schedule_label}</p>}
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {item.instructor_name ?? '-'} · Category: {item.category ?? '-'}</p>
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Age group: {item.age_range ?? '-'} · Caregiver: {item.caregiver_participation ?? '-'}</p>
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}</p>
-                  <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong> · Price: {dollars(item.price_cents)}</p>
-                  {item.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{item.description}</p>}
-                  {group.tone !== 'archive' && <div style={{ marginTop: 12, border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
-                    <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Registrant attendance checklist</p>
-                    {item.registrants.length === 0 ? (
-                      <p style={{ margin: 0, color: '#7a6d97' }}>No registrants yet.</p>
-                    ) : (
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        {item.registrants.map((reg) => {
-                          const key = `${item.id}:${reg.registration_id}`;
-                          return (
-                            <div key={reg.registration_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8, alignItems: 'center' }}>
-                              <div>
-                                <div style={{ fontWeight: 600, color: '#4f3f82' }}>{reg.person_name}</div>
-                                <div style={{ color: '#7a6d97', fontSize: 12 }}>Registration: {reg.registration_status}</div>
-                              </div>
-                              <select
-                                value={reg.attendance_status}
-                                disabled={savingAttendanceKey === key}
-                                onChange={(e) => updateClassAttendance(item.id, reg.registration_id, e.target.value as 'unknown' | 'attended' | 'cancelled' | 'no_show')}
-                                style={{ ...inputStyle, width: '100%' }}
-                              >
-                                <option value="unknown">Unknown / not marked</option>
-                                <option value="attended">Attended</option>
-                                <option value="cancelled">Cancelled</option>
-                                <option value="no_show">Not attended / no-show</option>
-                              </select>
-                            </div>
-                          );
-                        })}
+          {group.items.map((series) => (
+            <div key={series.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: group.tone === 'archive' ? 12 : 16, background: '#fff' }}>
+              <div>
+                <h3 style={{ margin: 0, color: '#4f3f82' }}>{series.title}</h3>
+                <p style={{ margin: '6px 0', color: '#6d6480' }}>
+                  {series.occurrences.length} date{series.occurrences.length === 1 ? '' : 's'} · {series.duration_minutes ?? 0} min
+                </p>
+                {series.schedule_note && <p style={{ margin: '6px 0', color: '#6d6480' }}>Public date note: {series.schedule_note}</p>}
+                {series.schedule_label && <p style={{ margin: '6px 0', color: '#6d6480' }}>Regular schedule: {series.schedule_label}</p>}
+                <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {series.instructor_name ?? '-'} · Category: {series.category ?? '-'}</p>
+                <p style={{ margin: '6px 0', color: '#6d6480' }}>Age group: {series.age_range ?? '-'} · Caregiver: {series.caregiver_participation ?? '-'}</p>
+                <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity per date: {series.capacity == null ? 'Unlimited' : `${series.capacity} kids`} · Price: {dollars(series.price_cents)}</p>
+                {series.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{series.description}</p>}
+              </div>
+
+              <div style={{ display: 'grid', gap: 0, marginTop: 12 }}>
+                {series.occurrences.map((item) => (
+                  <div key={item.id} style={{ borderTop: '1px solid #efe3ff', paddingTop: 12, paddingBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div>
+                        <strong style={{ color: '#4f3f82' }}>{classDateLabel(item)}</strong>
+                        <p style={{ margin: '6px 0', color: '#6d6480' }}>
+                          Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}
+                        </p>
+                        <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong></p>
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => {
+                          setEditingClassId(item.id);
+                          setClassForm(fromClass(item));
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}>Edit</button>
+                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => copyClassToNew(item)}>Duplicate</button>
+                        {item.status === 'cancelled' ? (
+                          <button style={{ ...buttonStyle, background: '#e8f6ee', color: '#2f7a47' }} onClick={() => updateClassStatus(item, 'scheduled')}>Restore</button>
+                        ) : (
+                          <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updateClassStatus(item, 'cancelled')}>Cancel</button>
+                        )}
+                      </div>
+                    </div>
+
+                    {group.tone !== 'archive' && (
+                      <div style={{ marginTop: 10, borderTop: '1px dashed #dfd1ef', paddingTop: 10 }}>
+                        <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Registrant attendance checklist</p>
+                        {item.registrants.length === 0 ? (
+                          <p style={{ margin: 0, color: '#7a6d97' }}>No registrants yet.</p>
+                        ) : (
+                          <div style={{ display: 'grid', gap: 8 }}>
+                            {item.registrants.map((reg) => {
+                              const key = `${item.id}:${reg.registration_id}`;
+                              return (
+                                <div key={reg.registration_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8, alignItems: 'center' }}>
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: '#4f3f82' }}>{reg.person_name}</div>
+                                    <div style={{ color: '#7a6d97', fontSize: 12 }}>Registration: {reg.registration_status}</div>
+                                  </div>
+                                  <select
+                                    value={reg.attendance_status}
+                                    disabled={savingAttendanceKey === key}
+                                    onChange={(e) => updateClassAttendance(item.id, reg.registration_id, e.target.value as 'unknown' | 'attended' | 'cancelled' | 'no_show')}
+                                    style={{ ...inputStyle, width: '100%' }}
+                                  >
+                                    <option value="unknown">Unknown / not marked</option>
+                                    <option value="attended">Attended</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="no_show">Not attended / no-show</option>
+                                  </select>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>}
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => {
-                    setEditingClassId(item.id);
-                    setClassForm(fromClass(item));
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}>Edit</button>
-                  <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => copyClassToNew(item)}>Duplicate</button>
-                  {item.status === 'cancelled' ? (
-                    <button style={{ ...buttonStyle, background: '#e8f6ee', color: '#2f7a47' }} onClick={() => updateClassStatus(item, 'scheduled')}>Restore</button>
-                  ) : (
-                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updateClassStatus(item, 'cancelled')}>Cancel</button>
-                  )}
-                </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
