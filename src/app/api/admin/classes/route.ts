@@ -4,7 +4,7 @@ import { requireStaffContext } from '@/lib/authz';
 export const dynamic = 'force-dynamic';
 
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status,created_at,updated_at';
-const CLASS_SELECT_WITHOUT_DURATION = 'id,title,category,start_time,end_time,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status,created_at,updated_at';
+const CLASS_SELECT_BASE = 'id,title,category,start_time,end_time,capacity,price_cents,status,created_at,updated_at';
 
 type AttendanceStatus = 'unknown' | 'attended' | 'cancelled' | 'no_show';
 
@@ -30,8 +30,12 @@ function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function isMissingClassDetailColumn(message: string) {
+  return /column .* does not exist|Could not find the '.*' column/i.test(message);
+}
+
 function isMissingDurationColumn(message: string) {
-  return /duration_minutes/i.test(message) && /column .* does not exist|Could not find the '.*' column/i.test(message);
+  return /duration_minutes/i.test(message) && isMissingClassDetailColumn(message);
 }
 
 function parseClassPayload(body: Record<string, unknown>) {
@@ -89,8 +93,8 @@ function parseClassPayload(body: Record<string, unknown>) {
 async function selectClasses(admin: SupabaseClient) {
   const primary = await admin.from('classes').select(CLASS_SELECT).order('start_time', { ascending: true });
   if (!primary.error) return primary.data as ClassRow[];
-  if (isMissingDurationColumn(primary.error.message)) {
-    const fallback = await admin.from('classes').select(CLASS_SELECT_WITHOUT_DURATION).order('start_time', { ascending: true });
+  if (isMissingClassDetailColumn(primary.error.message)) {
+    const fallback = await admin.from('classes').select(CLASS_SELECT_BASE).order('start_time', { ascending: true });
     if (!fallback.error) return (fallback.data ?? []) as ClassRow[];
     throw new Error(fallback.error.message);
   }
@@ -193,6 +197,9 @@ async function insertClasses(admin: SupabaseClient, payloads: ParsedClassPayload
     const fallback = await admin.from('classes').insert(payloads.map((payload) => payload.dataWithoutDuration));
     if (!fallback.error) return;
     throw new Error(fallback.error.message);
+  }
+  if (isMissingClassDetailColumn(primary.error.message)) {
+    throw new Error('Class detail columns are missing. Run the latest class metadata migration, then save the class again.');
   }
   throw new Error(primary.error.message);
 }

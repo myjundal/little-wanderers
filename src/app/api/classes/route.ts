@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
-const CLASS_SELECT_WITHOUT_DURATION = 'id,title,category,start_time,end_time,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
+const CLASS_SELECT_BASE = 'id,title,category,start_time,end_time,capacity,price_cents,status';
 
 type ClassRow = {
   id: string;
@@ -34,8 +34,8 @@ function toInt(value: unknown, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function isMissingDurationColumn(message: string) {
-  return /duration_minutes/i.test(message) && /column .* does not exist|Could not find the '.*' column/i.test(message);
+function isMissingClassDetailColumn(message: string) {
+  return /column .* does not exist|Could not find the '.*' column/i.test(message);
 }
 
 async function selectClasses(limit: number) {
@@ -49,10 +49,10 @@ async function selectClasses(limit: number) {
     .limit(limit);
 
   if (!primary.error) return (primary.data ?? []) as ClassRow[];
-  if (isMissingDurationColumn(primary.error.message)) {
+  if (isMissingClassDetailColumn(primary.error.message)) {
     const fallback = await supa
       .from('classes')
-      .select(CLASS_SELECT_WITHOUT_DURATION)
+      .select(CLASS_SELECT_BASE)
       .gte('start_time', new Date().toISOString())
       .eq('status', 'scheduled')
       .order('start_time', { ascending: true })

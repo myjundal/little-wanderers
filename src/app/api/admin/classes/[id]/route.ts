@@ -6,8 +6,12 @@ function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function isMissingClassDetailColumn(message: string) {
+  return /column .* does not exist|Could not find the '.*' column/i.test(message);
+}
+
 function isMissingDurationColumn(message: string) {
-  return /duration_minutes/i.test(message) && /column .* does not exist|Could not find the '.*' column/i.test(message);
+  return /duration_minutes/i.test(message) && isMissingClassDetailColumn(message);
 }
 
 function parseClassPayload(body: Record<string, unknown>) {
@@ -76,6 +80,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         const fallback = await context.admin.from('classes').update(parsed.dataWithoutDuration).eq('id', params.id);
         if (!fallback.error) return Response.json({ ok: true });
         return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
+      }
+      if (isMissingClassDetailColumn(primary.error.message)) {
+        return Response.json(
+          { ok: false, error: 'Class detail columns are missing. Run the latest class metadata migration, then save the class again.' },
+          { status: 500 }
+        );
       }
       return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
     }
