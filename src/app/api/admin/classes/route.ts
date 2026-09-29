@@ -4,6 +4,7 @@ import { requireStaffContext } from '@/lib/authz';
 export const dynamic = 'force-dynamic';
 
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status,created_at,updated_at';
+const CLASS_SELECT_WITHOUT_DURATION = 'id,title,category,start_time,end_time,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status,created_at,updated_at';
 
 type AttendanceStatus = 'unknown' | 'attended' | 'cancelled' | 'no_show';
 
@@ -27,6 +28,10 @@ type ClassRow = {
 
 function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function isMissingDurationColumn(message: string) {
+  return /duration_minutes/i.test(message) && /column .* does not exist|Could not find the '.*' column/i.test(message);
 }
 
 function parseClassPayload(body: Record<string, unknown>) {
@@ -58,29 +63,37 @@ function parseClassPayload(body: Record<string, unknown>) {
     return { error: 'price must be greater than or equal to 0' } as const;
   }
 
+  const duration_minutes = Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1);
+  const baseData = {
+    title,
+    category,
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    capacity,
+    price_cents: Math.round(price_cents),
+    status,
+    instructor_name,
+    description,
+    age_range,
+    caregiver_participation,
+    schedule_note,
+    schedule_label,
+  };
+
   return {
-    data: {
-      title,
-      category,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      capacity,
-      price_cents: Math.round(price_cents),
-      status,
-      duration_minutes: Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1),
-      instructor_name,
-      description,
-      age_range,
-      caregiver_participation,
-      schedule_note,
-      schedule_label,
-    },
+    data: { ...baseData, duration_minutes },
+    dataWithoutDuration: baseData,
   } as const;
 }
 
 async function selectClasses(admin: SupabaseClient) {
   const primary = await admin.from('classes').select(CLASS_SELECT).order('start_time', { ascending: true });
   if (!primary.error) return primary.data as ClassRow[];
+  if (isMissingDurationColumn(primary.error.message)) {
+    const fallback = await admin.from('classes').select(CLASS_SELECT_WITHOUT_DURATION).order('start_time', { ascending: true });
+    if (!fallback.error) return (fallback.data ?? []) as ClassRow[];
+    throw new Error(fallback.error.message);
+  }
   throw new Error(primary.error.message);
 }
 
@@ -176,6 +189,11 @@ type ParsedClassPayload = Exclude<ReturnType<typeof parseClassPayload>, { error:
 async function insertClasses(admin: SupabaseClient, payloads: ParsedClassPayload[]) {
   const primary = await admin.from('classes').insert(payloads.map((payload) => payload.data));
   if (!primary.error) return;
+  if (isMissingDurationColumn(primary.error.message)) {
+    const fallback = await admin.from('classes').insert(payloads.map((payload) => payload.dataWithoutDuration));
+    if (!fallback.error) return;
+    throw new Error(fallback.error.message);
+  }
   throw new Error(primary.error.message);
 }
 
