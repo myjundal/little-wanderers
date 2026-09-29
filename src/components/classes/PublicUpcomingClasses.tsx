@@ -255,18 +255,24 @@ export default function PublicUpcomingClasses() {
                 )}
               </div>
             )}
-            <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
-              {item.instructor_name ? `With ${item.instructor_name}` : 'Instructor to be announced'}
-            </p>
+            {item.instructor_name && (
+              <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
+                With {item.instructor_name}
+              </p>
+            )}
             {item.description && <p style={{ margin: 0, color: '#6f628d', lineHeight: 1.7 }}>{item.description}</p>}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginTop: 2 }}>
-              <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
-                {item.age_range ?? 'Ages TBA'}
-              </span>
-              <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
-                {item.caregiver_participation ?? 'Caregiver info TBA'}
-              </span>
+              {item.age_range && (
+                <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
+                  {item.age_range}
+                </span>
+              )}
+              {item.caregiver_participation && (
+                <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
+                  {item.caregiver_participation}
+                </span>
+              )}
               <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
                 {item.duration_minutes ? `${item.duration_minutes} min` : 'Length TBA'}
               </span>

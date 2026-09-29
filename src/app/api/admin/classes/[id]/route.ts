@@ -71,8 +71,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!context.ok) return context.response;
 
   try {
-    const parsed = parseClassPayload((await req.json()) as Record<string, unknown>);
+    const body = (await req.json()) as Record<string, unknown>;
+    const applyToSeries = body.apply_to_series === true;
+    const parsed = parseClassPayload(body);
     if ('error' in parsed) return Response.json({ ok: false, error: parsed.error }, { status: 400 });
+
+    const { data: original, error: originalError } = applyToSeries
+      ? await context.admin.from('classes').select('id,title,start_time,end_time').eq('id', params.id).maybeSingle()
+      : { data: null, error: null };
+
+    if (originalError) return Response.json({ ok: false, error: originalError.message }, { status: 500 });
 
     const primary = await context.admin.from('classes').update(parsed.data).eq('id', params.id);
     if (primary.error) {
@@ -88,6 +96,44 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         );
       }
       return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
+    }
+
+    if (applyToSeries && original) {
+      const originalStart = new Date(original.start_time);
+      const originalEnd = new Date(original.end_time);
+      const sameClock = (row: { start_time: string; end_time: string }) => {
+        const start = new Date(row.start_time);
+        const end = new Date(row.end_time);
+        return (
+          start.getHours() === originalStart.getHours() &&
+          start.getMinutes() === originalStart.getMinutes() &&
+          end.getHours() === originalEnd.getHours() &&
+          end.getMinutes() === originalEnd.getMinutes()
+        );
+      };
+
+      const { data: rows, error: rowsError } = await context.admin
+        .from('classes')
+        .select('id,start_time,end_time')
+        .eq('title', original.title);
+
+      if (rowsError) return Response.json({ ok: false, error: rowsError.message }, { status: 500 });
+
+      const seriesIds = (rows ?? [])
+        .filter((row) => row.id !== params.id && sameClock(row))
+        .map((row) => row.id);
+
+      if (seriesIds.length > 0) {
+        const seriesUpdate = await context.admin.from('classes').update(parsed.data).in('id', seriesIds);
+        if (seriesUpdate.error) {
+          if (isMissingDurationColumn(seriesUpdate.error.message)) {
+            const fallback = await context.admin.from('classes').update(parsed.dataWithoutDuration).in('id', seriesIds);
+            if (fallback.error) return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
+          } else {
+            return Response.json({ ok: false, error: seriesUpdate.error.message }, { status: 500 });
+          }
+        }
+      }
     }
 
     return Response.json({ ok: true });

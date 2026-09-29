@@ -339,6 +339,38 @@ function classDateLabel(item: ClassItem) {
   return `${start.toLocaleDateString()} · ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}-${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+function startOfWeek(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  const day = next.getDay();
+  next.setDate(next.getDate() - day);
+  return next;
+}
+
+function addCalendarDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function isSameCalendarDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function weekRangeLabel(weekStart: Date) {
+  const weekEnd = addCalendarDays(weekStart, 6);
+  const startLabel = weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const endLabel = weekEnd.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${startLabel} - ${endLabel}`;
+}
+
+function classTimeLabel(item: ClassItem) {
+  const start = new Date(item.start_time);
+  const end = new Date(item.end_time);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Time TBA';
+  return `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}-${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 function dollars(cents: number | null) {
   if (cents == null) return '-';
   return `$${(cents / 100).toFixed(2)}`;
@@ -372,6 +404,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
   const [savingAttendanceKey, setSavingAttendanceKey] = useState<string | null>(null);
   const [partyAttendanceNotes, setPartyAttendanceNotes] = useState<Record<string, string>>({});
   const [partyCountDrafts, setPartyCountDrafts] = useState<Record<string, { child: string; adult: string; total: string }>>({});
+  const [classWeekStart, setClassWeekStart] = useState(() => startOfWeek(new Date()));
 
   const selectedBooking = useMemo(
     () => partyBookings.find((item) => item.id === selectedBookingId) ?? partyBookings[0] ?? null,
@@ -380,8 +413,20 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
 
   const scheduledClasses = useMemo(() => classes.filter((item) => item.status !== 'cancelled'), [classes]);
   const cancelledClasses = useMemo(() => classes.filter((item) => item.status === 'cancelled'), [classes]);
-  const scheduledClassSeries = useMemo(() => groupClassSeries(scheduledClasses), [scheduledClasses]);
   const cancelledClassSeries = useMemo(() => groupClassSeries(cancelledClasses), [cancelledClasses]);
+  const classWeekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addCalendarDays(classWeekStart, index)),
+    [classWeekStart]
+  );
+  const classesThisWeek = useMemo(
+    () =>
+      scheduledClasses.filter((item) => {
+        const startsAt = new Date(item.start_time);
+        const weekEnd = addCalendarDays(classWeekStart, 7);
+        return startsAt >= classWeekStart && startsAt < weekEnd;
+      }),
+    [classWeekStart, scheduledClasses]
+  );
   const repeatDates = useMemo(
     () => buildRepeatDates(classForm.date, repeatMode, Math.max(Number(repeatCount) || 1, 1)),
     [classForm.date, repeatCount, repeatMode]
@@ -482,7 +527,10 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     setSavingClass(true);
     setMessage(null);
 
-    const payload = classPayloadFromForm(classForm);
+    const payload = {
+      ...classPayloadFromForm(classForm),
+      apply_to_series: Boolean(editingClassId),
+    };
 
     const endpoint = editingClassId ? `/api/admin/classes/${editingClassId}` : '/api/admin/classes';
     const method = editingClassId ? 'PATCH' : 'POST';
@@ -876,99 +924,144 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         </div>
 
         <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
-          {[
-            { title: 'Scheduled classes', items: scheduledClassSeries, empty: 'No scheduled classes yet.', defaultOpen: true, tone: 'active' as const },
-            { title: 'Cancelled classes', items: cancelledClassSeries, empty: 'No cancelled classes.', defaultOpen: false, tone: 'archive' as const },
-          ].map((group) => (
-            <StaffRecordGroup
-              key={group.title}
-              title={group.title}
-              count={group.items.length}
-              empty={group.empty}
-              defaultOpen={group.defaultOpen}
-              tone={group.tone}
-            >
-          {group.items.map((series) => (
-            <div key={series.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: group.tone === 'archive' ? 12 : 16, background: '#fff' }}>
-              <div>
-                <h3 style={{ margin: 0, color: '#4f3f82' }}>{series.title}</h3>
-                <p style={{ margin: '6px 0', color: '#6d6480' }}>
-                  {series.occurrences.length} date{series.occurrences.length === 1 ? '' : 's'} · {series.duration_minutes ?? 0} min
-                </p>
-                {series.schedule_note && <p style={{ margin: '6px 0', color: '#6d6480' }}>Public date note: {series.schedule_note}</p>}
-                {series.schedule_label && <p style={{ margin: '6px 0', color: '#6d6480' }}>Regular schedule: {series.schedule_label}</p>}
-                <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {series.instructor_name ?? '-'} · Category: {series.category ?? '-'}</p>
-                <p style={{ margin: '6px 0', color: '#6d6480' }}>Age group: {series.age_range ?? '-'} · Caregiver: {series.caregiver_participation ?? '-'}</p>
-                <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity per date: {series.capacity == null ? 'Unlimited' : `${series.capacity} kids`} · Price: {dollars(series.price_cents)}</p>
-                {series.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{series.description}</p>}
+          <div style={{ border: '1px solid #eadfff', borderRadius: 18, background: '#fff', padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => setClassWeekStart((prev) => addCalendarDays(prev, -7))}>
+                Previous week
+              </button>
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ margin: 0, color: '#4f3f82' }}>{weekRangeLabel(classWeekStart)}</h3>
+                <p style={{ margin: '4px 0 0', color: '#7a6d97', fontSize: 13 }}>{classesThisWeek.length} scheduled class{classesThisWeek.length === 1 ? '' : 'es'}</p>
               </div>
-
-              <div style={{ display: 'grid', gap: 0, marginTop: 12 }}>
-                {series.occurrences.map((item) => (
-                  <div key={item.id} style={{ borderTop: '1px solid #efe3ff', paddingTop: 12, paddingBottom: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                      <div>
-                        <strong style={{ color: '#4f3f82' }}>{classDateLabel(item)}</strong>
-                        <p style={{ margin: '6px 0', color: '#6d6480' }}>
-                          Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'}
-                        </p>
-                        <p style={{ margin: '6px 0', color: '#6d6480' }}>Status: <strong style={{ textTransform: 'capitalize' }}>{item.status}</strong></p>
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => {
-                          setEditingClassId(item.id);
-                          setClassForm(fromClass(item));
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}>Edit</button>
-                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => copyClassToNew(item)}>Duplicate</button>
-                        {item.status === 'cancelled' ? (
-                          <button style={{ ...buttonStyle, background: '#e8f6ee', color: '#2f7a47' }} onClick={() => updateClassStatus(item, 'scheduled')}>Restore</button>
-                        ) : (
-                          <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updateClassStatus(item, 'cancelled')}>Cancel</button>
-                        )}
-                      </div>
-                    </div>
-
-                    {group.tone !== 'archive' && (
-                      <div style={{ marginTop: 10, borderTop: '1px dashed #dfd1ef', paddingTop: 10 }}>
-                        <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Registrant attendance checklist</p>
-                        {item.registrants.length === 0 ? (
-                          <p style={{ margin: 0, color: '#7a6d97' }}>No registrants yet.</p>
-                        ) : (
-                          <div style={{ display: 'grid', gap: 8 }}>
-                            {item.registrants.map((reg) => {
-                              const key = `${item.id}:${reg.registration_id}`;
-                              return (
-                                <div key={reg.registration_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8, alignItems: 'center' }}>
-                                  <div>
-                                    <div style={{ fontWeight: 600, color: '#4f3f82' }}>{reg.person_name}</div>
-                                    <div style={{ color: '#7a6d97', fontSize: 12 }}>Registration: {reg.registration_status}</div>
-                                  </div>
-                                  <select
-                                    value={reg.attendance_status}
-                                    disabled={savingAttendanceKey === key}
-                                    onChange={(e) => updateClassAttendance(item.id, reg.registration_id, e.target.value as 'unknown' | 'attended' | 'cancelled' | 'no_show')}
-                                    style={{ ...inputStyle, width: '100%' }}
-                                  >
-                                    <option value="unknown">Unknown / not marked</option>
-                                    <option value="attended">Attended</option>
-                                    <option value="cancelled">Cancelled</option>
-                                    <option value="no_show">Not attended / no-show</option>
-                                  </select>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button style={{ ...buttonStyle, background: '#fff', color: '#5f3da4', border: '1px solid #eadfff' }} onClick={() => setClassWeekStart(startOfWeek(new Date()))}>
+                  This week
+                </button>
+                <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => setClassWeekStart((prev) => addCalendarDays(prev, 7))}>
+                  Next week
+                </button>
               </div>
             </div>
-          ))}
-            </StaffRecordGroup>
-          ))}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(120px, 1fr))', gap: 8, overflowX: 'auto', marginTop: 14, paddingBottom: 4 }}>
+              {classWeekDays.map((day) => {
+                const dayClasses = classesThisWeek.filter((item) => isSameCalendarDay(new Date(item.start_time), day));
+                return (
+                  <div key={day.toISOString()} style={{ minWidth: 120, border: '1px solid #efe3ff', borderRadius: 14, background: '#fcf9ff', padding: 10 }}>
+                    <div style={{ color: '#5f3da4', fontWeight: 900, fontSize: 13 }}>{day.toLocaleDateString([], { weekday: 'short' })}</div>
+                    <div style={{ color: '#4f3f82', fontWeight: 800, marginTop: 2 }}>{day.toLocaleDateString([], { month: 'short', day: 'numeric' })}</div>
+                    <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+                      {dayClasses.length === 0 ? (
+                        <span style={{ color: '#9a8eb0', fontSize: 12 }}>No classes</span>
+                      ) : (
+                        dayClasses.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setEditingClassId(item.id);
+                              setClassForm(fromClass(item));
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            style={{ textAlign: 'left', border: '1px solid #dfd1ef', borderRadius: 10, background: '#fff', padding: 8, color: '#4f3f82', cursor: 'pointer' }}
+                          >
+                            <strong style={{ display: 'block', fontSize: 12 }}>{classTimeLabel(item)}</strong>
+                            <span style={{ display: 'block', fontSize: 12 }}>{item.title}</span>
+                            <span style={{ display: 'block', fontSize: 11, color: '#7a6d97' }}>{item.booked_count}/{item.capacity ?? '∞'} booked</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <StaffRecordGroup
+            title="This week's classes"
+            count={classesThisWeek.length}
+            empty="No scheduled classes this week."
+            defaultOpen
+            tone="active"
+          >
+            {classesThisWeek.map((item) => (
+              <div key={item.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 16, background: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#4f3f82' }}>{item.title}</h3>
+                    <p style={{ margin: '6px 0', color: '#6d6480' }}>{classDateLabel(item)} · {item.duration_minutes ?? 0} min</p>
+                    {(item.instructor_name || item.category) && <p style={{ margin: '6px 0', color: '#6d6480' }}>Instructor: {item.instructor_name ?? '-'} · Category: {item.category ?? '-'}</p>}
+                    {(item.age_range || item.caregiver_participation) && <p style={{ margin: '6px 0', color: '#6d6480' }}>Age group: {item.age_range ?? '-'} · Caregiver: {item.caregiver_participation ?? '-'}</p>}
+                    <p style={{ margin: '6px 0', color: '#6d6480' }}>Capacity: {item.capacity == null ? 'Unlimited' : `${item.booked_count}/${item.capacity} booked`} · Seats left: {item.seats_left ?? 'Unlimited'} · Price: {dollars(item.price_cents)}</p>
+                    {item.description && <p style={{ margin: '6px 0', color: '#6d6480' }}>{item.description}</p>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => {
+                      setEditingClassId(item.id);
+                      setClassForm(fromClass(item));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}>Edit</button>
+                    <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} onClick={() => copyClassToNew(item)}>Duplicate</button>
+                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b' }} onClick={() => updateClassStatus(item, 'cancelled')}>Cancel</button>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12, borderTop: '1px dashed #dfd1ef', paddingTop: 10 }}>
+                  <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Registrants</p>
+                  {item.registrants.length === 0 ? (
+                    <p style={{ margin: 0, color: '#7a6d97' }}>No registrants yet.</p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {item.registrants.map((reg) => {
+                        const key = `${item.id}:${reg.registration_id}`;
+                        return (
+                          <div key={reg.registration_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8, alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#4f3f82' }}>{reg.person_name}</div>
+                              <div style={{ color: '#7a6d97', fontSize: 12 }}>Registration: {reg.registration_status}</div>
+                            </div>
+                            <select
+                              value={reg.attendance_status}
+                              disabled={savingAttendanceKey === key}
+                              onChange={(e) => updateClassAttendance(item.id, reg.registration_id, e.target.value as 'unknown' | 'attended' | 'cancelled' | 'no_show')}
+                              style={{ ...inputStyle, width: '100%' }}
+                            >
+                              <option value="unknown">Unknown / not marked</option>
+                              <option value="attended">Attended</option>
+                              <option value="cancelled">Cancelled</option>
+                              <option value="no_show">Not attended / no-show</option>
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </StaffRecordGroup>
+
+          <StaffRecordGroup
+            title="Cancelled classes"
+            count={cancelledClassSeries.length}
+            empty="No cancelled classes."
+            defaultOpen={false}
+            tone="archive"
+          >
+            {cancelledClassSeries.map((series) => (
+              <div key={series.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 12, background: '#fff' }}>
+                <h3 style={{ margin: 0, color: '#4f3f82' }}>{series.title}</h3>
+                <p style={{ margin: '6px 0', color: '#6d6480' }}>{series.occurrences.length} cancelled date{series.occurrences.length === 1 ? '' : 's'}</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {series.occurrences.map((item) => (
+                    <button key={item.id} style={{ ...buttonStyle, background: '#e8f6ee', color: '#2f7a47', padding: '10px 12px' }} onClick={() => updateClassStatus(item, 'scheduled')}>
+                      Restore {new Date(item.start_time).toLocaleDateString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </StaffRecordGroup>
         </div>
       </section>
       )}
