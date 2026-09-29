@@ -71,11 +71,6 @@ function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function formatStartLabel(item: Pick<ClassItem, 'schedule_note' | 'schedule_label' | 'start_time' | 'end_time'>) {
-  if (item.schedule_note) return item.schedule_note;
-  return item.schedule_note ?? item.schedule_label ?? formatClassTime(item.start_time, item.end_time);
-}
-
 function formatCapacity(capacity: number | null) {
   return capacity == null ? 'Class size varies' : `Max ${capacity} kids`;
 }
@@ -143,6 +138,26 @@ function shouldShowPublicDates(item: ClassSeries) {
   return !item.schedule_note;
 }
 
+function ScheduleLine({ item }: { item: Pick<ClassItem, 'schedule_note' | 'schedule_label' | 'start_time' | 'end_time'> }) {
+  if (item.schedule_note && item.schedule_label) {
+    return (
+      <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
+        {item.schedule_note} · <strong style={{ color: '#4b4360' }}>{item.schedule_label}</strong>
+      </p>
+    );
+  }
+
+  if (item.schedule_label) {
+    return (
+      <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
+        <strong style={{ color: '#4b4360' }}>{item.schedule_label}</strong>
+      </p>
+    );
+  }
+
+  return <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>{item.schedule_note ?? formatClassTime(item.start_time, item.end_time)}</p>;
+}
+
 export default function PublicUpcomingClasses() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -206,9 +221,7 @@ export default function PublicUpcomingClasses() {
             </div>
 
             <h3 style={{ margin: 0, color: '#4b4360', fontSize: '1.25rem' }}>{item.title}</h3>
-            <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
-              {formatStartLabel(item)}
-            </p>
+            <ScheduleLine item={item} />
             {shouldShowPublicDates(item) && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {item.occurrences.slice(0, 6).map((occurrence) => (
