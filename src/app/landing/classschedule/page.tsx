@@ -81,15 +81,32 @@ function classSeriesKey(item: ClassItem) {
   return [
     item.title,
     item.category ?? '',
-    item.instructor_name ?? '',
-    item.description ?? '',
-    item.age_range ?? '',
-    item.caregiver_participation ?? '',
     item.schedule_label ?? '',
     item.duration_minutes ?? '',
     item.capacity ?? '',
     item.price_cents,
   ].join('::');
+}
+
+function firstText(occurrences: ClassItem[], key: keyof Pick<ClassItem, 'category' | 'instructor_name' | 'description' | 'age_range' | 'caregiver_participation' | 'schedule_note' | 'schedule_label'>) {
+  return occurrences.find((item) => item[key])?.[key] ?? null;
+}
+
+function classSeriesBase(occurrences: ClassItem[]) {
+  const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+  const base = sorted[0];
+  return {
+    ...base,
+    category: firstText(sorted, 'category'),
+    instructor_name: firstText(sorted, 'instructor_name'),
+    description: firstText(sorted, 'description'),
+    age_range: firstText(sorted, 'age_range'),
+    caregiver_participation: firstText(sorted, 'caregiver_participation'),
+    schedule_note: firstText(sorted, 'schedule_note'),
+    schedule_label: firstText(sorted, 'schedule_label'),
+    duration_minutes: sorted.find((item) => item.duration_minutes)?.duration_minutes ?? base.duration_minutes,
+    is_popular: sorted.some((item) => item.is_popular),
+  };
 }
 
 function groupClassSeries(items: ClassItem[]) {
@@ -103,7 +120,7 @@ function groupClassSeries(items: ClassItem[]) {
 
   return Array.from(groups.values()).map((occurrences) => {
     const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-    return { ...sorted[0], occurrences: sorted } satisfies ClassSeries;
+    return { ...classSeriesBase(sorted), occurrences: sorted } satisfies ClassSeries;
   });
 }
 

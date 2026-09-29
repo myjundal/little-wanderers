@@ -97,15 +97,31 @@ function seriesKey(item: ClassItem) {
   return [
     item.title,
     item.category ?? '',
-    item.instructor_name ?? '',
-    item.description ?? '',
-    item.age_range ?? '',
-    item.caregiver_participation ?? '',
     item.schedule_label ?? '',
     item.duration_minutes ?? '',
     item.capacity ?? '',
     item.price_cents,
   ].join('::');
+}
+
+function firstText(occurrences: ClassItem[], key: keyof Pick<ClassItem, 'category' | 'instructor_name' | 'description' | 'age_range' | 'caregiver_participation' | 'schedule_note' | 'schedule_label'>) {
+  return occurrences.find((item) => item[key])?.[key] ?? null;
+}
+
+function seriesBase(occurrences: ClassItem[]) {
+  const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+  const base = sorted[0];
+  return {
+    ...base,
+    category: firstText(sorted, 'category'),
+    instructor_name: firstText(sorted, 'instructor_name'),
+    description: firstText(sorted, 'description'),
+    age_range: firstText(sorted, 'age_range'),
+    caregiver_participation: firstText(sorted, 'caregiver_participation'),
+    schedule_note: firstText(sorted, 'schedule_note'),
+    schedule_label: firstText(sorted, 'schedule_label'),
+    duration_minutes: sorted.find((item) => item.duration_minutes)?.duration_minutes ?? base.duration_minutes,
+  };
 }
 
 function groupClassSeries(items: ClassItem[]) {
@@ -119,7 +135,7 @@ function groupClassSeries(items: ClassItem[]) {
 
   return Array.from(groups.values()).map((occurrences) => {
     const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-    return { ...sorted[0], occurrences: sorted } satisfies ClassSeries;
+    return { ...seriesBase(sorted), occurrences: sorted } satisfies ClassSeries;
   });
 }
 
@@ -134,6 +150,10 @@ function seatLabel(item: ClassItem) {
   if ((item.waitlist_count ?? 0) > 0) return 'waitlist';
   if (item.seats_left == null) return 'open';
   return item.seats_left > 0 ? `${item.seats_left} left` : 'waitlist';
+}
+
+function shouldShowPublicDates(item: ClassSeries) {
+  return !item.schedule_note;
 }
 
 export default function PublicUpcomingClasses() {
@@ -210,29 +230,31 @@ export default function PublicUpcomingClasses() {
             <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
               {formatStartLabel(item)}
             </p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {item.occurrences.slice(0, 6).map((occurrence) => (
-                <span
-                  key={occurrence.id}
-                  style={{
-                    borderRadius: 999,
-                    border: '1px solid #eadff3',
-                    background: '#fff',
-                    color: '#6f628d',
-                    padding: '6px 9px',
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}
-                >
-                  {formatOccurrenceDate(occurrence)} · {seatLabel(occurrence)}
-                </span>
-              ))}
-              {item.occurrences.length > 6 && (
-                <span style={{ color: '#8f85a5', fontSize: 12, fontWeight: 800, alignSelf: 'center' }}>
-                  +{item.occurrences.length - 6} more
-                </span>
-              )}
-            </div>
+            {shouldShowPublicDates(item) && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {item.occurrences.slice(0, 6).map((occurrence) => (
+                  <span
+                    key={occurrence.id}
+                    style={{
+                      borderRadius: 999,
+                      border: '1px solid #eadff3',
+                      background: '#fff',
+                      color: '#6f628d',
+                      padding: '6px 9px',
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {formatOccurrenceDate(occurrence)} · {seatLabel(occurrence)}
+                  </span>
+                ))}
+                {item.occurrences.length > 6 && (
+                  <span style={{ color: '#8f85a5', fontSize: 12, fontWeight: 800, alignSelf: 'center' }}>
+                    +{item.occurrences.length - 6} more
+                  </span>
+                )}
+              </div>
+            )}
             <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>
               {item.instructor_name ? `With ${item.instructor_name}` : 'Instructor to be announced'}
             </p>
@@ -256,7 +278,9 @@ export default function PublicUpcomingClasses() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
               <strong style={{ color: '#7b6aa8' }}>{formatPrice(item.price_cents)}</strong>
               <span style={{ color: '#8f85a5', fontSize: 13, fontWeight: 700 }}>
-                {item.occurrences.length === 1 ? seatLabel(item) : `${item.occurrences.length} upcoming dates`}
+                {shouldShowPublicDates(item)
+                  ? item.occurrences.length === 1 ? seatLabel(item) : `${item.occurrences.length} upcoming dates`
+                  : 'Pre-registration open'}
               </span>
             </div>
             <Link

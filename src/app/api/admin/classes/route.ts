@@ -4,7 +4,6 @@ import { requireStaffContext } from '@/lib/authz';
 export const dynamic = 'force-dynamic';
 
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status,created_at,updated_at';
-const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status,created_at,updated_at';
 
 type AttendanceStatus = 'unknown' | 'attended' | 'cancelled' | 'no_show';
 
@@ -28,10 +27,6 @@ type ClassRow = {
 
 function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function isMissingColumnError(message: string) {
-  return /column .* does not exist|Could not find the '.*' column/i.test(message);
 }
 
 function parseClassPayload(body: Record<string, unknown>) {
@@ -63,19 +58,15 @@ function parseClassPayload(body: Record<string, unknown>) {
     return { error: 'price must be greater than or equal to 0' } as const;
   }
 
-  const baseData = {
-    title,
-    category,
-    start_time: start.toISOString(),
-    end_time: end.toISOString(),
-    capacity,
-    price_cents: Math.round(price_cents),
-    status,
-  };
-
   return {
     data: {
-      ...baseData,
+      title,
+      category,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      capacity,
+      price_cents: Math.round(price_cents),
+      status,
       duration_minutes: Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1),
       instructor_name,
       description,
@@ -84,18 +75,13 @@ function parseClassPayload(body: Record<string, unknown>) {
       schedule_note,
       schedule_label,
     },
-    fallbackData: baseData,
   } as const;
 }
 
 async function selectClasses(admin: SupabaseClient) {
   const primary = await admin.from('classes').select(CLASS_SELECT).order('start_time', { ascending: true });
   if (!primary.error) return primary.data as ClassRow[];
-  if (!isMissingColumnError(primary.error.message)) throw new Error(primary.error.message);
-
-  const fallback = await admin.from('classes').select(CLASS_SELECT_FALLBACK).order('start_time', { ascending: true });
-  if (fallback.error) throw new Error(fallback.error.message);
-  return (fallback.data ?? []) as ClassRow[];
+  throw new Error(primary.error.message);
 }
 
 async function loadClasses(admin: SupabaseClient) {
@@ -118,14 +104,8 @@ async function loadClasses(admin: SupabaseClient) {
       .select('id,class_id,person_id,status,attendance_status,attendance_marked_at,attendance_marked_by')
       .in('class_id', ids);
 
-    if (primaryRegs.error && !isMissingColumnError(primaryRegs.error.message)) {
-      throw new Error(primaryRegs.error.message);
-    }
-
     if (primaryRegs.error) {
-      const fallbackRegs = await admin.from('class_registrations').select('id,class_id,person_id,status').in('class_id', ids);
-      if (fallbackRegs.error) throw new Error(fallbackRegs.error.message);
-      regs = (fallbackRegs.data ?? []).map((row) => ({ ...row, attendance_status: 'unknown' }));
+      throw new Error(primaryRegs.error.message);
     } else {
       regs = primaryRegs.data ?? [];
     }
@@ -196,10 +176,7 @@ type ParsedClassPayload = Exclude<ReturnType<typeof parseClassPayload>, { error:
 async function insertClasses(admin: SupabaseClient, payloads: ParsedClassPayload[]) {
   const primary = await admin.from('classes').insert(payloads.map((payload) => payload.data));
   if (!primary.error) return;
-  if (!isMissingColumnError(primary.error.message)) throw new Error(primary.error.message);
-
-  const fallback = await admin.from('classes').insert(payloads.map((payload) => payload.fallbackData));
-  if (fallback.error) throw new Error(fallback.error.message);
+  throw new Error(primary.error.message);
 }
 
 export async function GET() {

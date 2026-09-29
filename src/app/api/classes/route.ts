@@ -6,7 +6,6 @@ export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
-const CLASS_SELECT_FALLBACK = 'id,title,category,start_time,end_time,capacity,price_cents,status';
 
 type ClassRow = {
   id: string;
@@ -34,10 +33,6 @@ function toInt(value: unknown, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function isMissingColumnError(message: string) {
-  return /column .* does not exist|Could not find the '.*' column/i.test(message);
-}
-
 async function selectClasses(limit: number) {
   const supa = admin();
   const primary = await supa
@@ -49,18 +44,7 @@ async function selectClasses(limit: number) {
     .limit(limit);
 
   if (!primary.error) return (primary.data ?? []) as ClassRow[];
-  if (!isMissingColumnError(primary.error.message)) throw new Error(primary.error.message);
-
-  const fallback = await supa
-    .from('classes')
-    .select(CLASS_SELECT_FALLBACK)
-    .gte('start_time', new Date().toISOString())
-    .eq('status', 'scheduled')
-    .order('start_time', { ascending: true })
-    .limit(limit);
-
-  if (fallback.error) throw new Error(fallback.error.message);
-  return (fallback.data ?? []) as ClassRow[];
+  throw new Error(primary.error.message);
 }
 
 export async function GET(req: NextRequest) {

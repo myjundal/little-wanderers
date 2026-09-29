@@ -6,10 +6,6 @@ function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function isMissingColumnError(message: string) {
-  return /column .* does not exist|Could not find the '.*' column/i.test(message);
-}
-
 function parseClassPayload(body: Record<string, unknown>) {
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const category = normalizeOptionalText(body.category);
@@ -39,19 +35,15 @@ function parseClassPayload(body: Record<string, unknown>) {
     return { error: 'price must be greater than or equal to 0' } as const;
   }
 
-  const baseData = {
-    title,
-    category,
-    start_time: start.toISOString(),
-    end_time: end.toISOString(),
-    capacity,
-    price_cents: Math.round(price_cents),
-    status,
-  };
-
   return {
     data: {
-      ...baseData,
+      title,
+      category,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      capacity,
+      price_cents: Math.round(price_cents),
+      status,
       duration_minutes: Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1),
       instructor_name,
       description,
@@ -60,7 +52,6 @@ function parseClassPayload(body: Record<string, unknown>) {
       schedule_note,
       schedule_label,
     },
-    fallbackData: baseData,
   } as const;
 }
 
@@ -74,14 +65,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const primary = await context.admin.from('classes').update(parsed.data).eq('id', params.id);
     if (primary.error) {
-      if (!isMissingColumnError(primary.error.message)) {
-        return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
-      }
-
-      const fallback = await context.admin.from('classes').update(parsed.fallbackData).eq('id', params.id);
-      if (fallback.error) {
-        return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
-      }
+      return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
     }
 
     return Response.json({ ok: true });
