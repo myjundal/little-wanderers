@@ -45,7 +45,7 @@ type RegistrationItem = {
   person_id: string;
   status: 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
   attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
-  attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming';
+  attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming' | 'waitlist';
   attendance_marked_at: string | null;
   person_name: string;
   created_at: string;
@@ -154,7 +154,7 @@ export default function ClassSchedulePage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
+  const [historyTab, setHistoryTab] = useState<'upcoming' | 'waitlist' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
 
   const load = useCallback(async (showLoading = true) => {
@@ -323,9 +323,14 @@ export default function ClassSchedulePage() {
     () => myItems.filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled'),
     [myItems]
   );
+  const waitlistItems = useMemo(
+    () => activeItems.filter((item) => item.status === 'waitlist' || item.attendance_display_status === 'waitlist'),
+    [activeItems]
+  );
   const upcomingHistoryItems = useMemo(
     () =>
       activeItems.filter((item) => {
+        if (item.status === 'waitlist' || item.attendance_display_status === 'waitlist') return false;
         const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
         return startsAt > Date.now() || item.attendance_display_status === 'upcoming';
       }),
@@ -334,6 +339,7 @@ export default function ClassSchedulePage() {
   const pastHistoryItems = useMemo(
     () =>
       activeItems.filter((item) => {
+        if (item.status === 'waitlist' || item.attendance_display_status === 'waitlist') return false;
         const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
         return startsAt <= Date.now() && item.attendance_display_status !== 'upcoming';
       }),
@@ -346,6 +352,17 @@ export default function ClassSchedulePage() {
         return attended && item.customer_favorite;
       }),
     [activeItems]
+  );
+  const selectedHistoryItems = useMemo(() => {
+    if (historyTab === 'upcoming') return upcomingHistoryItems;
+    if (historyTab === 'waitlist') return waitlistItems;
+    if (historyTab === 'past') return pastHistoryItems;
+    if (historyTab === 'favorites') return favoriteItems;
+    return cancelledItems;
+  }, [cancelledItems, favoriteItems, historyTab, pastHistoryItems, upcomingHistoryItems, waitlistItems]);
+  const visibleHistoryItems = useMemo(
+    () => selectedHistoryItems.filter((item) => historyPersonFilter === 'all' || item.person_id === historyPersonFilter),
+    [historyPersonFilter, selectedHistoryItems]
   );
 
   const preRegisterClass = async (classId: string) => {
@@ -538,6 +555,9 @@ export default function ClassSchedulePage() {
           <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Upcoming ({upcomingHistoryItems.length})
           </button>
+          <button onClick={() => setHistoryTab('waitlist')} style={historyTab === 'waitlist' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
+            Waitlist ({waitlistItems.length})
+          </button>
           <button onClick={() => setHistoryTab('past')} style={historyTab === 'past' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Past ({pastHistoryItems.length})
           </button>
@@ -550,35 +570,31 @@ export default function ClassSchedulePage() {
         </div>
         {loading ? (
           <p>Loading…</p>
-        ) : historyTab !== 'cancelled' && historyTab !== 'favorites' && activeItems.length === 0 ? (
+        ) : historyTab === 'upcoming' && visibleHistoryItems.length === 0 ? (
           <div style={{ border: '1px dashed #ccc', borderRadius: 12, padding: 16 }}>
             <p>You do not have any class bookings yet.</p>
           </div>
-        ) : historyTab === 'cancelled' && cancelledItems.length === 0 ? (
+        ) : historyTab === 'waitlist' && visibleHistoryItems.length === 0 ? (
+          <div style={{ border: '1px dashed #d8c6f2', borderRadius: 12, padding: 16, background: '#fbf8ff' }}>
+            <p>No waitlisted classes.</p>
+          </div>
+        ) : historyTab === 'cancelled' && visibleHistoryItems.length === 0 ? (
           <div style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 16, background: '#fff7fc' }}>
             <p>No cancelled classes.</p>
           </div>
-        ) : historyTab === 'favorites' && favoriteItems.length === 0 ? (
+        ) : historyTab === 'favorites' && visibleHistoryItems.length === 0 ? (
           <div style={{ border: '1px dashed #f2d067', borderRadius: 12, padding: 16, background: '#fff9e8' }}>
             <p>No favorite classes yet.</p>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {(historyTab === 'upcoming'
-              ? upcomingHistoryItems
-              : historyTab === 'past'
-                ? pastHistoryItems
-                : historyTab === 'favorites'
-                  ? favoriteItems
-                  : cancelledItems)
-              .filter((item) => historyPersonFilter === 'all' || item.person_id === historyPersonFilter)
-              .map((item) => (
+            {visibleHistoryItems.map((item) => (
               <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                 <h3 style={{ margin: 0 }}>{item.class?.title ?? 'Removed class'}</h3>
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status:{' '}
                   <b style={{ textTransform: 'uppercase' }}>
-                    {item.attendance_display_status}
+                    {item.status === 'waitlist' ? 'waitlist' : item.attendance_display_status}
                   </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>
@@ -630,7 +646,7 @@ export default function ClassSchedulePage() {
                 )}
                 {item.status !== 'cancelled' && item.class?.status !== 'cancelled' && (
                   <button onClick={() => cancelRegistration(item.id)} disabled={cancellingId === item.id}>
-                    {cancellingId === item.id ? 'Cancelling...' : 'Cancel Booking'}
+                    {cancellingId === item.id ? 'Cancelling...' : item.status === 'waitlist' ? 'Leave Waitlist' : 'Cancel Booking'}
                   </button>
                 )}
               </div>

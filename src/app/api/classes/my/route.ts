@@ -99,8 +99,10 @@ export async function GET() {
       const classStartMs = cls?.start_time ? new Date(cls.start_time).getTime() : null;
       const isUpcoming = classStartMs != null && classStartMs > now;
 
-      let attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming';
-      if (isUpcoming) {
+      let attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming' | 'waitlist';
+      if (r.status === 'waitlist') {
+        attendance_display_status = 'waitlist';
+      } else if (isUpcoming) {
         attendance_display_status = 'upcoming';
       } else if (r.status === 'cancelled' || cls?.status === 'cancelled' || r.attendance_status === 'cancelled') {
         attendance_display_status = 'cancelled';

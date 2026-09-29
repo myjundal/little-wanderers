@@ -82,7 +82,10 @@ export async function POST(req: Request) {
       logger.warn({ action: 'class.cancellation_email_not_sent', userId: user.id, householdId, registrationId, result: cancellationEmail });
     }
 
-    const waitlistOffer = await offerNextWaitlistSpot(supa, reg.class_id, new URL(req.url).origin).catch((offerError) => ({
+    const waitlistOffer = await offerNextWaitlistSpot(supa, reg.class_id, new URL(req.url).origin, {
+      email: user.email,
+      householdId,
+    }).catch((offerError) => ({
       ok: false as const,
       error: offerError instanceof Error ? offerError.message : 'Unable to send waitlist offer.',
     }));

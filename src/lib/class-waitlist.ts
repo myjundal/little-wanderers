@@ -318,11 +318,73 @@ export async function sendClassCancellationEmail(admin: SupabaseClient, registra
   });
 }
 
-export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: string, baseUrl: string) {
-  if (await hasActiveWaitlistOffer(admin, classId)) {
-    return { ok: true as const, offered: false, reason: 'active_offer_exists' };
+async function sendWaitlistSpotOfferEmail(input: {
+  admin: SupabaseClient;
+  klass: { id: string; title: string; start_time: string };
+  registration: {
+    id: string;
+    person_id: string;
+    created_by_user_id?: string | null;
+    waitlist_offer_token?: string | null;
+    waitlist_offer_expires_at?: string | null;
+  };
+  baseUrl: string;
+  fallbackEmail?: string | null;
+  fallbackHouseholdId?: string | null;
+}) {
+  if (!input.registration.waitlist_offer_token || !input.registration.waitlist_offer_expires_at) {
+    return { ok: false as const, error: 'waitlist offer token missing' };
   }
 
+  const { data: person, error: personError } = await input.admin
+    .from('people')
+    .select('first_name,household_id')
+    .eq('id', input.registration.person_id)
+    .maybeSingle();
+
+  if (personError) throw new Error(personError.message);
+  if (!person?.household_id) return { ok: true as const, offered: false, reason: 'missing_household' };
+
+  const fallbackEmail =
+    input.fallbackHouseholdId && input.fallbackHouseholdId === person.household_id
+      ? input.fallbackEmail
+      : null;
+  const to = await getHouseholdRecipientEmail(input.admin, person.household_id, input.registration.created_by_user_id, fallbackEmail);
+  if (!to) return { ok: true as const, offered: false, reason: 'missing_email' };
+
+  const claimUrl = `${input.baseUrl.replace(/\/$/, '')}/landing/classschedule?waitlist_token=${encodeURIComponent(input.registration.waitlist_offer_token)}`;
+  const childName = person.first_name ? ` for ${person.first_name}` : '';
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#ffffff;color:#3f355a;font-family:Arial,Helvetica,sans-serif;line-height:1.5;">
+    <main style="max-width:620px;margin:0 auto;">
+      <h1 style="font-size:22px;margin:0 0 14px;color:#4f3f82;">A class spot opened${escapeHtml(childName)}</h1>
+      <p>A spot opened in <strong>${escapeHtml(input.klass.title)}</strong>.</p>
+      <p><strong>Class time:</strong> ${escapeHtml(formatClassTime(input.klass.start_time))}</p>
+      <p>This offer is reserved for your family first and expires in ${WAITLIST_OFFER_HOURS} hours.</p>
+      <p style="margin:22px 0;">
+        <a href="${escapeHtml(claimUrl)}" style="display:inline-block;background:#5f3da4;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px;">Claim this spot</a>
+      </p>
+      <p style="color:#6d6480;font-size:13px;">If the button does not work, copy and paste this link: ${escapeHtml(claimUrl)}</p>
+    </main>
+  </body>
+</html>`;
+
+  const email = await sendResendEmail({
+    to,
+    subject: `A spot opened in ${input.klass.title}`,
+    html,
+  });
+
+  return { ok: true as const, offered: true, registration_id: input.registration.id, email };
+}
+
+export async function offerNextWaitlistSpot(
+  admin: SupabaseClient,
+  classId: string,
+  baseUrl: string,
+  fallback?: { email?: string | null; householdId?: string | null }
+) {
   const { data: klass, error: classError } = await admin
     .from('classes')
     .select('id,title,start_time,capacity,status')
@@ -339,7 +401,7 @@ export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: stri
 
   const { data: waitlistRows, error: waitlistError } = await admin
     .from('class_registrations')
-    .select('id,person_id,created_at,waitlist_offer_expires_at,created_by_user_id')
+    .select('id,person_id,created_at,waitlist_offer_token,waitlist_offer_expires_at,created_by_user_id')
     .eq('class_id', classId)
     .eq('status', 'waitlist')
     .order('created_at', { ascending: true })
@@ -348,6 +410,23 @@ export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: stri
   if (waitlistError) throw new Error(waitlistError.message);
 
   const now = Date.now();
+  const activeOffer = (waitlistRows ?? []).find((row) => (
+    row.waitlist_offer_token &&
+    row.waitlist_offer_expires_at &&
+    new Date(row.waitlist_offer_expires_at).getTime() > now
+  ));
+
+  if (activeOffer) {
+    return sendWaitlistSpotOfferEmail({
+      admin,
+      klass,
+      registration: activeOffer,
+      baseUrl,
+      fallbackEmail: fallback?.email,
+      fallbackHouseholdId: fallback?.householdId,
+    });
+  }
+
   const next = (waitlistRows ?? []).find((row) => {
     if (!row.waitlist_offer_expires_at) return true;
     return new Date(row.waitlist_offer_expires_at).getTime() <= now;
@@ -355,21 +434,8 @@ export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: stri
 
   if (!next) return { ok: true as const, offered: false, reason: 'no_waitlist' };
 
-  const { data: person, error: personError } = await admin
-    .from('people')
-    .select('first_name,household_id')
-    .eq('id', next.person_id)
-    .maybeSingle();
-
-  if (personError) throw new Error(personError.message);
-  if (!person?.household_id) return { ok: true as const, offered: false, reason: 'missing_household' };
-
-  const to = await getHouseholdRecipientEmail(admin, person.household_id, next.created_by_user_id);
-  if (!to) return { ok: true as const, offered: false, reason: 'missing_email' };
-
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + WAITLIST_OFFER_HOURS * 60 * 60 * 1000).toISOString();
-  const claimUrl = `${baseUrl.replace(/\/$/, '')}/landing/classschedule?waitlist_token=${encodeURIComponent(token)}`;
 
   const { error: updateError } = await admin
     .from('class_registrations')
@@ -382,28 +448,16 @@ export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: stri
 
   if (updateError) throw new Error(updateError.message);
 
-  const childName = person.first_name ? ` for ${person.first_name}` : '';
-  const html = `<!doctype html>
-<html>
-  <body style="margin:0;padding:24px;background:#ffffff;color:#3f355a;font-family:Arial,Helvetica,sans-serif;line-height:1.5;">
-    <main style="max-width:620px;margin:0 auto;">
-      <h1 style="font-size:22px;margin:0 0 14px;color:#4f3f82;">A class spot opened${escapeHtml(childName)}</h1>
-      <p>A spot opened in <strong>${escapeHtml(klass.title)}</strong>.</p>
-      <p><strong>Class time:</strong> ${escapeHtml(formatClassTime(klass.start_time))}</p>
-      <p>This offer is reserved for your family first and expires in ${WAITLIST_OFFER_HOURS} hours.</p>
-      <p style="margin:22px 0;">
-        <a href="${escapeHtml(claimUrl)}" style="display:inline-block;background:#5f3da4;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px;">Claim this spot</a>
-      </p>
-      <p style="color:#6d6480;font-size:13px;">If the button does not work, copy and paste this link: ${escapeHtml(claimUrl)}</p>
-    </main>
-  </body>
-</html>`;
-
-  const email = await sendResendEmail({
-    to,
-    subject: `A spot opened in ${klass.title}`,
-    html,
+  return sendWaitlistSpotOfferEmail({
+    admin,
+    klass,
+    registration: {
+      ...next,
+      waitlist_offer_token: token,
+      waitlist_offer_expires_at: expiresAt,
+    },
+    baseUrl,
+    fallbackEmail: fallback?.email,
+    fallbackHouseholdId: fallback?.householdId,
   });
-
-  return { ok: true as const, offered: true, registration_id: next.id, email };
 }
