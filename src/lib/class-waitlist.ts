@@ -25,6 +25,41 @@ function formatClassTime(startIso: string) {
   }).format(new Date(startIso));
 }
 
+function formatClassDateTime(startIso: string, endIso: string | null) {
+  const start = formatClassTime(startIso);
+  if (!endIso) return start;
+
+  const end = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(endIso));
+
+  return `${start} - ${end}`;
+}
+
+function formatPrice(priceCents: number | null) {
+  if (priceCents == null || priceCents <= 0) return 'Free';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: priceCents % 100 === 0 ? 0 : 2,
+  }).format(priceCents / 100);
+}
+
+async function getWaitlistPosition(admin: SupabaseClient, classId: string, registrationId: string) {
+  const { data, error } = await admin
+    .from('class_registrations')
+    .select('id')
+    .eq('class_id', classId)
+    .eq('status', 'waitlist')
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  const index = (data ?? []).findIndex((row) => row.id === registrationId);
+  return index >= 0 ? index + 1 : null;
+}
+
 export async function isUserOnWanderlist(admin: SupabaseClient, email: string | null | undefined) {
   const normalizedEmail = normalizeWaitlistEmail(email ?? '');
   if (!normalizedEmail) return false;
@@ -75,6 +110,102 @@ export async function countWaitlistRegistrations(admin: SupabaseClient, classId:
 
   if (error) throw new Error(error.message);
   return count ?? 0;
+}
+
+export async function sendClassRegistrationEmail(
+  admin: SupabaseClient,
+  registrationId: string,
+  status: 'scheduled' | 'waitlist'
+) {
+  const { data: reg, error: regError } = await admin
+    .from('class_registrations')
+    .select('id,class_id,person_id,status')
+    .eq('id', registrationId)
+    .maybeSingle();
+
+  if (regError) throw new Error(regError.message);
+  if (!reg) return { ok: false as const, error: 'registration not found' };
+
+  const { data: klass, error: classError } = await admin
+    .from('classes')
+    .select('id,title,category,start_time,end_time,capacity,price_cents,instructor_name,schedule_label,age_range,caregiver_participation')
+    .eq('id', reg.class_id)
+    .maybeSingle();
+
+  if (classError) throw new Error(classError.message);
+  if (!klass) return { ok: false as const, error: 'class not found' };
+
+  const { data: person, error: personError } = await admin
+    .from('people')
+    .select('first_name,last_name,household_id')
+    .eq('id', reg.person_id)
+    .maybeSingle();
+
+  if (personError) throw new Error(personError.message);
+  if (!person?.household_id) return { ok: false as const, error: 'person household not found' };
+
+  const { data: household, error: householdError } = await admin
+    .from('households')
+    .select('email,name')
+    .eq('id', person.household_id)
+    .maybeSingle();
+
+  if (householdError) throw new Error(householdError.message);
+  const to = typeof household?.email === 'string' ? household.email.trim() : '';
+  if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
+
+  const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';
+  const classTime = formatClassDateTime(klass.start_time, klass.end_time);
+  const scheduleLabel = typeof klass.schedule_label === 'string' && klass.schedule_label.trim() ? klass.schedule_label.trim() : null;
+  const waitlistPosition = status === 'waitlist' ? await getWaitlistPosition(admin, reg.class_id, reg.id) : null;
+  const heading = status === 'waitlist' ? 'You are on the waitlist' : 'You are pre-registered';
+  const intro =
+    status === 'waitlist'
+      ? `We added ${childName} to the waitlist for ${klass.title}.`
+      : `We received ${childName}'s pre-registration for ${klass.title}.`;
+  const positionLine = waitlistPosition
+    ? `<p><strong>Waitlist position:</strong> #${waitlistPosition}</p>`
+    : '';
+  const waitlistNote =
+    status === 'waitlist'
+      ? '<p>If a spot opens, we will email the next family in line a private claim link before opening that seat to anyone else.</p>'
+      : '<p>This is a pre-registration confirmation. We will follow up with any final class details before the start date.</p>';
+
+  const details = [
+    ['Class', klass.title],
+    ['Child', childName],
+    ['Instructor', klass.instructor_name],
+    ['Schedule', scheduleLabel ?? classTime],
+    ['First class', classTime],
+    ['Age group', klass.age_range],
+    ['Caregiver participation', klass.caregiver_participation],
+    ['Price', formatPrice(klass.price_cents)],
+  ]
+    .filter(([, value]) => typeof value === 'string' && value.trim())
+    .map(([label, value]) => `<tr><td style="padding:8px 12px;color:#6d6480;">${escapeHtml(label)}</td><td style="padding:8px 12px;font-weight:700;color:#3f355a;">${escapeHtml(value)}</td></tr>`)
+    .join('');
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#ffffff;color:#3f355a;font-family:Arial,Helvetica,sans-serif;line-height:1.5;">
+    <main style="max-width:620px;margin:0 auto;">
+      <h1 style="font-size:22px;margin:0 0 14px;color:#4f3f82;">${escapeHtml(heading)}</h1>
+      <p>${escapeHtml(intro)}</p>
+      ${positionLine}
+      <table style="width:100%;border-collapse:collapse;border:1px solid #efe3ff;border-radius:12px;overflow:hidden;margin:18px 0;">
+        <tbody>${details}</tbody>
+      </table>
+      ${waitlistNote}
+      <p style="color:#6d6480;font-size:13px;">Questions? Reply to this email and we will help.</p>
+    </main>
+  </body>
+</html>`;
+
+  return sendResendEmail({
+    to,
+    subject: status === 'waitlist' ? `Waitlist confirmation: ${klass.title}` : `Pre-registration confirmation: ${klass.title}`,
+    html,
+  });
 }
 
 export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: string, baseUrl: string) {
