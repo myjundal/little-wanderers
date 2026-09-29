@@ -60,7 +60,14 @@ async function getWaitlistPosition(admin: SupabaseClient, classId: string, regis
   return index >= 0 ? index + 1 : null;
 }
 
-async function getHouseholdRecipientEmail(admin: SupabaseClient, householdId: string) {
+async function getAuthUserEmail(admin: SupabaseClient, userId: string | null | undefined) {
+  if (!userId) return '';
+  const { data: authUser, error: authError } = await admin.auth.admin.getUserById(userId);
+  if (authError) throw new Error(authError.message);
+  return authUser.user?.email?.trim() ?? '';
+}
+
+async function getHouseholdRecipientEmail(admin: SupabaseClient, householdId: string, preferredUserId?: string | null) {
   const { data: household, error: householdError } = await admin
     .from('households')
     .select('email,user_id')
@@ -72,12 +79,27 @@ async function getHouseholdRecipientEmail(admin: SupabaseClient, householdId: st
   const householdEmail = typeof household?.email === 'string' ? household.email.trim() : '';
   if (householdEmail) return householdEmail;
 
-  const userId = typeof household?.user_id === 'string' ? household.user_id : '';
-  if (!userId) return '';
+  const candidateUserIds = new Set<string>();
+  if (preferredUserId) candidateUserIds.add(preferredUserId);
+  if (typeof household?.user_id === 'string' && household.user_id) candidateUserIds.add(household.user_id);
 
-  const { data: authUser, error: authError } = await admin.auth.admin.getUserById(userId);
-  if (authError) throw new Error(authError.message);
-  return authUser.user?.email?.trim() ?? '';
+  const { data: members, error: membersError } = await admin
+    .from('household_members')
+    .select('user_id,role,created_at')
+    .eq('household_id', householdId)
+    .order('created_at', { ascending: true });
+
+  if (membersError) throw new Error(membersError.message);
+  (members ?? []).forEach((member) => {
+    if (typeof member.user_id === 'string' && member.user_id) candidateUserIds.add(member.user_id);
+  });
+
+  for (const userId of candidateUserIds) {
+    const email = await getAuthUserEmail(admin, userId);
+    if (email) return email;
+  }
+
+  return '';
 }
 
 export async function isUserOnWanderlist(admin: SupabaseClient, email: string | null | undefined) {
@@ -139,7 +161,7 @@ export async function sendClassRegistrationEmail(
 ) {
   const { data: reg, error: regError } = await admin
     .from('class_registrations')
-    .select('id,class_id,person_id,status')
+    .select('id,class_id,person_id,status,created_by_user_id')
     .eq('id', registrationId)
     .maybeSingle();
 
@@ -164,7 +186,7 @@ export async function sendClassRegistrationEmail(
   if (personError) throw new Error(personError.message);
   if (!person?.household_id) return { ok: false as const, error: 'person household not found' };
 
-  const to = await getHouseholdRecipientEmail(admin, person.household_id);
+  const to = await getHouseholdRecipientEmail(admin, person.household_id, reg.created_by_user_id);
   if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
 
   const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';
@@ -221,6 +243,72 @@ export async function sendClassRegistrationEmail(
   });
 }
 
+export async function sendClassCancellationEmail(admin: SupabaseClient, registrationId: string) {
+  const { data: reg, error: regError } = await admin
+    .from('class_registrations')
+    .select('id,class_id,person_id,created_by_user_id')
+    .eq('id', registrationId)
+    .maybeSingle();
+
+  if (regError) throw new Error(regError.message);
+  if (!reg) return { ok: false as const, error: 'registration not found' };
+
+  const { data: klass, error: classError } = await admin
+    .from('classes')
+    .select('id,title,start_time,end_time,instructor_name,schedule_label')
+    .eq('id', reg.class_id)
+    .maybeSingle();
+
+  if (classError) throw new Error(classError.message);
+  if (!klass) return { ok: false as const, error: 'class not found' };
+
+  const { data: person, error: personError } = await admin
+    .from('people')
+    .select('first_name,last_name,household_id')
+    .eq('id', reg.person_id)
+    .maybeSingle();
+
+  if (personError) throw new Error(personError.message);
+  if (!person?.household_id) return { ok: false as const, error: 'person household not found' };
+
+  const to = await getHouseholdRecipientEmail(admin, person.household_id, reg.created_by_user_id);
+  if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
+
+  const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';
+  const classTime = formatClassDateTime(klass.start_time, klass.end_time);
+  const scheduleLabel = typeof klass.schedule_label === 'string' && klass.schedule_label.trim() ? klass.schedule_label.trim() : null;
+  const details = [
+    ['Class', klass.title],
+    ['Child', childName],
+    ['Instructor', klass.instructor_name],
+    ['Schedule', scheduleLabel ?? classTime],
+    ['Class time', classTime],
+  ]
+    .filter(([, value]) => typeof value === 'string' && value.trim())
+    .map(([label, value]) => `<tr><td style="padding:8px 12px;color:#6d6480;">${escapeHtml(label)}</td><td style="padding:8px 12px;font-weight:700;color:#3f355a;">${escapeHtml(value)}</td></tr>`)
+    .join('');
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#ffffff;color:#3f355a;font-family:Arial,Helvetica,sans-serif;line-height:1.5;">
+    <main style="max-width:620px;margin:0 auto;">
+      <h1 style="font-size:22px;margin:0 0 14px;color:#4f3f82;">Class registration cancelled</h1>
+      <p>We cancelled ${escapeHtml(childName)}'s registration for <strong>${escapeHtml(klass.title)}</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #efe3ff;border-radius:12px;overflow:hidden;margin:18px 0;">
+        <tbody>${details}</tbody>
+      </table>
+      <p style="color:#6d6480;font-size:13px;">If this was a mistake, you can register again from your class schedule. If the class is full, you will join the waitlist.</p>
+    </main>
+  </body>
+</html>`;
+
+  return sendResendEmail({
+    to,
+    subject: `Class cancellation confirmation: ${klass.title}`,
+    html,
+  });
+}
+
 export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: string, baseUrl: string) {
   if (await hasActiveWaitlistOffer(admin, classId)) {
     return { ok: true as const, offered: false, reason: 'active_offer_exists' };
@@ -242,7 +330,7 @@ export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: stri
 
   const { data: waitlistRows, error: waitlistError } = await admin
     .from('class_registrations')
-    .select('id,person_id,created_at,waitlist_offer_expires_at')
+    .select('id,person_id,created_at,waitlist_offer_expires_at,created_by_user_id')
     .eq('class_id', classId)
     .eq('status', 'waitlist')
     .order('created_at', { ascending: true })
@@ -267,7 +355,7 @@ export async function offerNextWaitlistSpot(admin: SupabaseClient, classId: stri
   if (personError) throw new Error(personError.message);
   if (!person?.household_id) return { ok: true as const, offered: false, reason: 'missing_household' };
 
-  const to = await getHouseholdRecipientEmail(admin, person.household_id);
+  const to = await getHouseholdRecipientEmail(admin, person.household_id, next.created_by_user_id);
   if (!to) return { ok: true as const, offered: false, reason: 'missing_email' };
 
   const token = crypto.randomUUID();

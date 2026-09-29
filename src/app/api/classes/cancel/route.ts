@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
-import { offerNextWaitlistSpot } from '@/lib/class-waitlist';
+import { offerNextWaitlistSpot, sendClassCancellationEmail } from '@/lib/class-waitlist';
 
 const admin = () =>
   createClient(
@@ -73,12 +73,17 @@ export async function POST(req: Request) {
       .eq('id', registrationId);
 
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+    const cancellationEmail = await sendClassCancellationEmail(supa, registrationId).catch((emailError) => ({
+      ok: false as const,
+      error: emailError instanceof Error ? emailError.message : 'Unable to send cancellation email.',
+    }));
+
     const waitlistOffer = await offerNextWaitlistSpot(supa, reg.class_id, new URL(req.url).origin).catch((offerError) => ({
       ok: false as const,
       error: offerError instanceof Error ? offerError.message : 'Unable to send waitlist offer.',
     }));
 
-    return Response.json({ ok: true, waitlist_offer: waitlistOffer });
+    return Response.json({ ok: true, cancellation_email: cancellationEmail, waitlist_offer: waitlistOffer });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
