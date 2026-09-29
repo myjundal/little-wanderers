@@ -30,7 +30,7 @@ export default function ActionToast({ message, tone = 'success', onDone }: Actio
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: 24,
+        top: 'max(22px, env(safe-area-inset-top))',
         transform: 'translateX(-50%)',
         zIndex: 80,
         width: 'min(420px, calc(100vw - 28px))',
