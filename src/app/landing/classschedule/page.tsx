@@ -263,6 +263,7 @@ export default function ClassSchedulePage() {
       }
 
       setMessage('Spot claimed. You are registered for the class.');
+      setToast({ message: 'Class spot claimed. You are registered.', tone: 'success' });
       setClaimingWaitlist(false);
       await load(false);
       window.history.replaceState({}, '', '/landing/classschedule');
