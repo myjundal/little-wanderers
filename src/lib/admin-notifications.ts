@@ -219,3 +219,54 @@ export async function sendClassRegistrationNotification(input: {
     html,
   });
 }
+
+export async function sendClassCancellationNotification(input: {
+  registrationId?: string | null;
+  familyName?: string | null;
+  familyEmail?: string | null;
+  guardianFirstName?: string | null;
+  guardianLastName?: string | null;
+  childFirstName?: string | null;
+  childLastName?: string | null;
+  childBirthdate?: string | null;
+  classTitle?: string | null;
+  classCategory?: string | null;
+  classStartTime?: string | null;
+  classEndTime?: string | null;
+  classScheduleLabel?: string | null;
+  instructorName?: string | null;
+  priceCents?: number | null;
+}) {
+  const to = getOwnerNotificationEmail();
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+  const childName = formatPersonName({ firstName: input.childFirstName, lastName: input.childLastName });
+  const classTime = input.classStartTime && input.classEndTime ? formatEasternRange(input.classStartTime, input.classEndTime) : null;
+
+  const html = renderOperationalNotification({
+    title: 'Little Wanderers class cancellation',
+    rows: [
+      ['Event', 'Class registration cancelled'],
+      ['Family', input.familyName],
+      ['Guardian', formatPersonName({ firstName: input.guardianFirstName, lastName: input.guardianLastName })],
+      ['Email', input.familyEmail],
+      ['Child', childName],
+      ['Child age', formatAgeFromBirthdate(input.childBirthdate)],
+      ['Class', input.classTitle],
+      ['Category', input.classCategory],
+      ['Class time', classTime],
+      ['Schedule label', input.classScheduleLabel],
+      ['Instructor', input.instructorName],
+      ['Price', formatPrice(input.priceCents)],
+      ['Status', 'cancelled'],
+      ['Registration ID', input.registrationId],
+    ],
+    ctaHref: siteUrl ? `${siteUrl}/staff/classes` : null,
+    ctaLabel: 'Open class management',
+  });
+
+  return sendResendEmail({
+    to,
+    subject: `Class cancellation: ${input.classTitle ?? 'Class'}`,
+    html,
+  });
+}

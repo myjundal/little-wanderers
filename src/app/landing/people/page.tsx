@@ -24,6 +24,13 @@ type Invite = {
   expires_at: string;
 };
 
+function normalizeUsPhone(input: string) {
+  const digits = input.replace(/\D/g, '');
+  if (!digits) return '';
+  const local = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+  return `+1${local}`;
+}
+
 export default function PeoplePage() {
   const supabase = createBrowserSupabaseClient();
   const [householdId, setHouseholdId] = useState<string | null>(null);
@@ -34,7 +41,7 @@ export default function PeoplePage() {
   const [sendingInvite, setSendingInvite] = useState(false);
   const [form, setForm] = useState({ role: 'adult', first_name: '', last_name: '', gender: '', birthdate: '' });
   const [inviteForm, setInviteForm] = useState({ email: '' });
-  const [contactForm, setContactForm] = useState({ city: '', state: 'CT' });
+  const [contactForm, setContactForm] = useState({ phone: '', city: '', state: 'CT' });
   const [openAdd, setOpenAdd] = useState(false);
   const [openNotify, setOpenNotify] = useState(false);
   const [openInvite, setOpenInvite] = useState(false);
@@ -49,8 +56,8 @@ export default function PeoplePage() {
     if (!hid) return;
 
     setHouseholdId(hid);
-    const { data: household } = await supabase.from('households').select('city,state').eq('id', hid).maybeSingle();
-    setContactForm({ city: household?.city ?? '', state: household?.state ?? 'CT' });
+    const { data: household } = await supabase.from('households').select('phone,city,state').eq('id', hid).maybeSingle();
+    setContactForm({ phone: userData.user?.phone ?? household?.phone ?? '', city: household?.city ?? '', state: household?.state ?? 'CT' });
 
     const [{ data: ppl }, invitesRes] = await Promise.all([
       supabase.from('people').select('id, role, first_name, last_name, gender, birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
@@ -98,7 +105,37 @@ export default function PeoplePage() {
   };
   const saveHouseholdLocation = async () => {
     if (!householdId) return;
-    await supabase.from('households').update({ city: contactForm.city || null, state: contactForm.state || 'CT' }).eq('id', householdId);
+    setUiError(null);
+    setUiMessage(null);
+
+    const normalizedPhone = normalizeUsPhone(contactForm.phone);
+    if (contactForm.phone.trim() && !/^\+1\d{10}$/.test(normalizedPhone)) {
+      setUiError('Please enter a valid US phone number.');
+      return;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const authPhone = userData.user?.phone ?? '';
+    const { error: householdError } = await supabase
+      .from('households')
+      .update({ phone: normalizedPhone || null, city: contactForm.city || null, state: contactForm.state || 'CT' })
+      .eq('id', householdId);
+
+    if (householdError) {
+      setUiError('Something went wrong while saving your family information.');
+      return;
+    }
+
+    if (normalizedPhone && normalizedPhone !== authPhone) {
+      const { error: authError } = await supabase.auth.updateUser({ phone: normalizedPhone });
+      if (authError) {
+        setUiMessage('Family information updated, but phone login could not be enabled yet. Please try the phone number again later.');
+        return;
+      }
+      setUiMessage('Family information updated. Please check your text messages to confirm phone login.');
+      return;
+    }
+
     setUiMessage('Family information updated.');
   };
 
@@ -152,7 +189,7 @@ export default function PeoplePage() {
 
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }}>
-      <h1>Family & Household</h1>
+      <h1>My Info/People</h1>
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
       <section style={{ marginTop: 24, overflow: 'visible' }}>
         <h3 style={{ margin: 0, padding: '0 2px' }}>Family Members</h3>
@@ -185,6 +222,14 @@ export default function PeoplePage() {
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
         <h3 style={{ marginTop: 0 }}>Family information</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            style={{ width: '100%' }}
+            type="tel"
+            placeholder="Phone number"
+            value={contactForm.phone}
+            onChange={(e) => setContactForm((p) => ({ ...p, phone: e.target.value }))}
+            autoComplete="tel"
+          />
           <input style={{ width: '100%' }} placeholder="City" value={contactForm.city} onChange={(e) => setContactForm((p) => ({ ...p, city: e.target.value }))} />
           <select style={{ width: '100%' }} value={contactForm.state} onChange={(e) => setContactForm((p) => ({ ...p, state: e.target.value }))}>
             {['CT', 'MA', 'NY', 'RI', 'NJ', 'NH', 'VT', 'ME'].map((s) => <option key={s} value={s}>{s}</option>)}

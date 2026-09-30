@@ -409,8 +409,8 @@ export default function ClassSchedulePage() {
 
   const ensureSelectedChild = async () => {
     if (selectedPersonId && !isAddingAdditionalChild && !selectedPersonNeedsAge) return selectedPersonId;
-    const ageYears = isAddingAdditionalChild ? null : parsedQuickAge();
-    if (!isAddingAdditionalChild && ageYears == null) {
+    const ageYears = parsedQuickAge();
+    if (ageYears == null) {
       setMessage('Please enter your child’s age.');
       return null;
     }
@@ -450,7 +450,7 @@ export default function ClassSchedulePage() {
     const res = await fetch('/api/family/children', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, age_years: ageYears, require_age: !isAddingAdditionalChild, ...guardian }),
+      body: JSON.stringify({ name, age_years: ageYears, ...guardian }),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
     setCreatingChild(false);
@@ -607,7 +607,7 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          Pre-registration is free for now. If you are new, add your child’s name and age here, then choose the class you want. Birthdays can be corrected later in My People.
+          Pre-registration is free for now. If you are new, add your child’s name and age here, then choose the class you want. Birthdays can be corrected later in My Info/People.
         </p>
         {isAuthenticated && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>
@@ -641,19 +641,33 @@ export default function ClassSchedulePage() {
               </select>
             </label>
             {isAddingAdditionalChild && (
-              <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
-                Additional child’s name
-                <input
-                  value={quickChildName}
-                  onChange={(e) => setQuickChildName(e.target.value)}
-                  placeholder="Child name"
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
-                />
-              </label>
+              <>
+                <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+                  Additional child’s name
+                  <input
+                    value={quickChildName}
+                    onChange={(e) => setQuickChildName(e.target.value)}
+                    placeholder="Child name"
+                    style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+                  />
+                </label>
+                <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+                  Child age
+                  <input
+                    value={quickChildAge}
+                    onChange={(e) => setQuickChildAge(e.target.value)}
+                    type="number"
+                    min={0}
+                    max={12}
+                    step={0.5}
+                    style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+                  />
+                </label>
+              </>
             )}
             {selectedPersonNeedsAge && (
               <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
-                Approximate age
+                Child age
                 <input
                   value={quickChildAge}
                   onChange={(e) => setQuickChildAge(e.target.value)}
@@ -661,7 +675,6 @@ export default function ClassSchedulePage() {
                   min={0}
                   max={12}
                   step={0.5}
-                  placeholder="e.g. 3.5"
                   style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
                 />
               </label>
@@ -680,7 +693,7 @@ export default function ClassSchedulePage() {
               />
             </label>
             <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
-              Approximate age
+              Child age
               <input
                 value={quickChildAge}
                 onChange={(e) => setQuickChildAge(e.target.value)}
@@ -688,7 +701,6 @@ export default function ClassSchedulePage() {
                 min={0}
                 max={12}
                 step={0.5}
-                placeholder="e.g. 3.5"
                 style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
               />
             </label>

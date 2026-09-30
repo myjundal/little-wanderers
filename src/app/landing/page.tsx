@@ -286,7 +286,7 @@ export default function AppHome() {
 
       {!canUseOwnerDashboard && (
         <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
-          <Link href="/landing/people" className="quickCard">My People</Link>
+          <Link href="/landing/people" className="quickCard">My Info/People</Link>
           <Link href="/landing/qr" className="quickCard">My QR Code</Link>
           <Link href="/landing/classschedule" className="quickCard">My Classes</Link>
           <Link href="/landing/party" className="quickCard">My Party</Link>
@@ -390,7 +390,7 @@ export default function AppHome() {
           <Link href="/staff/checkin">QR Check-in</Link>
         ) : (
           <>
-            <Link href="/landing/people">People</Link>
+            <Link href="/landing/people">Info</Link>
             <Link href="/landing/qr">QR</Link>
           </>
         )}
@@ -400,8 +400,8 @@ export default function AppHome() {
 
       <style jsx>{`
         .heroGrid { grid-template-columns: repeat(2,minmax(280px,1fr)); }
-        .quickGrid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
-        .quickCard { border:1px solid #e3d0fb; border-radius:16px; padding:16px; background:#fffdf9; color:#4f3f82; text-decoration:none; font-weight:700; text-align:center; }
+        .quickGrid { display:grid; grid-template-columns: minmax(0,1fr); gap:10px; }
+        .quickCard { border:1px solid #e3d0fb; border-radius:12px; padding:14px 16px; background:#fffdf9; color:#4f3f82; text-decoration:none; font-weight:700; text-align:left; }
         .mobileBottom { display:none; }
         .desktopOnly { display:block; }
         @media (max-width: 1024px){

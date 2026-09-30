@@ -108,8 +108,8 @@ export async function POST(req: Request) {
         gender: null,
         birthdate: ageYears == null ? null : approximateBirthdateFromAge(ageYears),
         notes: ageYears == null
-          ? 'Added during class pre-registration. Birthday can be updated in My People.'
-          : `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My People.`,
+          ? 'Added during class pre-registration. Birthday can be updated in My Info/People.'
+          : `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My Info/People.`,
       })
       .select('id,first_name,last_name,birthdate')
       .maybeSingle();
@@ -161,7 +161,7 @@ export async function PATCH(req: Request) {
       .from('people')
       .update({
         birthdate: approximateBirthdateFromAge(ageYears),
-        notes: `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My People.`,
+        notes: `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My Info/People.`,
       })
       .eq('id', personId)
       .eq('household_id', householdId)

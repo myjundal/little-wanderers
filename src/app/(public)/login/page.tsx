@@ -217,7 +217,7 @@ export default function LoginPage() {
       sessionStorage.setItem('post_login_journey', journeyMode);
       setMessage(
         reason === 'send'
-          ? 'Please head to your email for the login link. After sign-up, add your phone number on your family page so you can use phone login next time.'
+          ? 'Please head to your email for the login link. After sign-up, add your phone number in My Info/People so you can use phone login next time.'
           : 'We sent a fresh login link. Please head to your email and open the newest link.'
       );
       setStep('emailLinkSent');
@@ -382,7 +382,7 @@ export default function LoginPage() {
               <p style={{ margin: 0, color: '#2f7a47', fontWeight: 800 }}>Check your email</p>
               <p style={{ margin: '6px 0 0', color: '#4f3f82', lineHeight: 1.5 }}>
                 Please head to your email for the login link we sent to <strong>{pendingEmail}</strong>.
-                After sign-up, add your phone number on your family page so you can use phone login next time.
+                After sign-up, add your phone number in My Info/People so you can use phone login next time.
               </p>
             </div>
 

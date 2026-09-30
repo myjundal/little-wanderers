@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { offerNextWaitlistSpot, sendClassCancellationEmail } from '@/lib/class-waitlist';
+import { sendClassCancellationNotification } from '@/lib/admin-notifications';
+import { getPrimaryGuardianProfile } from '@/lib/family-profile';
 import { logger } from '@/lib/logger';
 
 const admin = () =>
@@ -14,6 +16,56 @@ async function getHouseholdIdForUser(userId: string) {
   return getLatestHouseholdIdForUser(admin(), userId);
 }
 
+async function sendOwnerClassCancellationNotification(input: {
+  admin: ReturnType<typeof admin>;
+  registrationId: string;
+  householdId: string;
+  fallbackEmail?: string | null;
+}) {
+  try {
+    const { data: reg } = await input.admin
+      .from('class_registrations')
+      .select('id,class_id,person_id')
+      .eq('id', input.registrationId)
+      .maybeSingle();
+    if (!reg) return;
+
+    const [{ data: household }, guardian, { data: person }, { data: klass }] = await Promise.all([
+      input.admin.from('households').select('name,email').eq('id', input.householdId).maybeSingle(),
+      getPrimaryGuardianProfile(input.admin, input.householdId).catch(() => null),
+      input.admin.from('people').select('first_name,last_name,birthdate').eq('id', reg.person_id).maybeSingle(),
+      input.admin.from('classes').select('title,category,start_time,end_time,schedule_label,instructor_name,price_cents').eq('id', reg.class_id).maybeSingle(),
+    ]);
+
+    const notification = await sendClassCancellationNotification({
+      registrationId: input.registrationId,
+      familyName: household?.name ?? null,
+      familyEmail: household?.email ?? input.fallbackEmail ?? null,
+      guardianFirstName: guardian?.first_name ?? null,
+      guardianLastName: guardian?.last_name ?? null,
+      childFirstName: person?.first_name ?? null,
+      childLastName: person?.last_name ?? null,
+      childBirthdate: person?.birthdate ?? null,
+      classTitle: klass?.title ?? null,
+      classCategory: klass?.category ?? null,
+      classStartTime: klass?.start_time ?? null,
+      classEndTime: klass?.end_time ?? null,
+      classScheduleLabel: klass?.schedule_label ?? null,
+      instructorName: klass?.instructor_name ?? null,
+      priceCents: klass?.price_cents ?? null,
+    });
+
+    if (!notification.ok) {
+      logger.error(
+        { action: 'class.cancellation_notification_not_sent', householdId: input.householdId, registrationId: input.registrationId },
+        new Error(notification.error)
+      );
+    }
+  } catch (error) {
+    logger.error({ action: 'class.cancellation_notification_failed', householdId: input.householdId, registrationId: input.registrationId }, error);
+  }
+}
+
 function queueClassCancellationSideEffects(input: {
   admin: ReturnType<typeof admin>;
   registrationId: string;
@@ -24,10 +76,18 @@ function queueClassCancellationSideEffects(input: {
   origin: string;
 }) {
   void (async () => {
-    const cancellationEmail = await sendClassCancellationEmail(input.admin, input.registrationId, input.email).catch((emailError) => ({
-      ok: false as const,
-      error: emailError instanceof Error ? emailError.message : 'Unable to send cancellation email.',
-    }));
+    const [cancellationEmail] = await Promise.all([
+      sendClassCancellationEmail(input.admin, input.registrationId, input.email).catch((emailError) => ({
+        ok: false as const,
+        error: emailError instanceof Error ? emailError.message : 'Unable to send cancellation email.',
+      })),
+      sendOwnerClassCancellationNotification({
+        admin: input.admin,
+        registrationId: input.registrationId,
+        householdId: input.householdId,
+        fallbackEmail: input.email,
+      }),
+    ]);
     if (!cancellationEmail.ok || 'skipped' in cancellationEmail) {
       logger.warn({
         action: 'class.cancellation_email_not_sent',
