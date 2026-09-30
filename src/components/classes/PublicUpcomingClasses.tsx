@@ -52,17 +52,24 @@ const classCardStyle: CSSProperties = {
 };
 
 const weeklyGridStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-  gap: 8,
+  display: 'flex',
+  gap: 10,
+  minWidth: 0,
+  overflowX: 'auto',
+  overscrollBehaviorX: 'contain',
+  padding: '2px 18px 12px 0',
+  scrollSnapType: 'x mandatory',
+  WebkitOverflowScrolling: 'touch',
 };
 
 const weeklyDayStyle: CSSProperties = {
+  flex: '0 0 138px',
   minWidth: 0,
   padding: 8,
   borderRadius: 16,
   border: '1px solid rgba(223,209,239,0.9)',
   background: 'rgba(255,253,249,0.9)',
+  scrollSnapAlign: 'start',
 };
 
 function formatClassTime(startTime: string, endTime: string) {
@@ -235,7 +242,7 @@ export default function PublicUpcomingClasses() {
   return (
     <section style={sectionStyle}>
       <div style={{ display: 'grid', gap: 10 }}>
-        <h2 style={{ margin: 0, color: '#4b4360', fontSize: '1.45rem' }}>Weekly class snapshot</h2>
+        <h2 style={{ margin: 0, color: '#4b4360', fontSize: '1.45rem' }}>Weekly class map</h2>
         <div style={weeklyGridStyle}>
           {WEEKDAY_COLUMNS.map((day) => {
             const dayItems = weeklySchedule.get(day.value) ?? [];
