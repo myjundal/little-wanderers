@@ -109,12 +109,44 @@ async function selectPartyBookings(householdId: string) {
   }));
 }
 
-async function notifyPartyBookingSaved(input: { bookingId?: string | null; startTime: string; endTime: string; status: string }) {
+async function notifyPartyBookingSaved(input: {
+  bookingId?: string | null;
+  householdId?: string | null;
+  fallbackEmail?: string | null;
+  startTime: string;
+  endTime: string;
+  status: string;
+  birthdayChildName?: string | null;
+  birthdayAge?: number | null;
+  headcountExpected?: number | null;
+  occasionDetails?: string | null;
+  notes?: string | null;
+}) {
   try {
+    let familyName: string | null = null;
+    let familyEmail: string | null = input.fallbackEmail ?? null;
+    if (input.householdId) {
+      const { data: household } = await admin()
+        .from('households')
+        .select('name,email')
+        .eq('id', input.householdId)
+        .maybeSingle();
+      familyName = household?.name ?? null;
+      familyEmail = household?.email ?? familyEmail;
+    }
+
     const notification = await sendPartyBookingNotification({
+      bookingId: input.bookingId,
       startTime: input.startTime,
       endTime: input.endTime,
       status: input.status,
+      familyName,
+      familyEmail,
+      birthdayChildName: input.birthdayChildName,
+      birthdayAge: input.birthdayAge,
+      headcountExpected: input.headcountExpected,
+      occasionDetails: input.occasionDetails,
+      notes: input.notes,
     });
 
     if (!notification.ok) {
@@ -242,9 +274,16 @@ export async function POST(req: Request) {
       if (!updateExisting.error && updateExisting.data?.id) {
         await notifyPartyBookingSaved({
           bookingId: updateExisting.data.id,
+          householdId,
+          fallbackEmail: user.email,
           startTime: start.toISOString(),
           endTime: end.toISOString(),
           status: 'confirmed',
+          birthdayChildName,
+          birthdayAge,
+          headcountExpected,
+          occasionDetails,
+          notes,
         });
         const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: updateExisting.data.id, fallbackEmail: user.email });
         return Response.json({ ok: true, id: updateExisting.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
@@ -295,9 +334,16 @@ export async function POST(req: Request) {
         if (updateExisting.error) return Response.json({ ok: false, error: updateExisting.error.message }, { status: 500 });
         await notifyPartyBookingSaved({
           bookingId: updateExisting.data?.id ?? existingSameSlot.id,
+          householdId,
+          fallbackEmail: user.email,
           startTime: holdPayload.start_time,
           endTime: holdPayload.end_time,
           status: 'confirmed',
+          birthdayChildName,
+          birthdayAge,
+          headcountExpected,
+          occasionDetails,
+          notes,
         });
         const bookingIdForEmail = updateExisting.data?.id ?? existingSameSlot.id;
         const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: bookingIdForEmail, fallbackEmail: user.email });
@@ -313,9 +359,16 @@ export async function POST(req: Request) {
       if (hold.error) return Response.json({ ok: false, error: hold.error.message }, { status: 500 });
       await notifyPartyBookingSaved({
         bookingId: hold.data?.id ?? null,
+        householdId,
+        fallbackEmail: user.email,
         startTime: holdPayload.start_time,
         endTime: holdPayload.end_time,
         status: 'confirmed',
+        birthdayChildName,
+        birthdayAge,
+        headcountExpected,
+        occasionDetails,
+        notes,
       });
       const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: hold.data?.id ?? null, fallbackEmail: user.email });
       return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'confirmed', deposit_required_now: false, party_email });
@@ -435,9 +488,16 @@ export async function POST(req: Request) {
       if (!primaryUpdate.error && primaryUpdate.data?.id) {
         await notifyPartyBookingSaved({
           bookingId: primaryUpdate.data.id,
+          householdId,
+          fallbackEmail: user.email,
           startTime: start.toISOString(),
           endTime: end.toISOString(),
           status: 'confirmed',
+          birthdayChildName,
+          birthdayAge,
+          headcountExpected,
+          occasionDetails,
+          notes,
         });
         const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: primaryUpdate.data.id, fallbackEmail: user.email });
         return Response.json({ ok: true, id: primaryUpdate.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
@@ -485,9 +545,16 @@ export async function POST(req: Request) {
       if (fallback.error) return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
       await notifyPartyBookingSaved({
         bookingId: fallback.data?.id ?? null,
+        householdId,
+        fallbackEmail: user.email,
         startTime: start.toISOString(),
         endTime: end.toISOString(),
         status: 'confirmed',
+        birthdayChildName,
+        birthdayAge,
+        headcountExpected,
+        occasionDetails,
+        notes,
       });
       const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: fallback.data?.id ?? null, fallbackEmail: user.email });
       return Response.json({ ok: true, id: fallback.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
@@ -495,9 +562,16 @@ export async function POST(req: Request) {
 
     await notifyPartyBookingSaved({
       bookingId: primary.data?.id ?? null,
+      householdId,
+      fallbackEmail: user.email,
       startTime: insertPayload.start_time,
       endTime: insertPayload.end_time,
       status: 'confirmed',
+      birthdayChildName,
+      birthdayAge,
+      headcountExpected,
+      occasionDetails,
+      notes,
     });
     const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: primary.data?.id ?? null, fallbackEmail: user.email });
     return Response.json({ ok: true, id: primary.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });

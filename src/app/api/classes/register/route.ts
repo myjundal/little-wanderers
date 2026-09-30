@@ -8,6 +8,7 @@ import {
   isUserOnWanderlist,
   sendClassRegistrationEmail,
 } from '@/lib/class-waitlist';
+import { sendClassRegistrationNotification } from '@/lib/admin-notifications';
 import { logger } from '@/lib/logger';
 
 const admin = () =>
@@ -18,6 +19,65 @@ const admin = () =>
 
 async function getHouseholdIdForUser(userId: string) {
   return getLatestHouseholdIdForUser(admin(), userId);
+}
+
+async function notifyClassRegistrationSaved(input: {
+  admin: ReturnType<typeof admin>;
+  registrationId?: string | null;
+  status: string;
+  householdId: string;
+  fallbackEmail?: string | null;
+  person: {
+    first_name?: string | null;
+    last_name?: string | null;
+    birthdate?: string | null;
+  };
+  klass: {
+    title?: string | null;
+    category?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    schedule_label?: string | null;
+    instructor_name?: string | null;
+    price_cents?: number | null;
+  };
+}) {
+  try {
+    const { data: household } = await input.admin
+      .from('households')
+      .select('name,email')
+      .eq('id', input.householdId)
+      .maybeSingle();
+
+    const notification = await sendClassRegistrationNotification({
+      registrationId: input.registrationId,
+      status: input.status,
+      familyName: household?.name ?? null,
+      familyEmail: household?.email ?? input.fallbackEmail ?? null,
+      childFirstName: input.person.first_name ?? null,
+      childLastName: input.person.last_name ?? null,
+      childBirthdate: input.person.birthdate ?? null,
+      classTitle: input.klass.title ?? null,
+      classCategory: input.klass.category ?? null,
+      classStartTime: input.klass.start_time ?? null,
+      classEndTime: input.klass.end_time ?? null,
+      classScheduleLabel: input.klass.schedule_label ?? null,
+      instructorName: input.klass.instructor_name ?? null,
+      priceCents: input.klass.price_cents ?? null,
+    });
+
+    if (!notification.ok) {
+      logger.error(
+        { action: 'class_registration_notification.failed', registrationId: input.registrationId ?? null, status: input.status },
+        new Error(notification.error)
+      );
+    }
+  } catch (notificationError) {
+    logger.error(
+      { action: 'class_registration_notification.failed', registrationId: input.registrationId ?? null, status: input.status },
+      notificationError
+    );
+  }
 }
 
 export async function POST(req: Request) {
@@ -58,7 +118,7 @@ export async function POST(req: Request) {
 
     const { data: person } = await supa
       .from('people')
-      .select('id,role')
+      .select('id,role,first_name,last_name,birthdate')
       .eq('id', personId)
       .eq('household_id', householdId)
       .maybeSingle();
@@ -69,7 +129,7 @@ export async function POST(req: Request) {
 
     const { data: klass } = await supa
       .from('classes')
-      .select('id,capacity,status,start_time')
+      .select('id,title,category,capacity,status,start_time,end_time,schedule_label,instructor_name,price_cents')
       .eq('id', classId)
       .maybeSingle();
 
@@ -116,6 +176,15 @@ export async function POST(req: Request) {
       if (!email.ok || 'skipped' in email) {
         logger.warn({ action: 'class.registration_email_not_sent', userId: user.id, householdId, registrationId: already.id, status: nextStatus, result: email });
       }
+      await notifyClassRegistrationSaved({
+        admin: supa,
+        registrationId: already.id,
+        status: nextStatus,
+        householdId,
+        fallbackEmail: user.email,
+        person,
+        klass,
+      });
 
       return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email });
     }
@@ -145,6 +214,15 @@ export async function POST(req: Request) {
     if (!email.ok || 'skipped' in email) {
       logger.warn({ action: 'class.registration_email_not_sent', userId: user.id, householdId, registrationId: inserted?.id ?? null, status: nextStatus, result: email });
     }
+    await notifyClassRegistrationSaved({
+      admin: supa,
+      registrationId: inserted?.id ?? null,
+      status: nextStatus,
+      householdId,
+      fallbackEmail: user.email,
+      person,
+      klass,
+    });
 
     return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email });
   } catch (e: unknown) {

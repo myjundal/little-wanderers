@@ -39,6 +39,32 @@ function formatEasternRange(startIso: string, endIso: string) {
   return `${date}, ${startTime}-${endTime}`;
 }
 
+function formatAgeFromBirthdate(birthdate: string | null | undefined) {
+  if (!birthdate) return null;
+  const born = new Date(`${birthdate}T00:00:00Z`);
+  if (Number.isNaN(born.getTime())) return null;
+
+  const now = new Date();
+  let months = (now.getUTCFullYear() - born.getUTCFullYear()) * 12 + now.getUTCMonth() - born.getUTCMonth();
+  if (now.getUTCDate() < born.getUTCDate()) months -= 1;
+  if (months < 0) return null;
+  if (months < 24) return `${months} month${months === 1 ? '' : 's'}`;
+
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  if (remainingMonths === 0) return `${years} year${years === 1 ? '' : 's'}`;
+  return `${years} year${years === 1 ? '' : 's'} ${remainingMonths} month${remainingMonths === 1 ? '' : 's'}`;
+}
+
+function formatPersonName(input: { firstName?: string | null; lastName?: string | null }) {
+  return [input.firstName, input.lastName].filter(Boolean).join(' ').trim() || null;
+}
+
+function formatPrice(cents: number | null | undefined) {
+  if (cents == null || !Number.isFinite(cents)) return null;
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 function getOwnerNotificationEmail() {
   return (
     process.env.OWNER_EMAIL?.trim() ||
@@ -97,9 +123,17 @@ export async function sendNewSignupNotification() {
 }
 
 export async function sendPartyBookingNotification(input: {
+  bookingId?: string | null;
   startTime: string;
   endTime: string;
   status: string;
+  familyName?: string | null;
+  familyEmail?: string | null;
+  birthdayChildName?: string | null;
+  birthdayAge?: number | null;
+  headcountExpected?: number | null;
+  occasionDetails?: string | null;
+  notes?: string | null;
 }) {
   const to = getOwnerNotificationEmail();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
@@ -108,8 +142,16 @@ export async function sendPartyBookingNotification(input: {
     title: 'New Little Wanderers party booking',
     rows: [
       ['Event', 'Party booking saved'],
+      ['Family', input.familyName],
+      ['Email', input.familyEmail],
+      ['Birthday child', input.birthdayChildName],
+      ['Turning age', input.birthdayAge],
       ['Party time', partyTime],
+      ['Expected guests', input.headcountExpected],
+      ['Occasion/details', input.occasionDetails],
+      ['Notes', input.notes],
       ['Status', input.status],
+      ['Booking ID', input.bookingId],
     ],
     ctaHref: siteUrl ? `${siteUrl}/staff/parties` : null,
     ctaLabel: 'Open party management',
@@ -118,6 +160,56 @@ export async function sendPartyBookingNotification(input: {
   return sendResendEmail({
     to,
     subject: `New party booking: ${partyTime}`,
+    html,
+  });
+}
+
+export async function sendClassRegistrationNotification(input: {
+  registrationId?: string | null;
+  status: 'scheduled' | 'waitlist' | string;
+  familyName?: string | null;
+  familyEmail?: string | null;
+  childFirstName?: string | null;
+  childLastName?: string | null;
+  childBirthdate?: string | null;
+  classTitle?: string | null;
+  classCategory?: string | null;
+  classStartTime?: string | null;
+  classEndTime?: string | null;
+  classScheduleLabel?: string | null;
+  instructorName?: string | null;
+  priceCents?: number | null;
+}) {
+  const to = getOwnerNotificationEmail();
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+  const childName = formatPersonName({ firstName: input.childFirstName, lastName: input.childLastName });
+  const classTime = input.classStartTime && input.classEndTime ? formatEasternRange(input.classStartTime, input.classEndTime) : null;
+  const registrationLabel = input.status === 'waitlist' ? 'Class waitlist joined' : 'Class pre-registration saved';
+
+  const html = renderOperationalNotification({
+    title: 'New Little Wanderers class registration',
+    rows: [
+      ['Event', registrationLabel],
+      ['Family', input.familyName],
+      ['Email', input.familyEmail],
+      ['Child', childName],
+      ['Child age', formatAgeFromBirthdate(input.childBirthdate)],
+      ['Class', input.classTitle],
+      ['Category', input.classCategory],
+      ['Class time', classTime],
+      ['Schedule label', input.classScheduleLabel],
+      ['Instructor', input.instructorName],
+      ['Price', formatPrice(input.priceCents)],
+      ['Status', input.status],
+      ['Registration ID', input.registrationId],
+    ],
+    ctaHref: siteUrl ? `${siteUrl}/staff/classes` : null,
+    ctaLabel: 'Open class management',
+  });
+
+  return sendResendEmail({
+    to,
+    subject: `${registrationLabel}: ${input.classTitle ?? 'Class'}`,
     html,
   });
 }
