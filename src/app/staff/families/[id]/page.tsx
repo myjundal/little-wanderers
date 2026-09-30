@@ -59,7 +59,6 @@ type StaffClass = {
 };
 
 const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
-const CLASS_TIME_ZONE = 'America/New_York';
 
 function emptyPartyForm() {
   const partyDate = getPartyBookingStartDate().toISOString().slice(0, 10);
@@ -83,16 +82,6 @@ function toIsoLocal(date: string, hourLocal: number) {
   return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
 }
 
-function formatClassTimeRange(startIso: string, endIso: string) {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Time TBA';
-  const day = start.toLocaleDateString('en-US', { timeZone: CLASS_TIME_ZONE, weekday: 'short', month: 'short', day: 'numeric' });
-  const startTime = start.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
-  const endTime = end.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
-  return `${day}, ${startTime}-${endTime}`;
-}
-
 function classSeatsLabel(klass: StaffClass) {
   if (klass.capacity == null) return 'Open';
   if (klass.waitlist_offer_pending || (klass.waitlist_count ?? 0) > 0) return 'Waitlist open';
@@ -112,6 +101,11 @@ function classGroupLabel(klass: StaffClass) {
 function compactClassGroupLabel(klass: StaffClass) {
   const meta = [klass.age_range, klass.caregiver_participation].filter(Boolean).join(', ');
   return meta ? `${klass.title} (${meta})` : klass.title;
+}
+
+function shortClassSelectLabel(klass: StaffClass) {
+  const title = klass.title.length > 34 ? `${klass.title.slice(0, 31)}...` : klass.title;
+  return klass.age_range ? `${title} - ${klass.age_range}` : title;
 }
 
 function getPartyBlackoutSlots(): CalendarSlot[] {
@@ -220,8 +214,8 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
     [classGroups, selectedClassGroupKey]
   );
   const selectedClass = useMemo(
-    () => selectedClassGroup?.items.find((klass) => klass.id === selectedClassId) ?? selectedClassGroup?.items[0] ?? null,
-    [selectedClassGroup, selectedClassId]
+    () => selectedClassGroup?.items[0] ?? null,
+    [selectedClassGroup]
   );
 
   useEffect(() => {
@@ -239,9 +233,8 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
       if (selectedClassId) setSelectedClassId('');
       return;
     }
-    if (!selectedClassGroup.items.some((klass) => klass.id === selectedClassId)) {
-      setSelectedClassId(selectedClassGroup.items[0]?.id ?? '');
-    }
+    const firstClassId = selectedClassGroup.items[0]?.id ?? '';
+    if (selectedClassId !== firstClassId) setSelectedClassId(firstClassId);
   }, [selectedClassGroup, selectedClassId]);
 
   const addMemberRow = () => {
@@ -448,23 +441,13 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
                 Class
                 <select style={{ width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }} value={selectedClassGroup.key} onChange={(e) => setSelectedClassGroupKey(e.target.value)}>
                   {classGroups.map((group) => (
-                    <option key={group.key} value={group.key}>{group.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'grid', gap: 4, color: '#5f5470', fontSize: 13, fontWeight: 700, minWidth: 0 }}>
-                Date and time
-                <select style={{ width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }} value={selectedClass.id} onChange={(e) => setSelectedClassId(e.target.value)}>
-                  {selectedClassGroup.items.map((klass) => (
-                    <option key={klass.id} value={klass.id}>
-                      {formatClassTimeRange(klass.start_time, klass.end_time)} - {classSeatsLabel(klass)}
-                    </option>
+                    <option key={group.key} value={group.key}>{shortClassSelectLabel(group.items[0])}</option>
                   ))}
                 </select>
               </label>
               <div style={{ border: '1px solid #eadfff', borderRadius: 12, background: '#fbf8ff', padding: 10, color: '#4f3f82', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
                 <p style={{ margin: '0 0 4px', fontWeight: 800 }}>{compactClassGroupLabel(selectedClass)}</p>
-                <p style={{ margin: 0, color: '#6f628d', fontSize: 13 }}>{formatClassTimeRange(selectedClass.start_time, selectedClass.end_time)}</p>
+                <p style={{ margin: 0, color: '#6f628d', fontSize: 13 }}>General class pre-registration</p>
                 <p style={{ margin: '4px 0 0', color: '#7b4d1f', fontSize: 13, fontWeight: 800 }}>{classSeatsLabel(selectedClass)}</p>
               </div>
               <button
