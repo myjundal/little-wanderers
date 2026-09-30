@@ -5,7 +5,7 @@ import styles from '@/app/(public)/home.module.css';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 
 const LOGO_SRC = '/logo.png';
-const WAITLIST_URL = '/login?mode=new';
+const ACCOUNT_URL = '/login?mode=new';
 
 export default function HomeFull() {
   return (
@@ -37,8 +37,8 @@ export default function HomeFull() {
             <p className={styles.subline}>Take a deep breath and a sip of your drink.</p>
 
             <div className={styles.ctaRow}>
-              <Link href={WAITLIST_URL} className={styles.primaryBtn}>
-                Join the Wanderlist
+              <Link href={ACCOUNT_URL} className={styles.primaryBtn}>
+                Join My Little Wanderers
               </Link>
               <Link href="/faq" className={styles.secondaryBtn}>
                 FAQ

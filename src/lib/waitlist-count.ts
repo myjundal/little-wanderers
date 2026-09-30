@@ -1,3 +1,5 @@
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+
 export const WAITLIST_COUNT_FALLBACK = 370;
 
 export type WaitlistDisplayCount = {
@@ -33,6 +35,20 @@ function fallbackWaitlistCount() {
 
 export async function getWaitlistCount(): Promise<WaitlistCount> {
   const fallback = fallbackWaitlistCount();
+
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const admin = createAdminSupabaseClient();
+      const { count, error } = await admin
+        .from('waitlist_entries')
+        .select('id', { count: 'exact', head: true });
+
+      if (!error) return toWaitlistCount(count) ?? fallback;
+    } catch {
+      // Fall through to the legacy count endpoint or fallback below.
+    }
+  }
+
   const endpoint = process.env.WAITLIST_COUNT_ENDPOINT?.trim();
 
   if (!endpoint) return fallback;

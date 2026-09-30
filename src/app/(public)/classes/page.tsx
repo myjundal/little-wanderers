@@ -29,7 +29,7 @@ export default function ClassesPage() {
           Little Wanderers Classes & Events
         </h1>
         <p style={{ maxWidth: 740, margin: '14px 0 0', color: '#6f628d', fontSize: '1.05rem', lineHeight: 1.75 }}>
-          Playful small-group programs for curious kids and families. Browse what is opening first, then join the Wanderlist to get early access to class pre-registration.
+          Playful small-group programs for curious kids and families. Browse what is opening first, then use My Little Wanderers to get early access to class pre-registration.
         </p>
       </section>
       <PublicUpcomingClasses />

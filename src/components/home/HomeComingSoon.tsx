@@ -7,7 +7,7 @@ import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://thelittlewanderers.com';
-const WAITLIST_URL = '/login?mode=new';
+const ACCOUNT_URL = '/login?mode=new';
 
 const localBusinessJsonLd = {
   '@context': 'https://schema.org',
@@ -71,8 +71,8 @@ export default async function HomeComingSoon() {
             We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
             in West Hartford, CT. Soft opening invitations will go to Wanderlist families first, so if you&apos;d like to
             join us for soft opening,{' '}
-            <a href={WAITLIST_URL} className={styles.inlineLink}>
-              join our Wanderlist
+            <a href={ACCOUNT_URL} className={styles.inlineLink}>
+              join our Little Wanderers
             </a>{' '}
             and we&apos;ll send opening updates and priority reservation access before we open to the public!
           </p>
@@ -82,9 +82,9 @@ export default async function HomeComingSoon() {
           </p>
           <div className={styles.actions}>
             <div className={styles.waitlistAction}>
-              <PastelButton href={WAITLIST_URL}>
-                <span>Join the Wanderlist</span>
-                <small>Get opening updates and priority booking access before we open to the public</small>
+              <PastelButton href={isAuthenticated ? '/landing' : ACCOUNT_URL}>
+                <span>Join My Little Wanderers</span>
+                <small>Get opening updates and priority booking access from your account</small>
               </PastelButton>
               <WaitlistCountCard initialCount={{ displayCount: waitlistCount.displayCount }} />
             </div>
@@ -130,6 +130,25 @@ export default async function HomeComingSoon() {
         <PastelButton href="/party">
           <span>View party calendar</span>
           <small>{isAuthenticated ? 'Request a hold from your account' : 'Sign in when you are ready to reserve'}</small>
+        </PastelButton>
+      </section>
+
+      <section className={styles.partyFeature}>
+        <div>
+          <p className={styles.partyEyebrow}>Class pre-registration</p>
+          <h2>Class pre-registration is open</h2>
+          <p>
+            Browse our first small-group classes and reserve a spot with your My Little Wanderers account. New families can sign in by email, add a child&apos;s name and approximate age, then choose a class.
+          </p>
+          {!isAuthenticated && (
+            <p className={styles.accessNote}>
+              Magic link sign-in will bring you back to class pre-registration.
+            </p>
+          )}
+        </div>
+        <PastelButton href="/classes">
+          <span>View classes</span>
+          <small>{isAuthenticated ? 'Choose a class from your account' : 'Sign in when you are ready to pre-register'}</small>
         </PastelButton>
       </section>
 
