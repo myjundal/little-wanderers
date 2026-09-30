@@ -270,8 +270,7 @@ export default function LoginPage() {
 
     if (journeyMode === 'new') {
       await fetch('/api/waitlist/claim', { method: 'POST' }).catch(() => null);
-      sessionStorage.setItem('post_onboarding_redirect', next);
-      window.location.replace('/onboarding');
+      window.location.replace(next);
       return;
     }
 

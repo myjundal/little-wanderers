@@ -225,13 +225,11 @@ export async function getPostAuthRedirectForUser(
   next: string,
   options: { forceOnboarding?: boolean } = {}
 ) {
+  void options;
+
   if (user.email) {
     await claimWaitlistForUser(user).catch(() => null);
   }
 
-  const skipOnboardingForQuickFlow = next === '/landing/classschedule' || next === '/landing/party';
-  if (options.forceOnboarding && !skipOnboardingForQuickFlow) return '/onboarding';
-
-  const needsOnboarding = await userNeedsOnboarding(user.id).catch(() => false);
-  return needsOnboarding && !skipOnboardingForQuickFlow ? '/onboarding' : next;
+  return next;
 }
