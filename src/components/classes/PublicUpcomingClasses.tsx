@@ -71,6 +71,7 @@ const weeklyDayStyle: CSSProperties = {
   background: 'rgba(255,253,249,0.9)',
   scrollSnapAlign: 'start',
 };
+const CLASS_TIME_ZONE = 'America/New_York';
 
 function formatClassTime(startTime: string, endTime: string) {
   const start = new Date(startTime);
@@ -78,15 +79,18 @@ function formatClassTime(startTime: string, endTime: string) {
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Time to be announced';
 
   const date = start.toLocaleDateString('en-US', {
+    timeZone: CLASS_TIME_ZONE,
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   });
   const startLabel = start.toLocaleTimeString('en-US', {
+    timeZone: CLASS_TIME_ZONE,
     hour: 'numeric',
     minute: '2-digit',
   });
   const endLabel = end.toLocaleTimeString('en-US', {
+    timeZone: CLASS_TIME_ZONE,
     hour: 'numeric',
     minute: '2-digit',
   });

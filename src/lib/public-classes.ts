@@ -27,6 +27,16 @@ export type PublicClassSeries = PublicClassItem & {
 
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
 const CLASS_SELECT_BASE = 'id,title,category,start_time,end_time,capacity,price_cents,status';
+const CLASS_TIME_ZONE = 'America/New_York';
+const WEEKDAY_VALUES = new Map([
+  ['Sun', 0],
+  ['Mon', 1],
+  ['Tue', 2],
+  ['Wed', 3],
+  ['Thu', 4],
+  ['Fri', 5],
+  ['Sat', 6],
+]);
 
 type ClassRow = Omit<PublicClassItem, 'booked_count' | 'seats_left' | 'waitlist_offer_pending' | 'waitlist_count'> & {
   status: string;
@@ -93,7 +103,29 @@ export function groupPublicClassSeries(items: PublicClassItem[]) {
 export function weekdayTimeKey(item: Pick<PublicClassItem, 'start_time'>) {
   const date = new Date(item.start_time);
   if (Number.isNaN(date.getTime())) return null;
-  return `${date.getDay()}-${date.getHours()}-${date.getMinutes()}`;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLASS_TIME_ZONE,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const weekday = parts.find((part) => part.type === 'weekday')?.value;
+  const hour = parts.find((part) => part.type === 'hour')?.value;
+  const minute = parts.find((part) => part.type === 'minute')?.value;
+  const day = weekday ? WEEKDAY_VALUES.get(weekday) : undefined;
+  if (day == null || hour == null || minute == null) return null;
+  return `${day}-${Number(hour)}-${Number(minute)}`;
+}
+
+function classWeekdayValue(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLASS_TIME_ZONE,
+    weekday: 'short',
+  }).format(date);
+  return WEEKDAY_VALUES.get(weekday) ?? null;
 }
 
 export function buildGeneralWeeklySchedule(seriesItems: PublicClassSeries[]) {
@@ -103,8 +135,8 @@ export function buildGeneralWeeklySchedule(seriesItems: PublicClassSeries[]) {
   seriesItems.forEach((series) => {
     const seen = new Set<string>();
     series.occurrences.forEach((item) => {
-      const day = new Date(item.start_time).getDay();
-      if (!grouped.has(day)) return;
+      const day = classWeekdayValue(item.start_time);
+      if (day == null || !grouped.has(day)) return;
       const key = weekdayTimeKey(item);
       if (!key || seen.has(key)) return;
       seen.add(key);
@@ -122,7 +154,7 @@ export function buildGeneralWeeklySchedule(seriesItems: PublicClassSeries[]) {
 export function timeOnlyLabel(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return 'Time TBA';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  return date.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }
 
 export function compactSeatsLine(item: Pick<PublicClassItem, 'capacity' | 'seats_left' | 'booked_count' | 'waitlist_offer_pending' | 'waitlist_count'>) {

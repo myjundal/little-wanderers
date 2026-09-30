@@ -86,6 +86,7 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
 
 const ADDITIONAL_CHILD_VALUE = '__add_child__';
 type AgeUnit = 'months' | 'years';
+const CLASS_TIME_ZONE = 'America/New_York';
 const WEEKDAY_COLUMNS = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -145,9 +146,9 @@ function classDateLabel(item: ClassItem) {
   const start = new Date(item.start_time);
   const end = new Date(item.end_time);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Date TBA';
-  const date = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
-  const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const date = start.toLocaleDateString('en-US', { timeZone: CLASS_TIME_ZONE, weekday: 'short', month: 'short', day: 'numeric' });
+  const startTime = start.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const endTime = end.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
   return `${date} · ${startTime}-${endTime}`;
 }
 
@@ -180,13 +181,48 @@ function compactCaregiverLabel(value: string | null) {
 function timeOnlyLabel(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return 'Time TBA';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  return date.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
+}
+
+const WEEKDAY_VALUES = new Map([
+  ['Sun', 0],
+  ['Mon', 1],
+  ['Tue', 2],
+  ['Wed', 3],
+  ['Thu', 4],
+  ['Fri', 5],
+  ['Sat', 6],
+]);
+
+function classWeekdayValue(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const weekday = date.toLocaleDateString('en-US', { timeZone: CLASS_TIME_ZONE, weekday: 'short' });
+  return WEEKDAY_VALUES.get(weekday) ?? null;
+}
+
+function classTimeKey(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLASS_TIME_ZONE,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const weekday = parts.find((part) => part.type === 'weekday')?.value;
+  const hour = parts.find((part) => part.type === 'hour')?.value;
+  const minute = parts.find((part) => part.type === 'minute')?.value;
+  const day = weekday ? WEEKDAY_VALUES.get(weekday) : undefined;
+  if (day == null || hour == null || minute == null) return null;
+  return `${day}-${Number(hour)}-${Number(minute)}`;
 }
 
 function weekdayTimeLabel(item: ClassItem) {
   const date = new Date(item.start_time);
   if (Number.isNaN(date.getTime())) return timeOnlyLabel(item.start_time);
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+  const weekday = date.toLocaleDateString('en-US', { timeZone: CLASS_TIME_ZONE, weekday: 'short' });
   return `${weekday} ${timeOnlyLabel(item.start_time)}`;
 }
 
@@ -362,10 +398,10 @@ export default function ClassSchedulePage() {
     classSeries.forEach((series) => {
       const seen = new Set<string>();
       series.occurrences.forEach((item) => {
-        const start = new Date(item.start_time);
-        const day = start.getDay();
-        if (!grouped.has(day)) return;
-        const key = `${day}-${start.getHours()}-${start.getMinutes()}`;
+        const day = classWeekdayValue(item.start_time);
+        if (day == null || !grouped.has(day)) return;
+        const key = classTimeKey(item.start_time);
+        if (!key) return;
         if (seen.has(key)) return;
         seen.add(key);
         grouped.get(day)!.push(item);
