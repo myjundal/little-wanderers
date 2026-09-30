@@ -38,24 +38,26 @@
 .classFeature{grid-template-columns:minmax(260px,.95fr) minmax(300px,1.15fr) auto;align-items:stretch;padding:0;overflow:hidden;background:linear-gradient(135deg,#fffdf9 0%,#f8f1fb 48%,#f0e8fb 100%)}
 .classFeatureCopy{padding:22px 0 22px 22px;align-self:center}
 .classFeatureAction{display:flex;align-items:center;justify-content:center;padding:22px 22px 22px 0}
-.classPreviewPanel{align-self:stretch;display:grid;gap:10px;min-width:0;padding:16px;border-left:1px solid rgba(167,139,203,.2);border-right:1px solid rgba(167,139,203,.16);background:rgba(255,255,255,.45)}
+.classPreviewPanel{position:relative;align-self:stretch;display:grid;gap:10px;min-width:0;padding:16px;border-left:1px solid rgba(167,139,203,.2);border-right:1px solid rgba(167,139,203,.16);background:rgba(255,255,255,.45)}
 .classPreviewHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#7f69a0;font-size:.72rem;font-weight:900;text-transform:uppercase}
 .classPreviewHeader a{color:#7b5ead;text-decoration:none;font-weight:900}
-.classScheduleMini{display:flex;gap:12px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;padding:2px 8px 10px 0}
-.classScheduleMini::-webkit-scrollbar{height:6px}
-.classScheduleMini::-webkit-scrollbar-track{background:rgba(167,139,203,.12);border-radius:999px}
-.classScheduleMini::-webkit-scrollbar-thumb{background:rgba(167,139,203,.42);border-radius:999px}
-.classScheduleCard{flex:0 0 218px;scroll-snap-align:start;display:grid;grid-template-rows:auto auto auto auto;gap:5px;min-width:0;min-height:128px;padding:14px;border:1px solid rgba(223,209,239,.95);border-radius:18px;background:#fff;color:#4b4360;text-decoration:none;box-shadow:0 12px 22px rgba(123,106,168,.10);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
-.classScheduleCard:hover{transform:translateY(-1px);border-color:#bca1de;box-shadow:0 14px 26px rgba(123,106,168,.16)}
-.classScheduleCard strong{display:flex;align-items:center;gap:7px;color:#7b5ead;font-size:.78rem;line-height:1.1}
-.classScheduleCard strong span{padding:3px 6px;border-radius:999px;background:#f1e8fb;color:#725c8d;font-size:.68rem;text-transform:uppercase}
-.classScheduleCard b{min-width:0;color:#4b4360;font-size:.98rem;line-height:1.12;overflow-wrap:anywhere}
-.classScheduleCard small{min-width:0;color:#6f628d;font-size:.76rem;line-height:1.2;overflow-wrap:anywhere}
-.classScheduleCard em{color:#7b4d1f;font-size:.72rem;font-style:normal;font-weight:850;line-height:1.15}
-.classScheduleCardEmpty{justify-content:center;text-align:center;color:#9a8aac;background:rgba(255,255,255,.72)}
-.classScheduleCardEmpty span{color:#9a8aac}
+.classWeekStrip{display:flex;gap:10px;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:2px 28px 12px 0}
+.classWeekStrip::-webkit-scrollbar{height:7px}
+.classWeekStrip::-webkit-scrollbar-track{background:rgba(167,139,203,.13);border-radius:999px}
+.classWeekStrip::-webkit-scrollbar-thumb{background:#b991dd;border-radius:999px}
+.classPreviewPanel::after{content:"";position:absolute;right:0;top:46px;bottom:18px;width:42px;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(248,241,251,.96))}
+.classWeekColumn{flex:0 0 148px;scroll-snap-align:start;display:grid;grid-template-rows:auto 1fr;gap:7px;min-width:0}
+.classWeekDayLabel{display:flex;align-items:center;justify-content:center;height:26px;border-radius:999px;background:#efe4fb;color:#725c8d;font-size:.68rem;font-weight:950;text-transform:uppercase}
+.classWeekSlots{display:grid;gap:7px;align-content:start;min-width:0}
+.classWeekSlot{display:grid;gap:2px;min-width:0;min-height:78px;padding:9px 10px;border:1px solid rgba(223,209,239,.98);border-radius:13px;background:#fff;color:#4b4360;text-decoration:none;box-shadow:0 9px 16px rgba(123,106,168,.09);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.classWeekSlot:hover{transform:translateY(-1px);border-color:#bca1de;box-shadow:0 12px 20px rgba(123,106,168,.15)}
+.classWeekTime{color:#7b5ead;font-size:.68rem;font-weight:950;line-height:1}
+.classWeekTitle{min-width:0;color:#433a55;font-size:.78rem;font-weight:900;line-height:1.08;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.classWeekMeta{min-width:0;color:#7b4d1f;font-size:.62rem;font-weight:850;line-height:1.1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.classWeekSlotEmpty{align-content:center;text-align:center;color:#9a8aac;background:rgba(255,255,255,.68);box-shadow:none}
+.classWeekSlotEmpty .classWeekTime,.classWeekSlotEmpty .classWeekTitle{color:#9a8aac}
 .values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 8px 10px;color:#6f6a78;font-size:.95rem}
 .values div{display:flex;align-items:center;gap:8px;justify-content:center;text-align:center}
-@media (prefers-reduced-motion:reduce){.waitlistNumber{animation:none}.classScheduleCard{transition:none}.classScheduleCard:hover{transform:none}}
+@media (prefers-reduced-motion:reduce){.waitlistNumber{animation:none}.classWeekSlot{transition:none}.classWeekSlot:hover{transform:none}}
 @media (max-width:980px){.page{padding:8px 12px 20px}.hero{grid-template-columns:1fr}.heroImageFrame img{height:390px}.partyFeature{grid-template-columns:1fr}.classFeature{grid-template-columns:1fr}.classFeatureCopy{padding:18px 18px 0}.classPreviewPanel{border:0;padding:14px 0 14px 18px;overflow:hidden}.classPreviewHeader{padding-right:18px}.classFeatureAction{justify-content:stretch;padding:0 18px 18px}.values{grid-template-columns:1fr 1fr}}
-@media (max-width:560px){.waitlistAction{display:grid;grid-template-columns:1fr;gap:8px;width:100%}.secondaryActions{display:grid;width:100%}.waitlistCountCard{gap:6px;padding:7px 7px 7px 10px}.waitlistCountCopy{max-width:none}.waitlistCountEyebrow{font-size:.58rem;line-height:1.25}.waitlistNumberStage{min-width:78px;padding:9px 7px}.waitlistNumber{font-size:1.65rem}.partyFeature{margin:20px 0 0;padding:16px}.classFeature{padding:0}.classPreviewPanel{padding:14px 0 14px 14px}.classPreviewHeader{padding-right:14px}.classScheduleMini{padding-right:14px}.classScheduleCard{flex-basis:210px;min-height:122px;padding:12px}.classScheduleCard b{font-size:.92rem}.classScheduleCard small{font-size:.72rem}.classScheduleCard em{font-size:.68rem}.classFeatureAction{padding:0 14px 16px}}
+@media (max-width:560px){.waitlistAction{display:grid;grid-template-columns:1fr;gap:8px;width:100%}.secondaryActions{display:grid;width:100%}.waitlistCountCard{gap:6px;padding:7px 7px 7px 10px}.waitlistCountCopy{max-width:none}.waitlistCountEyebrow{font-size:.58rem;line-height:1.25}.waitlistNumberStage{min-width:78px;padding:9px 7px}.waitlistNumber{font-size:1.65rem}.partyFeature{margin:20px 0 0;padding:16px}.classFeature{padding:0}.classPreviewPanel{padding:14px 0 14px 14px}.classPreviewHeader{padding-right:14px}.classWeekStrip{gap:8px;padding-right:34px}.classWeekColumn{flex-basis:128px}.classWeekDayLabel{height:24px;font-size:.64rem}.classWeekSlot{min-height:72px;padding:8px 9px}.classWeekTime{font-size:.64rem}.classWeekTitle{font-size:.72rem}.classWeekMeta{font-size:.58rem}.classFeatureAction{padding:0 14px 16px}}
