@@ -85,6 +85,8 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
 };
 
 const ADDITIONAL_CHILD_VALUE = '__add_child__';
+type AgeUnit = 'months' | 'years';
+type AgeUnitInput = AgeUnit | '';
 const WEEKDAY_COLUMNS = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -201,6 +203,7 @@ export default function ClassSchedulePage() {
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [quickChildName, setQuickChildName] = useState('');
   const [quickChildAge, setQuickChildAge] = useState('');
+  const [quickChildAgeUnit, setQuickChildAgeUnit] = useState<AgeUnitInput>('');
   const [guardianFirstName, setGuardianFirstName] = useState('');
   const [guardianLastName, setGuardianLastName] = useState('');
   const [creatingChild, setCreatingChild] = useState(false);
@@ -449,7 +452,14 @@ export default function ClassSchedulePage() {
 
   const parsedQuickAge = () => {
     const age = Number(quickChildAge);
-    if (!Number.isFinite(age) || age < 0 || age > 12) return null;
+    if (!quickChildAgeUnit) return null;
+    if (!Number.isFinite(age) || age < 0) return null;
+    if (quickChildAgeUnit === 'months') {
+      const roundedMonths = Math.round(age);
+      if (roundedMonths > 144) return null;
+      return roundedMonths;
+    }
+    if (age > 12) return null;
     return Math.round(age * 2) / 2;
   };
 
@@ -465,9 +475,9 @@ export default function ClassSchedulePage() {
 
   const ensureSelectedChild = async () => {
     if (selectedPersonId && !isAddingAdditionalChild && !selectedPersonNeedsAge) return selectedPersonId;
-    const ageYears = parsedQuickAge();
-    if (ageYears == null) {
-      setMessage('Please enter your child’s age.');
+    const ageValue = parsedQuickAge();
+    if (ageValue == null) {
+      setMessage('Please enter your child’s age and choose months or years.');
       return null;
     }
 
@@ -478,7 +488,7 @@ export default function ClassSchedulePage() {
       const res = await fetch('/api/family/children', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ person_id: selectedPersonId, age_years: ageYears, ...guardian }),
+        body: JSON.stringify({ person_id: selectedPersonId, age_years: ageValue, age_unit: quickChildAgeUnit, ...guardian }),
       });
       const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
       setCreatingChild(false);
@@ -491,6 +501,7 @@ export default function ClassSchedulePage() {
       const updatedChild = json.child as Person;
       setPeople((current) => current.map((person) => person.id === updatedChild.id ? updatedChild : person));
       setQuickChildAge('');
+      setQuickChildAgeUnit('');
       return selectedPersonId;
     }
 
@@ -506,7 +517,7 @@ export default function ClassSchedulePage() {
     const res = await fetch('/api/family/children', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, age_years: ageYears, ...guardian }),
+      body: JSON.stringify({ name, age_years: ageValue, age_unit: quickChildAgeUnit, ...guardian }),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
     setCreatingChild(false);
@@ -520,6 +531,7 @@ export default function ClassSchedulePage() {
     setSelectedPersonId(json.child.id);
     setQuickChildName('');
     setQuickChildAge('');
+    setQuickChildAgeUnit('');
     return json.child.id;
   };
 
@@ -750,7 +762,7 @@ export default function ClassSchedulePage() {
           <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
             <label style={{ display: 'block', color: '#6f628d', fontWeight: 700 }}>
               Register for
-              <select value={selectedPersonId} onChange={(e) => { setSelectedPersonId(e.target.value); setQuickChildName(''); setQuickChildAge(''); }} style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8 }}>
+              <select value={selectedPersonId} onChange={(e) => { setSelectedPersonId(e.target.value); setQuickChildName(''); setQuickChildAge(''); setQuickChildAgeUnit(''); }} style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8 }}>
                 {people.map((p) => <option key={`register-person-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
                 <option value={ADDITIONAL_CHILD_VALUE}>Register additional child</option>
               </select>
@@ -768,30 +780,52 @@ export default function ClassSchedulePage() {
                 </label>
                 <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
                   Child age
-                  <input
-                    value={quickChildAge}
-                    onChange={(e) => setQuickChildAge(e.target.value)}
-                    type="number"
-                    min={0}
-                    max={12}
-                    step={0.5}
-                    style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
-                  />
+                  <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <input
+                      value={quickChildAge}
+                      onChange={(e) => setQuickChildAge(e.target.value)}
+                      type="number"
+                      min={0}
+                      max={quickChildAgeUnit === 'months' ? 144 : 12}
+                      step={quickChildAgeUnit === 'months' ? 1 : 0.5}
+                      style={{ width: 110, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+                    />
+                    <select
+                      value={quickChildAgeUnit}
+                      onChange={(e) => setQuickChildAgeUnit(e.target.value as AgeUnitInput)}
+                      style={{ width: 118, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px', background: '#fff' }}
+                    >
+                      <option value="">unit</option>
+                      <option value="months">months</option>
+                      <option value="years">years</option>
+                    </select>
+                  </span>
                 </label>
               </>
             )}
             {selectedPersonNeedsAge && (
               <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
                 Child age
-                <input
-                  value={quickChildAge}
-                  onChange={(e) => setQuickChildAge(e.target.value)}
-                  type="number"
-                  min={0}
-                  max={12}
-                  step={0.5}
-                  style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
-                />
+                <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    value={quickChildAge}
+                    onChange={(e) => setQuickChildAge(e.target.value)}
+                    type="number"
+                    min={0}
+                    max={quickChildAgeUnit === 'months' ? 144 : 12}
+                    step={quickChildAgeUnit === 'months' ? 1 : 0.5}
+                    style={{ width: 110, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+                  />
+                  <select
+                    value={quickChildAgeUnit}
+                    onChange={(e) => setQuickChildAgeUnit(e.target.value as AgeUnitInput)}
+                    style={{ width: 118, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px', background: '#fff' }}
+                  >
+                    <option value="">unit</option>
+                    <option value="months">months</option>
+                    <option value="years">years</option>
+                  </select>
+                </span>
               </label>
             )}
           </div>
@@ -809,15 +843,26 @@ export default function ClassSchedulePage() {
             </label>
             <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
               Child age
-              <input
-                value={quickChildAge}
-                onChange={(e) => setQuickChildAge(e.target.value)}
-                type="number"
-                min={0}
-                max={12}
-                step={0.5}
-                style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
-              />
+              <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  value={quickChildAge}
+                  onChange={(e) => setQuickChildAge(e.target.value)}
+                  type="number"
+                  min={0}
+                  max={quickChildAgeUnit === 'months' ? 144 : 12}
+                  step={quickChildAgeUnit === 'months' ? 1 : 0.5}
+                  style={{ width: 110, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+                />
+                <select
+                  value={quickChildAgeUnit}
+                  onChange={(e) => setQuickChildAgeUnit(e.target.value as AgeUnitInput)}
+                  style={{ width: 118, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px', background: '#fff' }}
+                >
+                  <option value="">unit</option>
+                  <option value="months">months</option>
+                  <option value="years">years</option>
+                </select>
+              </span>
             </label>
           </div>
         )}

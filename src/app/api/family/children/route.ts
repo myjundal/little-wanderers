@@ -16,18 +16,34 @@ function splitName(input: string) {
   };
 }
 
-function approximateBirthdateFromAge(ageYears: number) {
-  const ageMonths = Math.round(ageYears * 12);
+type AgeUnit = 'months' | 'years';
+
+function approximateBirthdateFromAgeMonths(ageMonths: number) {
   const today = new Date();
   const approximate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
   approximate.setUTCMonth(approximate.getUTCMonth() - ageMonths);
   return approximate.toISOString().slice(0, 10);
 }
 
-function parseAgeYears(value: unknown) {
+function parseAge(value: unknown, unitValue: unknown): { months: number; label: string } | null {
   const age = Number(value);
-  if (!Number.isFinite(age) || age < 0 || age > 12) return null;
-  return Math.round(age * 2) / 2;
+  const unit: AgeUnit | null =
+    unitValue === undefined || unitValue === null
+      ? 'years'
+      : unitValue === 'months' || unitValue === 'years'
+      ? unitValue
+      : null;
+  if (!unit) return null;
+  if (!Number.isFinite(age) || age < 0) return null;
+  if (unit === 'months') {
+    const months = Math.round(age);
+    if (months > 144) return null;
+    return { months, label: `${months} ${months === 1 ? 'month' : 'months'}` };
+  }
+  const roundedYears = Math.round(age * 2) / 2;
+  if (roundedYears > 12) return null;
+  const months = Math.round(roundedYears * 12);
+  return { months, label: `${roundedYears} ${roundedYears === 1 ? 'year' : 'years'}` };
 }
 
 async function ensureHouseholdForSignedInUser(user: { id: string; email?: string | null }) {
@@ -71,9 +87,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please sign in again.' }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => null)) as { name?: string; age_years?: number; guardian_first_name?: string; guardian_last_name?: string; require_age?: boolean } | null;
+  const body = (await req.json().catch(() => null)) as { name?: string; age_years?: number; age_unit?: AgeUnit; guardian_first_name?: string; guardian_last_name?: string; require_age?: boolean } | null;
   const name = String(body?.name ?? '').trim();
-  const ageYears = parseAgeYears(body?.age_years);
+  const age = parseAge(body?.age_years, body?.age_unit);
   const requireAge = body?.require_age !== false;
   const guardian = parseGuardianName(body);
   if (name.length < 1) {
@@ -82,7 +98,7 @@ export async function POST(req: Request) {
   if (name.length > 80) {
     return NextResponse.json({ ok: false, error: 'Please use a shorter child name.' }, { status: 400 });
   }
-  if (requireAge && ageYears == null) {
+  if (requireAge && age == null) {
     return NextResponse.json({ ok: false, error: 'Please enter your child’s age.' }, { status: 400 });
   }
 
@@ -106,10 +122,10 @@ export async function POST(req: Request) {
         first_name: firstName,
         last_name: lastName,
         gender: null,
-        birthdate: ageYears == null ? null : approximateBirthdateFromAge(ageYears),
-        notes: ageYears == null
+        birthdate: age == null ? null : approximateBirthdateFromAgeMonths(age.months),
+        notes: age == null
           ? 'Added during class pre-registration. Birthday can be updated in My Info/People.'
-          : `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My Info/People.`,
+          : `Approximate age ${age.label} entered during class pre-registration. Birthday can be updated in My Info/People.`,
       })
       .select('id,first_name,last_name,birthdate')
       .maybeSingle();
@@ -135,14 +151,14 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please sign in again.' }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => null)) as { person_id?: string; age_years?: number; guardian_first_name?: string; guardian_last_name?: string } | null;
+  const body = (await req.json().catch(() => null)) as { person_id?: string; age_years?: number; age_unit?: AgeUnit; guardian_first_name?: string; guardian_last_name?: string } | null;
   const personId = String(body?.person_id ?? '').trim();
-  const ageYears = parseAgeYears(body?.age_years);
+  const age = parseAge(body?.age_years, body?.age_unit);
   const guardian = parseGuardianName(body);
   if (!personId) {
     return NextResponse.json({ ok: false, error: 'Please choose a child.' }, { status: 400 });
   }
-  if (ageYears == null) {
+  if (age == null) {
     return NextResponse.json({ ok: false, error: 'Please enter your child’s age.' }, { status: 400 });
   }
 
@@ -160,8 +176,8 @@ export async function PATCH(req: Request) {
     const { data: child, error } = await admin
       .from('people')
       .update({
-        birthdate: approximateBirthdateFromAge(ageYears),
-        notes: `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My Info/People.`,
+        birthdate: approximateBirthdateFromAgeMonths(age.months),
+        notes: `Approximate age ${age.label} entered during class pre-registration. Birthday can be updated in My Info/People.`,
       })
       .eq('id', personId)
       .eq('household_id', householdId)
