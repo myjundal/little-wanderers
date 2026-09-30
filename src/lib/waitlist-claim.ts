@@ -1,6 +1,8 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
+import { sendNewSignupNotification } from '@/lib/admin-notifications';
+import { logger } from '@/lib/logger';
 
 type WaitlistUser = { id: string; email?: string | null };
 
@@ -137,20 +139,43 @@ export async function claimWaitlistForUser(user: WaitlistUser) {
   }
 
   const admin = createAdminSupabaseClient();
-  const { data, error } = await admin
+  const claimedAt = new Date().toISOString();
+  const { data: existingEntry, error: existingError } = await admin
     .from('waitlist_entries')
-    .update({
-      claimed_user_id: user.id,
-      claimed_at: new Date().toISOString(),
-    })
+    .select('id,email,source,claimed_user_id,claimed_at')
     .eq('normalized_email', normalizedEmail)
-    .select('id')
     .maybeSingle();
 
-  if (error) throw error;
+  if (existingError) throw existingError;
 
-  let claimed = Boolean(data);
-  if (!data) {
+  const existingEntryWasClaimed = Boolean(existingEntry?.claimed_user_id || existingEntry?.claimed_at);
+  let claimed = Boolean(existingEntry);
+  let shouldNotifyNewSignup = false;
+  let waitlistEntryId = existingEntry?.id as string | null | undefined;
+  let waitlistSource = existingEntry?.source as string | null | undefined;
+  const claimedExistingWaitlistEntry = Boolean(existingEntry);
+
+  if (existingEntry && !existingEntryWasClaimed) {
+    const { data, error } = await admin
+      .from('waitlist_entries')
+      .update({
+        claimed_user_id: user.id,
+        claimed_at: claimedAt,
+      })
+      .eq('id', existingEntry.id)
+      .select('id,source')
+      .maybeSingle();
+
+    if (error) throw error;
+    claimed = Boolean(data);
+    waitlistEntryId = (data?.id as string | undefined) ?? waitlistEntryId;
+    waitlistSource = (data?.source as string | null | undefined) ?? waitlistSource;
+    shouldNotifyNewSignup = Boolean(data);
+  } else if (existingEntry) {
+    claimed = true;
+  }
+
+  if (!existingEntry) {
     const email = (user.email ?? normalizedEmail).trim().toLowerCase();
     const inserted = await admin
       .from('waitlist_entries')
@@ -159,39 +184,79 @@ export async function claimWaitlistForUser(user: WaitlistUser) {
         normalized_email: normalizedEmail,
         source: 'website_signup',
         claimed_user_id: user.id,
-        claimed_at: new Date().toISOString(),
+        claimed_at: claimedAt,
         raw_payload: {
           created_from: 'auth_callback',
-          created_at: new Date().toISOString(),
+          created_at: claimedAt,
         },
-        synced_at: new Date().toISOString(),
+        synced_at: claimedAt,
       })
-      .select('id')
+      .select('id,source')
       .maybeSingle();
 
     if (inserted.error) {
+      const retryExisting = await admin
+        .from('waitlist_entries')
+        .select('id,source,claimed_user_id,claimed_at')
+        .eq('normalized_email', normalizedEmail)
+        .maybeSingle();
+      if (retryExisting.error) throw retryExisting.error;
+
+      const retryEntryWasClaimed = Boolean(retryExisting.data?.claimed_user_id || retryExisting.data?.claimed_at);
       const retry = await admin
         .from('waitlist_entries')
         .update({
           claimed_user_id: user.id,
-          claimed_at: new Date().toISOString(),
+          claimed_at: claimedAt,
         })
         .eq('normalized_email', normalizedEmail)
-        .select('id')
+        .select('id,source')
         .maybeSingle();
       if (retry.error) throw retry.error;
       claimed = Boolean(retry.data);
+      waitlistEntryId = retry.data?.id as string | null | undefined;
+      waitlistSource = retry.data?.source as string | null | undefined;
+      shouldNotifyNewSignup = Boolean(retry.data) && !retryEntryWasClaimed;
     } else {
       claimed = Boolean(inserted.data);
+      waitlistEntryId = inserted.data?.id as string | null | undefined;
+      waitlistSource = inserted.data?.source as string | null | undefined;
+      shouldNotifyNewSignup = Boolean(inserted.data);
     }
   }
 
+  let householdId: string | null = null;
   try {
-    const householdId = await attachPrebookedHousehold(admin, user, normalizedEmail);
-    return { claimed, householdId };
-  } catch {
-    return { claimed, householdId: null };
+    householdId = await attachPrebookedHousehold(admin, user, normalizedEmail);
+  } catch (attachError) {
+    logger.warn({ action: 'waitlist_claim.attach_prebooked_household_failed', userId: user.id }, attachError);
   }
+
+  if (shouldNotifyNewSignup) {
+    try {
+      const notification = await sendNewSignupNotification({
+        email: user.email ?? normalizedEmail,
+        source: waitlistSource,
+        waitlistEntryId,
+        householdId,
+        claimedExistingWaitlistEntry,
+      });
+
+      if (!notification.ok) {
+        logger.error(
+          { action: 'signup_notification.failed', userId: user.id, householdId, waitlistEntryId },
+          new Error(notification.error)
+        );
+      }
+    } catch (notificationError) {
+      logger.error(
+        { action: 'signup_notification.failed', userId: user.id, householdId, waitlistEntryId },
+        notificationError
+      );
+    }
+  }
+
+  return { claimed, householdId };
 }
 
 export async function userNeedsOnboarding(userId: string) {

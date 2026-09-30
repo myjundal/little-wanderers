@@ -4,8 +4,6 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { claimWaitlistForUser } from '@/lib/waitlist-claim';
 import { US_CITIES_BY_STATE, type UsStateCode } from '@/lib/us-cities';
-import { sendNewSignupNotification } from '@/lib/admin-notifications';
-import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -136,23 +134,6 @@ export async function POST(req: Request) {
   }
 
   await claimWaitlistForUser(user).catch(() => null);
-  if (insertedNewFamily) {
-    try {
-      const notification = await sendNewSignupNotification();
-
-      if (!notification.ok) {
-        logger.error(
-          { action: 'signup_notification.failed', userId: user.id, householdId },
-          new Error(notification.error)
-        );
-      }
-    } catch (notificationError) {
-      logger.error(
-        { action: 'signup_notification.failed', userId: user.id, householdId },
-        notificationError
-      );
-    }
-  }
 
   return NextResponse.json({ ok: true });
 }

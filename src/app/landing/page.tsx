@@ -400,8 +400,8 @@ export default function AppHome() {
 
       <style jsx>{`
         .heroGrid { grid-template-columns: repeat(2,minmax(280px,1fr)); }
-        .quickGrid { display:grid; grid-template-columns: minmax(0,1fr); gap:10px; }
-        .quickCard { border:1px solid #e3d0fb; border-radius:12px; padding:14px 16px; background:#fffdf9; color:#4f3f82; text-decoration:none; font-weight:700; text-align:left; }
+        .quickGrid { display:grid; grid-template-columns: minmax(0,1fr); gap:10px; width:100%; box-sizing:border-box; }
+        .quickCard { display:block; width:100%; min-width:0; box-sizing:border-box; border:1px solid #e3d0fb; border-radius:12px; padding:14px 16px; background:#fffdf9; color:#4f3f82; text-decoration:none; font-weight:700; text-align:left; }
         .mobileBottom { display:none; }
         .desktopOnly { display:block; }
         @media (max-width: 1024px){

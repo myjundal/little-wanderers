@@ -101,14 +101,32 @@ function renderOperationalNotification(input: {
 </html>`;
 }
 
-export async function sendNewSignupNotification() {
+function formatSignupSource(source: string | null | undefined) {
+  if (!source) return null;
+  if (source === 'wanderlist') return 'Wanderlist';
+  if (source === 'website_signup') return 'Website signup';
+  return source;
+}
+
+export async function sendNewSignupNotification(input: {
+  email?: string | null;
+  source?: string | null;
+  waitlistEntryId?: string | null;
+  householdId?: string | null;
+  claimedExistingWaitlistEntry?: boolean;
+} = {}) {
   const to = getOwnerNotificationEmail();
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
   const html = renderOperationalNotification({
-    title: 'New Little Wanderers onboarding completed',
+    title: 'New My Little Wanderers sign-in',
     rows: [
-      ['Event', 'Family onboarding completed'],
+      ['Event', 'First My Little Wanderers sign-in'],
+      ['Email', input.email],
+      ['Source', formatSignupSource(input.source)],
+      ['Existing waitlist row', input.claimedExistingWaitlistEntry == null ? null : input.claimedExistingWaitlistEntry ? 'Yes' : 'No'],
+      ['Waitlist entry ID', input.waitlistEntryId],
+      ['Household ID', input.householdId],
       ['When', new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })],
     ],
     ctaHref: siteUrl ? `${siteUrl}/staff/families` : null,
@@ -117,7 +135,7 @@ export async function sendNewSignupNotification() {
 
   return sendResendEmail({
     to,
-    subject: 'New signup completed',
+    subject: `New My Little Wanderers signup${input.email ? `: ${input.email}` : ''}`,
     html,
   });
 }
