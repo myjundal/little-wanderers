@@ -194,6 +194,20 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
 
   const memberOptions = useMemo(() => ([...(item?.guardians ?? []), ...(item?.children ?? [])]), [item]);
   const classRegistrationOptions = useMemo(() => (item?.children.length ? item.children : memberOptions), [item?.children, memberOptions]);
+  const selectedClass = useMemo(
+    () => classes.find((klass) => klass.id === selectedClassId) ?? classes[0] ?? null,
+    [classes, selectedClassId]
+  );
+
+  useEffect(() => {
+    if (classes.length === 0) {
+      if (selectedClassId) setSelectedClassId('');
+      return;
+    }
+    if (!classes.some((klass) => klass.id === selectedClassId)) {
+      setSelectedClassId(classes[0].id);
+    }
+  }, [classes, selectedClassId]);
 
   const addMemberRow = () => {
     setEditableMembers((prev) => [...prev, { first_name: '', last_name: '', birthdate: '', role: 'child' }]);
@@ -394,70 +408,65 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
           <h4 style={{ marginBottom: 8 }}>Manual class registration</h4>
           {classes.length === 0 ? (
             <p style={{ margin: 0, color: '#6d6480' }}>No upcoming scheduled classes.</p>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-              {classes.map((klass) => {
-                const selected = selectedClassId === klass.id;
-                const isRegistering = registeringClassId === klass.id;
-                return (
-                  <article
-                    key={klass.id}
-                    onClick={() => setSelectedClassId(klass.id)}
-                    style={{
-                      border: selected ? '2px solid #7c5bcf' : '1px solid #e3d5ff',
-                      borderRadius: 14,
-                      padding: 12,
-                      background: selected ? '#fbf8ff' : '#fff',
-                      boxShadow: selected ? '0 10px 20px rgba(95,61,164,0.12)' : '0 6px 14px rgba(95,61,164,0.06)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-                      <div>
-                        <p style={{ margin: '0 0 4px', color: '#4f3f82', fontWeight: 800 }}>{klass.title}</p>
-                        <p style={{ margin: 0, color: '#6d6480', fontSize: 13 }}>{formatClassTimeRange(klass.start_time, klass.end_time)}</p>
-                      </div>
-                      <span style={{ borderRadius: 999, background: '#f3edff', color: '#5f3da4', padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                        {classSeatsLabel(klass)}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                      {klass.age_range && <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{klass.age_range}</span>}
-                      {klass.caregiver_participation && <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{klass.caregiver_participation}</span>}
-                      <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{formatClassPrice(klass.price_cents)}</span>
-                    </div>
-                    {klass.description && <p style={{ margin: '10px 0 0', color: '#6d6480', fontSize: 13, lineHeight: 1.35 }}>{klass.description}</p>}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void registerClass(klass.id);
-                      }}
-                      disabled={!selectedPersonId || Boolean(registeringClassId)}
-                      style={{
-                        width: '100%',
-                        marginTop: 12,
-                        border: 'none',
-                        borderRadius: 12,
-                        padding: '10px 12px',
-                        background: !selectedPersonId || registeringClassId ? '#d7cee8' : '#5f3da4',
-                        color: '#fff',
-                        fontWeight: 800,
-                      }}
-                    >
-                      {isRegistering ? 'Registering...' : classSeatsLabel(klass).toLowerCase().includes('waitlist') ? 'Add to waitlist' : 'Register'}
-                    </button>
-                  </article>
-                );
-              })}
+          ) : selectedClass ? (
+            <div style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
+              <select value={selectedClass.id} onChange={(e) => setSelectedClassId(e.target.value)}>
+                {classes.map((klass) => (
+                  <option key={klass.id} value={klass.id}>
+                    {formatClassTimeRange(klass.start_time, klass.end_time)} - {klass.title}
+                  </option>
+                ))}
+              </select>
+              <article
+                style={{
+                  border: '1px solid #e3d5ff',
+                  borderRadius: 14,
+                  padding: 12,
+                  background: '#fff',
+                  boxShadow: '0 6px 14px rgba(95,61,164,0.06)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                  <div>
+                    <p style={{ margin: '0 0 4px', color: '#4f3f82', fontWeight: 800 }}>{selectedClass.title}</p>
+                    <p style={{ margin: 0, color: '#6d6480', fontSize: 13 }}>{formatClassTimeRange(selectedClass.start_time, selectedClass.end_time)}</p>
+                  </div>
+                  <span style={{ borderRadius: 999, background: '#f3edff', color: '#5f3da4', padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                    {classSeatsLabel(selectedClass)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                  {selectedClass.age_range && <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{selectedClass.age_range}</span>}
+                  {selectedClass.caregiver_participation && <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{selectedClass.caregiver_participation}</span>}
+                  <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{formatClassPrice(selectedClass.price_cents)}</span>
+                </div>
+                {selectedClass.description && <p style={{ margin: '10px 0 0', color: '#6d6480', fontSize: 13, lineHeight: 1.35 }}>{selectedClass.description}</p>}
+                <button
+                  type="button"
+                  onClick={() => void registerClass(selectedClass.id)}
+                  disabled={!selectedPersonId || Boolean(registeringClassId)}
+                  style={{
+                    width: '100%',
+                    marginTop: 12,
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '10px 12px',
+                    background: !selectedPersonId || registeringClassId ? '#d7cee8' : '#5f3da4',
+                    color: '#fff',
+                    fontWeight: 800,
+                  }}
+                >
+                  {registeringClassId === selectedClass.id ? 'Registering...' : classSeatsLabel(selectedClass).toLowerCase().includes('waitlist') ? 'Add to waitlist' : 'Register'}
+                </button>
+              </article>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div style={{ marginTop: 18 }}>
           <h4 style={{ marginBottom: 6 }}>Book party</h4>
           <AvailabilityCalendar title="Party calendar" slots={partySlots} initialMonth={PARTY_BOOKING_START_DATE} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginTop: 8, maxWidth: 520 }}>
             <input type="date" min={PARTY_BOOKING_START_DATE} value={partyForm.party_date} onChange={(e) => {
               const partyDate = e.target.value;
               setPartyForm((prev) => ({
