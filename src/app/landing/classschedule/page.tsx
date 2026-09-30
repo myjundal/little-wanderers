@@ -357,16 +357,23 @@ export default function ClassSchedulePage() {
   const weeklySchedule = useMemo(() => {
     const grouped = new Map<number, ClassItem[]>();
     WEEKDAY_COLUMNS.forEach((day) => grouped.set(day.value, []));
-    classes.forEach((item) => {
-      const day = new Date(item.start_time).getDay();
-      if (!grouped.has(day)) return;
-      grouped.get(day)!.push(item);
+    classSeries.forEach((series) => {
+      const seen = new Set<string>();
+      series.occurrences.forEach((item) => {
+        const start = new Date(item.start_time);
+        const day = start.getDay();
+        if (!grouped.has(day)) return;
+        const key = `${day}-${start.getHours()}-${start.getMinutes()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        grouped.get(day)!.push(item);
+      });
     });
     grouped.forEach((items, day) => {
       grouped.set(day, [...items].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()));
     });
     return grouped;
-  }, [classes]);
+  }, [classSeries]);
 
   useEffect(() => {
     if (activeClassId && !classes.some((item) => item.id === activeClassId)) {
@@ -1122,14 +1129,38 @@ export default function ClassSchedulePage() {
   }
   @media (max-width: 900px) {
     .weeklyGrid {
-      display: flex;
-      overflow-x: auto;
-      padding-bottom: 4px;
-      scroll-snap-type: x proximity;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 5px;
     }
     .weeklyDay {
-      flex: 0 0 220px;
-      scroll-snap-align: start;
+      padding: 6px 4px;
+      border-radius: 10px;
+    }
+    .weeklyDayLabel {
+      font-size: 10px;
+      text-align: center;
+      margin-bottom: 5px;
+    }
+    .classPill {
+      padding: 6px 4px;
+      border-radius: 9px;
+      gap: 2px;
+    }
+    .classPillTime {
+      font-size: 10px;
+    }
+    .classPillTitle {
+      font-size: 10px;
+      line-height: 1.15;
+    }
+    .classPillMeta,
+    .classPillSeats {
+      font-size: 9px;
+      line-height: 1.15;
+    }
+    .weeklyEmpty {
+      font-size: 9px;
+      text-align: center;
     }
   }
 `}</style>

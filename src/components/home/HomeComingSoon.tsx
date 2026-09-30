@@ -2,6 +2,15 @@ import styles from '@/app/(public)/home.module.css';
 import WaitlistCountCard from '@/components/home/WaitlistCountCard';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
 import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
+import {
+  WEEKDAY_COLUMNS,
+  buildGeneralWeeklySchedule,
+  compactCaregiverLabel,
+  compactSeatsLine,
+  getPublicClasses,
+  groupPublicClassSeries,
+  timeOnlyLabel,
+} from '@/lib/public-classes';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
@@ -48,8 +57,11 @@ export default async function HomeComingSoon() {
       data: { user },
     },
     waitlistCount,
-  ] = await Promise.all([supabase.auth.getUser(), getWaitlistCount()]);
+    classItems,
+  ] = await Promise.all([supabase.auth.getUser(), getWaitlistCount(), getPublicClasses(80)]);
   const isAuthenticated = Boolean(user);
+  const weeklyClassSchedule = buildGeneralWeeklySchedule(groupPublicClassSeries(classItems));
+  const hasWeeklyClasses = WEEKDAY_COLUMNS.some((day) => (weeklyClassSchedule.get(day.value) ?? []).length > 0);
 
   return (
     <main className={styles.page}>
@@ -140,6 +152,32 @@ export default async function HomeComingSoon() {
           <p>
             Browse our first small-group classes and reserve a spot with your My Little Wanderers account. New families can sign in by email, add a child&apos;s name and approximate age, then choose a class.
           </p>
+          {hasWeeklyClasses && (
+            <div className={styles.classScheduleMini} aria-label="Weekly class schedule preview">
+              {WEEKDAY_COLUMNS.map((day) => {
+                const dayItems = weeklyClassSchedule.get(day.value) ?? [];
+                return (
+                  <div className={styles.classScheduleDay} key={day.value}>
+                    <div className={styles.classScheduleDayLabel}>{day.label}</div>
+                    <div className={styles.classSchedulePills}>
+                      {dayItems.length === 0 ? (
+                        <span className={styles.classScheduleEmpty}>-</span>
+                      ) : (
+                        dayItems.slice(0, 2).map((item) => (
+                          <span className={styles.classSchedulePill} key={`home-class-${item.id}`}>
+                            <strong>{timeOnlyLabel(item.start_time)}</strong>
+                            <span>{item.title}</span>
+                            <small>{item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}</small>
+                            <em>{compactSeatsLine(item)}</em>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {!isAuthenticated && (
             <p className={styles.accessNote}>
               Magic link sign-in will bring you back to class pre-registration.

@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import {
+  WEEKDAY_COLUMNS,
+  buildGeneralWeeklySchedule,
+  compactCaregiverLabel,
+  compactSeatsLine,
+  timeOnlyLabel,
+} from '@/lib/public-classes';
 
 type ClassItem = {
   id: string;
@@ -42,6 +49,20 @@ const classCardStyle: CSSProperties = {
   background: 'rgba(255,253,249,0.96)',
   border: '1px solid rgba(232,223,239,0.96)',
   boxShadow: '0 12px 26px rgba(123, 106, 168, 0.07)',
+};
+
+const weeklyGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+  gap: 8,
+};
+
+const weeklyDayStyle: CSSProperties = {
+  minWidth: 0,
+  padding: 8,
+  borderRadius: 16,
+  border: '1px solid rgba(223,209,239,0.9)',
+  background: 'rgba(255,253,249,0.9)',
 };
 
 function formatClassTime(startTime: string, endTime: string) {
@@ -121,28 +142,11 @@ function groupClassSeries(items: ClassItem[]) {
   });
 }
 
-function formatOccurrenceDate(item: ClassItem) {
-  const start = new Date(item.start_time);
-  if (Number.isNaN(start.getTime())) return 'Date TBA';
-  return start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function seatLabel(item: ClassItem) {
-  if (item.waitlist_offer_pending) return 'offer pending';
-  if ((item.waitlist_count ?? 0) > 0) return 'waitlist';
-  if (item.seats_left == null) return 'open';
-  return item.seats_left > 0 ? `${item.seats_left} left` : 'waitlist';
-}
-
 function seatsLine(item: ClassItem) {
   if (item.capacity == null) return 'Seats: Unlimited';
   if (item.waitlist_offer_pending) return `Seats: ${item.booked_count}/${item.capacity} (waitlist offer pending)`;
   if ((item.waitlist_count ?? 0) > 0) return `Seats: ${item.booked_count}/${item.capacity} (waitlist: ${item.waitlist_count})`;
   return `Seats: ${item.booked_count}/${item.capacity} (left: ${item.seats_left ?? 0})`;
-}
-
-function shouldShowPublicDates(item: ClassSeries) {
-  return !item.schedule_note;
 }
 
 function ScheduleLine({ item }: { item: Pick<ClassItem, 'schedule_note' | 'schedule_label' | 'start_time' | 'end_time'> }) {
@@ -201,6 +205,7 @@ export default function PublicUpcomingClasses() {
   }, []);
 
   const visibleClasses = useMemo(() => groupClassSeries(classes).slice(0, 6), [classes]);
+  const weeklySchedule = useMemo(() => buildGeneralWeeklySchedule(visibleClasses), [visibleClasses]);
 
   const goToClassPreRegistration = async () => {
     const next = '/landing/classschedule';
@@ -214,6 +219,48 @@ export default function PublicUpcomingClasses() {
 
   return (
     <section style={sectionStyle}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <h2 style={{ margin: 0, color: '#4b4360', fontSize: '1.45rem' }}>Weekly class snapshot</h2>
+        <div style={weeklyGridStyle}>
+          {WEEKDAY_COLUMNS.map((day) => {
+            const dayItems = weeklySchedule.get(day.value) ?? [];
+            return (
+              <div key={day.value} style={weeklyDayStyle}>
+                <div style={{ marginBottom: 7, color: '#7b6aa8', fontSize: 11, fontWeight: 900, textAlign: 'center', textTransform: 'uppercase' }}>
+                  {day.label}
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {dayItems.length === 0 ? (
+                    <span style={{ color: '#aaa0b8', fontSize: 11, textAlign: 'center' }}>-</span>
+                  ) : (
+                    dayItems.slice(0, 3).map((item) => (
+                      <span
+                        key={`public-weekly-${item.id}`}
+                        style={{
+                          display: 'grid',
+                          gap: 2,
+                          minWidth: 0,
+                          padding: '7px 6px',
+                          borderRadius: 11,
+                          border: '1px solid #eadff3',
+                          background: '#fff',
+                          color: '#4b4360',
+                        }}
+                      >
+                        <strong style={{ color: '#7b5ead', fontSize: 11, lineHeight: 1.1 }}>{timeOnlyLabel(item.start_time)}</strong>
+                        <span style={{ minWidth: 0, color: '#4b4360', fontSize: 12, fontWeight: 850, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{item.title}</span>
+                        <small style={{ minWidth: 0, color: '#6f628d', fontSize: 10, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}</small>
+                        <em style={{ color: '#7b4d1f', fontSize: 10, fontStyle: 'normal', fontWeight: 850, lineHeight: 1.15 }}>{compactSeatsLine(item)}</em>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 14 }}>
         {visibleClasses.map((item) => (
           <article key={item.id} style={classCardStyle}>
@@ -237,31 +284,6 @@ export default function PublicUpcomingClasses() {
 
             <h3 style={{ margin: 0, color: '#4b4360', fontSize: '1.25rem' }}>{item.title}</h3>
             <ScheduleLine item={item} />
-            {shouldShowPublicDates(item) && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {item.occurrences.slice(0, 6).map((occurrence) => (
-                  <span
-                    key={occurrence.id}
-                    style={{
-                      borderRadius: 999,
-                      border: '1px solid #eadff3',
-                      background: '#fff',
-                      color: '#6f628d',
-                      padding: '6px 9px',
-                      fontSize: 12,
-                      fontWeight: 800,
-                    }}
-                  >
-                    {formatOccurrenceDate(occurrence)} · {seatLabel(occurrence)}
-                  </span>
-                ))}
-                {item.occurrences.length > 6 && (
-                  <span style={{ color: '#8f85a5', fontSize: 12, fontWeight: 800, alignSelf: 'center' }}>
-                    +{item.occurrences.length - 6} more
-                  </span>
-                )}
-              </div>
-            )}
             {item.instructor_name && (
               <p style={{ margin: 0, color: '#4b4360', lineHeight: 1.6, fontWeight: 800 }}>
                 {item.instructor_name}
