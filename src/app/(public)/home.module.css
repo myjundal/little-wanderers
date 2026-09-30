@@ -41,24 +41,21 @@
 .classPreviewPanel{align-self:stretch;display:grid;gap:10px;min-width:0;padding:16px;border-left:1px solid rgba(167,139,203,.2);border-right:1px solid rgba(167,139,203,.16);background:rgba(255,255,255,.45)}
 .classPreviewHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#7f69a0;font-size:.72rem;font-weight:900;text-transform:uppercase}
 .classPreviewHeader a{color:#7b5ead;text-decoration:none;font-weight:900}
-.classScheduleMini{display:flex;gap:10px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;padding:2px 8px 8px 0}
+.classScheduleMini{display:flex;gap:12px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;padding:2px 8px 10px 0}
 .classScheduleMini::-webkit-scrollbar{height:6px}
 .classScheduleMini::-webkit-scrollbar-track{background:rgba(167,139,203,.12);border-radius:999px}
 .classScheduleMini::-webkit-scrollbar-thumb{background:rgba(167,139,203,.42);border-radius:999px}
-.classScheduleDay{position:relative;flex:0 0 150px;scroll-snap-align:start;min-width:0;padding:9px 8px 10px;border:1px solid rgba(167,139,203,.18);border-radius:16px;background:rgba(255,253,249,.9);box-shadow:0 10px 18px rgba(123,106,168,.08)}
-.classScheduleDay::before{content:"";display:block;width:24px;height:3px;margin:0 auto 7px;border-radius:999px;background:#d8c2f0}
-.classScheduleDayLabel{margin-bottom:7px;color:#7f69a0;font-size:.7rem;font-weight:900;text-align:center;text-transform:uppercase}
-.classSchedulePills{display:grid;gap:6px}
-.classSchedulePill{display:grid;gap:2px;min-width:0;min-height:96px;padding:9px 8px;border:1px solid rgba(223,209,239,.9);border-radius:13px;background:#fff;color:#4b4360;text-decoration:none;box-shadow:0 7px 14px rgba(123,106,168,.07);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
-.classSchedulePill:hover{transform:translateY(-1px);border-color:#bca1de;box-shadow:0 10px 18px rgba(123,106,168,.13)}
-.classSchedulePill strong{color:#7b5ead;font-size:.72rem;line-height:1.1}
-.classSchedulePill span{min-width:0;color:#4b4360;font-size:.76rem;font-weight:850;line-height:1.12;overflow-wrap:anywhere}
-.classSchedulePill small{min-width:0;color:#6f628d;font-size:.64rem;line-height:1.12;overflow-wrap:anywhere}
-.classSchedulePill em{color:#7b4d1f;font-size:.6rem;font-style:normal;font-weight:850;line-height:1.12}
-.classSchedulePillEmpty{justify-content:center;text-align:center;color:#9a8aac;background:rgba(255,255,255,.62);box-shadow:none}
-.classSchedulePillEmpty span{color:#9a8aac}
+.classScheduleCard{flex:0 0 218px;scroll-snap-align:start;display:grid;grid-template-rows:auto auto auto auto;gap:5px;min-width:0;min-height:128px;padding:14px;border:1px solid rgba(223,209,239,.95);border-radius:18px;background:#fff;color:#4b4360;text-decoration:none;box-shadow:0 12px 22px rgba(123,106,168,.10);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.classScheduleCard:hover{transform:translateY(-1px);border-color:#bca1de;box-shadow:0 14px 26px rgba(123,106,168,.16)}
+.classScheduleCard strong{display:flex;align-items:center;gap:7px;color:#7b5ead;font-size:.78rem;line-height:1.1}
+.classScheduleCard strong span{padding:3px 6px;border-radius:999px;background:#f1e8fb;color:#725c8d;font-size:.68rem;text-transform:uppercase}
+.classScheduleCard b{min-width:0;color:#4b4360;font-size:.98rem;line-height:1.12;overflow-wrap:anywhere}
+.classScheduleCard small{min-width:0;color:#6f628d;font-size:.76rem;line-height:1.2;overflow-wrap:anywhere}
+.classScheduleCard em{color:#7b4d1f;font-size:.72rem;font-style:normal;font-weight:850;line-height:1.15}
+.classScheduleCardEmpty{justify-content:center;text-align:center;color:#9a8aac;background:rgba(255,255,255,.72)}
+.classScheduleCardEmpty span{color:#9a8aac}
 .values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 8px 10px;color:#6f6a78;font-size:.95rem}
 .values div{display:flex;align-items:center;gap:8px;justify-content:center;text-align:center}
-@media (prefers-reduced-motion:reduce){.waitlistNumber{animation:none}.classSchedulePill{transition:none}.classSchedulePill:hover{transform:none}}
+@media (prefers-reduced-motion:reduce){.waitlistNumber{animation:none}.classScheduleCard{transition:none}.classScheduleCard:hover{transform:none}}
 @media (max-width:980px){.page{padding:8px 12px 20px}.hero{grid-template-columns:1fr}.heroImageFrame img{height:390px}.partyFeature{grid-template-columns:1fr}.classFeature{grid-template-columns:1fr}.classFeatureCopy{padding:18px 18px 0}.classPreviewPanel{border:0;padding:14px 0 14px 18px;overflow:hidden}.classPreviewHeader{padding-right:18px}.classFeatureAction{justify-content:stretch;padding:0 18px 18px}.values{grid-template-columns:1fr 1fr}}
-@media (max-width:560px){.waitlistAction{display:grid;grid-template-columns:1fr;gap:8px;width:100%}.secondaryActions{display:grid;width:100%}.waitlistCountCard{gap:6px;padding:7px 7px 7px 10px}.waitlistCountCopy{max-width:none}.waitlistCountEyebrow{font-size:.58rem;line-height:1.25}.waitlistNumberStage{min-width:78px;padding:9px 7px}.waitlistNumber{font-size:1.65rem}.partyFeature{margin:20px 0 0;padding:16px}.classFeature{padding:0}.classPreviewPanel{padding:14px 0 14px 14px}.classPreviewHeader{padding-right:14px}.classScheduleMini{padding-right:14px}.classScheduleDay{flex-basis:142px}.classFeatureAction{padding:0 14px 16px}}
+@media (max-width:560px){.waitlistAction{display:grid;grid-template-columns:1fr;gap:8px;width:100%}.secondaryActions{display:grid;width:100%}.waitlistCountCard{gap:6px;padding:7px 7px 7px 10px}.waitlistCountCopy{max-width:none}.waitlistCountEyebrow{font-size:.58rem;line-height:1.25}.waitlistNumberStage{min-width:78px;padding:9px 7px}.waitlistNumber{font-size:1.65rem}.partyFeature{margin:20px 0 0;padding:16px}.classFeature{padding:0}.classPreviewPanel{padding:14px 0 14px 14px}.classPreviewHeader{padding-right:14px}.classScheduleMini{padding-right:14px}.classScheduleCard{flex-basis:210px;min-height:122px;padding:12px}.classScheduleCard b{font-size:.92rem}.classScheduleCard small{font-size:.72rem}.classScheduleCard em{font-size:.68rem}.classFeatureAction{padding:0 14px 16px}}

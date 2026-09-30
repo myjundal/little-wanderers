@@ -61,7 +61,9 @@ export default async function HomeComingSoon() {
   ] = await Promise.all([supabase.auth.getUser(), getWaitlistCount(), getPublicClasses(80)]);
   const isAuthenticated = Boolean(user);
   const weeklyClassSchedule = buildGeneralWeeklySchedule(groupPublicClassSeries(classItems));
-  const hasWeeklyClasses = WEEKDAY_COLUMNS.some((day) => (weeklyClassSchedule.get(day.value) ?? []).length > 0);
+  const classPreviewItems = WEEKDAY_COLUMNS.flatMap((day) =>
+    (weeklyClassSchedule.get(day.value) ?? []).slice(0, 2).map((item) => ({ day: day.label, item }))
+  ).slice(0, 8);
 
   return (
     <main className={styles.page}>
@@ -164,35 +166,26 @@ export default async function HomeComingSoon() {
             <a href="/classes">View all</a>
           </div>
           <div className={styles.classScheduleMini}>
-            {WEEKDAY_COLUMNS.map((day) => {
-              const dayItems = weeklyClassSchedule.get(day.value) ?? [];
-              return (
-                <div className={styles.classScheduleDay} key={day.value}>
-                  <div className={styles.classScheduleDayLabel}>{day.label}</div>
-                  <div className={styles.classSchedulePills}>
-                    {dayItems.length === 0 ? (
-                      <a className={`${styles.classSchedulePill} ${styles.classSchedulePillEmpty}`} href="/classes">
-                        <strong>-</strong>
-                        <span>{hasWeeklyClasses ? 'Open play' : 'Class details'}</span>
-                      </a>
-                    ) : (
-                      dayItems.slice(0, 1).map((item) => (
-                        <a
-                          className={styles.classSchedulePill}
-                          href={`/classes?class=${encodeURIComponent(item.id)}`}
-                          key={`home-class-${item.id}`}
-                        >
-                          <strong>{timeOnlyLabel(item.start_time)}</strong>
-                          <span>{item.title}</span>
-                          <small>{item.age_range ?? 'Ages TBA'}</small>
-                          <em>{compactCaregiverLabel(item.caregiver_participation)} · {compactSeatsLine(item)}</em>
-                        </a>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {classPreviewItems.length === 0 ? (
+              <a className={`${styles.classScheduleCard} ${styles.classScheduleCardEmpty}`} href="/classes">
+                <strong>Classes</strong>
+                <span>Schedule details</span>
+                <small>Coming into focus soon</small>
+              </a>
+            ) : (
+              classPreviewItems.map(({ day, item }) => (
+                <a
+                  className={styles.classScheduleCard}
+                  href={`/classes?class=${encodeURIComponent(item.id)}`}
+                  key={`home-class-${item.id}`}
+                >
+                  <strong><span>{day}</span>{timeOnlyLabel(item.start_time)}</strong>
+                  <b>{item.title}</b>
+                  <small>{item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}</small>
+                  <em>{compactSeatsLine(item)}</em>
+                </a>
+              ))
+            )}
           </div>
         </div>
         <div className={styles.classFeatureAction}>
