@@ -109,6 +109,11 @@ function classGroupLabel(klass: StaffClass) {
   return [klass.title, klass.age_range, klass.caregiver_participation].filter(Boolean).join(' - ');
 }
 
+function compactClassGroupLabel(klass: StaffClass) {
+  const meta = [klass.age_range, klass.caregiver_participation].filter(Boolean).join(', ');
+  return meta ? `${klass.title} (${meta})` : klass.title;
+}
+
 function getPartyBlackoutSlots(): CalendarSlot[] {
   const start = getPartyBookingStartDate();
   const monthStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
@@ -269,7 +274,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
       return;
     }
     setSelectedClassId(classId);
-    setMessage(json.status === 'waitlist' ? 'Added to the class waitlist.' : 'Class registration saved.');
+    setMessage(json.status === 'waitlist' ? 'Added to the class waitlist.' : 'Class pre-registration saved.');
     await load();
   };
 
@@ -425,29 +430,43 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
       <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
         <h3 style={{ marginTop: 0 }}>Owner actions</h3>
         <div style={{ marginTop: 12 }}>
-          <h4 style={{ marginBottom: 8 }}>Manual class registration</h4>
+          <h4 style={{ marginBottom: 8 }}>Manual class pre-registration</h4>
           {classes.length === 0 ? (
             <p style={{ margin: 0, color: '#6d6480' }}>No upcoming scheduled classes.</p>
           ) : selectedClassGroup && selectedClass ? (
-            <div style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
-              <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)}>
-                <option value="">Select child</option>
-                {classRegistrationOptions.map((person) => (
-                  <option key={person.id} value={person.id}>{person.first_name} {person.last_name ?? ''} ({person.role ?? 'member'})</option>
-                ))}
-              </select>
-              <select value={selectedClassGroup.key} onChange={(e) => setSelectedClassGroupKey(e.target.value)}>
-                {classGroups.map((group) => (
-                  <option key={group.key} value={group.key}>{group.label}</option>
-                ))}
-              </select>
-              <select value={selectedClass.id} onChange={(e) => setSelectedClassId(e.target.value)}>
-                {selectedClassGroup.items.map((klass) => (
-                  <option key={klass.id} value={klass.id}>
-                    {formatClassTimeRange(klass.start_time, klass.end_time)} - {classSeatsLabel(klass)}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 520 }}>
+              <label style={{ display: 'grid', gap: 4, color: '#5f5470', fontSize: 13, fontWeight: 700, minWidth: 0 }}>
+                Child
+                <select style={{ width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }} value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)}>
+                  <option value="">Select child</option>
+                  {classRegistrationOptions.map((person) => (
+                    <option key={person.id} value={person.id}>{person.first_name} {person.last_name ?? ''} ({person.role ?? 'member'})</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 4, color: '#5f5470', fontSize: 13, fontWeight: 700, minWidth: 0 }}>
+                Class
+                <select style={{ width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }} value={selectedClassGroup.key} onChange={(e) => setSelectedClassGroupKey(e.target.value)}>
+                  {classGroups.map((group) => (
+                    <option key={group.key} value={group.key}>{group.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 4, color: '#5f5470', fontSize: 13, fontWeight: 700, minWidth: 0 }}>
+                Date and time
+                <select style={{ width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }} value={selectedClass.id} onChange={(e) => setSelectedClassId(e.target.value)}>
+                  {selectedClassGroup.items.map((klass) => (
+                    <option key={klass.id} value={klass.id}>
+                      {formatClassTimeRange(klass.start_time, klass.end_time)} - {classSeatsLabel(klass)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ border: '1px solid #eadfff', borderRadius: 12, background: '#fbf8ff', padding: 10, color: '#4f3f82', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 800 }}>{compactClassGroupLabel(selectedClass)}</p>
+                <p style={{ margin: 0, color: '#6f628d', fontSize: 13 }}>{formatClassTimeRange(selectedClass.start_time, selectedClass.end_time)}</p>
+                <p style={{ margin: '4px 0 0', color: '#7b4d1f', fontSize: 13, fontWeight: 800 }}>{classSeatsLabel(selectedClass)}</p>
+              </div>
               <button
                 type="button"
                 onClick={() => void registerClass(selectedClass.id)}
@@ -461,7 +480,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
                   fontWeight: 800,
                 }}
               >
-                {registeringClassId === selectedClass.id ? 'Registering...' : classSeatsLabel(selectedClass).toLowerCase().includes('waitlist') ? 'Add to waitlist' : 'Register'}
+                {registeringClassId === selectedClass.id ? 'Saving...' : classSeatsLabel(selectedClass).toLowerCase().includes('waitlist') ? 'Join waitlist' : 'Pre-register'}
               </button>
             </div>
           ) : null}
