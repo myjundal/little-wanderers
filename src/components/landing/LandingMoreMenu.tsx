@@ -4,12 +4,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useOwnerDashboardAccess } from '@/lib/use-owner-dashboard-access';
-import { SHOW_CUSTOMER_CLASS_BOOKING, SHOW_CUSTOMER_MEMBERSHIP } from '@/lib/feature-flags';
+import { SHOW_CUSTOMER_MEMBERSHIP } from '@/lib/feature-flags';
 
 export default function LandingMoreMenu() {
   const [open, setOpen] = useState(false);
   const canUseOwnerDashboard = useOwnerDashboardAccess();
-  const showClassBookingLink = canUseOwnerDashboard || SHOW_CUSTOMER_CLASS_BOOKING;
 
   return (
     <div style={{ marginBottom: 12, position: 'sticky', top: 8, zIndex: 40 }}>
@@ -33,9 +32,7 @@ export default function LandingMoreMenu() {
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">Owner/Staff Tool</Link>
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff/checkin">Staff QR check-in</Link>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/staff/open-play-reservations">Open Play Reservations</Link>
-              {showClassBookingLink && (
-                <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link>
-              )}
+              <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/party">My Parties</Link>
             </>
           )}
@@ -46,9 +43,7 @@ export default function LandingMoreMenu() {
               {SHOW_CUSTOMER_MEMBERSHIP && (
                 <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/membership">My Membership</Link>
               )}
-              {showClassBookingLink && (
-                <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link>
-              )}
+              <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/party">My Parties</Link>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/contact">Contact</Link>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/faq">FAQ</Link>

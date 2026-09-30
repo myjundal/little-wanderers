@@ -12,6 +12,7 @@ import {
 } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 import { sendPartyBookingNotification } from '@/lib/admin-notifications';
+import { ensureGuardianProfile, getPrimaryGuardianProfile, parseGuardianName } from '@/lib/family-profile';
 import { logger } from '@/lib/logger';
 import { PARTY_DEPOSIT_CENTS, PARTY_TOTAL_FEE_CENTS } from '@/lib/party-info';
 import { sendPartyConfirmationEmail } from '@/lib/party-emails';
@@ -33,6 +34,8 @@ type PartyPayload = {
   birthday_age?: number | null;
   occasion_details?: string | null;
   booking_id?: string;
+  guardian_first_name?: string | null;
+  guardian_last_name?: string | null;
 };
 
 const admin = () =>
@@ -125,14 +128,20 @@ async function notifyPartyBookingSaved(input: {
   try {
     let familyName: string | null = null;
     let familyEmail: string | null = input.fallbackEmail ?? null;
+    let guardianFirstName: string | null = null;
+    let guardianLastName: string | null = null;
     if (input.householdId) {
-      const { data: household } = await admin()
+      const supa = admin();
+      const { data: household } = await supa
         .from('households')
         .select('name,email')
         .eq('id', input.householdId)
         .maybeSingle();
       familyName = household?.name ?? null;
       familyEmail = household?.email ?? familyEmail;
+      const guardian = await getPrimaryGuardianProfile(supa, input.householdId).catch(() => null);
+      guardianFirstName = guardian?.first_name ?? null;
+      guardianLastName = guardian?.last_name ?? null;
     }
 
     const notification = await sendPartyBookingNotification({
@@ -142,6 +151,8 @@ async function notifyPartyBookingSaved(input: {
       status: input.status,
       familyName,
       familyEmail,
+      guardianFirstName,
+      guardianLastName,
       birthdayChildName: input.birthdayChildName,
       birthdayAge: input.birthdayAge,
       headcountExpected: input.headcountExpected,
@@ -208,6 +219,7 @@ export async function POST(req: Request) {
     const birthdayChildName = typeof body.birthday_child_name === 'string' ? body.birthday_child_name.trim().slice(0, 80) : null;
     const birthdayAge = body?.birthday_age == null ? null : Number(body.birthday_age);
     const occasionDetails = typeof body.occasion_details === 'string' ? body.occasion_details.trim().slice(0, 120) : null;
+    const guardianName = parseGuardianName(body);
     const mode = body.mode ?? 'create_payment_link';
     const bookingId = typeof body.booking_id === 'string' ? body.booking_id : null;
 
@@ -240,6 +252,14 @@ export async function POST(req: Request) {
     if (!householdId) return Response.json({ ok: false, error: 'household not found' }, { status: 404 });
 
     const supa = admin();
+    await ensureGuardianProfile({
+      admin: supa,
+      householdId,
+      userId: user.id,
+      email: user.email,
+      firstName: guardianName.firstName,
+      lastName: guardianName.lastName,
+    });
     const { data: existingSameSlot } = await supa
       .from('party_bookings')
       .select('id,status')
@@ -390,7 +410,9 @@ export async function POST(req: Request) {
       const encodedBirthdayName = encodeURIComponent(birthdayChildName ?? '');
       const encodedBirthdayAge = encodeURIComponent(birthdayAge == null ? '' : String(birthdayAge));
       const encodedOccasion = encodeURIComponent(occasionDetails ?? '');
-      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}`;
+      const encodedGuardianFirstName = encodeURIComponent(guardianName.firstName ?? '');
+      const encodedGuardianLastName = encodeURIComponent(guardianName.lastName ?? '');
+      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}&guardian_first_name=${encodedGuardianFirstName}&guardian_last_name=${encodedGuardianLastName}`;
 
       const squareBody = {
         idempotency_key: idempotencyKey,

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 import {
-  SHOW_CUSTOMER_CLASS_BOOKING,
   SHOW_CUSTOMER_CROWD_STATUS,
   SHOW_CUSTOMER_MEMBERSHIP,
   SHOW_CUSTOMER_WAIVER_PROMPTS,
@@ -67,7 +66,6 @@ export default function AppHome() {
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
-  const showClassBookingLink = canUseOwnerDashboard || SHOW_CUSTOMER_CLASS_BOOKING;
 
   useEffect(() => {
     const run = async () => {
@@ -332,7 +330,7 @@ export default function AppHome() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Owner/Staff Tool</Link>
             <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Staff QR check-in</Link>
-            {showClassBookingLink && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
+            <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>
             <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
           </div>
         </section>
@@ -344,7 +342,7 @@ export default function AppHome() {
           <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
           <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
           {SHOW_CUSTOMER_MEMBERSHIP && <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>}
-          {showClassBookingLink && <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>}
+          <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>
           <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
           <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
             UX Flows (preview)
@@ -390,16 +388,19 @@ export default function AppHome() {
       </section>
       )}
 
-      <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : '', showClassBookingLink ? 'mobileBottomWithClasses' : ''].filter(Boolean).join(' ')}>
+      <nav className={['mobileBottom', canUseOwnerDashboard ? 'mobileBottomStaff' : ''].filter(Boolean).join(' ')}>
         <Link href="/">Main</Link>
         <Link href="/landing">{canUseOwnerDashboard ? 'Staff Dash' : 'My Dash'}</Link>
         {canUseOwnerDashboard && <Link href="/staff">Staff Tool</Link>}
         {canUseOwnerDashboard ? (
           <Link href="/staff/checkin">QR Check-in</Link>
         ) : (
-          <Link href="/landing/qr">QR Codes</Link>
+          <>
+            <Link href="/landing/people">People</Link>
+            <Link href="/landing/qr">QR</Link>
+          </>
         )}
-        {showClassBookingLink && <Link href="/landing/classschedule">Classes</Link>}
+        <Link href="/landing/classschedule">Classes</Link>
         <Link href="/landing/party">Party</Link>
       </nav>
 
@@ -413,10 +414,8 @@ export default function AppHome() {
           main > section:first-of-type { grid-template-columns: minmax(0, 1fr) !important; }
           .desktopOnly { display:none; }
           .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
-          .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
+          .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:640px; margin:0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
           .mobileBottomStaff { grid-template-columns:repeat(5,1fr); }
-          .mobileBottomWithClasses { grid-template-columns:repeat(5,1fr); }
-          .mobileBottomStaff.mobileBottomWithClasses { grid-template-columns:repeat(6,1fr); }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;
  border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }

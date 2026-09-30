@@ -129,6 +129,8 @@ export async function sendPartyBookingNotification(input: {
   status: string;
   familyName?: string | null;
   familyEmail?: string | null;
+  guardianFirstName?: string | null;
+  guardianLastName?: string | null;
   birthdayChildName?: string | null;
   birthdayAge?: number | null;
   headcountExpected?: number | null;
@@ -143,6 +145,7 @@ export async function sendPartyBookingNotification(input: {
     rows: [
       ['Event', 'Party booking saved'],
       ['Family', input.familyName],
+      ['Guardian', formatPersonName({ firstName: input.guardianFirstName, lastName: input.guardianLastName })],
       ['Email', input.familyEmail],
       ['Birthday child', input.birthdayChildName],
       ['Turning age', input.birthdayAge],
@@ -169,6 +172,8 @@ export async function sendClassRegistrationNotification(input: {
   status: 'scheduled' | 'waitlist' | string;
   familyName?: string | null;
   familyEmail?: string | null;
+  guardianFirstName?: string | null;
+  guardianLastName?: string | null;
   childFirstName?: string | null;
   childLastName?: string | null;
   childBirthdate?: string | null;
@@ -191,6 +196,7 @@ export async function sendClassRegistrationNotification(input: {
     rows: [
       ['Event', registrationLabel],
       ['Family', input.familyName],
+      ['Guardian', formatPersonName({ firstName: input.guardianFirstName, lastName: input.guardianLastName })],
       ['Email', input.familyEmail],
       ['Child', childName],
       ['Child age', formatAgeFromBirthdate(input.childBirthdate)],

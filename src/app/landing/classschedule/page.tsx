@@ -156,6 +156,8 @@ export default function ClassSchedulePage() {
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [quickChildName, setQuickChildName] = useState('');
   const [quickChildAge, setQuickChildAge] = useState('');
+  const [guardianFirstName, setGuardianFirstName] = useState('');
+  const [guardianLastName, setGuardianLastName] = useState('');
   const [creatingChild, setCreatingChild] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -223,14 +225,24 @@ export default function ClassSchedulePage() {
       return;
     }
 
-    const { data: ppl } = await supabase
-      .from('people')
-      .select('id,first_name,last_name,birthdate')
-      .eq('household_id', householdId)
-      .eq('role', 'child')
-      .order('created_at', { ascending: true });
+    const [peopleResult, profileResult] = await Promise.all([
+      supabase
+        .from('people')
+        .select('id,first_name,last_name,birthdate')
+        .eq('household_id', householdId)
+        .eq('role', 'child')
+        .order('created_at', { ascending: true }),
+      fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .catch(() => null),
+    ]);
 
-    const casted = (ppl ?? []) as Person[];
+    if (profileResult?.ok && profileResult.guardian) {
+      setGuardianFirstName((prev) => prev || profileResult.guardian.first_name || '');
+      setGuardianLastName((prev) => prev || profileResult.guardian.last_name || '');
+    }
+
+    const casted = (peopleResult.data ?? []) as Person[];
     setPeople(casted);
     if (casted[0]?.id) setSelectedPersonId((prev) => prev || casted[0].id);
 
@@ -396,6 +408,16 @@ export default function ClassSchedulePage() {
     return Math.round(age * 2) / 2;
   };
 
+  const guardianPayload = () => {
+    const firstName = guardianFirstName.trim();
+    const lastName = guardianLastName.trim();
+    if (!firstName || !lastName) {
+      setMessage('Please enter the parent/guardian first and last name.');
+      return null;
+    }
+    return { guardian_first_name: firstName, guardian_last_name: lastName };
+  };
+
   const ensureSelectedChild = async () => {
     if (selectedPersonId && !selectedPersonNeedsAge) return selectedPersonId;
     const ageYears = parsedQuickAge();
@@ -405,11 +427,13 @@ export default function ClassSchedulePage() {
     }
 
     if (selectedPersonId && selectedPersonNeedsAge) {
+      const guardian = guardianPayload();
+      if (!guardian) return null;
       setCreatingChild(true);
       const res = await fetch('/api/family/children', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ person_id: selectedPersonId, age_years: ageYears }),
+        body: JSON.stringify({ person_id: selectedPersonId, age_years: ageYears, ...guardian }),
       });
       const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
       setCreatingChild(false);
@@ -430,12 +454,14 @@ export default function ClassSchedulePage() {
       setMessage('Please enter your child’s name first.');
       return null;
     }
+    const guardian = guardianPayload();
+    if (!guardian) return null;
 
     setCreatingChild(true);
     const res = await fetch('/api/family/children', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, age_years: ageYears }),
+      body: JSON.stringify({ name, age_years: ageYears, ...guardian }),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
     setCreatingChild(false);
@@ -458,6 +484,8 @@ export default function ClassSchedulePage() {
       window.location.assign(`/login?mode=new&next=${encodeURIComponent('/landing/classschedule')}`);
       return;
     }
+    const guardian = guardianPayload();
+    if (!guardian) return;
     const personId = await ensureSelectedChild();
     if (!personId) {
       return;
@@ -469,7 +497,7 @@ export default function ClassSchedulePage() {
     const res = await fetch('/api/classes/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ class_id: classId, person_id: personId }),
+      body: JSON.stringify({ class_id: classId, person_id: personId, ...guardian }),
     });
     const json = await res.json();
     setRegisteringClassId(null);
@@ -556,6 +584,28 @@ export default function ClassSchedulePage() {
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
           Pre-registration is free for now. If you are new, add your child’s name and age here, then choose the class you want. Birthdays can be corrected later in My People.
         </p>
+        {isAuthenticated && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>
+            <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+              Parent first name
+              <input
+                value={guardianFirstName}
+                onChange={(e) => setGuardianFirstName(e.target.value)}
+                placeholder="First name"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+              Parent last name
+              <input
+                value={guardianLastName}
+                onChange={(e) => setGuardianLastName(e.target.value)}
+                placeholder="Last name"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+              />
+            </label>
+          </div>
+        )}
         {people.length > 0 && (
           <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
             <label style={{ display: 'block', color: '#6f628d', fontWeight: 700 }}>

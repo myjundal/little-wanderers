@@ -141,6 +141,8 @@ export default function PartyPage() {
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
   const [rescheduleSlot, setRescheduleSlot] = useState<PartyBookingSlot>(() => getDefaultPartyBookingSlot(getDefaultPartyDate()));
+  const [guardianFirstName, setGuardianFirstName] = useState('');
+  const [guardianLastName, setGuardianLastName] = useState('');
 
   const [form, setForm] = useState<PartyForm>(() => getDefaultPartyForm());
 
@@ -178,6 +180,15 @@ export default function PartyPage() {
     if (calendarRes.ok && calendarJson.ok) {
       setBookedSlots(calendarJson.items ?? []);
     }
+    if (authRes.data.user?.id) {
+      const profileJson = await fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .catch(() => null);
+      if (profileJson?.ok && profileJson.guardian) {
+        setGuardianFirstName((prev) => prev || profileJson.guardian.first_name || '');
+        setGuardianLastName((prev) => prev || profileJson.guardian.last_name || '');
+      }
+    }
 
     setLoading(false);
   }, []);
@@ -200,6 +211,8 @@ export default function PartyPage() {
     const birthdayChildName = params.get('birthday_child_name');
     const birthdayAge = params.get('birthday_age');
     const occasionDetails = params.get('occasion_details');
+    const guardianFirstNameParam = params.get('guardian_first_name');
+    const guardianLastNameParam = params.get('guardian_last_name');
     if (!startTime || !endTime) return;
 
     const finalize = async () => {
@@ -218,6 +231,8 @@ export default function PartyPage() {
           birthday_child_name: birthdayChildName || null,
           birthday_age: birthdayAge ? Number(birthdayAge) : null,
           occasion_details: occasionDetails || null,
+          guardian_first_name: guardianFirstNameParam || null,
+          guardian_last_name: guardianLastNameParam || null,
           slot: slot || undefined,
         }),
       });
@@ -249,6 +264,14 @@ export default function PartyPage() {
     }
     setSubmitting(true);
     setMessage(null);
+
+    const guardianFirst = guardianFirstName.trim();
+    const guardianLast = guardianLastName.trim();
+    if (!guardianFirst || !guardianLast) {
+      setMessage('Please enter the parent/guardian first and last name.');
+      setSubmitting(false);
+      return;
+    }
 
     if (!isPartyBookingDate(form.party_date) || !partySlotOptions.some((slot) => slot.value === form.slot)) {
       setMessage(`Please choose an available Friday afternoon, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
@@ -282,6 +305,8 @@ export default function PartyPage() {
         birthday_child_name: form.birthday_child_name.trim() || null,
         birthday_age: birthdayAgeValue ? Number(birthdayAgeValue) : null,
         occasion_details: form.occasion_details.trim() || null,
+        guardian_first_name: guardianFirst,
+        guardian_last_name: guardianLast,
         slot: form.slot,
       }),
     });
@@ -544,6 +569,30 @@ export default function PartyPage() {
           <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
             Most parties are birthdays, but you can also use this for baby showers, baby namings, family celebrations, or other special occasions.
           </p>
+          {isAuthenticated && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
+              <label>
+                Parent first name
+                <br />
+                <input
+                  style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+                  value={guardianFirstName}
+                  placeholder="First name"
+                  onChange={(e) => setGuardianFirstName(e.target.value)}
+                />
+              </label>
+              <label>
+                Parent last name
+                <br />
+                <input
+                  style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+                  value={guardianLastName}
+                  placeholder="Last name"
+                  onChange={(e) => setGuardianLastName(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
           <label>
             Party date
             <br />

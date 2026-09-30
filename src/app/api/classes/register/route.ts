@@ -9,6 +9,7 @@ import {
   sendClassRegistrationEmail,
 } from '@/lib/class-waitlist';
 import { sendClassRegistrationNotification } from '@/lib/admin-notifications';
+import { ensureGuardianProfile, getPrimaryGuardianProfile, parseGuardianName } from '@/lib/family-profile';
 import { logger } from '@/lib/logger';
 
 const admin = () =>
@@ -48,12 +49,15 @@ async function notifyClassRegistrationSaved(input: {
       .select('name,email')
       .eq('id', input.householdId)
       .maybeSingle();
+    const guardian = await getPrimaryGuardianProfile(input.admin, input.householdId).catch(() => null);
 
     const notification = await sendClassRegistrationNotification({
       registrationId: input.registrationId,
       status: input.status,
       familyName: household?.name ?? null,
       familyEmail: household?.email ?? input.fallbackEmail ?? null,
+      guardianFirstName: guardian?.first_name ?? null,
+      guardianLastName: guardian?.last_name ?? null,
       childFirstName: input.person.first_name ?? null,
       childLastName: input.person.last_name ?? null,
       childBirthdate: input.person.birthdate ?? null,
@@ -85,6 +89,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const classId = body?.class_id as string | undefined;
     const personId = body?.person_id as string | undefined;
+    const guardianName = parseGuardianName(body);
 
     if (!classId || !personId) {
       return Response.json({ ok: false, error: 'class_id and person_id are required' }, { status: 400 });
@@ -105,6 +110,14 @@ export async function POST(req: Request) {
     }
 
     const supa = admin();
+    await ensureGuardianProfile({
+      admin: supa,
+      householdId,
+      userId: user.id,
+      email: user.email,
+      firstName: guardianName.firstName,
+      lastName: guardianName.lastName,
+    });
 
     const { data: roleRow } = await supa.from('roles').select('role').eq('id', user.id).maybeSingle();
     const isOperator = roleRow?.role === 'owner' || roleRow?.role === 'staff' || roleRow?.role === 'admin';

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
+import { ensureGuardianProfile, parseGuardianName } from '@/lib/family-profile';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 
 export const dynamic = 'force-dynamic';
@@ -70,9 +71,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please sign in again.' }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => null)) as { name?: string; age_years?: number } | null;
+  const body = (await req.json().catch(() => null)) as { name?: string; age_years?: number; guardian_first_name?: string; guardian_last_name?: string } | null;
   const name = String(body?.name ?? '').trim();
   const ageYears = parseAgeYears(body?.age_years);
+  const guardian = parseGuardianName(body);
   if (name.length < 1) {
     return NextResponse.json({ ok: false, error: 'Please enter your child’s name.' }, { status: 400 });
   }
@@ -85,8 +87,16 @@ export async function POST(req: Request) {
 
   try {
     const householdId = await ensureHouseholdForSignedInUser(user);
-    const { firstName, lastName } = splitName(name);
     const admin = createAdminSupabaseClient();
+    await ensureGuardianProfile({
+      admin,
+      householdId,
+      userId: user.id,
+      email: user.email,
+      firstName: guardian.firstName,
+      lastName: guardian.lastName,
+    });
+    const { firstName, lastName } = splitName(name);
     const { data: child, error } = await admin
       .from('people')
       .insert({
@@ -122,9 +132,10 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please sign in again.' }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => null)) as { person_id?: string; age_years?: number } | null;
+  const body = (await req.json().catch(() => null)) as { person_id?: string; age_years?: number; guardian_first_name?: string; guardian_last_name?: string } | null;
   const personId = String(body?.person_id ?? '').trim();
   const ageYears = parseAgeYears(body?.age_years);
+  const guardian = parseGuardianName(body);
   if (!personId) {
     return NextResponse.json({ ok: false, error: 'Please choose a child.' }, { status: 400 });
   }
@@ -135,6 +146,14 @@ export async function PATCH(req: Request) {
   try {
     const householdId = await ensureHouseholdForSignedInUser(user);
     const admin = createAdminSupabaseClient();
+    await ensureGuardianProfile({
+      admin,
+      householdId,
+      userId: user.id,
+      email: user.email,
+      firstName: guardian.firstName,
+      lastName: guardian.lastName,
+    });
     const { data: child, error } = await admin
       .from('people')
       .update({
