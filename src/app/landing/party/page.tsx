@@ -555,7 +555,7 @@ export default function PartyPage() {
             <li>Because our construction schedule is still moving, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}.</li>
             {!loading && !isAuthenticated && (
               <li>
-                To request a party hold, you&apos;ll sign in with email first. If your email is not on the Wanderlist yet, we will add it automatically.
+                Party holds now start through My Little Wanderers. Login or join with email first, then request your date.
               </li>
             )}
             <li>During early access, we will hold your selected party slot without collecting a deposit today.</li>
@@ -565,6 +565,11 @@ export default function PartyPage() {
           </ul>
         </div>
 
+        {loading ? (
+          <div style={{ color: '#6f628d', lineHeight: 1.5 }}>
+            Checking your My Little Wanderers sign-in…
+          </div>
+        ) : isAuthenticated ? (
         <div style={{ display: 'grid', gap: 10 }}>
           <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
             Most parties are birthdays, but you can also use this for baby showers, baby namings, family celebrations, or other special occasions.
@@ -662,6 +667,30 @@ export default function PartyPage() {
             {submitting ? 'Requesting hold...' : 'Request to hold'}
           </button>
         </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <p style={{ margin: 0, color: '#6f628d', lineHeight: 1.5 }}>
+              Login/join My Little Wanderers to request early party booking.
+            </p>
+            <Link
+              href={`/login?mode=new&next=${encodeURIComponent('/landing/party')}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 44,
+                borderRadius: 12,
+                background: '#5f3da4',
+                color: '#fff',
+                fontWeight: 800,
+                textDecoration: 'none',
+                padding: '0 16px',
+              }}
+            >
+              Login / Join My Little Wanderers
+            </Link>
+          </div>
+        )}
       </section>
 
       {isAuthenticated && (
