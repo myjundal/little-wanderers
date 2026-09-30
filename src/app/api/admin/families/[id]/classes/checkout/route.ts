@@ -1,13 +1,96 @@
 import { requireStaffContext } from '@/lib/authz';
 import crypto from 'crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
+import {
+  countConfirmedClassRegistrations,
+  countWaitlistRegistrations,
+  hasActiveWaitlistOffer,
+  sendClassRegistrationEmail,
+} from '@/lib/class-waitlist';
+import { sendClassRegistrationNotification } from '@/lib/admin-notifications';
+import { getPrimaryGuardianProfile } from '@/lib/family-profile';
+import { logger } from '@/lib/logger';
 
 type Params = { params: { id: string } };
-type CheckoutBody = { person_id?: string; items?: Array<{ class_id: string; quantity?: number }>; mode?: 'create_payment_link' | 'finalize' };
+type CheckoutBody = { person_id?: string; items?: Array<{ class_id: string; quantity?: number }>; mode?: 'create_payment_link' | 'finalize' | 'register' };
 
 function getSquareBaseUrl() {
   const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
   return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
+}
+
+async function notifyManualClassRegistration(input: {
+  admin: SupabaseClient;
+  registrationId?: string | null;
+  status: 'scheduled' | 'waitlist';
+  householdId: string;
+  fallbackEmail?: string | null;
+  userId: string;
+  person: {
+    first_name?: string | null;
+    last_name?: string | null;
+    birthdate?: string | null;
+  };
+  klass: {
+    title?: string | null;
+    category?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    schedule_label?: string | null;
+    instructor_name?: string | null;
+    price_cents?: number | null;
+  };
+}) {
+  if (!input.registrationId) return;
+
+  void (async () => {
+    const email = await sendClassRegistrationEmail(input.admin, input.registrationId!, input.status, input.fallbackEmail).catch((emailError) => ({
+      ok: false as const,
+      error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
+    }));
+    if (!email.ok || 'skipped' in email) {
+      logger.warn({
+        action: 'staff.class.registration_email_not_sent',
+        householdId: input.householdId,
+        registrationId: input.registrationId,
+        status: input.status,
+        result: email,
+      });
+    }
+
+    try {
+      const [{ data: household }, guardian] = await Promise.all([
+        input.admin.from('households').select('name,email').eq('id', input.householdId).maybeSingle(),
+        getPrimaryGuardianProfile(input.admin, input.householdId).catch(() => null),
+      ]);
+      const notification = await sendClassRegistrationNotification({
+        registrationId: input.registrationId,
+        status: input.status,
+        familyName: household?.name ?? null,
+        familyEmail: household?.email ?? input.fallbackEmail ?? null,
+        guardianFirstName: guardian?.first_name ?? null,
+        guardianLastName: guardian?.last_name ?? null,
+        childFirstName: input.person.first_name ?? null,
+        childLastName: input.person.last_name ?? null,
+        childBirthdate: input.person.birthdate ?? null,
+        classTitle: input.klass.title ?? null,
+        classCategory: input.klass.category ?? null,
+        classStartTime: input.klass.start_time ?? null,
+        classEndTime: input.klass.end_time ?? null,
+        classScheduleLabel: input.klass.schedule_label ?? null,
+        instructorName: input.klass.instructor_name ?? null,
+        priceCents: input.klass.price_cents ?? null,
+      });
+      if (!notification.ok) {
+        logger.error({ action: 'staff.class.registration_notification_not_sent', registrationId: input.registrationId }, new Error(notification.error));
+      }
+    } catch (notificationError) {
+      logger.error({ action: 'staff.class.registration_notification_failed', registrationId: input.registrationId }, notificationError);
+    }
+  })().catch((error) => {
+    logger.error({ action: 'staff.class.registration_side_effects_failed', registrationId: input.registrationId }, error);
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -37,6 +120,107 @@ export async function POST(req: Request, { params }: Params) {
   const { data: classes, error: classError } = await admin.from('classes').select('id,title,capacity,status,price_cents').in('id', classIds);
   if (classError) return Response.json({ ok: false, error: classError.message }, { status: 500 });
   const classById = new Map((classes ?? []).map((c) => [c.id, c]));
+
+  if (mode === 'register') {
+    if (items.length !== 1) {
+      return Response.json({ ok: false, error: 'Choose one class at a time for manual registration.' }, { status: 400 });
+    }
+
+    const classId = items[0].class_id;
+    const { data: person } = await admin
+      .from('people')
+      .select('id,role,first_name,last_name,birthdate')
+      .eq('id', personId)
+      .eq('household_id', householdId)
+      .maybeSingle();
+    if (!person) return Response.json({ ok: false, error: 'person not found in household' }, { status: 404 });
+
+    const { data: klass } = await admin
+      .from('classes')
+      .select('id,title,category,capacity,status,start_time,end_time,schedule_label,instructor_name,price_cents')
+      .eq('id', classId)
+      .maybeSingle();
+    if (!klass) return Response.json({ ok: false, error: 'class not found' }, { status: 404 });
+    if (klass.status !== 'scheduled') {
+      return Response.json({ ok: false, error: 'class is not open for booking' }, { status: 409 });
+    }
+
+    const { data: already } = await admin
+      .from('class_registrations')
+      .select('id,status')
+      .eq('class_id', classId)
+      .eq('person_id', personId)
+      .maybeSingle();
+
+    if (already && already.status !== 'cancelled') {
+      return Response.json({ ok: false, error: 'already registered' }, { status: 409 });
+    }
+
+    const [booked, offerPendingResult, waitlistCount, { data: household }] = await Promise.all([
+      countConfirmedClassRegistrations(admin, classId),
+      hasActiveWaitlistOffer(admin, classId),
+      countWaitlistRegistrations(admin, classId),
+      admin.from('households').select('email').eq('id', householdId).maybeSingle(),
+    ]);
+    const isFull = klass.capacity != null && booked >= klass.capacity;
+    const shouldWaitlist = isFull || (!isFull && offerPendingResult) || (!isFull && waitlistCount > 0);
+    const nextStatus: 'scheduled' | 'waitlist' = shouldWaitlist ? 'waitlist' : 'scheduled';
+
+    if (already && already.status === 'cancelled') {
+      const { error } = await admin
+        .from('class_registrations')
+        .update({
+          status: nextStatus,
+          created_at: new Date().toISOString(),
+          waitlist_offer_token: null,
+          waitlist_offer_expires_at: null,
+          waitlist_offered_at: null,
+        })
+        .eq('id', already.id);
+      if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+
+      notifyManualClassRegistration({
+        admin,
+        registrationId: already.id,
+        status: nextStatus,
+        householdId,
+        fallbackEmail: household?.email ?? null,
+        userId: context.user.id,
+        person,
+        klass,
+      });
+
+      return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email_pending: true });
+    }
+
+    const { data: inserted, error } = await admin
+      .from('class_registrations')
+      .insert({
+        class_id: classId,
+        person_id: personId,
+        status: nextStatus,
+        household_id: householdId,
+        child_id: person.role === 'child' ? person.id : null,
+        created_by_user_id: context.user.id,
+        created_by_role: context.role,
+      })
+      .select('id')
+      .maybeSingle();
+    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+
+    notifyManualClassRegistration({
+      admin,
+      registrationId: inserted?.id ?? null,
+      status: nextStatus,
+      householdId,
+      fallbackEmail: household?.email ?? null,
+      userId: context.user.id,
+      person,
+      klass,
+    });
+
+    return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email_pending: true });
+  }
 
   if (mode === 'finalize') {
     const registrationIds: string[] = [];

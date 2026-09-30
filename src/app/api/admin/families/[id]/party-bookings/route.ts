@@ -11,9 +11,14 @@ export async function POST(req: Request, { params }: Params) {
   const body = await req.json();
   const start = new Date(body.start_time);
   const end = new Date(body.end_time);
+  const birthdayChildName = typeof body.birthday_child_name === 'string' ? body.birthday_child_name.trim().slice(0, 80) : null;
+  const birthdayAge = body.birthday_age == null ? null : Number(body.birthday_age);
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
+  }
+  if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
+    return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });
   }
   if (!isOnOrAfterPartyBookingStart(start)) {
     return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
@@ -41,6 +46,8 @@ export async function POST(req: Request, { params }: Params) {
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       headcount_expected: body.headcount_expected ? Number(body.headcount_expected) : null,
+      birthday_child_name: birthdayChildName,
+      birthday_age: birthdayAge,
       notes: body.notes ?? null,
       status: 'confirmed',
       status_updated_at: new Date().toISOString(),
