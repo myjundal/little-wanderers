@@ -93,21 +93,20 @@ function formatClassTimeRange(startIso: string, endIso: string) {
   return `${day}, ${startTime}-${endTime}`;
 }
 
-function formatClassPrice(priceCents: number) {
-  if (priceCents <= 0) return 'Free';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: priceCents % 100 === 0 ? 0 : 2,
-  }).format(priceCents / 100);
-}
-
 function classSeatsLabel(klass: StaffClass) {
   if (klass.capacity == null) return 'Open';
   if (klass.waitlist_offer_pending || (klass.waitlist_count ?? 0) > 0) return 'Waitlist open';
   const seatsLeft = klass.seats_left ?? Math.max(klass.capacity - klass.booked_count, 0);
   if (seatsLeft <= 0) return 'Waitlist';
   return `${seatsLeft}/${klass.capacity} seats left`;
+}
+
+function classGroupKey(klass: StaffClass) {
+  return [klass.title, klass.age_range ?? '', klass.caregiver_participation ?? ''].join('::');
+}
+
+function classGroupLabel(klass: StaffClass) {
+  return [klass.title, klass.age_range, klass.caregiver_participation].filter(Boolean).join(' - ');
 }
 
 function getPartyBlackoutSlots(): CalendarSlot[] {
@@ -137,6 +136,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   const [item, setItem] = useState<FamilyDetail | null>(null);
   const [classes, setClasses] = useState<StaffClass[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
+  const [selectedClassGroupKey, setSelectedClassGroupKey] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
   const [registeringClassId, setRegisteringClassId] = useState<string | null>(null);
   const [partyForm, setPartyForm] = useState(emptyPartyForm);
@@ -194,20 +194,50 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
 
   const memberOptions = useMemo(() => ([...(item?.guardians ?? []), ...(item?.children ?? [])]), [item]);
   const classRegistrationOptions = useMemo(() => (item?.children.length ? item.children : memberOptions), [item?.children, memberOptions]);
+  const classGroups = useMemo(() => {
+    const groupMap = new Map<string, { key: string; label: string; items: StaffClass[] }>();
+    classes.forEach((klass) => {
+      const key = classGroupKey(klass);
+      const current = groupMap.get(key);
+      if (current) {
+        current.items.push(klass);
+      } else {
+        groupMap.set(key, { key, label: classGroupLabel(klass), items: [klass] });
+      }
+    });
+    return Array.from(groupMap.values()).map((group) => ({
+      ...group,
+      items: [...group.items].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()),
+    }));
+  }, [classes]);
+  const selectedClassGroup = useMemo(
+    () => classGroups.find((group) => group.key === selectedClassGroupKey) ?? classGroups[0] ?? null,
+    [classGroups, selectedClassGroupKey]
+  );
   const selectedClass = useMemo(
-    () => classes.find((klass) => klass.id === selectedClassId) ?? classes[0] ?? null,
-    [classes, selectedClassId]
+    () => selectedClassGroup?.items.find((klass) => klass.id === selectedClassId) ?? selectedClassGroup?.items[0] ?? null,
+    [selectedClassGroup, selectedClassId]
   );
 
   useEffect(() => {
-    if (classes.length === 0) {
+    if (classGroups.length === 0) {
+      if (selectedClassGroupKey) setSelectedClassGroupKey('');
+      return;
+    }
+    if (!classGroups.some((group) => group.key === selectedClassGroupKey)) {
+      setSelectedClassGroupKey(classGroups[0].key);
+    }
+  }, [classGroups, selectedClassGroupKey]);
+
+  useEffect(() => {
+    if (!selectedClassGroup) {
       if (selectedClassId) setSelectedClassId('');
       return;
     }
-    if (!classes.some((klass) => klass.id === selectedClassId)) {
-      setSelectedClassId(classes[0].id);
+    if (!selectedClassGroup.items.some((klass) => klass.id === selectedClassId)) {
+      setSelectedClassId(selectedClassGroup.items[0]?.id ?? '');
     }
-  }, [classes, selectedClassId]);
+  }, [selectedClassGroup, selectedClassId]);
 
   const addMemberRow = () => {
     setEditableMembers((prev) => [...prev, { first_name: '', last_name: '', birthdate: '', role: 'child' }]);
@@ -394,71 +424,45 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
 
       <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
         <h3 style={{ marginTop: 0 }}>Owner actions</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 280px) minmax(180px, 1fr)', gap: 10, alignItems: 'center' }}>
-          <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)}>
-            <option value="">Select member for class registration</option>
-            {classRegistrationOptions.map((person) => (
-              <option key={person.id} value={person.id}>{person.first_name} {person.last_name ?? ''} ({person.role ?? 'member'})</option>
-            ))}
-          </select>
-          <p style={{ margin: 0, color: '#6d6480', fontSize: 14 }}>Choose a child, then register from the class cards below.</p>
-        </div>
-
         <div style={{ marginTop: 12 }}>
           <h4 style={{ marginBottom: 8 }}>Manual class registration</h4>
           {classes.length === 0 ? (
             <p style={{ margin: 0, color: '#6d6480' }}>No upcoming scheduled classes.</p>
-          ) : selectedClass ? (
+          ) : selectedClassGroup && selectedClass ? (
             <div style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
+              <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)}>
+                <option value="">Select child</option>
+                {classRegistrationOptions.map((person) => (
+                  <option key={person.id} value={person.id}>{person.first_name} {person.last_name ?? ''} ({person.role ?? 'member'})</option>
+                ))}
+              </select>
+              <select value={selectedClassGroup.key} onChange={(e) => setSelectedClassGroupKey(e.target.value)}>
+                {classGroups.map((group) => (
+                  <option key={group.key} value={group.key}>{group.label}</option>
+                ))}
+              </select>
               <select value={selectedClass.id} onChange={(e) => setSelectedClassId(e.target.value)}>
-                {classes.map((klass) => (
+                {selectedClassGroup.items.map((klass) => (
                   <option key={klass.id} value={klass.id}>
-                    {formatClassTimeRange(klass.start_time, klass.end_time)} - {klass.title}
+                    {formatClassTimeRange(klass.start_time, klass.end_time)} - {classSeatsLabel(klass)}
                   </option>
                 ))}
               </select>
-              <article
+              <button
+                type="button"
+                onClick={() => void registerClass(selectedClass.id)}
+                disabled={!selectedPersonId || Boolean(registeringClassId)}
                 style={{
-                  border: '1px solid #e3d5ff',
-                  borderRadius: 14,
-                  padding: 12,
-                  background: '#fff',
-                  boxShadow: '0 6px 14px rgba(95,61,164,0.06)',
+                  border: 'none',
+                  borderRadius: 12,
+                  padding: '10px 12px',
+                  background: !selectedPersonId || registeringClassId ? '#d7cee8' : '#5f3da4',
+                  color: '#fff',
+                  fontWeight: 800,
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-                  <div>
-                    <p style={{ margin: '0 0 4px', color: '#4f3f82', fontWeight: 800 }}>{selectedClass.title}</p>
-                    <p style={{ margin: 0, color: '#6d6480', fontSize: 13 }}>{formatClassTimeRange(selectedClass.start_time, selectedClass.end_time)}</p>
-                  </div>
-                  <span style={{ borderRadius: 999, background: '#f3edff', color: '#5f3da4', padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                    {classSeatsLabel(selectedClass)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                  {selectedClass.age_range && <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{selectedClass.age_range}</span>}
-                  {selectedClass.caregiver_participation && <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{selectedClass.caregiver_participation}</span>}
-                  <span style={{ border: '1px solid #eadfff', borderRadius: 999, padding: '4px 8px', color: '#5f5470', fontSize: 12 }}>{formatClassPrice(selectedClass.price_cents)}</span>
-                </div>
-                {selectedClass.description && <p style={{ margin: '10px 0 0', color: '#6d6480', fontSize: 13, lineHeight: 1.35 }}>{selectedClass.description}</p>}
-                <button
-                  type="button"
-                  onClick={() => void registerClass(selectedClass.id)}
-                  disabled={!selectedPersonId || Boolean(registeringClassId)}
-                  style={{
-                    width: '100%',
-                    marginTop: 12,
-                    border: 'none',
-                    borderRadius: 12,
-                    padding: '10px 12px',
-                    background: !selectedPersonId || registeringClassId ? '#d7cee8' : '#5f3da4',
-                    color: '#fff',
-                    fontWeight: 800,
-                  }}
-                >
-                  {registeringClassId === selectedClass.id ? 'Registering...' : classSeatsLabel(selectedClass).toLowerCase().includes('waitlist') ? 'Add to waitlist' : 'Register'}
-                </button>
-              </article>
+                {registeringClassId === selectedClass.id ? 'Registering...' : classSeatsLabel(selectedClass).toLowerCase().includes('waitlist') ? 'Add to waitlist' : 'Register'}
+              </button>
             </div>
           ) : null}
         </div>
