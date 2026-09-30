@@ -59,7 +59,7 @@ function getEmailRedirectTo(mode: JourneyMode) {
     : currentIsLocal
       ? PRODUCTION_SITE_URL
       : window.location.origin;
-  const url = new URL('/auth/callback', origin);
+  const url = new URL('/auth/link', origin);
   url.searchParams.set('mode', mode);
   url.searchParams.set('next', getSafeNextPath());
   return url.toString();

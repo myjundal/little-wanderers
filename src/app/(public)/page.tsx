@@ -52,7 +52,7 @@ export default function HomePage({ searchParams }: { searchParams?: Record<strin
         params.set(key, value);
       }
     });
-    redirect(`/auth/callback?${params.toString()}`);
+    redirect(`/auth/link?${params.toString()}`);
   }
 
   return (

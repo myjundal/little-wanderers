@@ -8,7 +8,7 @@ export default function AuthLinkLandingGuard() {
     const searchParams = new URLSearchParams(window.location.search);
 
     if (searchParams.has('code') || searchParams.has('token_hash')) {
-      window.location.replace(`/auth/callback?${searchParams.toString()}`);
+      window.location.replace(`/auth/link?${searchParams.toString()}`);
       return;
     }
 
