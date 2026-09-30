@@ -35,18 +35,20 @@
 .partyFeature p{max-width:680px;margin:0;color:#4A4A4A;line-height:1.65}
 .partyEyebrow{font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9E8FBF}
 .accessNote{margin-top:10px!important;color:#725c8d!important;font-weight:600}
-.classScheduleMini{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:16px;max-width:760px}
-.classScheduleDay{min-width:0;padding:8px;border:1px solid rgba(167,139,203,.24);border-radius:16px;background:rgba(255,255,255,.78)}
-.classScheduleDayLabel{margin-bottom:7px;color:#7f69a0;font-size:.72rem;font-weight:900;text-align:center;text-transform:uppercase}
+.classScheduleMini{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin-top:16px;max-width:760px;padding:10px;border:1px solid rgba(167,139,203,.22);border-radius:22px;background:linear-gradient(135deg,rgba(255,255,255,.78),rgba(244,237,253,.82));box-shadow:inset 0 1px rgba(255,255,255,.7)}
+.classScheduleDay{position:relative;min-width:0;padding:7px 6px 8px;border:1px solid rgba(167,139,203,.18);border-radius:16px;background:rgba(255,253,249,.78)}
+.classScheduleDay::before{content:"";display:block;width:20px;height:3px;margin:0 auto 6px;border-radius:999px;background:#d8c2f0}
+.classScheduleDayLabel{margin-bottom:6px;color:#7f69a0;font-size:.68rem;font-weight:900;text-align:center;text-transform:uppercase}
 .classSchedulePills{display:grid;gap:6px}
-.classScheduleEmpty{display:block;color:#b7acc3;font-size:.78rem;text-align:center}
-.classSchedulePill{display:grid;gap:2px;min-width:0;padding:7px 8px;border:1px solid rgba(223,209,239,.9);border-radius:12px;background:#fff;color:#4b4360;box-shadow:0 6px 12px rgba(123,106,168,.06)}
+.classScheduleEmpty{display:block;color:#b7acc3;font-size:.72rem;text-align:center}
+.classSchedulePill{display:grid;gap:2px;min-width:0;padding:8px 7px;border:1px solid rgba(223,209,239,.9);border-radius:13px;background:#fff;color:#4b4360;text-decoration:none;box-shadow:0 7px 14px rgba(123,106,168,.07);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.classSchedulePill:hover{transform:translateY(-1px);border-color:#bca1de;box-shadow:0 10px 18px rgba(123,106,168,.13)}
 .classSchedulePill strong{color:#7b5ead;font-size:.72rem;line-height:1.1}
-.classSchedulePill span{min-width:0;color:#4b4360;font-size:.78rem;font-weight:850;line-height:1.15;overflow-wrap:anywhere}
-.classSchedulePill small{min-width:0;color:#6f628d;font-size:.68rem;line-height:1.15;overflow-wrap:anywhere}
-.classSchedulePill em{color:#7b4d1f;font-size:.68rem;font-style:normal;font-weight:850;line-height:1.15}
+.classSchedulePill span{min-width:0;color:#4b4360;font-size:.78rem;font-weight:850;line-height:1.12;overflow-wrap:anywhere}
+.classSchedulePill small{min-width:0;color:#6f628d;font-size:.66rem;line-height:1.1;overflow-wrap:anywhere}
+.classSchedulePill em{color:#7b4d1f;font-size:.62rem;font-style:normal;font-weight:850;line-height:1.1}
 .values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 8px 10px;color:#6f6a78;font-size:.95rem}
 .values div{display:flex;align-items:center;gap:8px;justify-content:center;text-align:center}
-@media (prefers-reduced-motion:reduce){.waitlistNumber{animation:none}}
+@media (prefers-reduced-motion:reduce){.waitlistNumber{animation:none}.classSchedulePill{transition:none}.classSchedulePill:hover{transform:none}}
 @media (max-width:980px){.page{padding:8px 12px 20px}.hero{grid-template-columns:1fr}.heroImageFrame img{height:390px}.partyFeature{grid-template-columns:1fr}.values{grid-template-columns:1fr 1fr}}
-@media (max-width:560px){.waitlistAction{display:grid;grid-template-columns:1fr;gap:8px;width:100%}.secondaryActions{display:grid;width:100%}.waitlistCountCard{gap:6px;padding:7px 7px 7px 10px}.waitlistCountCopy{max-width:none}.waitlistCountEyebrow{font-size:.58rem;line-height:1.25}.waitlistNumberStage{min-width:78px;padding:9px 7px}.waitlistNumber{font-size:1.65rem}.partyFeature{margin:20px 0 0;padding:16px}.classScheduleMini{gap:4px}.classScheduleDay{padding:5px 3px;border-radius:10px}.classScheduleDayLabel{font-size:.58rem;margin-bottom:4px}.classSchedulePills{gap:4px}.classSchedulePill{padding:5px 3px;border-radius:8px}.classSchedulePill strong{font-size:.56rem}.classSchedulePill span{font-size:.58rem;line-height:1.1}.classSchedulePill small,.classSchedulePill em{font-size:.52rem;line-height:1.1}.classScheduleEmpty{font-size:.55rem}}
+@media (max-width:560px){.waitlistAction{display:grid;grid-template-columns:1fr;gap:8px;width:100%}.secondaryActions{display:grid;width:100%}.waitlistCountCard{gap:6px;padding:7px 7px 7px 10px}.waitlistCountCopy{max-width:none}.waitlistCountEyebrow{font-size:.58rem;line-height:1.25}.waitlistNumberStage{min-width:78px;padding:9px 7px}.waitlistNumber{font-size:1.65rem}.partyFeature{margin:20px 0 0;padding:16px}.classScheduleMini{gap:3px;padding:6px;border-radius:16px}.classScheduleDay{padding:5px 2px 6px;border-radius:10px}.classScheduleDay::before{width:14px;height:2px;margin-bottom:4px}.classScheduleDayLabel{font-size:.54rem;margin-bottom:4px}.classSchedulePills{gap:4px}.classSchedulePill{padding:5px 3px;border-radius:8px}.classSchedulePill strong{font-size:.54rem}.classSchedulePill span{font-size:.56rem;line-height:1.08}.classSchedulePill small{font-size:.49rem;line-height:1.08}.classSchedulePill em{display:none}.classScheduleEmpty{font-size:.52rem}}

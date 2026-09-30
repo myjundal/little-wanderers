@@ -163,13 +163,17 @@ export default async function HomeComingSoon() {
                       {dayItems.length === 0 ? (
                         <span className={styles.classScheduleEmpty}>-</span>
                       ) : (
-                        dayItems.slice(0, 2).map((item) => (
-                          <span className={styles.classSchedulePill} key={`home-class-${item.id}`}>
+                        dayItems.slice(0, 1).map((item) => (
+                          <a
+                            className={styles.classSchedulePill}
+                            href={`/classes?class=${encodeURIComponent(item.id)}`}
+                            key={`home-class-${item.id}`}
+                          >
                             <strong>{timeOnlyLabel(item.start_time)}</strong>
                             <span>{item.title}</span>
-                            <small>{item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}</small>
-                            <em>{compactSeatsLine(item)}</em>
-                          </span>
+                            <small>{item.age_range ?? 'Ages TBA'}</small>
+                            <em>{compactCaregiverLabel(item.caregiver_participation)} · {compactSeatsLine(item)}</em>
+                          </a>
                         ))
                       )}
                     </div>

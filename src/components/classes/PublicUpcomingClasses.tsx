@@ -173,6 +173,7 @@ export default function PublicUpcomingClasses() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [focusedSeriesId, setFocusedSeriesId] = useState<string | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -207,6 +208,20 @@ export default function PublicUpcomingClasses() {
   const visibleClasses = useMemo(() => groupClassSeries(classes).slice(0, 6), [classes]);
   const weeklySchedule = useMemo(() => buildGeneralWeeklySchedule(visibleClasses), [visibleClasses]);
 
+  useEffect(() => {
+    if (visibleClasses.length === 0) return;
+    const targetClassId = new URLSearchParams(window.location.search).get('class');
+    if (!targetClassId) return;
+    const targetSeries = visibleClasses.find((item) =>
+      item.id === targetClassId || item.occurrences.some((occurrence) => occurrence.id === targetClassId)
+    );
+    if (!targetSeries) return;
+    setFocusedSeriesId(targetSeries.id);
+    window.setTimeout(() => {
+      document.getElementById(`public-class-card-${targetSeries.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }, [visibleClasses]);
+
   const goToClassPreRegistration = async () => {
     const next = '/landing/classschedule';
     sessionStorage.setItem('post_login_redirect', next);
@@ -234,24 +249,34 @@ export default function PublicUpcomingClasses() {
                     <span style={{ color: '#aaa0b8', fontSize: 11, textAlign: 'center' }}>-</span>
                   ) : (
                     dayItems.slice(0, 3).map((item) => (
-                      <span
+                      <button
                         key={`public-weekly-${item.id}`}
+                        type="button"
+                        onClick={() => {
+                          const targetSeries = visibleClasses.find((series) => series.occurrences.some((occurrence) => occurrence.id === item.id));
+                          if (!targetSeries) return;
+                          setFocusedSeriesId(targetSeries.id);
+                          document.getElementById(`public-class-card-${targetSeries.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}
                         style={{
                           display: 'grid',
                           gap: 2,
+                          width: '100%',
                           minWidth: 0,
                           padding: '7px 6px',
                           borderRadius: 11,
                           border: '1px solid #eadff3',
                           background: '#fff',
                           color: '#4b4360',
+                          textAlign: 'left',
+                          cursor: 'pointer',
                         }}
                       >
                         <strong style={{ color: '#7b5ead', fontSize: 11, lineHeight: 1.1 }}>{timeOnlyLabel(item.start_time)}</strong>
                         <span style={{ minWidth: 0, color: '#4b4360', fontSize: 12, fontWeight: 850, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{item.title}</span>
                         <small style={{ minWidth: 0, color: '#6f628d', fontSize: 10, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}</small>
                         <em style={{ color: '#7b4d1f', fontSize: 10, fontStyle: 'normal', fontWeight: 850, lineHeight: 1.15 }}>{compactSeatsLine(item)}</em>
-                      </span>
+                      </button>
                     ))
                   )}
                 </div>
@@ -262,8 +287,24 @@ export default function PublicUpcomingClasses() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 14 }}>
-        {visibleClasses.map((item) => (
-          <article key={item.id} style={classCardStyle}>
+        {visibleClasses.map((item) => {
+          const focused = item.id === focusedSeriesId;
+          return (
+          <article
+            id={`public-class-card-${item.id}`}
+            key={item.id}
+            style={{
+              ...classCardStyle,
+              border: focused ? '2px solid #9c78d2' : classCardStyle.border,
+              boxShadow: focused ? '0 16px 34px rgba(123, 106, 168, 0.18)' : classCardStyle.boxShadow,
+              scrollMarginTop: 18,
+            }}
+          >
+            {focused && (
+              <p style={{ margin: 0, color: '#5f3da4', fontSize: 13, fontWeight: 850 }}>
+                Selected from the weekly snapshot
+              </p>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {item.category && (
                 <span
@@ -335,7 +376,8 @@ export default function PublicUpcomingClasses() {
               Pre-register
             </button>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
