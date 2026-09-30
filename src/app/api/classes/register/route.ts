@@ -25,7 +25,7 @@ async function getHouseholdIdForUser(userId: string) {
 async function notifyClassRegistrationSaved(input: {
   admin: ReturnType<typeof admin>;
   registrationId?: string | null;
-  status: string;
+  status: 'scheduled' | 'waitlist';
   householdId: string;
   fallbackEmail?: string | null;
   person: {
@@ -82,6 +82,63 @@ async function notifyClassRegistrationSaved(input: {
       notificationError
     );
   }
+}
+
+function queueClassRegistrationSideEffects(input: {
+  admin: ReturnType<typeof admin>;
+  registrationId?: string | null;
+  status: 'scheduled' | 'waitlist';
+  householdId: string;
+  fallbackEmail?: string | null;
+  userId: string;
+  person: {
+    first_name?: string | null;
+    last_name?: string | null;
+    birthdate?: string | null;
+  };
+  klass: {
+    title?: string | null;
+    category?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    schedule_label?: string | null;
+    instructor_name?: string | null;
+    price_cents?: number | null;
+  };
+}) {
+  if (!input.registrationId) return;
+
+  void (async () => {
+    const email = await sendClassRegistrationEmail(input.admin, input.registrationId!, input.status, input.fallbackEmail).catch((emailError) => ({
+      ok: false as const,
+      error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
+    }));
+    if (!email.ok || 'skipped' in email) {
+      logger.warn({
+        action: 'class.registration_email_not_sent',
+        userId: input.userId,
+        householdId: input.householdId,
+        registrationId: input.registrationId,
+        status: input.status,
+        result: email,
+      });
+    }
+
+    await notifyClassRegistrationSaved({
+      admin: input.admin,
+      registrationId: input.registrationId,
+      status: input.status,
+      householdId: input.householdId,
+      fallbackEmail: input.fallbackEmail,
+      person: input.person,
+      klass: input.klass,
+    });
+  })().catch((error) => {
+    logger.error(
+      { action: 'class.registration_side_effects_failed', registrationId: input.registrationId, status: input.status },
+      error
+    );
+  });
 }
 
 export async function POST(req: Request) {
@@ -162,12 +219,16 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'already registered' }, { status: 409 });
     }
 
-    const booked = await countConfirmedClassRegistrations(supa, classId);
+    const [booked, offerPendingResult, waitlistCount] = await Promise.all([
+      countConfirmedClassRegistrations(supa, classId),
+      hasActiveWaitlistOffer(supa, classId),
+      countWaitlistRegistrations(supa, classId),
+    ]);
     const isFull = klass.capacity != null && booked >= klass.capacity;
-    const offerPending = !isFull && (await hasActiveWaitlistOffer(supa, classId));
-    const waitlistExists = !isFull && (await countWaitlistRegistrations(supa, classId)) > 0;
+    const offerPending = !isFull && offerPendingResult;
+    const waitlistExists = !isFull && waitlistCount > 0;
     const shouldWaitlist = isFull || offerPending || waitlistExists;
-    const nextStatus = shouldWaitlist ? 'waitlist' : 'scheduled';
+    const nextStatus: 'scheduled' | 'waitlist' = shouldWaitlist ? 'waitlist' : 'scheduled';
 
     if (already && already.status === 'cancelled') {
       const { error } = await supa
@@ -182,24 +243,18 @@ export async function POST(req: Request) {
         .eq('id', already.id);
       if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
-      const email = await sendClassRegistrationEmail(supa, already.id, nextStatus, user.email).catch((emailError) => ({
-        ok: false as const,
-        error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
-      }));
-      if (!email.ok || 'skipped' in email) {
-        logger.warn({ action: 'class.registration_email_not_sent', userId: user.id, householdId, registrationId: already.id, status: nextStatus, result: email });
-      }
-      await notifyClassRegistrationSaved({
+      queueClassRegistrationSideEffects({
         admin: supa,
         registrationId: already.id,
         status: nextStatus,
         householdId,
         fallbackEmail: user.email,
+        userId: user.id,
         person,
         klass,
       });
 
-      return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email });
+      return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email_pending: true });
     }
 
     const { data: inserted, error: insertErr } = await supa
@@ -218,26 +273,18 @@ export async function POST(req: Request) {
 
     if (insertErr) return Response.json({ ok: false, error: insertErr.message }, { status: 500 });
 
-    const email = inserted?.id
-      ? await sendClassRegistrationEmail(supa, inserted.id, nextStatus, user.email).catch((emailError) => ({
-          ok: false as const,
-          error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
-        }))
-      : { ok: false as const, error: 'registration id missing' };
-    if (!email.ok || 'skipped' in email) {
-      logger.warn({ action: 'class.registration_email_not_sent', userId: user.id, householdId, registrationId: inserted?.id ?? null, status: nextStatus, result: email });
-    }
-    await notifyClassRegistrationSaved({
+    queueClassRegistrationSideEffects({
       admin: supa,
       registrationId: inserted?.id ?? null,
       status: nextStatus,
       householdId,
       fallbackEmail: user.email,
+      userId: user.id,
       person,
       klass,
     });
 
-    return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email });
+    return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email_pending: true });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

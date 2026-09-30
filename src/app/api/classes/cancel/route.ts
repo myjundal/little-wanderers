@@ -14,6 +14,52 @@ async function getHouseholdIdForUser(userId: string) {
   return getLatestHouseholdIdForUser(admin(), userId);
 }
 
+function queueClassCancellationSideEffects(input: {
+  admin: ReturnType<typeof admin>;
+  registrationId: string;
+  classId: string;
+  userId: string;
+  householdId: string;
+  email?: string | null;
+  origin: string;
+}) {
+  void (async () => {
+    const cancellationEmail = await sendClassCancellationEmail(input.admin, input.registrationId, input.email).catch((emailError) => ({
+      ok: false as const,
+      error: emailError instanceof Error ? emailError.message : 'Unable to send cancellation email.',
+    }));
+    if (!cancellationEmail.ok || 'skipped' in cancellationEmail) {
+      logger.warn({
+        action: 'class.cancellation_email_not_sent',
+        userId: input.userId,
+        householdId: input.householdId,
+        registrationId: input.registrationId,
+        result: cancellationEmail,
+      });
+    }
+
+    const waitlistOffer = await offerNextWaitlistSpot(input.admin, input.classId, input.origin, {
+      email: input.email,
+      householdId: input.householdId,
+    }).catch((offerError) => ({
+      ok: false as const,
+      error: offerError instanceof Error ? offerError.message : 'Unable to send waitlist offer.',
+    }));
+    const waitlistOfferEmailFailed = waitlistOffer.ok && 'email' in waitlistOffer && waitlistOffer.email && !waitlistOffer.email.ok;
+    if (!waitlistOffer.ok || waitlistOfferEmailFailed) {
+      logger.warn({
+        action: 'class.waitlist_offer_email_not_sent',
+        userId: input.userId,
+        householdId: input.householdId,
+        registrationId: input.registrationId,
+        result: waitlistOffer,
+      });
+    }
+  })().catch((error) => {
+    logger.error({ action: 'class.cancellation_side_effects_failed', registrationId: input.registrationId }, error);
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -74,27 +120,17 @@ export async function POST(req: Request) {
       .eq('id', registrationId);
 
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-    const cancellationEmail = await sendClassCancellationEmail(supa, registrationId, user.email).catch((emailError) => ({
-      ok: false as const,
-      error: emailError instanceof Error ? emailError.message : 'Unable to send cancellation email.',
-    }));
-    if (!cancellationEmail.ok || 'skipped' in cancellationEmail) {
-      logger.warn({ action: 'class.cancellation_email_not_sent', userId: user.id, householdId, registrationId, result: cancellationEmail });
-    }
-
-    const waitlistOffer = await offerNextWaitlistSpot(supa, reg.class_id, new URL(req.url).origin, {
-      email: user.email,
+    queueClassCancellationSideEffects({
+      admin: supa,
+      registrationId,
+      classId: reg.class_id,
+      userId: user.id,
       householdId,
-    }).catch((offerError) => ({
-      ok: false as const,
-      error: offerError instanceof Error ? offerError.message : 'Unable to send waitlist offer.',
-    }));
-    const waitlistOfferEmailFailed = waitlistOffer.ok && 'email' in waitlistOffer && waitlistOffer.email && !waitlistOffer.email.ok;
-    if (!waitlistOffer.ok || waitlistOfferEmailFailed) {
-      logger.warn({ action: 'class.waitlist_offer_email_not_sent', userId: user.id, householdId, registrationId, result: waitlistOffer });
-    }
+      email: user.email,
+      origin: new URL(req.url).origin,
+    });
 
-    return Response.json({ ok: true, cancellation_email: cancellationEmail, waitlist_offer: waitlistOffer });
+    return Response.json({ ok: true, cancellation_email_pending: true, waitlist_offer_pending: true });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
-import { getLatestHouseholdIdForUser } from '@/lib/households';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import ActionToast from '@/components/ui/ActionToast';
 
@@ -39,6 +38,13 @@ type ClassItem = {
 
 type ClassSeries = ClassItem & {
   occurrences: ClassItem[];
+};
+
+type FamilyProfileResponse = {
+  ok?: boolean;
+  guardian?: { first_name: string | null; last_name: string | null } | null;
+  children?: Person[];
+  error?: string;
 };
 
 type RegistrationItem = {
@@ -78,6 +84,8 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
   border: '1px solid #b897ec',
   boxShadow: '0 2px 8px rgba(95,61,164,0.12)',
 };
+
+const ADDITIONAL_CHILD_VALUE = '__add_child__';
 
 function classSeriesKey(item: ClassItem) {
   return [
@@ -178,13 +186,15 @@ export default function ClassSchedulePage() {
     }
     const requestKey = Date.now();
 
-    const [classRes, myRes] = await Promise.all([
+    const [classRes, myRes, profileRes] = await Promise.all([
       fetch(`/api/classes?limit=200&ts=${requestKey}`, { cache: 'no-store' }),
       fetch(`/api/classes/my?ts=${requestKey}`, { cache: 'no-store' }),
+      fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' }),
     ]);
 
     const classJson = await classRes.json();
     const myJson = await myRes.json();
+    const profileJson = (await profileRes.json().catch(() => null)) as FamilyProfileResponse | null;
 
     if (!classRes.ok || !classJson.ok) {
       setMessage(classJson.error ?? 'Failed to load classes.');
@@ -206,43 +216,21 @@ export default function ClassSchedulePage() {
     setClasses(loadedClasses);
     setMyItems(myJson.items ?? []);
 
-    const supabase = createBrowserSupabaseClient();
-    const { data: userData } = await supabase.auth.getUser();
-    const uid = userData.user?.id;
-    setIsAuthenticated(Boolean(uid));
-    if (!uid) {
+    const authenticated = profileRes.ok && profileJson?.ok;
+    setIsAuthenticated(Boolean(authenticated));
+    if (!authenticated) {
       setPeople([]);
       setSelectedPersonId('');
       setLoading(false);
       return;
     }
 
-    const householdId = await getLatestHouseholdIdForUser(supabase, uid);
-    if (!householdId) {
-      setPeople([]);
-      setSelectedPersonId('');
-      setLoading(false);
-      return;
+    if (profileJson?.guardian) {
+      setGuardianFirstName((prev) => prev || profileJson.guardian?.first_name || '');
+      setGuardianLastName((prev) => prev || profileJson.guardian?.last_name || '');
     }
 
-    const [peopleResult, profileResult] = await Promise.all([
-      supabase
-        .from('people')
-        .select('id,first_name,last_name,birthdate')
-        .eq('household_id', householdId)
-        .eq('role', 'child')
-        .order('created_at', { ascending: true }),
-      fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' })
-        .then((res) => res.json())
-        .catch(() => null),
-    ]);
-
-    if (profileResult?.ok && profileResult.guardian) {
-      setGuardianFirstName((prev) => prev || profileResult.guardian.first_name || '');
-      setGuardianLastName((prev) => prev || profileResult.guardian.last_name || '');
-    }
-
-    const casted = (peopleResult.data ?? []) as Person[];
+    const casted = (profileJson?.children ?? []) as Person[];
     setPeople(casted);
     if (casted[0]?.id) setSelectedPersonId((prev) => prev || casted[0].id);
 
@@ -253,7 +241,7 @@ export default function ClassSchedulePage() {
     load();
     const interval = window.setInterval(() => {
       load(false);
-    }, 10000);
+    }, 30000);
 
     return () => window.clearInterval(interval);
   }, [load]);
@@ -400,6 +388,7 @@ export default function ClassSchedulePage() {
     () => people.find((person) => person.id === selectedPersonId) ?? null,
     [people, selectedPersonId]
   );
+  const isAddingAdditionalChild = selectedPersonId === ADDITIONAL_CHILD_VALUE;
   const selectedPersonNeedsAge = Boolean(selectedPerson && !selectedPerson.birthdate);
 
   const parsedQuickAge = () => {
@@ -419,14 +408,14 @@ export default function ClassSchedulePage() {
   };
 
   const ensureSelectedChild = async () => {
-    if (selectedPersonId && !selectedPersonNeedsAge) return selectedPersonId;
-    const ageYears = parsedQuickAge();
-    if (ageYears == null) {
+    if (selectedPersonId && !isAddingAdditionalChild && !selectedPersonNeedsAge) return selectedPersonId;
+    const ageYears = isAddingAdditionalChild ? null : parsedQuickAge();
+    if (!isAddingAdditionalChild && ageYears == null) {
       setMessage('Please enter your child’s age.');
       return null;
     }
 
-    if (selectedPersonId && selectedPersonNeedsAge) {
+    if (selectedPersonId && !isAddingAdditionalChild && selectedPersonNeedsAge) {
       const guardian = guardianPayload();
       if (!guardian) return null;
       setCreatingChild(true);
@@ -461,7 +450,7 @@ export default function ClassSchedulePage() {
     const res = await fetch('/api/family/children', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, age_years: ageYears, ...guardian }),
+      body: JSON.stringify({ name, age_years: ageYears, require_age: !isAddingAdditionalChild, ...guardian }),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
     setCreatingChild(false);
@@ -508,8 +497,40 @@ export default function ClassSchedulePage() {
     }
 
     const emailFailed = json.email && (!json.email.ok || json.email.skipped);
+    const emailPending = Boolean(json.email_pending);
+    const registeredClass = classes.find((item) => item.id === classId) ?? null;
+    const registeredPerson = people.find((person) => person.id === personId) ?? null;
+    const optimisticStatus: RegistrationItem['status'] = json.status === 'waitlist' ? 'waitlist' : 'scheduled';
+    if (json.id && registeredClass && registeredPerson) {
+      const optimisticItem: RegistrationItem = {
+        id: json.id,
+        person_id: personId,
+        status: optimisticStatus,
+        attendance_status: 'unknown',
+        attendance_display_status: optimisticStatus === 'waitlist' ? 'waitlist' : 'upcoming',
+        attendance_marked_at: null,
+        person_name: `${registeredPerson.first_name} ${registeredPerson.last_name ?? ''}`.trim(),
+        created_at: new Date().toISOString(),
+        customer_favorite: false,
+        customer_note: null,
+        customer_note_updated_at: null,
+        class: {
+          id: registeredClass.id,
+          title: registeredClass.title,
+          start_time: registeredClass.start_time,
+          end_time: registeredClass.end_time,
+          category: registeredClass.category,
+          status: 'scheduled',
+        },
+      };
+      setMyItems((current) => [...current.filter((item) => item.id !== json.id), optimisticItem]);
+    }
     const doneMessage =
-      emailFailed
+      emailPending
+        ? json.status === 'waitlist'
+          ? 'Class is full. You are on the waitlist. Confirmation email will arrive shortly.'
+          : 'Pre-registration complete. Confirmation email will arrive shortly.'
+        : emailFailed
         ? json.status === 'waitlist'
           ? 'Class is full. You are on the waitlist, but we could not send the confirmation email yet.'
           : 'Pre-registration complete, but we could not send the confirmation email yet.'
@@ -518,7 +539,7 @@ export default function ClassSchedulePage() {
           : 'Pre-registration complete. Confirmation email sent.';
     setMessage(doneMessage);
     setToast({ message: json.status === 'waitlist' ? 'Waitlist joined.' : 'Pre-registration complete.', tone: emailFailed ? 'warning' : 'success' });
-    await load(false);
+    void load(false);
   };
 
   const cancelRegistration = async (registrationId: string) => {
@@ -539,14 +560,18 @@ export default function ClassSchedulePage() {
     }
 
     const cancellationEmailFailed = json.cancellation_email && (!json.cancellation_email.ok || json.cancellation_email.skipped);
+    const cancellationEmailPending = Boolean(json.cancellation_email_pending);
     const doneMessage =
-      cancellationEmailFailed
+      cancellationEmailPending
+        ? 'Class booking has been cancelled. Confirmation email will arrive shortly.'
+        : cancellationEmailFailed
         ? 'Class booking has been cancelled, but we could not send the cancellation email yet.'
         : 'Class booking has been cancelled. Cancellation email sent.';
     setMessage(doneMessage);
     setToast({ message: 'Class booking cancelled.', tone: cancellationEmailFailed ? 'warning' : 'success' });
+    setMyItems((current) => current.map((item) => item.id === registrationId ? { ...item, status: 'cancelled' } : item));
     setCancellingId(null);
-    await load(false);
+    void load(false);
   };
 
   const saveClassReflection = async (registrationId: string, favorite: boolean, note: string) => {
@@ -565,7 +590,7 @@ export default function ClassSchedulePage() {
     }
 
     setMessage('Class favorite/note saved.');
-    await load(false);
+    void load(false);
   };
 
   return (
@@ -610,10 +635,22 @@ export default function ClassSchedulePage() {
           <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
             <label style={{ display: 'block', color: '#6f628d', fontWeight: 700 }}>
               Register for
-              <select value={selectedPersonId} onChange={(e) => { setSelectedPersonId(e.target.value); setQuickChildAge(''); }} style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8 }}>
+              <select value={selectedPersonId} onChange={(e) => { setSelectedPersonId(e.target.value); setQuickChildName(''); setQuickChildAge(''); }} style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8 }}>
                 {people.map((p) => <option key={`register-person-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+                <option value={ADDITIONAL_CHILD_VALUE}>Register additional child</option>
               </select>
             </label>
+            {isAddingAdditionalChild && (
+              <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+                Additional child’s name
+                <input
+                  value={quickChildName}
+                  onChange={(e) => setQuickChildName(e.target.value)}
+                  placeholder="Child name"
+                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+                />
+              </label>
+            )}
             {selectedPersonNeedsAge && (
               <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
                 Approximate age

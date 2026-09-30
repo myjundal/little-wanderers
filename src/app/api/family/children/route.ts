@@ -71,9 +71,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please sign in again.' }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => null)) as { name?: string; age_years?: number; guardian_first_name?: string; guardian_last_name?: string } | null;
+  const body = (await req.json().catch(() => null)) as { name?: string; age_years?: number; guardian_first_name?: string; guardian_last_name?: string; require_age?: boolean } | null;
   const name = String(body?.name ?? '').trim();
   const ageYears = parseAgeYears(body?.age_years);
+  const requireAge = body?.require_age !== false;
   const guardian = parseGuardianName(body);
   if (name.length < 1) {
     return NextResponse.json({ ok: false, error: 'Please enter your child’s name.' }, { status: 400 });
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
   if (name.length > 80) {
     return NextResponse.json({ ok: false, error: 'Please use a shorter child name.' }, { status: 400 });
   }
-  if (ageYears == null) {
+  if (requireAge && ageYears == null) {
     return NextResponse.json({ ok: false, error: 'Please enter your child’s age.' }, { status: 400 });
   }
 
@@ -105,8 +106,10 @@ export async function POST(req: Request) {
         first_name: firstName,
         last_name: lastName,
         gender: null,
-        birthdate: approximateBirthdateFromAge(ageYears),
-        notes: `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My People.`,
+        birthdate: ageYears == null ? null : approximateBirthdateFromAge(ageYears),
+        notes: ageYears == null
+          ? 'Added during class pre-registration. Birthday can be updated in My People.'
+          : `Approximate age ${ageYears} entered during class pre-registration. Birthday can be updated in My People.`,
       })
       .select('id,first_name,last_name,birthdate')
       .maybeSingle();
