@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { countWaitlistRegistrations, hasActiveWaitlistOffer } from '@/lib/class-waitlist';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
@@ -72,10 +71,17 @@ export async function GET(req: NextRequest) {
 
     const ids = classes.map((c) => c.id);
     let countsByClass = new Map<string, number>();
+    let waitlistCountsByClass = new Map<string, number>();
+    let waitlistOfferPendingByClass = new Map<string, boolean>();
     const registrationsByPerson = new Map<string, Set<string>>();
 
     if (ids.length > 0) {
-      const { data: regs } = await supa.from('class_registrations').select('class_id,person_id,status').in('class_id', ids);
+      const { data: regs } = await supa
+        .from('class_registrations')
+        .select('class_id,person_id,status,waitlist_offer_expires_at')
+        .in('class_id', ids);
+      const nowIso = new Date().toISOString();
+
       countsByClass = (regs ?? []).reduce((map, row) => {
         if (row.status === 'scheduled' || row.status === 'attended') {
           map.set(row.class_id, (map.get(row.class_id) ?? 0) + 1);
@@ -86,6 +92,24 @@ export async function GET(req: NextRequest) {
         }
         return map;
       }, new Map<string, number>());
+
+      waitlistCountsByClass = (regs ?? []).reduce((map, row) => {
+        if (row.status === 'waitlist') {
+          map.set(row.class_id, (map.get(row.class_id) ?? 0) + 1);
+        }
+        return map;
+      }, new Map<string, number>());
+
+      waitlistOfferPendingByClass = (regs ?? []).reduce((map, row) => {
+        if (
+          row.status === 'waitlist' &&
+          typeof row.waitlist_offer_expires_at === 'string' &&
+          row.waitlist_offer_expires_at > nowIso
+        ) {
+          map.set(row.class_id, true);
+        }
+        return map;
+      }, new Map<string, boolean>());
     }
 
     const pairCounts = new Map<string, number>();
@@ -106,7 +130,7 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.booked - a.booked);
     const popularThreshold = sortedByPopularity[Math.floor(sortedByPopularity.length * 0.25) - 1]?.booked ?? 0;
 
-    const items = await Promise.all(classes.map(async (c) => {
+    const items = classes.map((c) => {
       const booked = countsByClass.get(c.id) ?? 0;
       const recommendations = classes
         .filter((candidate) => candidate.id !== c.id)
@@ -129,12 +153,12 @@ export async function GET(req: NextRequest) {
         schedule_label: c.schedule_label ?? null,
         booked_count: booked,
         seats_left: c.capacity == null ? null : Math.max(c.capacity - booked, 0),
-        waitlist_offer_pending: await hasActiveWaitlistOffer(supa, c.id).catch(() => false),
-        waitlist_count: await countWaitlistRegistrations(supa, c.id).catch(() => 0),
+        waitlist_offer_pending: waitlistOfferPendingByClass.get(c.id) ?? false,
+        waitlist_count: waitlistCountsByClass.get(c.id) ?? 0,
         is_popular: booked > 0 && booked >= popularThreshold,
         recommended_class_ids: recommendations.map((entry) => entry.class_id),
       };
-    }));
+    });
 
     return Response.json({ ok: true, items }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {

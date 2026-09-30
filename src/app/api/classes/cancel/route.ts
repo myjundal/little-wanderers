@@ -146,7 +146,7 @@ export async function POST(req: Request) {
     const supa = admin();
     const { data: reg } = await supa
       .from('class_registrations')
-      .select('id,class_id,person_id,status')
+      .select('id,class_id,person_id,status,household_id')
       .eq('id', registrationId)
       .maybeSingle();
 
@@ -154,14 +154,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'registration not found' }, { status: 404 });
     }
 
-    const { data: person } = await supa
-      .from('people')
-      .select('id')
-      .eq('id', reg.person_id)
-      .eq('household_id', householdId)
-      .maybeSingle();
-
-    if (!person) {
+    if (reg.household_id !== householdId) {
       return Response.json({ ok: false, error: 'forbidden' }, { status: 403 });
     }
 
@@ -177,7 +170,8 @@ export async function POST(req: Request) {
         waitlist_offer_expires_at: null,
         waitlist_offered_at: null,
       })
-      .eq('id', registrationId);
+      .eq('id', registrationId)
+      .eq('household_id', householdId);
 
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
     queueClassCancellationSideEffects({
