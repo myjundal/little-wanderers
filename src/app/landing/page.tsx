@@ -284,6 +284,15 @@ export default function AppHome() {
       </section>
 
 
+      {!canUseOwnerDashboard && (
+        <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
+          <Link href="/landing/people" className="quickCard">My People</Link>
+          <Link href="/landing/qr" className="quickCard">My QR Code</Link>
+          <Link href="/landing/classschedule" className="quickCard">My Classes</Link>
+          <Link href="/landing/party" className="quickCard">My Party</Link>
+        </section>
+      )}
+
       
 
       {/* Membership badge + CTA */}
@@ -334,21 +343,6 @@ export default function AppHome() {
             <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
           </div>
         </section>
-      )}
-
-      {!canUseOwnerDashboard && (
-      <section className="desktopOnly" style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Link href="/landing/people" style={{ display: 'block' }}>My People</Link>
-          <Link href="/landing/qr" style={{ display: 'block' }}>My QR Codes</Link>
-          {SHOW_CUSTOMER_MEMBERSHIP && <Link href="/landing/membership" style={{ display: 'block' }}>My Membership</Link>}
-          <Link href="/landing/classschedule" style={{ display: 'block' }}>My Classes</Link>
-          <Link href="/landing/party" style={{ display: 'block' }}>My Parties</Link>
-          <Link href="/flows" style={{ display: 'block', color: '#777', fontStyle: 'italic' }}>
-            UX Flows (preview)
-          </Link>
-        </div>
-      </section>
       )}
 
       {!canUseOwnerDashboard && (
