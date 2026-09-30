@@ -145,53 +145,62 @@ export default async function HomeComingSoon() {
         </PastelButton>
       </section>
 
-      <section className={styles.partyFeature}>
-        <div>
+      <section className={`${styles.partyFeature} ${styles.classFeature}`}>
+        <div className={styles.classFeatureCopy}>
           <p className={styles.partyEyebrow}>Class pre-registration</p>
           <h2>Class pre-registration is open</h2>
           <p>
             Browse our first small-group classes and reserve a spot with your My Little Wanderers account. New families can sign in by email, add a child&apos;s name and approximate age, then choose a class.
           </p>
-          {hasWeeklyClasses && (
-            <div className={styles.classScheduleMini} aria-label="Weekly class schedule preview">
-              {WEEKDAY_COLUMNS.map((day) => {
-                const dayItems = weeklyClassSchedule.get(day.value) ?? [];
-                return (
-                  <div className={styles.classScheduleDay} key={day.value}>
-                    <div className={styles.classScheduleDayLabel}>{day.label}</div>
-                    <div className={styles.classSchedulePills}>
-                      {dayItems.length === 0 ? (
-                        <span className={styles.classScheduleEmpty}>-</span>
-                      ) : (
-                        dayItems.slice(0, 1).map((item) => (
-                          <a
-                            className={styles.classSchedulePill}
-                            href={`/classes?class=${encodeURIComponent(item.id)}`}
-                            key={`home-class-${item.id}`}
-                          >
-                            <strong>{timeOnlyLabel(item.start_time)}</strong>
-                            <span>{item.title}</span>
-                            <small>{item.age_range ?? 'Ages TBA'}</small>
-                            <em>{compactCaregiverLabel(item.caregiver_participation)} · {compactSeatsLine(item)}</em>
-                          </a>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
           {!isAuthenticated && (
             <p className={styles.accessNote}>
               Magic link sign-in will bring you back to class pre-registration.
             </p>
           )}
         </div>
-        <PastelButton href="/classes">
-          <span>View classes</span>
-          <small>{isAuthenticated ? 'Choose a class from your account' : 'Sign in when you are ready to pre-register'}</small>
-        </PastelButton>
+        <div className={styles.classPreviewPanel} aria-label="Weekly class schedule preview">
+          <div className={styles.classPreviewHeader}>
+            <span>Weekly snapshot</span>
+            <a href="/classes">View all</a>
+          </div>
+          <div className={styles.classScheduleMini}>
+            {WEEKDAY_COLUMNS.map((day) => {
+              const dayItems = weeklyClassSchedule.get(day.value) ?? [];
+              return (
+                <div className={styles.classScheduleDay} key={day.value}>
+                  <div className={styles.classScheduleDayLabel}>{day.label}</div>
+                  <div className={styles.classSchedulePills}>
+                    {dayItems.length === 0 ? (
+                      <a className={`${styles.classSchedulePill} ${styles.classSchedulePillEmpty}`} href="/classes">
+                        <strong>-</strong>
+                        <span>{hasWeeklyClasses ? 'Open play' : 'Class details'}</span>
+                      </a>
+                    ) : (
+                      dayItems.slice(0, 1).map((item) => (
+                        <a
+                          className={styles.classSchedulePill}
+                          href={`/classes?class=${encodeURIComponent(item.id)}`}
+                          key={`home-class-${item.id}`}
+                        >
+                          <strong>{timeOnlyLabel(item.start_time)}</strong>
+                          <span>{item.title}</span>
+                          <small>{item.age_range ?? 'Ages TBA'}</small>
+                          <em>{compactCaregiverLabel(item.caregiver_participation)} · {compactSeatsLine(item)}</em>
+                        </a>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className={styles.classFeatureAction}>
+          <PastelButton href="/classes">
+            <span>View classes</span>
+            <small>{isAuthenticated ? 'Choose a class from your account' : 'Sign in when you are ready to pre-register'}</small>
+          </PastelButton>
+        </div>
       </section>
 
       <div className={styles.softBand} />
