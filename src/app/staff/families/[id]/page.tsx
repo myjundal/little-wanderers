@@ -91,7 +91,14 @@ function classSeatsLabel(klass: StaffClass) {
 }
 
 function classGroupKey(klass: StaffClass) {
-  return [klass.title, klass.age_range ?? '', klass.caregiver_participation ?? ''].join('::');
+  return [
+    klass.title,
+    klass.category ?? '',
+    klass.schedule_label ?? '',
+    klass.duration_minutes ?? '',
+    klass.capacity ?? '',
+    klass.price_cents,
+  ].join('::');
 }
 
 function classGroupLabel(klass: StaffClass) {
