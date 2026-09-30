@@ -22,6 +22,9 @@ const normalizeUsPhone = (input: string) => {
 
 function formatAuthError(message: string, method: AuthMethod) {
   const normalized = message.toLowerCase();
+  if (normalized.includes('missing-code')) {
+    return 'That login link did not include a usable sign-in code. Please request a fresh email link and use the newest email.';
+  }
   if (normalized.includes('signup') && (normalized.includes('disable') || normalized.includes('not allowed'))) {
     return 'Email sign-up is currently turned off. Please check Supabase Auth sign-up settings, then try again.';
   }
@@ -33,8 +36,10 @@ function formatAuthError(message: string, method: AuthMethod) {
   if (normalized.includes('invalid') && normalized.includes('otp')) {
     return 'That code was not accepted. Please check the code and try again.';
   }
-  if (normalized.includes('expired')) {
-    return 'That code expired. Please request a new code.';
+  if (normalized.includes('expired') || normalized.includes('invalid')) {
+    return method === 'email'
+      ? 'That login link expired or was already used. Please request a fresh email and open the newest link.'
+      : 'That code expired or was not accepted. Please request a new code.';
   }
   return message || 'Something went wrong. Please try again.';
 }
@@ -85,8 +90,12 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const next = params.get('next');
     const mode = params.get('mode');
+    const authError = params.get('error');
     if (next && next.startsWith('/') && !next.startsWith('//')) {
       sessionStorage.setItem('post_login_redirect', next);
+    }
+    if (authError) {
+      setError(formatAuthError(authError, 'email'));
     }
     if (mode === 'new') {
       setJourneyMode('new');
