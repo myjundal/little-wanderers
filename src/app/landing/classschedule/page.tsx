@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
-import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import ActionToast from '@/components/ui/ActionToast';
 
 type Person = {
@@ -86,6 +85,13 @@ const historyTabButtonActiveStyle: React.CSSProperties = {
 };
 
 const ADDITIONAL_CHILD_VALUE = '__add_child__';
+const WEEKDAY_COLUMNS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+];
 
 function classSeriesKey(item: ClassItem) {
   return [
@@ -156,6 +162,37 @@ function seatsLine(item: ClassItem) {
   return `Seats: ${item.booked_count}/${item.capacity} (left: ${item.seats_left ?? 0})`;
 }
 
+function compactSeatsLine(item: ClassItem) {
+  if (item.capacity == null) return 'Unlimited seats';
+  if (item.waitlist_offer_pending || (item.waitlist_count ?? 0) > 0) return 'Waitlist open';
+  const seatsLeft = item.seats_left ?? Math.max(item.capacity - item.booked_count, 0);
+  if (seatsLeft <= 0) return 'Waitlist';
+  return `${seatsLeft}/${item.capacity} seats left`;
+}
+
+function compactCaregiverLabel(value: string | null) {
+  if (!value) return 'Participation TBA';
+  if (value.toLowerCase().includes('drop')) return 'Drop-off';
+  return value;
+}
+
+function timeOnlyLabel(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Time TBA';
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+}
+
+function weekdayTimeLabel(item: ClassItem) {
+  const date = new Date(item.start_time);
+  if (Number.isNaN(date.getTime())) return timeOnlyLabel(item.start_time);
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${weekday} ${timeOnlyLabel(item.start_time)}`;
+}
+
+function classCardDomId(series: ClassSeries) {
+  return `class-card-${series.id}`;
+}
+
 export default function ClassSchedulePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -178,6 +215,7 @@ export default function ClassSchedulePage() {
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [historyTab, setHistoryTab] = useState<'upcoming' | 'waitlist' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
 
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -302,6 +340,39 @@ export default function ClassSchedulePage() {
   );
 
   const classSeries = useMemo(() => groupClassSeries(classes), [classes]);
+  const activeSeriesKey = useMemo(() => {
+    if (!activeClassId) return null;
+    const item = classes.find((klass) => klass.id === activeClassId);
+    return item ? classSeriesKey(item) : null;
+  }, [activeClassId, classes]);
+  const sortedClassSeries = useMemo(() => {
+    if (!activeSeriesKey) return classSeries;
+    return [...classSeries].sort((a, b) => {
+      const aActive = classSeriesKey(a) === activeSeriesKey;
+      const bActive = classSeriesKey(b) === activeSeriesKey;
+      if (aActive === bActive) return 0;
+      return aActive ? -1 : 1;
+    });
+  }, [activeSeriesKey, classSeries]);
+  const weeklySchedule = useMemo(() => {
+    const grouped = new Map<number, ClassItem[]>();
+    WEEKDAY_COLUMNS.forEach((day) => grouped.set(day.value, []));
+    classes.forEach((item) => {
+      const day = new Date(item.start_time).getDay();
+      if (!grouped.has(day)) return;
+      grouped.get(day)!.push(item);
+    });
+    grouped.forEach((items, day) => {
+      grouped.set(day, [...items].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()));
+    });
+    return grouped;
+  }, [classes]);
+
+  useEffect(() => {
+    if (activeClassId && !classes.some((item) => item.id === activeClassId)) {
+      setActiveClassId(null);
+    }
+  }, [activeClassId, classes]);
 
   useEffect(() => {
     setNoteDrafts((prev) => {
@@ -312,28 +383,6 @@ export default function ClassSchedulePage() {
       return next;
     });
   }, [myItems]);
-
-  const classSlots = useMemo<CalendarSlot[]>(
-    () => [
-      ...classes.map<CalendarSlot>((c) => ({
-        id: `class-${c.id}`,
-        start: c.start_time,
-        end: c.end_time,
-        label: c.title,
-        status: c.seats_left != null && c.seats_left <= 0 ? 'full' : 'available',
-      })),
-      ...myItems
-        .filter((item) => item.class?.start_time && item.class?.status !== 'cancelled' && item.status !== 'cancelled')
-        .map<CalendarSlot>((item) => ({
-          id: `mine-${item.id}`,
-          start: item.class!.start_time,
-          end: item.class!.end_time,
-          label: item.class?.title ?? 'My class',
-          status: 'mine',
-        })),
-    ],
-    [classes, myItems]
-  );
 
   const cancelledItems = useMemo(
     () => myItems.filter((item) => item.status === 'cancelled' || item.class?.status === 'cancelled'),
@@ -593,6 +642,15 @@ export default function ClassSchedulePage() {
     void load(false);
   };
 
+  const selectScheduleClass = (item: ClassItem) => {
+    setActiveClassId(item.id);
+    const matchingSeries = classSeries.find((series) => series.occurrences.some((occurrence) => occurrence.id === item.id));
+    window.setTimeout(() => {
+      const target = matchingSeries ? document.getElementById(classCardDomId(matchingSeries)) : null;
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
@@ -602,7 +660,57 @@ export default function ClassSchedulePage() {
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
       {claimingWaitlist && <p style={{ marginTop: 12, color: '#5a4a8f' }}>Claiming your waitlist spot...</p>}
 
-      <div className="desktopCalendar"><AvailabilityCalendar title="Class calendar" slots={classSlots} showUpcoming /></div>
+      <section className="weeklySchedule" aria-label="Weekly class schedule">
+        <div className="weeklyScheduleHeader">
+          <div>
+            <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82' }}>Weekly class snapshot</h2>
+            <p style={{ margin: '6px 0 0', color: '#6f628d', fontSize: 14 }}>
+              Tap a class time to bring its card and pre-registration button to the top.
+            </p>
+          </div>
+        </div>
+        {loading ? (
+          <p style={{ margin: '12px 0 0', color: '#6f628d' }}>Loading schedule…</p>
+        ) : classes.length === 0 ? (
+          <p style={{ margin: '12px 0 0', color: '#6f628d' }}>No upcoming classes yet.</p>
+        ) : (
+          <div className="weeklyGrid">
+            {WEEKDAY_COLUMNS.map((day) => {
+              const dayItems = weeklySchedule.get(day.value) ?? [];
+              return (
+                <div className="weeklyDay" key={day.value}>
+                  <div className="weeklyDayLabel">{day.label}</div>
+                  <div className="weeklyDayPills">
+                    {dayItems.length === 0 ? (
+                      <p className="weeklyEmpty">No classes</p>
+                    ) : (
+                      dayItems.map((item) => {
+                        const isActive = item.id === activeClassId;
+                        return (
+                          <button
+                            key={`weekly-${item.id}`}
+                            type="button"
+                            className={`classPill${isActive ? ' classPillActive' : ''}`}
+                            onClick={() => selectScheduleClass(item)}
+                            aria-pressed={isActive}
+                          >
+                            <span className="classPillTime">{timeOnlyLabel(item.start_time)}</span>
+                            <span className="classPillTitle">{item.title}</span>
+                            <span className="classPillMeta">
+                              {item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}
+                            </span>
+                            <span className="classPillSeats">{compactSeatsLine(item)}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
@@ -721,8 +829,12 @@ export default function ClassSchedulePage() {
           <p>No upcoming classes yet.</p>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {classSeries.map((series) => {
-              const target = series.occurrences[0] ?? series;
+            {sortedClassSeries.map((series) => {
+              const selectedOccurrence = activeClassId
+                ? series.occurrences.find((occurrence) => occurrence.id === activeClassId) ?? null
+                : null;
+              const target = selectedOccurrence ?? series.occurrences[0] ?? series;
+              const isActiveSeries = Boolean(selectedOccurrence);
               const isFull = target.seats_left != null && target.seats_left <= 0;
               const shouldWaitlist = isFull || Boolean(target.waitlist_offer_pending) || (target.waitlist_count ?? 0) > 0;
               const existingStatus = selectedPersonId
@@ -732,7 +844,23 @@ export default function ClassSchedulePage() {
                 : undefined;
               const alreadyBooked = Boolean(existingStatus);
               return (
-                <div key={series.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 14, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
+                <div
+                  id={classCardDomId(series)}
+                  key={series.id}
+                  style={{
+                    border: isActiveSeries ? '2px solid #8f66d8' : '1px solid #e3d4fa',
+                    borderRadius: 14,
+                    padding: 14,
+                    background: isActiveSeries ? '#fffdf9' : '#fff',
+                    boxShadow: isActiveSeries ? '0 10px 24px rgba(95,61,164,0.18)' : '0 6px 16px rgba(138, 103, 193, 0.08)',
+                    scrollMarginTop: 18,
+                  }}
+                >
+                  {isActiveSeries && (
+                    <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 800, fontSize: 13 }}>
+                      Selected from schedule: {weekdayTimeLabel(target)}
+                    </p>
+                  )}
                   <h3 style={{ margin: 0 }}>
                     {series.title}{' '}
                     {series.occurrences.some((item) => item.is_popular) && (
@@ -887,7 +1015,94 @@ export default function ClassSchedulePage() {
         </Link>
       </p>
     <style jsx>{`
-  .desktopCalendar { display:block; }
+  .weeklySchedule {
+    margin-top: 18px;
+    border: 1px solid #dfccfb;
+    border-radius: 16px;
+    background: #fff;
+    padding: 14px;
+    box-shadow: 0 10px 22px rgba(120,87,177,0.08);
+  }
+  .weeklyScheduleHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .weeklyGrid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .weeklyDay {
+    min-width: 0;
+    border: 1px solid #eadfff;
+    border-radius: 14px;
+    background: #fbf8ff;
+    padding: 10px;
+  }
+  .weeklyDayLabel {
+    color: #4f3f82;
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .weeklyDayPills {
+    display: grid;
+    gap: 8px;
+  }
+  .weeklyEmpty {
+    margin: 0;
+    color: #9588aa;
+    font-size: 13px;
+  }
+  .classPill {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    text-align: left;
+    border: 1px solid #d9c8f7;
+    border-radius: 12px;
+    background: #fff;
+    color: #4f3f82;
+    padding: 9px 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(138,103,193,0.08);
+  }
+  .classPillActive {
+    border-color: #8f66d8;
+    background: #f4edff;
+    box-shadow: 0 6px 14px rgba(95,61,164,0.16);
+  }
+  .classPillTime {
+    color: #5f3da4;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .classPillTitle {
+    min-width: 0;
+    color: #34284f;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .classPillMeta,
+  .classPillSeats {
+    min-width: 0;
+    color: #6f628d;
+    font-size: 12px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .classPillSeats {
+    color: #7b4d1f;
+    font-weight: 800;
+  }
   .historySummary {
     list-style: none;
     display: flex;
@@ -906,7 +1121,16 @@ export default function ClassSchedulePage() {
     transform: rotate(90deg) translateX(1px);
   }
   @media (max-width: 900px) {
-    .desktopCalendar { display:none; }
+    .weeklyGrid {
+      display: flex;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scroll-snap-type: x proximity;
+    }
+    .weeklyDay {
+      flex: 0 0 220px;
+      scroll-snap-align: start;
+    }
   }
 `}</style>
     </main>
