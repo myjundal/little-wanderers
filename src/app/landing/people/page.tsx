@@ -38,6 +38,7 @@ export default function PeoplePage() {
   const [openAdd, setOpenAdd] = useState(false);
   const [openNotify, setOpenNotify] = useState(false);
   const [openInvite, setOpenInvite] = useState(false);
+  const [savingBirthdateId, setSavingBirthdateId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -130,6 +131,25 @@ export default function PeoplePage() {
     await load();
   };
 
+  const updateBirthdate = async (personId: string, birthdate: string) => {
+    setSavingBirthdateId(personId);
+    setUiError(null);
+    setUiMessage(null);
+    const { error } = await supabase
+      .from('people')
+      .update({ birthdate: birthdate || null })
+      .eq('id', personId);
+    setSavingBirthdateId(null);
+
+    if (error) {
+      setUiError('Something went wrong while saving the birthday.');
+      return;
+    }
+
+    setPeople((current) => current.map((person) => person.id === personId ? { ...person, birthdate: birthdate || null } : person));
+    setUiMessage('Birthday updated.');
+  };
+
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }}>
       <h1>Family & Household</h1>
@@ -143,7 +163,20 @@ export default function PeoplePage() {
               <span style={{ fontSize: 13, textTransform: 'capitalize', color: '#6d6480' }}>{p.role}</span>
               <span style={{ fontWeight: 700 }}>{p.first_name} {p.last_name ?? ''}</span>
               <span style={{ color: '#666', fontSize: 14, textTransform: 'capitalize' }}>{p.gender ? p.gender.replaceAll('_', ' ') : '-'}</span>
-              <span style={{ color: '#666', fontSize: 14 }}>{p.birthdate ?? '-'}</span>
+              {p.role === 'child' ? (
+                <label style={{ display: 'grid', gap: 4, color: '#666', fontSize: 14 }}>
+                  Birthday
+                  <input
+                    type="date"
+                    value={p.birthdate ?? ''}
+                    onChange={(event) => updateBirthdate(p.id, event.target.value)}
+                    disabled={savingBirthdateId === p.id}
+                    style={{ width: '100%', minWidth: 0 }}
+                  />
+                </label>
+              ) : (
+                <span style={{ color: '#666', fontSize: 14 }}>{p.birthdate ?? '-'}</span>
+              )}
               <button onClick={() => removePerson(p.id)} style={{ width: '100%' }}>Remove</button>
             </li>
           ))}

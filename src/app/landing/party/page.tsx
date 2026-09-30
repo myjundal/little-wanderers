@@ -243,8 +243,8 @@ export default function PartyPage() {
 
   const submit = async () => {
     if (!isAuthenticated) {
-      sessionStorage.setItem('post_login_redirect', '/party');
-      window.location.assign('/login');
+      sessionStorage.setItem('post_login_redirect', '/landing/party');
+      window.location.assign(`/login?mode=new&next=${encodeURIComponent('/landing/party')}`);
       return;
     }
     setSubmitting(true);
@@ -530,9 +530,7 @@ export default function PartyPage() {
             <li>Because our construction schedule is still moving, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}.</li>
             {!loading && !isAuthenticated && (
               <li>
-                To request a party hold, you&apos;ll need to sign in to My Little Wanderers. Early access sign-in is currently available for Wanderlist families, so please{' '}
-                <Link href="https://forms.gle/ucr5SGqiX6A6TJ8K7" target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>join the Wanderlist</Link>{' '}
-                or come back after we open.
+                To request a party hold, you&apos;ll sign in with email first. If your email is not on the Wanderlist yet, we will add it automatically.
               </li>
             )}
             <li>During early access, we will hold your selected party slot without collecting a deposit today.</li>

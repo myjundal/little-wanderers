@@ -61,8 +61,6 @@ export default function SoftOpeningInvitePage() {
           <SoftOpeningSignInButton>Sign in for soft opening access</SoftOpeningSignInButton>
           <Link
             href={WAITLIST_JOIN_URL}
-            target="_blank"
-            rel="noreferrer"
             style={{
               display: 'inline-flex',
               alignItems: 'center',

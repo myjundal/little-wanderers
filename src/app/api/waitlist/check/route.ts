@@ -28,18 +28,53 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, allowed: false, error: 'Unable to check Wanderlist access right now.' }, { status: 500 });
   }
 
-  const claimed = Boolean(data?.claimed_user_id);
-  if (data?.claimed_at && !data.claimed_user_id) {
+  let waitlistEntry = data;
+
+  if (!waitlistEntry) {
+    const { data: inserted, error: insertError } = await admin
+      .from('waitlist_entries')
+      .insert({
+        email,
+        normalized_email: normalizedEmail,
+        source: 'website_signup',
+        raw_payload: {
+          created_from: 'login',
+          created_at: new Date().toISOString(),
+        },
+        synced_at: new Date().toISOString(),
+      })
+      .select('id,claimed_user_id,claimed_at')
+      .maybeSingle();
+
+    if (insertError) {
+      const retry = await admin
+        .from('waitlist_entries')
+        .select('id,claimed_user_id,claimed_at')
+        .eq('normalized_email', normalizedEmail)
+        .maybeSingle();
+
+      if (retry.error || !retry.data) {
+        return NextResponse.json({ ok: false, allowed: false, error: 'Unable to create Wanderlist access right now.' }, { status: 500 });
+      }
+
+      waitlistEntry = retry.data;
+    } else {
+      waitlistEntry = inserted;
+    }
+  }
+
+  const claimed = Boolean(waitlistEntry?.claimed_user_id);
+  if (waitlistEntry?.claimed_at && !waitlistEntry.claimed_user_id) {
     await admin
       .from('waitlist_entries')
       .update({ claimed_at: null })
-      .eq('id', data.id)
+      .eq('id', waitlistEntry.id)
       .is('claimed_user_id', null);
   }
 
   return NextResponse.json({
     ok: true,
-    allowed: Boolean(data),
+    allowed: Boolean(waitlistEntry),
     claimed,
     waitlist_url: WAITLIST_JOIN_URL,
   });

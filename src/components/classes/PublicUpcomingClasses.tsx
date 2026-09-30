@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import type { CSSProperties } from 'react';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type ClassItem = {
   id: string;
@@ -202,6 +202,14 @@ export default function PublicUpcomingClasses() {
 
   const visibleClasses = useMemo(() => groupClassSeries(classes).slice(0, 6), [classes]);
 
+  const goToClassPreRegistration = async () => {
+    const next = '/landing/classschedule';
+    sessionStorage.setItem('post_login_redirect', next);
+    const supabase = createBrowserSupabaseClient();
+    const { data } = await supabase.auth.getUser();
+    window.location.assign(data.user ? next : `/login?mode=new&next=${encodeURIComponent(next)}`);
+  };
+
   if (loading || error || visibleClasses.length === 0) return null;
 
   return (
@@ -286,22 +294,24 @@ export default function PublicUpcomingClasses() {
                 {seatsLine(item)}
               </span>
             </div>
-            <Link
-              href="/landing/classschedule"
+            <button
+              type="button"
+              onClick={goToClassPreRegistration}
               style={{
                 display: 'inline-flex',
                 justifyContent: 'center',
+                border: 'none',
                 marginTop: 4,
                 borderRadius: 14,
                 background: '#5f3da4',
                 color: '#fff',
                 padding: '11px 14px',
-                textDecoration: 'none',
                 fontWeight: 800,
+                cursor: 'pointer',
               }}
             >
               Pre-register
-            </Link>
+            </button>
           </article>
         ))}
       </div>

@@ -7,7 +7,7 @@ import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://thelittlewanderers.com';
-const WAITLIST_URL = 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
+const WAITLIST_URL = '/login?mode=new';
 
 const localBusinessJsonLd = {
   '@context': 'https://schema.org',
@@ -71,7 +71,7 @@ export default async function HomeComingSoon() {
             We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
             in West Hartford, CT. Soft opening invitations will go to Wanderlist families first, so if you&apos;d like to
             join us for soft opening,{' '}
-            <a href={WAITLIST_URL} className={styles.inlineLink} target="_blank" rel="noreferrer">
+            <a href={WAITLIST_URL} className={styles.inlineLink}>
               join our Wanderlist
             </a>{' '}
             and we&apos;ll send opening updates and priority reservation access before we open to the public!
@@ -82,7 +82,7 @@ export default async function HomeComingSoon() {
           </p>
           <div className={styles.actions}>
             <div className={styles.waitlistAction}>
-              <PastelButton href={WAITLIST_URL} external>
+              <PastelButton href={WAITLIST_URL}>
                 <span>Join the Wanderlist</span>
                 <small>Get opening updates and priority booking access before we open to the public</small>
               </PastelButton>
@@ -123,7 +123,7 @@ export default async function HomeComingSoon() {
           </p>
           {!isAuthenticated && (
             <p className={styles.accessNote}>
-              Requesting a party hold requires My Little Wanderers access. Early access accounts are currently available for Wanderlist families.
+              Requesting a party hold requires My Little Wanderers access. New emails are added to the Wanderlist automatically during sign-up.
             </p>
           )}
         </div>

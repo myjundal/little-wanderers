@@ -11,6 +11,7 @@ type Person = {
   id: string;
   first_name: string;
   last_name: string | null;
+  birthdate: string | null;
 };
 
 type ClassItem = {
@@ -153,6 +154,9 @@ export default function ClassSchedulePage() {
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
+  const [quickChildName, setQuickChildName] = useState('');
+  const [quickChildAge, setQuickChildAge] = useState('');
+  const [creatingChild, setCreatingChild] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
@@ -221,8 +225,9 @@ export default function ClassSchedulePage() {
 
     const { data: ppl } = await supabase
       .from('people')
-      .select('id,first_name,last_name')
+      .select('id,first_name,last_name,birthdate')
       .eq('household_id', householdId)
+      .eq('role', 'child')
       .order('created_at', { ascending: true });
 
     const casted = (ppl ?? []) as Person[];
@@ -379,15 +384,82 @@ export default function ClassSchedulePage() {
     () => selectedHistoryItems.filter((item) => historyPersonFilter === 'all' || item.person_id === historyPersonFilter),
     [historyPersonFilter, selectedHistoryItems]
   );
+  const selectedPerson = useMemo(
+    () => people.find((person) => person.id === selectedPersonId) ?? null,
+    [people, selectedPersonId]
+  );
+  const selectedPersonNeedsAge = Boolean(selectedPerson && !selectedPerson.birthdate);
+
+  const parsedQuickAge = () => {
+    const age = Number(quickChildAge);
+    if (!Number.isFinite(age) || age < 0 || age > 12) return null;
+    return Math.round(age * 2) / 2;
+  };
+
+  const ensureSelectedChild = async () => {
+    if (selectedPersonId && !selectedPersonNeedsAge) return selectedPersonId;
+    const ageYears = parsedQuickAge();
+    if (ageYears == null) {
+      setMessage('Please enter your child’s age.');
+      return null;
+    }
+
+    if (selectedPersonId && selectedPersonNeedsAge) {
+      setCreatingChild(true);
+      const res = await fetch('/api/family/children', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ person_id: selectedPersonId, age_years: ageYears }),
+      });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
+      setCreatingChild(false);
+
+      if (!res.ok || !json?.ok || !json.child?.id) {
+        setMessage(json?.error ?? 'Could not save your child’s age yet.');
+        return null;
+      }
+
+      const updatedChild = json.child as Person;
+      setPeople((current) => current.map((person) => person.id === updatedChild.id ? updatedChild : person));
+      setQuickChildAge('');
+      return selectedPersonId;
+    }
+
+    const name = quickChildName.trim();
+    if (!name) {
+      setMessage('Please enter your child’s name first.');
+      return null;
+    }
+
+    setCreatingChild(true);
+    const res = await fetch('/api/family/children', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, age_years: ageYears }),
+    });
+    const json = (await res.json().catch(() => null)) as { ok?: boolean; child?: Person; error?: string } | null;
+    setCreatingChild(false);
+
+    if (!res.ok || !json?.ok || !json.child?.id) {
+      setMessage(json?.error ?? 'Could not save your child yet.');
+      return null;
+    }
+
+    setPeople((current) => [...current, json.child as Person]);
+    setSelectedPersonId(json.child.id);
+    setQuickChildName('');
+    setQuickChildAge('');
+    return json.child.id;
+  };
 
   const preRegisterClass = async (classId: string) => {
     if (!isAuthenticated) {
       sessionStorage.setItem('post_login_redirect', '/landing/classschedule');
-      window.location.assign('/login');
+      window.location.assign(`/login?mode=new&next=${encodeURIComponent('/landing/classschedule')}`);
       return;
     }
-    if (!selectedPersonId) {
-      setMessage('Please add/select a child before pre-registering.');
+    const personId = await ensureSelectedChild();
+    if (!personId) {
       return;
     }
 
@@ -397,7 +469,7 @@ export default function ClassSchedulePage() {
     const res = await fetch('/api/classes/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ class_id: classId, person_id: selectedPersonId }),
+      body: JSON.stringify({ class_id: classId, person_id: personId }),
     });
     const json = await res.json();
     setRegisteringClassId(null);
@@ -482,15 +554,63 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          Pre-registration is free for now. If a class is full, you can join the waitlist. When a spot opens, the next waitlisted family gets a private claim link before the spot returns to general registration.
+          Pre-registration is free for now. If you are new, add your child’s name and age here, then choose the class you want. Birthdays can be corrected later in My People.
         </p>
         {people.length > 0 && (
-          <label style={{ display: 'block', marginTop: 12, color: '#6f628d', fontWeight: 700 }}>
-            Register for
-            <select value={selectedPersonId} onChange={(e) => setSelectedPersonId(e.target.value)} style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8 }}>
-              {people.map((p) => <option key={`register-person-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
-            </select>
-          </label>
+          <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+            <label style={{ display: 'block', color: '#6f628d', fontWeight: 700 }}>
+              Register for
+              <select value={selectedPersonId} onChange={(e) => { setSelectedPersonId(e.target.value); setQuickChildAge(''); }} style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8 }}>
+                {people.map((p) => <option key={`register-person-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
+              </select>
+            </label>
+            {selectedPersonNeedsAge && (
+              <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+                Approximate age
+                <input
+                  value={quickChildAge}
+                  onChange={(e) => setQuickChildAge(e.target.value)}
+                  type="number"
+                  min={0}
+                  max={12}
+                  step={0.5}
+                  placeholder="e.g. 3.5"
+                  style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+                />
+              </label>
+            )}
+          </div>
+        )}
+        {isAuthenticated && people.length === 0 && (
+          <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+            <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+              Child’s name
+              <input
+                value={quickChildName}
+                onChange={(e) => setQuickChildName(e.target.value)}
+                placeholder="Child name"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
+              Approximate age
+              <input
+                value={quickChildAge}
+                onChange={(e) => setQuickChildAge(e.target.value)}
+                type="number"
+                min={0}
+                max={12}
+                step={0.5}
+                placeholder="e.g. 3.5"
+                style={{ width: '100%', maxWidth: 220, boxSizing: 'border-box', border: '1px solid #d8c5f6', borderRadius: 10, padding: '10px 12px' }}
+              />
+            </label>
+          </div>
+        )}
+        {!isAuthenticated && (
+          <p style={{ margin: '10px 0 0', color: '#6f628d', fontSize: 14 }}>
+            Choose a class below and we will open email sign-in first.
+          </p>
         )}
       </section>
 
@@ -536,8 +656,8 @@ export default function ClassSchedulePage() {
                     <div style={{ minWidth: 220, flex: '1 1 240px', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
                       {seatsLine(target)}
                     </div>
-                    <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId === target.id || alreadyBooked || !selectedPersonId}>
-                      {registeringClassId === target.id ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
+                    <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId === target.id || creatingChild || alreadyBooked}>
+                      {registeringClassId === target.id || creatingChild ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
                     </button>
                   </div>
                 </div>

@@ -149,11 +149,48 @@ export async function claimWaitlistForUser(user: WaitlistUser) {
 
   if (error) throw error;
 
+  let claimed = Boolean(data);
+  if (!data) {
+    const email = (user.email ?? normalizedEmail).trim().toLowerCase();
+    const inserted = await admin
+      .from('waitlist_entries')
+      .insert({
+        email,
+        normalized_email: normalizedEmail,
+        source: 'website_signup',
+        claimed_user_id: user.id,
+        claimed_at: new Date().toISOString(),
+        raw_payload: {
+          created_from: 'auth_callback',
+          created_at: new Date().toISOString(),
+        },
+        synced_at: new Date().toISOString(),
+      })
+      .select('id')
+      .maybeSingle();
+
+    if (inserted.error) {
+      const retry = await admin
+        .from('waitlist_entries')
+        .update({
+          claimed_user_id: user.id,
+          claimed_at: new Date().toISOString(),
+        })
+        .eq('normalized_email', normalizedEmail)
+        .select('id')
+        .maybeSingle();
+      if (retry.error) throw retry.error;
+      claimed = Boolean(retry.data);
+    } else {
+      claimed = Boolean(inserted.data);
+    }
+  }
+
   try {
     const householdId = await attachPrebookedHousehold(admin, user, normalizedEmail);
-    return { claimed: Boolean(data), householdId };
+    return { claimed, householdId };
   } catch {
-    return { claimed: Boolean(data), householdId: null };
+    return { claimed, householdId: null };
   }
 }
 
@@ -192,8 +229,9 @@ export async function getPostAuthRedirectForUser(
     await claimWaitlistForUser(user).catch(() => null);
   }
 
-  if (options.forceOnboarding) return '/onboarding';
+  const skipOnboardingForQuickFlow = next === '/landing/classschedule' || next === '/landing/party';
+  if (options.forceOnboarding && !skipOnboardingForQuickFlow) return '/onboarding';
 
   const needsOnboarding = await userNeedsOnboarding(user.id).catch(() => false);
-  return needsOnboarding ? '/onboarding' : next;
+  return needsOnboarding && !skipOnboardingForQuickFlow ? '/onboarding' : next;
 }

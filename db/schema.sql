@@ -120,7 +120,7 @@ CREATE TABLE public.waitlist_entries (
     normalized_email text NOT NULL,
     first_name text,
     last_name text,
-    source text DEFAULT 'google_form'::text NOT NULL,
+    source text DEFAULT 'Wanderlist'::text NOT NULL,
     external_id text,
     invite_token uuid DEFAULT gen_random_uuid() NOT NULL,
     raw_payload jsonb,

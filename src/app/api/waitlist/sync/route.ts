@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       normalized_email: normalizedEmail,
       first_name: entry.first_name ? String(entry.first_name).trim() : null,
       last_name: entry.last_name ? String(entry.last_name).trim() : null,
-      source: entry.source ? String(entry.source).trim() : 'google_form',
+      source: entry.source ? String(entry.source).trim() : 'Wanderlist',
       external_id: entry.external_id ? String(entry.external_id).trim() : null,
       raw_payload: entry.raw_payload ?? entry,
       synced_at: new Date().toISOString(),

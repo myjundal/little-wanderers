@@ -1,4 +1,4 @@
-export const WAITLIST_JOIN_URL = process.env.NEXT_PUBLIC_WAITLIST_URL || 'https://forms.gle/ucr5SGqiX6A6TJ8K7';
+export const WAITLIST_JOIN_URL = '/login?mode=new';
 
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
 

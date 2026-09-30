@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
-import { WAITLIST_JOIN_URL } from '@/lib/waitlist';
 
 type AuthMethod = 'phone' | 'email';
 type JourneyMode = 'new' | 'existing';
@@ -83,6 +82,28 @@ export default function LoginPage() {
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get('next');
+    const mode = params.get('mode');
+    if (next && next.startsWith('/') && !next.startsWith('//')) {
+      sessionStorage.setItem('post_login_redirect', next);
+    }
+    if (mode === 'new') {
+      setJourneyMode('new');
+      setAuthMethod('email');
+    }
+
+    const redirectIfSignedIn = async () => {
+      const supabase = createBrowserSupabaseClient();
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) return;
+      window.location.replace(getSafeNextPath());
+    };
+
+    void redirectIfSignedIn();
+  }, []);
+
+  useEffect(() => {
     if (step === 'collect') {
       firstInputRef.current?.focus();
     } else if (step === 'verify') {
@@ -144,23 +165,15 @@ export default function LoginPage() {
 
         if (!checkRes.ok || !checkJson.allowed) {
           setPending(false);
-          setShowWaitlistInvite(true);
           setError(
             checkJson.error ||
-            'We are currently opening sign-ups to Wanderlist families first. Please join the Wanderlist and come back here to log in, or feel free to revisit us after opening.'
+            'We could not create your Little Wanderers access right now. Please try again soon.'
           );
-          return;
-        }
-
-        if (checkJson.claimed) {
-          setPending(false);
-          setJourneyMode('existing');
-          setError('This Wanderlist email already has an account. Please choose “I already have an account” and sign in.');
           return;
         }
       } catch {
         setPending(false);
-        setError('Unable to check Wanderlist access right now. Please try again soon.');
+        setError('Unable to prepare Little Wanderers access right now. Please try again soon.');
         return;
       }
     }
@@ -303,19 +316,12 @@ export default function LoginPage() {
       <section style={{ borderRadius: 24, border: '1px solid #e3d0fb', background: '#fff', boxShadow: '0 16px 28px rgba(120,87,177,0.12)', padding: 20 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
         <h1 style={{ margin: '10px 0 8px', color: '#4f3f82', fontSize: 26 }}>Sign in</h1>
-        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Wanderlist families can create an account with the email they used to join the Wanderlist.</p>
+        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Create or continue your Little Wanderers account with email.</p>
 
         <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
-          <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access is open to Wanderlist families first.</p>
+          <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access now starts here.</p>
           <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
-            To create your account, choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong> and enter the same email you used for the Wanderlist.
-          </p>
-          <p style={{ margin: '8px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
-            Not on the Wanderlist yet?{' '}
-            <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>
-              Join the Wanderlist
-            </a>
-            {' '}and come back here to log in, or feel free to revisit us after opening.
+            Choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong>. If your email is not on the Wanderlist yet, we will add it and send your magic link.
           </p>
         </div>
 
@@ -435,11 +441,7 @@ export default function LoginPage() {
         {error && <p style={{ marginTop: 14, color: '#8a3f6b' }}>{error}</p>}
         {showWaitlistInvite && (
           <p style={{ marginTop: 10, color: '#6d6480', lineHeight: 1.5 }}>
-            Already joined the Wanderlist? Try the email you used. Otherwise,{' '}
-            <a href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 700 }}>
-              join the Wanderlist here
-            </a>
-            {' '}and come back here to log in, or feel free to revisit us after opening.
+            Please use email sign-up for new accounts. We will add new emails to the Wanderlist automatically.
           </p>
         )}
       </section>

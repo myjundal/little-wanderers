@@ -186,7 +186,7 @@ export default function SoftOpeningReservationPage() {
             <Link href="/login" style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center', minHeight: 48, padding: '10px 20px', borderRadius: 999, background: '#A78BCB', color: '#fff', fontWeight: 800, textDecoration: 'none' }}>
               Sign in again
             </Link>
-            <Link href={WAITLIST_JOIN_URL} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center', minHeight: 48, padding: '10px 20px', borderRadius: 999, border: '1px solid #CFC0E2', color: '#7a63a5', fontWeight: 800, textDecoration: 'none' }}>
+            <Link href={WAITLIST_JOIN_URL} style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center', minHeight: 48, padding: '10px 20px', borderRadius: 999, border: '1px solid #CFC0E2', color: '#7a63a5', fontWeight: 800, textDecoration: 'none' }}>
               Join the Wanderlist
             </Link>
           </div>

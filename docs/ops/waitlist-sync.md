@@ -1,6 +1,8 @@
 # Waitlist early-access sync
 
-Use this flow while sign-ups are limited to Google Form waitlist emails:
+> Legacy only: the website now creates Supabase `waitlist_entries` directly during email sign-up. Disable the Google Apps Script time-based `syncAllWaitlistRows` trigger to stop maximum-execution-time failure emails.
+
+Use this flow only if you need to backfill old Google Form waitlist emails:
 
 Google Form responses -> Apps Script -> `/api/waitlist/sync` -> Supabase `waitlist_entries`
 
@@ -9,7 +11,6 @@ Google Form responses -> Apps Script -> `/api/waitlist/sync` -> Supabase `waitli
 Set these in Vercel and local `.env.local`:
 
 ```txt
-NEXT_PUBLIC_WAITLIST_URL=https://forms.gle/ucr5SGqiX6A6TJ8K7
 WAITLIST_SYNC_SECRET=<long random secret>
 SUPABASE_SERVICE_ROLE_KEY=<already configured service role key>
 ```
