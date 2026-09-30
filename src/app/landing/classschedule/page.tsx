@@ -670,7 +670,7 @@ export default function ClassSchedulePage() {
       <section className="weeklySchedule" aria-label="Weekly class schedule">
         <div className="weeklyScheduleHeader">
           <div>
-            <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82' }}>Weekly class snapshot</h2>
+            <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82' }}>Weekly class map</h2>
             <p style={{ margin: '6px 0 0', color: '#6f628d', fontSize: 14 }}>
               Tap a class time to bring its card and pre-registration button to the top.
             </p>
@@ -1037,17 +1037,35 @@ export default function ClassSchedulePage() {
     gap: 12px;
   }
   .weeklyGrid {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
     gap: 10px;
     margin-top: 14px;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 2px 18px 12px 0;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .weeklyGrid::-webkit-scrollbar {
+    height: 7px;
+  }
+  .weeklyGrid::-webkit-scrollbar-track {
+    background: rgba(167,139,203,0.13);
+    border-radius: 999px;
+  }
+  .weeklyGrid::-webkit-scrollbar-thumb {
+    background: #b991dd;
+    border-radius: 999px;
   }
   .weeklyDay {
+    flex: 0 0 138px;
     min-width: 0;
     border: 1px solid #eadfff;
     border-radius: 14px;
     background: #fbf8ff;
     padding: 10px;
+    scroll-snap-align: start;
   }
   .weeklyDayLabel {
     color: #4f3f82;
@@ -1129,37 +1147,38 @@ export default function ClassSchedulePage() {
   }
   @media (max-width: 900px) {
     .weeklyGrid {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 5px;
+      gap: 10px;
+      padding-right: 18px;
     }
     .weeklyDay {
-      padding: 6px 4px;
-      border-radius: 10px;
+      flex-basis: 138px;
+      padding: 8px;
+      border-radius: 14px;
     }
     .weeklyDayLabel {
-      font-size: 10px;
+      font-size: 11px;
       text-align: center;
-      margin-bottom: 5px;
+      margin-bottom: 7px;
     }
     .classPill {
-      padding: 6px 4px;
-      border-radius: 9px;
+      padding: 7px 6px;
+      border-radius: 11px;
       gap: 2px;
     }
     .classPillTime {
-      font-size: 10px;
+      font-size: 11px;
     }
     .classPillTitle {
-      font-size: 10px;
+      font-size: 12px;
       line-height: 1.15;
     }
     .classPillMeta,
     .classPillSeats {
-      font-size: 9px;
+      font-size: 10px;
       line-height: 1.15;
     }
     .weeklyEmpty {
-      font-size: 9px;
+      font-size: 11px;
       text-align: center;
     }
   }
