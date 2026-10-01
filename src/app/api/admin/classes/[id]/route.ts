@@ -2,6 +2,8 @@ import { requireStaffContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
+const CLASS_TIME_ZONE = 'America/New_York';
+
 function normalizeOptionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -12,6 +14,48 @@ function isMissingClassDetailColumn(message: string) {
 
 function isMissingDurationColumn(message: string) {
   return /duration_minutes/i.test(message) && isMissingClassDetailColumn(message);
+}
+
+function normalizedText(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function localDateParts(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLASS_TIME_ZONE,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const weekday = parts.find((part) => part.type === 'weekday')?.value;
+  const hour = parts.find((part) => part.type === 'hour')?.value;
+  const minute = parts.find((part) => part.type === 'minute')?.value;
+  if (!weekday || hour == null || minute == null) return null;
+  return `${weekday}:${Number(hour)}:${Number(minute)}`;
+}
+
+function localSeriesTimeKey(row: { start_time: string; end_time: string }) {
+  const start = localDateParts(row.start_time);
+  const end = localDateParts(row.end_time);
+  if (!start || !end) return null;
+  return `${start}-${end}`;
+}
+
+function isSameEditableSeries(
+  row: { id: string; title: string; start_time: string; end_time: string; schedule_label?: string | null },
+  original: { id: string; title: string; start_time: string; end_time: string; schedule_label?: string | null }
+) {
+  if (row.id === original.id) return false;
+  if (localSeriesTimeKey(row) !== localSeriesTimeKey(original)) return false;
+
+  const originalSchedule = normalizedText(original.schedule_label);
+  const rowSchedule = normalizedText(row.schedule_label);
+  const sameSchedule = Boolean(originalSchedule && rowSchedule && originalSchedule === rowSchedule);
+  return normalizedText(row.title) === normalizedText(original.title) || sameSchedule;
 }
 
 function parseClassPayload(body: Record<string, unknown>) {
@@ -77,7 +121,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if ('error' in parsed) return Response.json({ ok: false, error: parsed.error }, { status: 400 });
 
     const { data: original, error: originalError } = applyToSeries
-      ? await context.admin.from('classes').select('id,title,start_time,end_time').eq('id', params.id).maybeSingle()
+      ? await context.admin.from('classes').select('id,title,start_time,end_time,schedule_label').eq('id', params.id).maybeSingle()
       : { data: null, error: null };
 
     if (originalError) return Response.json({ ok: false, error: originalError.message }, { status: 500 });
@@ -99,28 +143,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 
     if (applyToSeries && original) {
-      const originalStart = new Date(original.start_time);
-      const originalEnd = new Date(original.end_time);
-      const sameClock = (row: { start_time: string; end_time: string }) => {
-        const start = new Date(row.start_time);
-        const end = new Date(row.end_time);
-        return (
-          start.getHours() === originalStart.getHours() &&
-          start.getMinutes() === originalStart.getMinutes() &&
-          end.getHours() === originalEnd.getHours() &&
-          end.getMinutes() === originalEnd.getMinutes()
-        );
-      };
-
       const { data: rows, error: rowsError } = await context.admin
         .from('classes')
-        .select('id,start_time,end_time')
-        .eq('title', original.title);
+        .select('id,title,start_time,end_time,schedule_label');
 
       if (rowsError) return Response.json({ ok: false, error: rowsError.message }, { status: 500 });
 
       const seriesIds = (rows ?? [])
-        .filter((row) => row.id !== params.id && sameClock(row))
+        .filter((row) => isSameEditableSeries(row, original))
         .map((row) => row.id);
 
       if (seriesIds.length > 0) {
