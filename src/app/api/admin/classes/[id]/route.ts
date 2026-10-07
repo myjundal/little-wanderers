@@ -25,24 +25,68 @@ function localDateParts(iso: string) {
   if (Number.isNaN(date.getTime())) return null;
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: CLASS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     weekday: 'short',
     hour: 'numeric',
     minute: '2-digit',
     hourCycle: 'h23',
   }).formatToParts(date);
 
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const dayOfMonth = parts.find((part) => part.type === 'day')?.value;
   const weekday = parts.find((part) => part.type === 'weekday')?.value;
   const hour = parts.find((part) => part.type === 'hour')?.value;
   const minute = parts.find((part) => part.type === 'minute')?.value;
-  if (!weekday || hour == null || minute == null) return null;
-  return `${weekday}:${Number(hour)}:${Number(minute)}`;
+  if (!year || !month || !dayOfMonth || !weekday || hour == null || minute == null) return null;
+  return {
+    year: Number(year),
+    month: Number(month),
+    dayOfMonth: Number(dayOfMonth),
+    weekday,
+    hour: Number(hour),
+    minute: Number(minute),
+  };
 }
 
 function localSeriesTimeKey(row: { start_time: string; end_time: string }) {
   const start = localDateParts(row.start_time);
   const end = localDateParts(row.end_time);
   if (!start || !end) return null;
-  return `${start}-${end}`;
+  return `${start.weekday}:${start.hour}:${start.minute}-${end.weekday}:${end.hour}:${end.minute}`;
+}
+
+function timeZoneOffsetMs(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLASS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const localAsUtc = Date.UTC(value('year'), value('month') - 1, value('day'), value('hour'), value('minute'), value('second'));
+  return localAsUtc - date.getTime();
+}
+
+function zonedWallTimeToIso(date: { year: number; month: number; dayOfMonth: number }, time: { hour: number; minute: number }) {
+  const wallTimeAsUtc = Date.UTC(date.year, date.month - 1, date.dayOfMonth, time.hour, time.minute, 0);
+  let instant = new Date(wallTimeAsUtc - timeZoneOffsetMs(new Date(wallTimeAsUtc)));
+  const correctedOffset = timeZoneOffsetMs(instant);
+  instant = new Date(wallTimeAsUtc - correctedOffset);
+  return instant.toISOString();
+}
+
+function moveOccurrenceToTime(row: { start_time: string }, time: { hour: number; minute: number }) {
+  const localDate = localDateParts(row.start_time);
+  if (!localDate) return row.start_time;
+  return zonedWallTimeToIso(localDate, time);
 }
 
 function isSameEditableSeries(
@@ -50,12 +94,13 @@ function isSameEditableSeries(
   original: { id: string; title: string; start_time: string; end_time: string; schedule_label?: string | null }
 ) {
   if (row.id === original.id) return false;
-  if (localSeriesTimeKey(row) !== localSeriesTimeKey(original)) return false;
 
   const originalSchedule = normalizedText(original.schedule_label);
   const rowSchedule = normalizedText(row.schedule_label);
   const sameSchedule = Boolean(originalSchedule && rowSchedule && originalSchedule === rowSchedule);
-  return normalizedText(row.title) === normalizedText(original.title) || sameSchedule;
+  const sameTitle = normalizedText(row.title) === normalizedText(original.title);
+  if (sameTitle && sameSchedule) return true;
+  return sameTitle && localSeriesTimeKey(row) === localSeriesTimeKey(original);
 }
 
 function parseClassPayload(body: Record<string, unknown>) {
@@ -151,12 +196,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
       const seriesIds = (rows ?? [])
         .filter((row) => isSameEditableSeries(row, original))
-        .map((row) => row.id);
+        .map((row) => row);
 
       if (seriesIds.length > 0) {
+        const nextStart = localDateParts(parsed.data.start_time);
+        const nextEnd = localDateParts(parsed.data.end_time);
         const seriesData = {
           title: parsed.data.title,
           category: parsed.data.category,
+          duration_minutes: parsed.data.duration_minutes,
           capacity: parsed.data.capacity,
           price_cents: parsed.data.price_cents,
           instructor_name: parsed.data.instructor_name,
@@ -167,9 +215,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           schedule_label: parsed.data.schedule_label,
           status: parsed.data.status,
         };
-        const seriesUpdate = await context.admin.from('classes').update(seriesData).in('id', seriesIds);
-        if (seriesUpdate.error) {
-          return Response.json({ ok: false, error: seriesUpdate.error.message }, { status: 500 });
+
+        for (const row of seriesIds) {
+          const timedSeriesData = nextStart && nextEnd
+            ? {
+                ...seriesData,
+                start_time: moveOccurrenceToTime(row, { hour: nextStart.hour, minute: nextStart.minute }),
+                end_time: moveOccurrenceToTime(row, { hour: nextEnd.hour, minute: nextEnd.minute }),
+              }
+            : seriesData;
+          const seriesUpdate = await context.admin.from('classes').update(timedSeriesData).eq('id', row.id);
+          if (seriesUpdate.error) {
+            if (isMissingDurationColumn(seriesUpdate.error.message)) {
+              const fallbackData: Record<string, unknown> = { ...timedSeriesData };
+              delete fallbackData.duration_minutes;
+              const fallback = await context.admin.from('classes').update(fallbackData).eq('id', row.id);
+              if (!fallback.error) continue;
+              return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
+            }
+            return Response.json({ ok: false, error: seriesUpdate.error.message }, { status: 500 });
+          }
         }
       }
     }
