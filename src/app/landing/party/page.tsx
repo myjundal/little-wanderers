@@ -7,13 +7,17 @@ import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/A
 import ActionToast from '@/components/ui/ActionToast';
 import {
   getDefaultPartyBookingSlot,
+  getPartyDateKey,
   getPartyBookingSlotOptionsForDate,
   getPartyBookingStartDate,
+  getPartySlotFromStart,
   isPartyBookingDate,
   isVisiblePartyCalendarSlot,
   PARTY_BOOKING_START_DATE,
   PARTY_BOOKING_START_LABEL,
   PARTY_BOOKING_SLOTS,
+  PARTY_TIME_ZONE,
+  toPartyDateTimeIso,
   type PartyBookingSlot,
 } from '@/lib/party-config';
 import { PARTY_FINAL_DETAILS, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
@@ -64,10 +68,6 @@ const PARTY_BRING_GROUPS = [
   },
 ];
 
-function toIsoLocal(date: string, hourLocal: number) {
-  return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
-}
-
 function getDefaultPartyDate() {
   const tomorrow = new Date();
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -91,8 +91,8 @@ function getPartyBlackoutSlots(): CalendarSlot[] {
     const dayStr = d.toISOString().slice(0, 10);
     slots.push({
       id: `blackout-${dayStr}`,
-      start: toIsoLocal(dayStr, 10),
-      end: toIsoLocal(dayStr, 18),
+      start: toPartyDateTimeIso(dayStr, 10),
+      end: toPartyDateTimeIso(dayStr, 18),
       label: 'Unavailable before opening',
       status: 'full',
     });
@@ -104,7 +104,7 @@ function getPartyBlackoutSlots(): CalendarSlot[] {
 function prettyNote(note: string | null) {
   if (!note) return '-';
   return note.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (iso) =>
-    new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    new Date(iso).toLocaleTimeString([], { timeZone: PARTY_TIME_ZONE, hour: '2-digit', minute: '2-digit' })
   );
 }
 
@@ -124,7 +124,7 @@ function getDefaultPartyForm(): PartyForm {
 function formatPartySummary(startIso: string, endIso: string) {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  return `${start.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}, ${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
+  return `${start.toLocaleDateString('en-US', { timeZone: PARTY_TIME_ZONE, month: 'long', day: 'numeric', year: 'numeric' })}, ${start.toLocaleTimeString('en-US', { timeZone: PARTY_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase()}-${end.toLocaleTimeString('en-US', { timeZone: PARTY_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`;
 }
 
 export default function PartyPage() {
@@ -149,8 +149,8 @@ export default function PartyPage() {
   const selectedSlotOption = PARTY_BOOKING_SLOTS.find((slot) => slot.value === form.slot) ?? PARTY_BOOKING_SLOTS[1];
   const partySlotOptions = getPartyBookingSlotOptionsForDate(form.party_date);
   const rescheduleSlotOptions = getPartyBookingSlotOptionsForDate(rescheduleDate);
-  const startIso = useMemo(() => toIsoLocal(form.party_date, selectedSlotOption.startHour), [form.party_date, selectedSlotOption.startHour]);
-  const endIso = useMemo(() => toIsoLocal(form.party_date, selectedSlotOption.endHour), [form.party_date, selectedSlotOption.endHour]);
+  const startIso = useMemo(() => toPartyDateTimeIso(form.party_date, selectedSlotOption.startHour), [form.party_date, selectedSlotOption.startHour]);
+  const endIso = useMemo(() => toPartyDateTimeIso(form.party_date, selectedSlotOption.endHour), [form.party_date, selectedSlotOption.endHour]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -373,12 +373,12 @@ export default function PartyPage() {
           )
         );
         for (const slot of getPartyBookingSlotOptionsForDate(dayStr)) {
-          const start = toIsoLocal(dayStr, slot.startHour);
+          const start = toPartyDateTimeIso(dayStr, slot.startHour);
           if (blockedStarts.has(new Date(start).getTime())) continue;
           generated.push({
             id: `avail-${dayStr}-${slot.value}`,
             start,
-            end: toIsoLocal(dayStr, slot.endHour),
+            end: toPartyDateTimeIso(dayStr, slot.endHour),
             label: 'Available party slot',
             status: 'available',
           });
@@ -413,20 +413,19 @@ export default function PartyPage() {
 
   const selectSlot = (slot: CalendarSlot) => {
     if (slot.status !== 'available') return;
-    const start = new Date(slot.start);
-    const hour = start.getHours();
+    const selectedSlot = getPartySlotFromStart(slot.start) ?? '15:00';
     setForm((prev) => ({
       ...prev,
-      party_date: slot.start.slice(0, 10),
-      slot: hour >= 15 ? '15:00' : '10:00',
+      party_date: getPartyDateKey(slot.start),
+      slot: selectedSlot,
     }));
     setMessage(null);
   };
 
   const reschedule = async (bookingId: string) => {
     const nextSlotOption = PARTY_BOOKING_SLOTS.find((slot) => slot.value === rescheduleSlot) ?? PARTY_BOOKING_SLOTS[1];
-    const nextStart = toIsoLocal(rescheduleDate, nextSlotOption.startHour);
-    const nextEnd = toIsoLocal(rescheduleDate, nextSlotOption.endHour);
+    const nextStart = toPartyDateTimeIso(rescheduleDate, nextSlotOption.startHour);
+    const nextEnd = toPartyDateTimeIso(rescheduleDate, nextSlotOption.endHour);
     if (!isPartyBookingDate(rescheduleDate) || !rescheduleSlotOptions.some((slot) => slot.value === rescheduleSlot)) {
       setMessage(`Please choose an available Friday afternoon, Saturday, or Sunday on or after ${PARTY_BOOKING_START_LABEL}.`);
       return;
@@ -541,6 +540,7 @@ export default function PartyPage() {
             onSlotSelect={selectSlot}
             visibleWeekdays={[5, 6, 0]}
             initialMonth={PARTY_BOOKING_START_DATE}
+            timeZone={PARTY_TIME_ZONE}
           />
         </div>
       </div>
@@ -710,7 +710,7 @@ export default function PartyPage() {
                 return (
                   <div key={item.id} style={{ border: '1px solid #e3d4fa', borderRadius: 14, padding: 12, background: '#fff', boxShadow: '0 6px 16px rgba(138, 103, 193, 0.08)' }}>
                   <p style={{ margin: 0, fontWeight: 600 }}>
-                    {new Date(item.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(item.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}
+                    {new Date(item.start_time).toLocaleString('en-US', { timeZone: PARTY_TIME_ZONE, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toLowerCase()} ~ {new Date(item.end_time).toLocaleTimeString('en-US', { timeZone: PARTY_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase()}
                   </p>
                   {item.birthday_child_name && (
                     <p style={{ margin: '6px 0' }}>

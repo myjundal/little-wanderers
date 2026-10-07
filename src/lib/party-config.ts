@@ -15,7 +15,7 @@ export const PARTY_BOOKING_SLOTS: Array<{
 ];
 
 const PARTY_BOOKING_START_MS = Date.parse(`${PARTY_BOOKING_START_DATE}T00:00:00.000Z`);
-const PARTY_TIME_ZONE = 'America/New_York';
+export const PARTY_TIME_ZONE = 'America/New_York';
 
 export function getPartyBookingStartDate() {
   return new Date(PARTY_BOOKING_START_MS);
@@ -50,7 +50,7 @@ function getEasternDateParts(value: Date | string) {
   };
 }
 
-function getPartyDateKey(value: Date | string) {
+export function getPartyDateKey(value: Date | string) {
   const parts = getEasternDateParts(value);
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
@@ -60,11 +60,43 @@ function getPartyWeekday(value: Date | string) {
   return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
 }
 
-function getPartySlotFromStart(value: Date | string): PartyBookingSlot | null {
+export function getPartySlotFromStart(value: Date | string): PartyBookingSlot | null {
   const hour = getEasternDateParts(value).hour;
   if (hour === 10) return '10:00';
   if (hour === 15) return '15:00';
   return null;
+}
+
+function timeZoneOffsetMs(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: PARTY_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const getPart = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const localAsUtc = Date.UTC(
+    getPart('year'),
+    getPart('month') - 1,
+    getPart('day'),
+    getPart('hour'),
+    getPart('minute'),
+    getPart('second')
+  );
+  return localAsUtc - date.getTime();
+}
+
+export function toPartyDateTimeIso(date: string, hourLocal: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  const wallTimeAsUtc = Date.UTC(year, month - 1, day, hourLocal, 0, 0);
+  let instant = new Date(wallTimeAsUtc - timeZoneOffsetMs(new Date(wallTimeAsUtc)));
+  instant = new Date(wallTimeAsUtc - timeZoneOffsetMs(instant));
+  return instant.toISOString();
 }
 
 export function isOnOrAfterPartyBookingStart(value: Date | string) {

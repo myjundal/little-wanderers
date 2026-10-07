@@ -333,6 +333,7 @@ export default function OpenPlayReservationsAdmin() {
           initialMonth="2026-10"
           maxVisibleSlotsPerDay={4}
           formatSlotPillLabel={(slot) => slot.label}
+          timeZone="America/New_York"
         />
       )}
 

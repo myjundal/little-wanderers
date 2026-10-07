@@ -21,6 +21,7 @@ type Props = {
   maxVisibleSlotsPerDay?: number;
   formatSlotPillLabel?: (slot: CalendarSlot) => string;
   selectableStatuses?: CalendarSlot['status'][];
+  timeZone?: string;
 };
 
 const statusColor: Record<CalendarSlot['status'], string> = {
@@ -39,8 +40,44 @@ const statusLabel: Record<CalendarSlot['status'], string> = {
   closed: 'Closed',
 };
 
-function ymd(date: Date) {
+function ymd(date: Date, timeZone?: string) {
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const getPart = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+  }
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function slotTimeKey(iso: string, timeZone?: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    ...(timeZone ? { timeZone } : {}),
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(iso));
+}
+
+function slotTimeLabel(iso: string, timeZone?: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    ...(timeZone ? { timeZone } : {}),
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(iso)).toLowerCase();
+}
+
+function slotDateLabel(iso: string, timeZone?: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    ...(timeZone ? { timeZone } : {}),
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(iso));
 }
 
 export default function AvailabilityCalendar({
@@ -54,6 +91,7 @@ export default function AvailabilityCalendar({
   maxVisibleSlotsPerDay = 2,
   formatSlotPillLabel,
   selectableStatuses = ['available'],
+  timeZone,
 }: Props) {
   const [cursor, setCursor] = useState(() => {
     if (initialMonth) {
@@ -79,7 +117,7 @@ export default function AvailabilityCalendar({
   const { dayMap, calendarDays, weekdayLabels } = useMemo(() => {
     const map = new Map<string, CalendarSlot[]>();
     slots.forEach((slot) => {
-      const key = ymd(new Date(slot.start));
+      const key = ymd(new Date(slot.start), timeZone);
       const existing = map.get(key) ?? [];
       existing.push(slot);
       existing.sort((a, b) => {
@@ -125,7 +163,7 @@ export default function AvailabilityCalendar({
     const labels = weekdayFilter?.length ? weekdayFilter.map((day) => dayNames[day]) : dayNames;
 
     return { dayMap: map, calendarDays: days, weekdayLabels: labels };
-  }, [slots, cursor, visibleWeekdays]);
+  }, [slots, cursor, visibleWeekdays, timeZone]);
 
   return (
     <section
@@ -194,7 +232,7 @@ export default function AvailabilityCalendar({
           const list = dayMap.get(key) ?? [];
           const displaySlots = Array.from(
             list.reduce((map, slot) => {
-              const aggregateKey = `${slot.status}::${slot.label}::${new Date(slot.start).toISOString().slice(11, 16)}`;
+              const aggregateKey = `${slot.status}::${slot.label}::${slotTimeKey(slot.start, timeZone)}`;
               const current = map.get(aggregateKey);
               if (!current) {
                 map.set(aggregateKey, { ...slot, count: 1 });
@@ -223,7 +261,7 @@ export default function AvailabilityCalendar({
                   const selectable = selectableStatuses.includes(slot.status) && Boolean(onSlotSelect);
                   const pillLabel = formatSlotPillLabel
                     ? formatSlotPillLabel(slot)
-                    : `${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} ${slot.label}${slot.count > 1 ? ` (${slot.count})` : ''}`;
+                    : `${slotTimeLabel(slot.start, timeZone)} ${slot.label}${slot.count > 1 ? ` (${slot.count})` : ''}`;
                   const slotStyle = {
                     fontSize: 10,
                     lineHeight: 1.2,
@@ -280,7 +318,7 @@ export default function AvailabilityCalendar({
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
             {upcoming.map((slot) => (
               <div key={`upcoming-${slot.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, color: '#5b4a84' }}>
-                <span>{new Intl.DateTimeFormat('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).format(new Date(slot.start))} · {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()}</span>
+                <span>{slotDateLabel(slot.start, timeZone)} · {slotTimeLabel(slot.start, timeZone)}</span>
                 <span style={{ fontWeight: 700, color: statusColor[slot.status] }}>{slot.label}</span>
               </div>
             ))}
@@ -297,7 +335,7 @@ export default function AvailabilityCalendar({
           <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
             {(dayMap.get(expandedDayKey) ?? []).map((slot) => {
               const selectable = selectableStatuses.includes(slot.status) && Boolean(onSlotSelect);
-              const label = `${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(slot.start)).toLowerCase()} · ${slot.label} (${statusLabel[slot.status]})`;
+              const label = `${slotTimeLabel(slot.start, timeZone)} · ${slot.label} (${statusLabel[slot.status]})`;
               return selectable ? (
                 <button
                   key={slot.id}
