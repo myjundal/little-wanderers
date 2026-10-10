@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type AuthMethod = 'phone' | 'email';
 type JourneyMode = 'new' | 'existing';
-type Step = 'collect' | 'verify' | 'emailLinkSent';
+type Step = 'collect' | 'verify';
 
-const OTP_LENGTH = 4;
+const PHONE_OTP_LENGTH = 4;
+const EMAIL_OTP_LENGTH = 6;
 const TEXT_RESEND_SECONDS = 30;
 const EMAIL_RESEND_SECONDS = 120;
 const PRODUCTION_SITE_URL = 'https://thelittlewanderers.com';
@@ -20,26 +21,22 @@ const normalizeUsPhone = (input: string) => {
   return `+1${local}`;
 };
 
-function formatAuthError(message: string, method: AuthMethod) {
+function formatAuthError(message: string) {
   const normalized = message.toLowerCase();
   if (normalized.includes('missing-code')) {
     return 'That login link did not include a usable sign-in code. Please request a fresh email link and use the newest email.';
   }
   if (normalized.includes('signup') && (normalized.includes('disable') || normalized.includes('not allowed'))) {
-    return 'Email sign-up is currently turned off. Please check Supabase Auth sign-up settings, then try again.';
+    return 'We cannot create an account right now. Please contact Little Wanderers for help.';
   }
   if (normalized.includes('rate limit') || normalized.includes('too many')) {
-    return method === 'email'
-      ? 'Too many login link requests for this email. Please wait a few more minutes, then try again. If a recent email arrived, use the newest link.'
-      : 'Too many text code requests. Please wait a few more minutes, then try again.';
+    return 'Too many code requests. Please wait a few minutes before requesting another code. Use the newest email or text if it has arrived.';
   }
   if (normalized.includes('invalid') && normalized.includes('otp')) {
-    return 'That code was not accepted. Please check the code and try again.';
+    return 'That code was not accepted. Use the code in the newest email or text, or request a new code.';
   }
   if (normalized.includes('expired') || normalized.includes('invalid')) {
-    return method === 'email'
-      ? 'That login link expired or was already used. Please request a fresh email and open the newest link.'
-      : 'That code expired or was not accepted. Please request a new code.';
+    return 'That code expired or was not accepted. Use the newest code or request a new one.';
   }
   return message || 'Something went wrong. Please try again.';
 }
@@ -76,17 +73,24 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showWaitlistInvite, setShowWaitlistInvite] = useState(false);
-  const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [otpToken, setOtpToken] = useState('');
   const [resendIn, setResendIn] = useState(0);
 
   const [pendingPhone, setPendingPhone] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
-  const [lastAutoSubmitToken, setLastAutoSubmitToken] = useState<string | null>(null);
+  const requestInFlight = useRef(false);
+  const verifyInFlight = useRef(false);
+  const cooldownUntil = useRef(0);
 
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const savedCooldown = Number(sessionStorage.getItem('auth_resend_until') || 0);
+    if (savedCooldown > Date.now()) {
+      cooldownUntil.current = savedCooldown;
+      setResendIn(Math.ceil((savedCooldown - Date.now()) / 1000));
+    }
     const params = new URLSearchParams(window.location.search);
     const next = params.get('next');
     const mode = params.get('mode');
@@ -95,10 +99,10 @@ export default function LoginPage() {
       sessionStorage.setItem('post_login_redirect', next);
     }
     if (authError) {
-      setError(formatAuthError(authError, 'email'));
+      setError(formatAuthError(authError));
     }
-    if (mode === 'new') {
-      setJourneyMode('new');
+    if (mode === 'new' || mode === 'existing') {
+      setJourneyMode(mode);
       setAuthMethod('email');
     }
 
@@ -116,7 +120,7 @@ export default function LoginPage() {
     if (step === 'collect') {
       firstInputRef.current?.focus();
     } else if (step === 'verify') {
-      otpRefs.current[0]?.focus();
+      otpInputRef.current?.focus();
     }
   }, [step, authMethod]);
 
@@ -137,7 +141,7 @@ export default function LoginPage() {
 
   const normalizedPhone = useMemo(() => normalizeUsPhone(phoneInput), [phoneInput]);
   const normalizedEmail = useMemo(() => emailInput.trim().toLowerCase(), [emailInput]);
-  const otpToken = otpDigits.join('');
+  const otpLength = authMethod === 'email' ? EMAIL_OTP_LENGTH : PHONE_OTP_LENGTH;
 
   const canRequestOtp = authMethod === 'phone'
     ? /^\+1\d{10}$/.test(normalizedPhone)
@@ -150,6 +154,7 @@ export default function LoginPage() {
   }, []);
 
   const requestOtp = async (reason: 'send' | 'resend') => {
+    if (requestInFlight.current || verifyInFlight.current || !canRequestOtp || Date.now() < cooldownUntil.current) return;
     clearFeedback();
 
     const supabase = createBrowserSupabaseClient();
@@ -157,161 +162,149 @@ export default function LoginPage() {
 
     if (shouldCreateUser && authMethod === 'phone') {
       setShowWaitlistInvite(true);
-      setError('Early access sign-up is currently available by Wanderlist email only. Please continue with the email you used for the Wanderlist.');
+      setError('Please use email to create your account. You can add a phone number after signing in.');
       return;
     }
 
+    requestInFlight.current = true;
     setPending(true);
+    try {
 
-    if (shouldCreateUser && authMethod === 'email') {
-      try {
-        const checkRes = await fetch('/api/waitlist/check', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ email: normalizedEmail }),
-        });
-        const checkJson = (await checkRes.json()) as { allowed?: boolean; claimed?: boolean; error?: string };
+      if (shouldCreateUser && authMethod === 'email') {
+        try {
+          const checkRes = await fetch('/api/waitlist/check', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email: normalizedEmail }),
+          });
+          const checkJson = (await checkRes.json()) as { allowed?: boolean; claimed?: boolean; error?: string };
 
-        if (!checkRes.ok || !checkJson.allowed) {
-          setPending(false);
-          setError(
-            checkJson.error ||
-            'We could not create your Little Wanderers access right now. Please try again soon.'
-          );
+          if (!checkRes.ok || !checkJson.allowed) {
+            setError(
+              checkJson.error ||
+              'We could not create your Little Wanderers access right now. Please try again soon.'
+            );
+            return;
+          }
+        } catch {
+          setError('Unable to prepare Little Wanderers access right now. Please try again soon.');
           return;
         }
-      } catch {
-        setPending(false);
-        setError('Unable to prepare Little Wanderers access right now. Please try again soon.');
+      }
+
+      const response = authMethod === 'phone'
+        ? await supabase.auth.signInWithOtp({
+            phone: normalizedPhone,
+            options: {
+              shouldCreateUser,
+              channel: 'sms',
+            },
+          })
+        : await supabase.auth.signInWithOtp({
+            email: normalizedEmail,
+            options: {
+              shouldCreateUser,
+              emailRedirectTo: getEmailRedirectTo(journeyMode),
+            },
+          });
+
+
+      if (response.error) {
+        const safeError = response.error.message.toLowerCase();
+        if (!shouldCreateUser && safeError.includes('not found')) {
+          setError('We could not find an account for this email. If you are new, choose “I am new” first.');
+          return;
+        }
+        setError(formatAuthError(response.error.message));
         return;
       }
-    }
 
-    const response = authMethod === 'phone'
-      ? await supabase.auth.signInWithOtp({
-          phone: normalizedPhone,
-          options: {
-            shouldCreateUser,
-            channel: 'sms',
-          },
-        })
-      : await supabase.auth.signInWithOtp({
-          email: normalizedEmail,
-          options: {
-            shouldCreateUser,
-            emailRedirectTo: getEmailRedirectTo(journeyMode),
-          },
-        });
-
-    setPending(false);
-
-    if (response.error) {
-      const safeError = response.error.message.toLowerCase();
-      if (!shouldCreateUser && safeError.includes('not found')) {
-        setError('We could not find an account for this email. If you are new, choose “I am new” first.');
-        return;
+      if (authMethod === 'phone') {
+        setPendingPhone(normalizedPhone);
+        setMessage(reason === 'send' ? 'We sent a 4-digit code by text.' : 'We sent a new code.');
+        setStep('verify');
+        setOtpToken('');
+      } else {
+        setPendingEmail(normalizedEmail);
+        sessionStorage.setItem('post_login_journey', journeyMode);
+        setMessage(
+          reason === 'send'
+            ? 'We sent a 6-digit code. Enter it here to sign in.'
+            : 'We sent a new code. Use the code in the newest email.'
+        );
+        setOtpToken('');
+        setStep('verify');
       }
-      setError(formatAuthError(response.error.message, authMethod));
-      return;
-    }
 
-    if (authMethod === 'phone') {
-      setPendingPhone(normalizedPhone);
-      setMessage(reason === 'send' ? 'We sent a 4-digit code by text.' : 'We sent a new code.');
-      setStep('verify');
-      setOtpDigits(Array(OTP_LENGTH).fill(''));
-      setLastAutoSubmitToken(null);
-    } else {
-      setPendingEmail(normalizedEmail);
-      sessionStorage.setItem('post_login_journey', journeyMode);
-      setMessage(
-        reason === 'send'
-          ? 'Please head to your email for the login link. After sign-up, add your phone number in My Info/People so you can use phone login next time.'
-          : 'We sent a fresh login link. Please head to your email and open the newest link.'
-      );
-      setStep('emailLinkSent');
+      const cooldown = authMethod === 'email' ? EMAIL_RESEND_SECONDS : TEXT_RESEND_SECONDS;
+      cooldownUntil.current = Date.now() + cooldown * 1000;
+      sessionStorage.setItem('auth_resend_until', String(cooldownUntil.current));
+      setResendIn(cooldown);
+    } catch {
+      setError('Unable to send your code right now. Please try again.');
+    } finally {
+      requestInFlight.current = false;
+      setPending(false);
     }
-
-    setResendIn(authMethod === 'email' ? EMAIL_RESEND_SECONDS : TEXT_RESEND_SECONDS);
   };
 
   const verifyOtp = useCallback(async () => {
+    if (verifyInFlight.current || requestInFlight.current) return;
     clearFeedback();
-    if (otpToken.length !== OTP_LENGTH) {
-      setError(`Please enter the ${OTP_LENGTH}-digit code.`);
+    if (otpToken.length !== otpLength) {
+      setError(`Please enter the ${otpLength}-digit code.`);
       return;
     }
 
+    verifyInFlight.current = true;
     setPending(true);
-    const supabase = createBrowserSupabaseClient();
-    const response = authMethod === 'phone'
-      ? await supabase.auth.verifyOtp({
-          phone: pendingPhone,
-          token: otpToken,
-          type: 'sms',
-        })
-      : await supabase.auth.verifyOtp({
-          email: pendingEmail,
-          token: otpToken,
-          type: 'email',
-        });
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const response = authMethod === 'phone'
+        ? await supabase.auth.verifyOtp({
+            phone: pendingPhone,
+            token: otpToken,
+            type: 'sms',
+          })
+        : await supabase.auth.verifyOtp({
+            email: pendingEmail,
+            token: otpToken,
+            type: 'email',
+          });
 
-    setPending(false);
 
-    if (response.error) {
-      setError(formatAuthError(response.error.message, authMethod));
-      setLastAutoSubmitToken(null);
-      return;
-    }
+      if (response.error) {
+        setError(formatAuthError(response.error.message));
+        return;
+      }
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      setError('We could not finish signing you in. Please try again.');
-      return;
-    }
+      if (userError || !user) {
+        setError('We could not finish signing you in. Please try again.');
+        return;
+      }
 
-    const next = sessionStorage.getItem('post_login_redirect') || '/landing';
-    sessionStorage.removeItem('post_login_redirect');
+      const next = getSafeNextPath();
+      sessionStorage.removeItem('post_login_redirect');
 
-    if (journeyMode === 'new') {
-      await fetch('/api/waitlist/claim', { method: 'POST' }).catch(() => null);
+      if (journeyMode === 'new') {
+        await fetch('/api/waitlist/claim', { method: 'POST' }).catch(() => null);
+        window.location.replace(next);
+        return;
+      }
+
       window.location.replace(next);
-      return;
+    } catch {
+      setError('Unable to finish signing you in. Please try again.');
+    } finally {
+      verifyInFlight.current = false;
+      setPending(false);
     }
-
-    window.location.replace(next);
-  }, [authMethod, clearFeedback, journeyMode, otpToken, pendingEmail, pendingPhone]);
-
-  const onOtpChange = (index: number, value: string) => {
-    const nextDigit = value.replace(/\D/g, '').slice(-1);
-    const nextDigits = [...otpDigits];
-    nextDigits[index] = nextDigit;
-    setOtpDigits(nextDigits);
-
-    if (nextDigit && index < OTP_LENGTH - 1) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const onOtpKeyDown = (index: number, event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
-  useEffect(() => {
-    if (step !== 'verify') return;
-    if (otpToken.length !== OTP_LENGTH) return;
-    if (pending) return;
-    if (lastAutoSubmitToken === otpToken) return;
-
-    setLastAutoSubmitToken(otpToken);
-    void verifyOtp();
-  }, [step, otpToken, pending, lastAutoSubmitToken, verifyOtp]);
+  }, [authMethod, clearFeedback, journeyMode, otpToken, otpLength, pendingEmail, pendingPhone]);
 
   const switchToEmailFallback = () => {
     setAuthMethod('email');
@@ -329,21 +322,21 @@ export default function LoginPage() {
         <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
           <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access now starts here.</p>
           <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
-            Choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong>. If your email is not on the Wanderlist yet, we will add it and send your magic link.
+            Choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong>. If your email is not on the Wanderlist yet, we will add it and send a sign-in code.
           </p>
         </div>
 
         <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
           <label style={{ color: '#4f3f82', fontWeight: 600 }}>Account status</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <button type="button" onClick={() => setJourneyMode('existing')} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'existing' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I already have an account</button>
-            <button type="button" onClick={() => { setJourneyMode('new'); setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'new' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I am new</button>
+            <button type="button" disabled={pending} onClick={() => { setJourneyMode('existing'); setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'existing' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I already have an account</button>
+            <button type="button" disabled={pending} onClick={() => { setJourneyMode('new'); setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'new' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I am new</button>
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 14 }}>
-          <button type="button" onClick={() => { setAuthMethod('phone'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'phone' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with phone</button>
-          <button type="button" onClick={() => { setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'email' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with email</button>
+          <button type="button" disabled={pending} onClick={() => { setAuthMethod('phone'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'phone' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with phone</button>
+          <button type="button" disabled={pending} onClick={() => { setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'email' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with email</button>
         </div>
 
         {step === 'collect' && authMethod === 'phone' && (
@@ -360,8 +353,8 @@ export default function LoginPage() {
               onChange={(event) => setPhoneInput(event.target.value)}
               style={{ padding: '12px 14px', width: '100%', boxSizing: 'border-box', borderRadius: 12, border: '1px solid #d8c5f6' }}
             />
-            <button type="button" onClick={() => requestOtp('send')} disabled={!canRequestOtp || pending} style={{ marginTop: 4, padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
-              {pending ? 'Sending…' : 'Text me a code'}
+            <button type="button" onClick={() => requestOtp('send')} disabled={!canRequestOtp || pending || resendIn > 0} style={{ marginTop: 4, padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
+              {pending ? 'Sending…' : resendIn > 0 ? `Send code (${resendIn}s)` : 'Text me a code'}
             </button>
           </div>
         )}
@@ -379,28 +372,8 @@ export default function LoginPage() {
               onChange={(event) => setEmailInput(event.target.value)}
               style={{ padding: '12px 14px', width: '100%', boxSizing: 'border-box', borderRadius: 12, border: '1px solid #d8c5f6' }}
             />
-            <button type="button" onClick={() => requestOtp('send')} disabled={!canRequestOtp || pending} style={{ marginTop: 4, padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
-              {pending ? 'Sending…' : journeyMode === 'new' ? 'Email me my early access link' : 'Email me a login link'}
-            </button>
-          </div>
-        )}
-
-        {step === 'emailLinkSent' && (
-          <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>
-            <div style={{ borderRadius: 16, border: '1px solid #d6f0dc', background: '#f2fbf4', padding: 14 }}>
-              <p style={{ margin: 0, color: '#2f7a47', fontWeight: 800 }}>Check your email</p>
-              <p style={{ margin: '6px 0 0', color: '#4f3f82', lineHeight: 1.5 }}>
-                Please head to your email for the login link we sent to <strong>{pendingEmail}</strong>.
-                After sign-up, add your phone number in My Info/People so you can use phone login next time.
-              </p>
-            </div>
-
-            <button type="button" disabled={resendIn > 0 || pending} onClick={() => requestOtp('resend')} style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>
-              {resendIn > 0 ? `Resend login link (${resendIn}s)` : 'Resend login link'}
-            </button>
-
-            <button type="button" onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
-              Change email
+            <button type="button" onClick={() => requestOtp('send')} disabled={!canRequestOtp || pending || resendIn > 0} style={{ marginTop: 4, padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
+              {pending ? 'Sending…' : resendIn > 0 ? `Send code (${resendIn}s)` : 'Email me a sign-in code'}
             </button>
           </div>
         )}
@@ -408,25 +381,25 @@ export default function LoginPage() {
         {step === 'verify' && (
           <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>
             <p style={{ margin: 0, color: '#6d6480' }}>
-              Enter the 4-digit code sent to {authMethod === 'phone' ? pendingPhone : pendingEmail}.
+              Enter the {otpLength}-digit code sent to {authMethod === 'phone' ? pendingPhone : pendingEmail}.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${OTP_LENGTH}, minmax(0, 1fr))`, gap: 8 }}>
-              {otpDigits.map((digit, index) => (
-                <input
-                  key={`otp-${index}`}
-                  ref={(element) => { otpRefs.current[index] = element; }}
-                  value={digit}
-                  onChange={(event) => onOtpChange(index, event.target.value)}
-                  onKeyDown={(event) => onOtpKeyDown(index, event)}
-                  inputMode="numeric"
-                  maxLength={1}
-                  style={{ textAlign: 'center', padding: '12px 0', fontSize: 20, borderRadius: 12, border: '1px solid #d8c5f6' }}
-                />
-              ))}
-            </div>
+            <label htmlFor="sign-in-code" style={{ color: '#4f3f82', fontWeight: 600 }}>Sign-in code</label>
+            <input
+              id="sign-in-code"
+              ref={otpInputRef}
+              value={otpToken}
+              onChange={(event) => setOtpToken(event.target.value.replace(/\D/g, '').slice(0, otpLength))}
+              onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void verifyOtp(); } }}
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={otpLength}
+              disabled={pending}
+              style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', padding: 12, fontSize: 24, letterSpacing: '0.25em', borderRadius: 12, border: '1px solid #d8c5f6' }}
+            />
 
-            <button type="button" onClick={verifyOtp} disabled={pending || otpToken.length !== OTP_LENGTH} style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
-              {pending ? 'Checking…' : 'Verify code (auto)'}
+            <button type="button" onClick={verifyOtp} disabled={pending || otpToken.length !== otpLength} style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: '#5f3da4', color: '#fff', fontWeight: 700 }}>
+              {pending ? 'Checking…' : 'Sign in'}
             </button>
 
             <button type="button" disabled={resendIn > 0 || pending} onClick={() => requestOtp('resend')} style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>
@@ -434,19 +407,19 @@ export default function LoginPage() {
             </button>
 
             {authMethod === 'phone' && (
-              <button type="button" onClick={switchToEmailFallback} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#5f3da4', textDecoration: 'underline', fontWeight: 600 }}>
+              <button type="button" disabled={pending} onClick={switchToEmailFallback} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#5f3da4', textDecoration: 'underline', fontWeight: 600 }}>
                 Did not get a text? Continue with email
               </button>
             )}
 
-            <button type="button" onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
+            <button type="button" disabled={pending} onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
               Change phone or email
             </button>
           </div>
         )}
 
-        {message && <p style={{ marginTop: 14, color: '#5f3da4' }}>{message}</p>}
-        {error && <p style={{ marginTop: 14, color: '#8a3f6b' }}>{error}</p>}
+        {message && <p role="status" style={{ marginTop: 14, color: '#5f3da4' }}>{message}</p>}
+        {error && <p role="alert" style={{ marginTop: 14, color: '#8a3f6b' }}>{error}</p>}
         {showWaitlistInvite && (
           <p style={{ marginTop: 10, color: '#6d6480', lineHeight: 1.5 }}>
             Please use email sign-up for new accounts. We will add new emails to the Wanderlist automatically.
