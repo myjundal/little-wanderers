@@ -22,9 +22,16 @@ export async function GET(request: NextRequest) {
   const mode = requestUrl.searchParams.get('mode');
   const next = getSafeNextPath(requestUrl.searchParams.get('next'));
   const response = NextResponse.redirect(getRedirectUrl(request, next));
+  const loginErrorUrl = (message: string) => {
+    const url = getRedirectUrl(request, '/login');
+    url.searchParams.set('error', message);
+    url.searchParams.set('next', next);
+    if (mode === 'new' || mode === 'existing') url.searchParams.set('mode', mode);
+    return url;
+  };
 
   if (!code && !tokenHash) {
-    return NextResponse.redirect(getRedirectUrl(request, '/login?error=missing-code'));
+    return NextResponse.redirect(loginErrorUrl('missing-code'));
   }
 
   const supabase = createServerClient(
@@ -52,7 +59,7 @@ export async function GET(request: NextRequest) {
         type: (type || 'email') as EmailOtpType,
       });
   if (error) {
-    return NextResponse.redirect(getRedirectUrl(request, `/login?error=${encodeURIComponent(error.message)}`));
+    return NextResponse.redirect(loginErrorUrl(error.message));
   }
 
   const {
