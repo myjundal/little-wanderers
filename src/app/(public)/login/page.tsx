@@ -9,8 +9,9 @@ type Step = 'collect' | 'verify' | 'emailLinkSent';
 
 const OTP_LENGTH = 4;
 const TEXT_RESEND_SECONDS = 30;
-const EMAIL_RESEND_SECONDS = 120;
+const EMAIL_RESEND_SECONDS = 180;
 const PRODUCTION_SITE_URL = 'https://thelittlewanderers.com';
+const EMAIL_LINK_SENT_STORAGE_PREFIX = 'lw_email_link_sent_at';
 
 const normalizeUsPhone = (input: string) => {
   const digits = input.replace(/\D/g, '');
@@ -65,6 +66,32 @@ function getEmailRedirectTo(mode: JourneyMode) {
   return url.toString();
 }
 
+function emailLinkStorageKey(email: string, mode: JourneyMode) {
+  return `${EMAIL_LINK_SENT_STORAGE_PREFIX}:${mode}:${email}`;
+}
+
+function getRecentEmailLinkRemaining(email: string, mode: JourneyMode) {
+  if (typeof window === 'undefined') return 0;
+  let sentAt = 0;
+  try {
+    sentAt = Number(window.localStorage.getItem(emailLinkStorageKey(email, mode)) ?? 0);
+  } catch {
+    return 0;
+  }
+  if (!Number.isFinite(sentAt) || sentAt <= 0) return 0;
+  const elapsedSeconds = Math.floor((Date.now() - sentAt) / 1000);
+  return Math.max(EMAIL_RESEND_SECONDS - elapsedSeconds, 0);
+}
+
+function rememberEmailLinkSent(email: string, mode: JourneyMode) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(emailLinkStorageKey(email, mode), String(Date.now()));
+  } catch {
+    // Login should still work if browser storage is unavailable.
+  }
+}
+
 export default function LoginPage() {
   const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
   const [journeyMode, setJourneyMode] = useState<JourneyMode>('new');
@@ -85,6 +112,7 @@ export default function LoginPage() {
 
   const firstInputRef = useRef<HTMLInputElement>(null);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const requestInFlightRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -150,10 +178,22 @@ export default function LoginPage() {
   }, []);
 
   const requestOtp = async (reason: 'send' | 'resend') => {
+    if (requestInFlightRef.current) return;
     clearFeedback();
 
     const supabase = createBrowserSupabaseClient();
     const shouldCreateUser = journeyMode === 'new';
+
+    if (authMethod === 'email') {
+      const remaining = getRecentEmailLinkRemaining(normalizedEmail, journeyMode);
+      if (remaining > 0) {
+        setPendingEmail(normalizedEmail);
+        setStep('emailLinkSent');
+        setResendIn(remaining);
+        setMessage('We already sent a login link. Please open the newest email from Little Wanderers.');
+        return;
+      }
+    }
 
     if (shouldCreateUser && authMethod === 'phone') {
       setShowWaitlistInvite(true);
@@ -161,6 +201,7 @@ export default function LoginPage() {
       return;
     }
 
+    requestInFlightRef.current = true;
     setPending(true);
 
     if (shouldCreateUser && authMethod === 'email') {
@@ -173,6 +214,7 @@ export default function LoginPage() {
         const checkJson = (await checkRes.json()) as { allowed?: boolean; claimed?: boolean; error?: string };
 
         if (!checkRes.ok || !checkJson.allowed) {
+          requestInFlightRef.current = false;
           setPending(false);
           setError(
             checkJson.error ||
@@ -181,29 +223,39 @@ export default function LoginPage() {
           return;
         }
       } catch {
+        requestInFlightRef.current = false;
         setPending(false);
         setError('Unable to prepare Little Wanderers access right now. Please try again soon.');
         return;
       }
     }
 
-    const response = authMethod === 'phone'
-      ? await supabase.auth.signInWithOtp({
-          phone: normalizedPhone,
-          options: {
-            shouldCreateUser,
-            channel: 'sms',
-          },
-        })
-      : await supabase.auth.signInWithOtp({
-          email: normalizedEmail,
-          options: {
-            shouldCreateUser,
-            emailRedirectTo: getEmailRedirectTo(journeyMode),
-          },
-        });
+    let response;
+    try {
+      response = authMethod === 'phone'
+        ? await supabase.auth.signInWithOtp({
+            phone: normalizedPhone,
+            options: {
+              shouldCreateUser,
+              channel: 'sms',
+            },
+          })
+        : await supabase.auth.signInWithOtp({
+            email: normalizedEmail,
+            options: {
+              shouldCreateUser,
+              emailRedirectTo: getEmailRedirectTo(journeyMode),
+            },
+          });
+    } catch {
+      requestInFlightRef.current = false;
+      setPending(false);
+      setError('We could not send the login link. Please check your connection and try again.');
+      return;
+    }
 
     setPending(false);
+    requestInFlightRef.current = false;
 
     if (response.error) {
       const safeError = response.error.message.toLowerCase();
@@ -223,6 +275,7 @@ export default function LoginPage() {
       setLastAutoSubmitToken(null);
     } else {
       setPendingEmail(normalizedEmail);
+      rememberEmailLinkSent(normalizedEmail, journeyMode);
       sessionStorage.setItem('post_login_journey', journeyMode);
       setMessage(
         reason === 'send'
@@ -393,10 +446,13 @@ export default function LoginPage() {
                 Please head to your email for the login link we sent to <strong>{pendingEmail}</strong>.
                 After sign-up, add your phone number in My Info/People so you can use phone login next time.
               </p>
+              <p style={{ margin: '8px 0 0', color: '#6b4d12', lineHeight: 1.5, fontWeight: 700 }}>
+                If you requested more than one email, only the newest Little Wanderers link will work.
+              </p>
             </div>
 
             <button type="button" disabled={resendIn > 0 || pending} onClick={() => requestOtp('resend')} style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>
-              {resendIn > 0 ? `Resend login link (${resendIn}s)` : 'Resend login link'}
+              {resendIn > 0 ? `Send a new link (${resendIn}s)` : 'Send a new link'}
             </button>
 
             <button type="button" onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>

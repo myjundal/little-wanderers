@@ -52,6 +52,17 @@ export async function GET(request: NextRequest) {
         type: (type || 'email') as EmailOtpType,
       });
   if (error) {
+    const {
+      data: { user: existingUser },
+    } = await supabase.auth.getUser();
+    if (existingUser) {
+      const redirectPath = await getPostAuthRedirectForUser(existingUser, next, {
+        forceOnboarding: mode === 'new' || type === 'signup',
+      });
+      response.headers.set('location', getRedirectUrl(request, redirectPath).toString());
+      return response;
+    }
+
     return NextResponse.redirect(getRedirectUrl(request, `/login?error=${encodeURIComponent(error.message)}`));
   }
 

@@ -1,12 +1,30 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 export default function AuthLinkPage() {
   const searchParams = useSearchParams();
   const hasAuthToken = searchParams.has('code') || searchParams.has('token_hash');
+  const [opening, setOpening] = useState(false);
+
+  useEffect(() => {
+    if (hasAuthToken) return;
+    const checkSession = async () => {
+      const supabase = createBrowserSupabaseClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) window.location.replace('/auth/finish');
+    };
+
+    void checkSession();
+  }, [hasAuthToken]);
 
   function finishSignIn() {
+    if (opening) return;
+    setOpening(true);
     const params = searchParams.toString();
     window.location.assign(params ? `/auth/callback?${params}` : '/login?error=missing-code');
   }
@@ -23,9 +41,10 @@ export default function AuthLinkPage() {
           <button
             type="button"
             onClick={finishSignIn}
-            style={{ display: 'inline-flex', justifyContent: 'center', width: '100%', boxSizing: 'border-box', marginTop: 12, padding: '12px 16px', borderRadius: 12, background: '#5f3da4', color: '#fff', fontWeight: 800, textDecoration: 'none' }}
+            disabled={opening}
+            style={{ display: 'inline-flex', justifyContent: 'center', width: '100%', boxSizing: 'border-box', marginTop: 12, padding: '12px 16px', borderRadius: 12, background: opening ? '#b8acd1' : '#5f3da4', color: '#fff', fontWeight: 800, textDecoration: 'none', border: 'none' }}
           >
-            Open My Little Wanderers
+            {opening ? 'Opening...' : 'Open My Little Wanderers'}
           </button>
         ) : (
           <a
