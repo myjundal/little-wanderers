@@ -80,7 +80,7 @@ export default function SoftOpeningInvitePage() {
 
         <p style={{ margin: 0, color: '#7b7188', fontSize: 14, lineHeight: 1.6 }}>
           Please use the same email you used for the Wanderlist or your party early access request. Soft opening windows
-          are planned from October 15-31, 2026.
+          are planned for the end of October 2026.
         </p>
       </section>
     </main>

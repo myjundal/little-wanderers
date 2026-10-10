@@ -318,12 +318,12 @@ export default function OpenPlayReservationsAdmin() {
       ) : slots.length === 0 ? (
         <section style={{ border: '1px solid #f0d89b', borderRadius: 18, background: '#fff8e6', padding: 16 }}>
           <strong style={{ color: '#6b4d12' }}>No soft opening windows yet.</strong>
-          <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Seed the October soft opening windows in Supabase first.</p>
+          <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Seed the end-of-October soft opening windows in Supabase first.</p>
         </section>
       ) : (
         <AvailabilityCalendar
           title="Open Play reservation calendar"
-          subtitle="October soft opening windows. Click a pill to inspect the date below."
+          subtitle="End-of-October soft opening windows. Click a pill to inspect the date below."
           slots={calendarSlots}
           onSlotSelect={(slot) => {
             setSelectedSlotId(slot.id);

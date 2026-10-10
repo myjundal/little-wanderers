@@ -77,7 +77,7 @@ export default async function HomeComingSoon() {
             <br />
             <span className={styles.heroLocationLine}>in West Hartford</span>
           </h1>
-          <p className={styles.comingSoon}>Soft opening mid-October 2026 · Grand opening early November</p>
+          <p className={styles.comingSoon}>Soft opening end of October 2026 · Grand opening November 2026</p>
           <p>
             We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
             in West Hartford, CT. Soft opening invitations will go to Wanderlist families first, so if you&apos;d like to

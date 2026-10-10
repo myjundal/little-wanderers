@@ -254,7 +254,7 @@ export default function SoftOpeningReservationPage() {
         ) : (
           <AvailabilityCalendar
             title="Soft opening calendar"
-            subtitle="October 15-31, 2026. Choose one 2-hour arrival window: 9-11, 11-1, 1-3, or 3-5."
+            subtitle="End of October 2026. Choose one 2-hour arrival window: 9-11, 11-1, 1-3, or 3-5."
             slots={calendarSlots}
             onSlotSelect={(slot) => setSelectedSlotId(slot.id)}
             initialMonth="2026-10"
