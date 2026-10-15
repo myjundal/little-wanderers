@@ -4,6 +4,8 @@
 
 Use this flow only if you need to backfill old Google Form waitlist emails:
 
+Wanderlist membership closes after October 28, 2026 in America/New_York. Imports must send the original `submitted_at` timestamp (see `formResponseToEntry` below), not the date the import runs. The API retains the earliest original signup time for repeat imports and existing website signups. After the cutoff, new imported responses without a valid original timestamp are rejected with a 400 error; update old Apps Script copies before backfilling. Later submissions remain regular website signups and are excluded from Wanderlist counts, tags, and private access.
+
 Google Form responses -> Apps Script -> `/api/waitlist/sync` -> Supabase `waitlist_entries`
 
 ## Environment variables
@@ -113,6 +115,7 @@ function formResponseToEntry(response) {
     last_name: getAnswerByTitle(itemResponses, LAST_NAME_QUESTION_TITLES),
     source: 'google_form',
     external_id: response.getId(),
+    submitted_at: response.getTimestamp().toISOString(),
     raw_payload: raw,
   };
 }

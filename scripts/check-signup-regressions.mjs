@@ -18,6 +18,14 @@ const policy = load('src/lib/signup-policy.ts');
 assert.equal(policy.signupSource(new Date('2026-10-29T03:59:59.999Z')), 'Wanderlist');
 assert.equal(policy.signupSource(new Date('2026-10-29T04:00:00Z')), 'website_signup');
 assert.equal(policy.isWanderlistSignupWindow(new Date('2026-11-01')), false);
+const afterCutoff = new Date('2026-11-05T12:00:00Z');
+assert.equal(policy.resolveSignupTime('2026-10-15T12:00:00Z', undefined, afterCutoff), '2026-10-15T12:00:00.000Z');
+assert.equal(policy.resolveSignupTime('2026-11-01T12:00:00Z', '2026-10-15T12:00:00Z', afterCutoff), '2026-10-15T12:00:00.000Z');
+assert.equal(policy.resolveSignupTime(undefined, '2026-10-15T12:00:00Z', afterCutoff), '2026-10-15T12:00:00.000Z');
+assert.equal(policy.resolveSignupTime(undefined, undefined, afterCutoff), null);
+assert.equal(policy.resolveSignupTime('not-a-date', undefined, afterCutoff), null);
+assert.equal(policy.resolveSignupTime('2026-12-01T12:00:00Z', undefined, afterCutoff), null);
+assert.equal(policy.signupSource(new Date(policy.resolveSignupTime('2026-11-01T12:00:00Z', undefined, afterCutoff))), 'website_signup');
 const classes = load('src/lib/class-config.ts');
 assert.equal(classes.earliestClassTime(new Date('2026-10-15')), '2026-11-09T05:00:00.000Z');
 assert.equal(classes.earliestClassTime(new Date('2026-12-01')), '2026-12-01T00:00:00.000Z');
@@ -65,6 +73,39 @@ window.localStorage.getItem = () => { throw new Error('storage unavailable'); };
 assert.equal(analytics.shouldLoadAnalytics(), false);
 
 (async () => {
+  // Exercise the import route itself: late imports retain the original signup time.
+  let imported;
+  let existingRows = [];
+  class ImportDate extends Date {
+    constructor(...args) { super(...(args.length ? args : ['2026-11-05T12:00:00Z'])); }
+  }
+  const syncRoute = load('src/app/api/waitlist/sync/route.ts', {
+    Date: ImportDate, process: { env: { WAITLIST_SYNC_SECRET: 'test-secret' } },
+  }, {
+    '@/lib/signup-policy': policy,
+    '@/lib/email-campaigns': { syncWaitlistContacts: async () => ({}) },
+    '@/lib/supabase/admin': { createAdminSupabaseClient: () => ({ from: () => ({
+      select: () => ({ in: async () => ({ data: existingRows }) }),
+      upsert: async (rows) => { imported = rows; return { error: null }; },
+    }) }) },
+    '@/lib/waitlist': load('src/lib/waitlist.ts'),
+    'next/server': { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
+  });
+  const importRequest = (submitted_at) => ({
+    headers: { get: (key) => key === 'x-waitlist-sync-secret' ? 'test-secret' : null },
+    json: async () => ({ email: 'test@example.com', submitted_at }),
+  });
+  assert.equal((await syncRoute.POST(importRequest('2026-10-15T12:00:00Z'))).status, 200);
+  assert.equal(imported[0].created_at, '2026-10-15T12:00:00.000Z');
+  assert.equal(imported[0].source, 'Wanderlist');
+  imported = null;
+  assert.equal((await syncRoute.POST(importRequest(undefined))).status, 400);
+  assert.equal(imported, null);
+  existingRows = [{ normalized_email: 'test@example.com', created_at: '2026-10-15T12:00:00Z' }];
+  assert.equal((await syncRoute.POST(importRequest('2026-11-01T12:00:00Z'))).status, 200);
+  assert.equal(imported[0].created_at, '2026-10-15T12:00:00.000Z');
+  assert.equal(imported[0].source, 'Wanderlist');
+
   let email;
   const notifications = load('src/lib/admin-notifications.ts', {}, {
     '@/lib/email-campaigns': { sendResendEmail: async (input) => { email = input; return { ok: true }; } },
