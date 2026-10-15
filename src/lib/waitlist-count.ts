@@ -1,3 +1,4 @@
+import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 export const WAITLIST_COUNT_FALLBACK = 370;
@@ -41,7 +42,8 @@ export async function getWaitlistCount(): Promise<WaitlistCount> {
       const admin = createAdminSupabaseClient();
       const { count, error } = await admin
         .from('waitlist_entries')
-        .select('id', { count: 'exact', head: true });
+        .select('id', { count: 'exact', head: true })
+        .lt('created_at', WANDERLIST_CUTOFF);
 
       if (!error) return toWaitlistCount(count) ?? fallback;
     } catch {

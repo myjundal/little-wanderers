@@ -56,7 +56,7 @@ export function PastelHeader({ isAuthenticated = false, waitlistCount }: { isAut
 
       <div className={styles.headerActions}>
         <PastelButton href={isAuthenticated ? '/landing' : '/login'} className={styles.accessButton}>
-          <span>My Little Wanderers</span>
+          <span>Join/Login to My Little Wanderers</span>
         </PastelButton>
         {waitlistCount && <WaitlistCountCard initialCount={waitlistCount} variant="compact" />}
       </div>

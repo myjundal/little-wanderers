@@ -1,4 +1,5 @@
 import styles from '@/app/(public)/home.module.css';
+import { CLASS_START_NOTE } from '@/lib/class-config';
 import WaitlistCountCard from '@/components/home/WaitlistCountCard';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
 import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
@@ -94,7 +95,7 @@ export default async function HomeComingSoon() {
           <div className={styles.actions}>
             <div className={styles.waitlistAction}>
               <PastelButton href={isAuthenticated ? '/landing' : ACCOUNT_URL}>
-                <span>Join My Little Wanderers</span>
+                <span>Join/Login to My Little Wanderers</span>
                 <small>Get opening updates and priority booking access from your account</small>
               </PastelButton>
               <WaitlistCountCard initialCount={{ displayCount: waitlistCount.displayCount }} />
@@ -134,7 +135,7 @@ export default async function HomeComingSoon() {
           </p>
           {!isAuthenticated && (
             <p className={styles.accessNote}>
-              Requesting a party hold requires My Little Wanderers access. New emails are added to the Wanderlist automatically during sign-up.
+              Requesting a party hold requires My Little Wanderers access. Sign up through October 28, 2026 to join the Wanderlist. From October 29, new accounts are regular website signups.
             </p>
           )}
         </div>
@@ -148,6 +149,7 @@ export default async function HomeComingSoon() {
         <div className={styles.classFeatureCopy}>
           <p className={styles.partyEyebrow}>Class pre-registration</p>
           <h2>Class pre-registration is open</h2>
+          <p>{CLASS_START_NOTE}</p>
           <p>
             Browse our first small-group classes and reserve a spot with your My Little Wanderers account. New families can sign in by email, add a child&apos;s name and approximate age, then choose a class.
           </p>

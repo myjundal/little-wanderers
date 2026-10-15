@@ -74,7 +74,7 @@ export default function SoftOpeningInvitePage() {
               textDecoration: 'none',
             }}
           >
-            Join My Little Wanderers
+            Join/Login to My Little Wanderers
           </Link>
         </div>
 

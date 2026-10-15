@@ -1,3 +1,4 @@
+import { earliestClassTime } from '@/lib/class-config';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -42,7 +43,7 @@ async function selectClasses(limit: number) {
   const primary = await supa
     .from('classes')
     .select(CLASS_SELECT)
-    .gte('start_time', new Date().toISOString())
+    .gte('start_time', earliestClassTime())
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
     .limit(limit);
@@ -52,7 +53,7 @@ async function selectClasses(limit: number) {
     const fallback = await supa
       .from('classes')
       .select(CLASS_SELECT_BASE)
-      .gte('start_time', new Date().toISOString())
+      .gte('start_time', earliestClassTime())
       .eq('status', 'scheduled')
       .order('start_time', { ascending: true })
       .limit(limit);

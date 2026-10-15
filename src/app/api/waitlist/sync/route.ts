@@ -95,7 +95,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    await syncWaitlistContacts(admin, rows);
+    await syncWaitlistContacts(admin);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return NextResponse.json({ ok: false, error: `Wanderlist synced, but contact tags failed: ${message}` }, { status: 500 });

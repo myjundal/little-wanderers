@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import NotificationPreferences from '@/components/pwa/NotificationPreferences';
+import { formatBirthdateInput, parseBirthdate } from '@/lib/birthdate';
 
 type Person = {
   id: string;
@@ -85,13 +86,19 @@ export default function PeoplePage() {
       return;
     }
 
+    const birthdate = form.birthdate.trim() ? parseBirthdate(form.birthdate) : null;
+    if (form.birthdate.trim() && !birthdate) {
+      setUiError('Enter the birthday as MM/DD/YYYY (for example, 03/15/2022). Use a real date that is not in the future.');
+      return;
+    }
+
     const { error } = await supabase.from('people').insert({
       household_id: householdId,
       role: form.role as 'adult' | 'child',
       first_name: form.first_name,
       last_name: form.last_name || null,
       gender: form.gender || null,
-      birthdate: form.birthdate || null,
+      birthdate,
     });
 
     if (error) {
@@ -242,20 +249,24 @@ export default function PeoplePage() {
         <button type="button" onClick={() => setOpenAdd((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>{openAdd ? '▾' : '▸'} Add Family Member</button>
         {openAdd && <>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <select style={{ width: '100%', minWidth: 0 }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          <select aria-label="Family member role" style={{ width: '100%', minWidth: 0 }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             <option value="adult">Adult</option>
             <option value="child">Child</option>
           </select>
-          <input style={{ width: '100%', minWidth: 0 }} placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
-          <input style={{ width: '100%', minWidth: 0 }} placeholder="Last name (optional)" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
-          <select style={{ width: '100%', minWidth: 0 }} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
-            <option value="">Gender</option>
+          <input style={{ width: '100%', minWidth: 0 }} aria-label="First name (required)" placeholder="First name (required)" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+          <input style={{ width: '100%', minWidth: 0 }} aria-label="Last name (optional)" placeholder="Last name (optional)" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          <select aria-label="Gender (optional)" style={{ width: '100%', minWidth: 0 }} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+            <option value="">Gender (optional)</option>
             <option value="female">Female</option>
             <option value="male">Male</option>
             <option value="non_binary">Non-binary</option>
             <option value="prefer_not_to_say">Prefer not to say</option>
           </select>
-          <input style={{ width: '100%', minWidth: 0 }} type="date" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: e.target.value })} />
+          <label style={{ display: 'grid', gap: 6, width: '100%', color: '#6d6480' }}>
+            Birthday (optional, MM/DD/YYYY)
+            <input style={{ width: '100%', minWidth: 0 }} type="text" inputMode="numeric" maxLength={10} placeholder="03/15/2022" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: formatBirthdateInput(e.target.value) })} aria-describedby="family-birthday-help" />
+          </label>
+          <p id="family-birthday-help" style={{ margin: 0, color: '#6d6480', fontSize: 14 }}>Month / day / four-digit year. For a child, enter their date of birth, not their age. You can leave this blank and add it later.</p>
           <button style={{ width: '100%' }} type="button" onClick={addPerson}>Add Family Member</button>
         </div>
         </>}
@@ -267,7 +278,7 @@ export default function PeoplePage() {
       </section>
 
       {(uiError || uiMessage) && (
-        <p style={{ color: uiError ? '#8a3f6b' : '#2f7a44', marginTop: 10 }}>{uiError ?? uiMessage}</p>
+        <p role={uiError ? 'alert' : 'status'} style={{ color: uiError ? '#8a3f6b' : '#2f7a44', marginTop: 10 }}>{uiError ?? uiMessage}</p>
       )}
 
 

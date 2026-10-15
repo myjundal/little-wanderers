@@ -1,3 +1,4 @@
+import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
 import type { User } from '@supabase/supabase-js';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
@@ -66,6 +67,7 @@ export async function getSoftOpeningAccessForUser(admin: AdminClient, user: Pick
     const { data: waitlist, error: waitlistError } = await admin
       .from('waitlist_entries')
       .select('id')
+      .lt('created_at', WANDERLIST_CUTOFF)
       .eq('normalized_email', normalizedEmail)
       .maybeSingle();
 

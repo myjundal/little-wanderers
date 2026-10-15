@@ -1,3 +1,4 @@
+import { parseBirthdate } from '@/lib/birthdate';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
@@ -12,7 +13,7 @@ const childSchema = z.object({
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().optional(),
   gender: genderSchema,
-  birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  birthdate: z.string().refine((value) => parseBirthdate(value) !== null, 'Enter a valid child birthday as MM/DD/YYYY, not a future date.').transform((value) => parseBirthdate(value)!),
 });
 
 const payloadSchema = z.object({
@@ -47,7 +48,13 @@ export async function POST(req: Request) {
 
   const parsed = payloadSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: 'Please check the form and try again.' }, { status: 400 });
+    const field = parsed.error.issues[0]?.path[0];
+    const error = field === 'children' ? 'Please add each child’s name, gender, and a valid birthday (MM/DD/YYYY).'
+      : field === 'phone' ? 'Please enter a 10-digit US phone number, including area code.'
+      : field === 'email' ? 'Please enter a valid email address.'
+      : field === 'city' || field === 'state' ? 'Please enter your city and state.'
+      : 'Please enter your first name, last name, and gender.';
+    return NextResponse.json({ ok: false, error }, { status: 400 });
   }
 
   const input = parsed.data;

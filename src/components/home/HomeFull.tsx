@@ -38,7 +38,7 @@ export default function HomeFull() {
 
             <div className={styles.ctaRow}>
               <Link href={ACCOUNT_URL} className={styles.primaryBtn}>
-                Join My Little Wanderers
+                Join/Login to My Little Wanderers
               </Link>
               <Link href="/faq" className={styles.secondaryBtn}>
                 FAQ

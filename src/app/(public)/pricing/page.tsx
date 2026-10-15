@@ -184,7 +184,7 @@ export default function PricingPage() {
           Infant siblings are free when listed under the sibling option. For the latest updates and opening info, you
           can also{' '}
           <Link href="/login?mode=new">
-            join My Little Wanderers here
+            Join/Login to My Little Wanderers
           </Link>
           .
         </p>

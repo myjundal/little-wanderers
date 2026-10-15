@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 
+import { CLASS_START_NOTE } from '@/lib/class-config';
 import PublicUpcomingClasses from '@/components/classes/PublicUpcomingClasses';
 
 export const metadata = {
@@ -31,6 +32,7 @@ export default function ClassesPage() {
         <p style={{ maxWidth: 740, margin: '14px 0 0', color: '#6f628d', fontSize: '1.05rem', lineHeight: 1.75 }}>
           Playful small-group programs for curious kids and families. Browse what is opening first, then use My Little Wanderers to get early access to class pre-registration.
         </p>
+        <p style={{ color: '#6f628d', fontWeight: 700 }}>{CLASS_START_NOTE}</p>
       </section>
       <PublicUpcomingClasses />
     </main>

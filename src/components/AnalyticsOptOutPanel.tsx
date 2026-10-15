@@ -40,8 +40,8 @@ const secondaryButtonStyle: React.CSSProperties = {
 
 function hasOptOut() {
   if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem('lw_ignore_analytics') === 'true'
-    || document.cookie.split(';').some((part) => part.trim() === 'lw_ignore_analytics=true');
+  const cookie = document.cookie.split(';').some((part) => part.trim() === 'lw_ignore_analytics=true');
+  try { return cookie || window.localStorage.getItem('lw_ignore_analytics') === 'true'; } catch { return cookie; }
 }
 
 export default function AnalyticsOptOutPanel() {

@@ -1,3 +1,4 @@
+import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendResendEmail } from '@/lib/email-campaigns';
@@ -117,6 +118,7 @@ export async function isUserOnWanderlist(admin: SupabaseClient, email: string | 
   const { data, error } = await admin
     .from('waitlist_entries')
     .select('id')
+    .lt('created_at', WANDERLIST_CUTOFF)
     .eq('normalized_email', normalizedEmail)
     .maybeSingle();
 

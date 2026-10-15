@@ -1,3 +1,5 @@
+import { isWanderlistSignupWindow } from '@/lib/signup-policy';
+import { CLASS_START_AT, CLASS_START_LABEL } from '@/lib/class-config';
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -179,7 +181,7 @@ export async function POST(req: Request) {
     const { data: roleRow } = await supa.from('roles').select('role').eq('id', user.id).maybeSingle();
     const isOperator = roleRow?.role === 'owner' || roleRow?.role === 'staff' || roleRow?.role === 'admin';
     const onWanderlist = isOperator || (await isUserOnWanderlist(supa, user.email));
-    if (!onWanderlist) {
+    if (isWanderlistSignupWindow() && !onWanderlist) {
       return Response.json(
         { ok: false, error: 'Class pre-registration is open to Wanderlist families first.' },
         { status: 403 }
@@ -204,6 +206,9 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (!klass) return Response.json({ ok: false, error: 'class not found' }, { status: 404 });
+    if (new Date(klass.start_time).getTime() < new Date(CLASS_START_AT).getTime()) {
+      return Response.json({ ok: false, error: `Classes begin ${CLASS_START_LABEL}. Please choose an upcoming date.` }, { status: 409 });
+    }
     if (klass.status !== 'scheduled') {
       return Response.json({ ok: false, error: 'class is not open for booking' }, { status: 409 });
     }

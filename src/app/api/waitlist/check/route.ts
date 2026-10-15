@@ -1,3 +1,4 @@
+import { signupSource } from '@/lib/signup-policy';
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { isLikelyEmail, normalizeWaitlistEmail, WAITLIST_JOIN_URL } from '@/lib/waitlist';
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
       .insert({
         email,
         normalized_email: normalizedEmail,
-        source: 'website_signup',
+        source: signupSource(),
         raw_payload: {
           created_from: 'login',
           created_at: new Date().toISOString(),

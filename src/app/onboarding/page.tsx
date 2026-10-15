@@ -5,6 +5,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
 import { US_CITIES_BY_STATE, US_STATE_OPTIONS, type UsStateCode } from '@/lib/us-cities';
 import styles from './onboarding.module.css';
+import { formatBirthdateInput, parseBirthdate } from '@/lib/birthdate';
 
 type Gender = 'female' | 'male' | 'non_binary' | 'prefer_not_to_say';
 type ChildForm = {
@@ -128,11 +129,12 @@ export default function OnboardingPage() {
       }
       setHouseholdId(hid);
 
-      const [{ data: household }, { data: people }] = await Promise.all([
+      const [{ data: household, error: householdError }, { data: people, error: peopleError }] = await Promise.all([
         supabase.from('households').select('name,email,phone,city,state').eq('id', hid).maybeSingle(),
         supabase.from('people').select('id,role,first_name,last_name,gender,birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
       ]);
 
+      if (householdError || peopleError) throw new Error('Unable to load your family information. Please refresh and try again.');
       const existingPeople = people ?? [];
       if (existingPeople.length > 0) {
         window.location.replace('/landing');
@@ -156,7 +158,10 @@ export default function OnboardingPage() {
       setReady(true);
     };
 
-    void run();
+    void run().catch(() => {
+      setError('Unable to load your family information. Please refresh and try again.');
+      setReady(true);
+    });
   }, [supabase]);
 
   const updateChild = (key: number, next: Partial<ChildForm>) => {
@@ -190,6 +195,11 @@ export default function OnboardingPage() {
       return;
     }
 
+    if (childRows.some((child) => !parseBirthdate(child.birthdate))) {
+      setError('Enter each child’s birthday as MM/DD/YYYY (for example, 03/15/2022). Use a real date that is not in the future.');
+      return;
+    }
+
     if (!submittedCity) {
       setError('Please enter your city or town.');
       return;
@@ -208,44 +218,50 @@ export default function OnboardingPage() {
     setSaving(true);
 
     const nextRedirect = getSafeRedirect(sessionStorage.getItem('post_onboarding_redirect') || getCookieValue('post_onboarding_redirect'));
-    sessionStorage.removeItem('post_onboarding_redirect');
-    clearCookie('post_onboarding_redirect');
 
-    if (!isPreview) {
-      if (!householdId) {
-        setError('We could not find your household. Please sign in again.');
-        setSaving(false);
-        return;
+    try {
+      if (!isPreview) {
+        if (!householdId) {
+          setError('We could not find your household. Please sign in again.');
+          setSaving(false);
+          return;
+        }
+
+        const response = await fetch('/api/onboarding/complete', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            adultFirstName: adultFirstName.trim(),
+            adultLastName: adultLastName.trim(),
+            adultGender,
+            children: childRows.map((child) => ({
+              firstName: child.firstName.trim(),
+              lastName: child.lastName.trim(),
+              gender: child.gender,
+              birthdate: parseBirthdate(child.birthdate),
+            })),
+            city: submittedCity,
+            state,
+            email: normalizedEmail,
+            phone: normalizedPhone,
+          }),
+        });
+        const json = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+
+        if (!response.ok || !json?.ok) {
+          setError(json?.error ?? 'Something went wrong while saving your family setup.');
+          setSaving(false);
+          return;
+        }
       }
-
-      const response = await fetch('/api/onboarding/complete', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          adultFirstName: adultFirstName.trim(),
-          adultLastName: adultLastName.trim(),
-          adultGender,
-          children: childRows.map((child) => ({
-            firstName: child.firstName.trim(),
-            lastName: child.lastName.trim(),
-            gender: child.gender,
-            birthdate: child.birthdate,
-          })),
-          city: submittedCity,
-          state,
-          email: normalizedEmail,
-          phone: normalizedPhone,
-        }),
-      });
-      const json = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-
-      if (!response.ok || !json?.ok) {
-        setError(json?.error ?? 'Something went wrong while saving your family setup.');
-        setSaving(false);
-        return;
-      }
+    } catch {
+      setError('We could not save your setup. Check your connection and try again. Your entries are still here.');
+      setSaving(false);
+      return;
     }
 
+    sessionStorage.removeItem('post_onboarding_redirect');
+    clearCookie('post_onboarding_redirect');
     setWelcome(true);
     setSaving(false);
     window.setTimeout(() => {
@@ -270,7 +286,7 @@ export default function OnboardingPage() {
               <p className={styles.eyebrow}>Little Wanderers</p>
               <h1>Welcome. Let’s get your family set up.</h1>
               <p className={styles.introCopy}>
-                Add yourself, your child, and your contact details so your family dashboard and early access party holds are ready.
+                Add yourself, your child, and your contact details so your family dashboard and bookings are ready. All fields are required unless marked optional.
               </p>
             </div>
           </section>
@@ -324,8 +340,9 @@ export default function OnboardingPage() {
                       </select>
                     </div>
                     <div className={styles.field}>
-                      <label htmlFor={`child-birthdate-${child.key}`}>Birthday</label>
-                      <input id={`child-birthdate-${child.key}`} type="date" value={child.birthdate} onChange={(event) => updateChild(child.key, { birthdate: event.target.value })} />
+                      <label htmlFor={`child-birthdate-${child.key}`}>Child’s birthday (MM/DD/YYYY)</label>
+                      <input id={`child-birthdate-${child.key}`} type="text" inputMode="numeric" maxLength={10} placeholder="03/15/2022" aria-describedby={`child-birthday-help-${child.key}`} value={child.birthdate} onChange={(event) => updateChild(child.key, { birthdate: formatBirthdateInput(event.target.value) })} />
+                      <p id={`child-birthday-help-${child.key}`} className={styles.hint}>Month / day / four-digit year. This is your child’s date of birth, not their age.</p>
                     </div>
                   </div>
                 </div>
@@ -356,9 +373,9 @@ export default function OnboardingPage() {
                   {authEmail && <p className={styles.hint}>Pulled from your email sign-in.</p>}
                 </div>
                 <div className={styles.field}>
-                  <label htmlFor="phone">Phone</label>
+                  <label htmlFor="phone">US phone number (required)</label>
                   <input id="phone" type="tel" value={phone} readOnly={Boolean(authPhone)} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" placeholder="(555) 123-4567" />
-                  {authPhone && <p className={styles.hint}>Pulled from your phone sign-in.</p>}
+                  <p className={styles.hint}>{authPhone ? 'Pulled from your phone sign-in.' : 'Enter a 10-digit US phone number, including area code. This is not a birthday.'}</p>
                 </div>
               </div>
             </div>
@@ -368,7 +385,7 @@ export default function OnboardingPage() {
                 {saving ? 'Saving…' : 'Complete setup'}
               </button>
               {welcome && <p className={styles.message}>Welcome to Little Wanderers. Taking you to your dashboard…</p>}
-              {error && <p className={styles.error}>{error}</p>}
+              {error && <p role="alert" className={styles.error}>{error}</p>}
             </div>
           </section>
         </div>
