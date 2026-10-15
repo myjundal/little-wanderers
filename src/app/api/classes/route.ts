@@ -31,7 +31,7 @@ const admin = () =>
 
 function toInt(value: unknown, fallback: number) {
   const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+  return Number.isInteger(n) && n > 0 ? Math.min(n, 200) : fallback;
 }
 
 function isMissingClassDetailColumn(message: string) {
