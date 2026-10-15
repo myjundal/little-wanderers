@@ -44,7 +44,7 @@ export default function AuthLinkPage() {
             disabled={opening}
             style={{ display: 'inline-flex', justifyContent: 'center', width: '100%', boxSizing: 'border-box', marginTop: 12, padding: '12px 16px', borderRadius: 12, background: opening ? '#b8acd1' : '#5f3da4', color: '#fff', fontWeight: 800, textDecoration: 'none', border: 'none' }}
           >
-            {opening ? 'Opening...' : 'Open My Little Wanderers'}
+            {opening ? 'Opening...' : 'Join/Login to My Little Wanderers'}
           </button>
         ) : (
           <a

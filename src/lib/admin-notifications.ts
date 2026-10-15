@@ -101,13 +101,6 @@ function renderOperationalNotification(input: {
 </html>`;
 }
 
-function formatSignupSource(source: string | null | undefined) {
-  if (!source) return null;
-  if (source === 'wanderlist') return 'Wanderlist';
-  if (source === 'website_signup') return 'Website signup';
-  return source;
-}
-
 export async function sendNewSignupNotification(input: {
   email?: string | null;
   source?: string | null;
@@ -117,20 +110,13 @@ export async function sendNewSignupNotification(input: {
 } = {}) {
   const to = getOwnerNotificationEmail();
 
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
   const html = renderOperationalNotification({
     title: 'New My Little Wanderers sign-in',
     rows: [
       ['Event', 'First My Little Wanderers sign-in'],
       ['Email', input.email],
-      ['Source', formatSignupSource(input.source)],
-      ['Existing waitlist row', input.claimedExistingWaitlistEntry == null ? null : input.claimedExistingWaitlistEntry ? 'Yes' : 'No'],
-      ['Waitlist entry ID', input.waitlistEntryId],
-      ['Household ID', input.householdId],
       ['When', new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })],
     ],
-    ctaHref: siteUrl ? `${siteUrl}/staff/families` : null,
-    ctaLabel: 'Open family management',
   });
 
   return sendResendEmail({

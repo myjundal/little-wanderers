@@ -197,7 +197,7 @@ export default function LoginPage() {
 
     if (shouldCreateUser && authMethod === 'phone') {
       setShowWaitlistInvite(true);
-      setError('Early access sign-up is currently available by Wanderlist email only. Please continue with the email you used for the Wanderlist.');
+      setError('Please create your account with email. Existing accounts can also sign in with a verified phone number.');
       return;
     }
 
@@ -382,7 +382,7 @@ export default function LoginPage() {
         <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
           <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access now starts here.</p>
           <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
-            Choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong>. If your email is not on the Wanderlist yet, we will add it and send your magic link.
+            Choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong>. We will send your magic link. Signups through October 28, 2026 join the Wanderlist; new signups from October 29 are regular accounts.
           </p>
         </div>
 
@@ -505,7 +505,7 @@ export default function LoginPage() {
         {error && <p style={{ marginTop: 14, color: '#8a3f6b' }}>{error}</p>}
         {showWaitlistInvite && (
           <p style={{ marginTop: 10, color: '#6d6480', lineHeight: 1.5 }}>
-            Please use email sign-up for new accounts. We will add new emails to the Wanderlist automatically.
+            Please use email sign-up for new accounts. Signups through October 28, 2026 join the Wanderlist; new signups from October 29 are regular accounts.
           </p>
         )}
       </section>

@@ -1,5 +1,6 @@
 'use client';
 
+import { CLASS_START_NOTE } from '@/lib/class-config';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
@@ -710,6 +711,7 @@ export default function ClassSchedulePage() {
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Pre-registration</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Wanderlist families get first access. Register for available spots or join the waitlist when a class is full.</p>
 
+      <p style={{ color: '#6f628d' }}>{CLASS_START_NOTE}</p>
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
       {claimingWaitlist && <p style={{ marginTop: 12, color: '#5a4a8f' }}>Claiming your waitlist spot...</p>}
 

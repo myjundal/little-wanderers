@@ -1,3 +1,4 @@
+import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isLikelyEmail, normalizeWaitlistEmail } from '@/lib/waitlist';
 
@@ -69,6 +70,7 @@ type WaitlistContactInput = {
   last_name: string | null;
   source?: string | null;
   id?: string | null;
+  created_at?: string;
 };
 
 type ContactLookupRow = {
@@ -117,7 +119,8 @@ export async function syncWaitlistContacts(
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await admin
         .from('waitlist_entries')
-        .select('id,email,normalized_email,first_name,last_name,source')
+        .select('id,email,normalized_email,first_name,last_name,source,created_at')
+        .lt('created_at', WANDERLIST_CUTOFF)
         .order('created_at', { ascending: true })
         .range(from, from + pageSize - 1);
 
@@ -131,6 +134,7 @@ export async function syncWaitlistContacts(
     sourceRows = allRows;
   }
 
+  sourceRows = sourceRows.filter((row) => row.created_at && new Date(row.created_at).getTime() < new Date(WANDERLIST_CUTOFF).getTime());
   const contactRows = toWaitlistContactRows(sourceRows);
   if (contactRows.length === 0) {
     return { waitlist_count: sourceRows.length, contact_count: 0, tagged_count: 0 };

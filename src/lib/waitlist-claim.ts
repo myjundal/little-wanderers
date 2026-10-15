@@ -1,3 +1,4 @@
+import { signupSource } from '@/lib/signup-policy';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
@@ -182,7 +183,7 @@ export async function claimWaitlistForUser(user: WaitlistUser) {
       .insert({
         email,
         normalized_email: normalizedEmail,
-        source: 'website_signup',
+        source: signupSource(),
         claimed_user_id: user.id,
         claimed_at: claimedAt,
         raw_payload: {

@@ -1,3 +1,4 @@
+import { resolveSignupTime, signupSource } from '@/lib/signup-policy';
 import { NextResponse } from 'next/server';
 import { syncWaitlistContacts } from '@/lib/email-campaigns';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
@@ -11,6 +12,7 @@ type WaitlistSyncEntry = {
   last_name?: string;
   source?: string;
   external_id?: string;
+  submitted_at?: string;
   raw_payload?: Record<string, unknown>;
 };
 
@@ -56,7 +58,19 @@ export async function POST(req: Request) {
     external_id: string | null;
     raw_payload: Record<string, unknown> | WaitlistSyncEntry;
     synced_at: string;
+    created_at: string;
   }>();
+
+  const admin = createAdminSupabaseClient();
+  const existingByEmail = new Map<string, string>();
+  const emails = [...new Set(entries.map((entry) => normalizeWaitlistEmail(String(entry.email ?? ''))).filter(Boolean))];
+  for (let i = 0; i < emails.length; i += 500) {
+    const existing = await admin.from('waitlist_entries').select('normalized_email,created_at').in('normalized_email', emails.slice(i, i + 500));
+    if (existing.error) return NextResponse.json({ ok: false, error: existing.error.message }, { status: 500 });
+    (existing.data ?? []).forEach((row) => existingByEmail.set(row.normalized_email, row.created_at));
+  }
+  const now = new Date();
+  let missingSubmissionTime = false;
 
   entries.forEach((entry) => {
     const email = String(entry.email ?? '').trim();
@@ -67,25 +81,33 @@ export async function POST(req: Request) {
       return;
     }
 
+    const createdAt = resolveSignupTime(entry.submitted_at, rowsByEmail.get(normalizedEmail)?.created_at ?? existingByEmail.get(normalizedEmail), now);
+    if (!createdAt) {
+      missingSubmissionTime = true;
+      return;
+    }
     validCount += 1;
     rowsByEmail.set(normalizedEmail, {
       email,
       normalized_email: normalizedEmail,
       first_name: entry.first_name ? String(entry.first_name).trim() : null,
       last_name: entry.last_name ? String(entry.last_name).trim() : null,
-      source: entry.source ? String(entry.source).trim() : 'Wanderlist',
+      source: signupSource(new Date(createdAt)),
       external_id: entry.external_id ? String(entry.external_id).trim() : null,
       raw_payload: entry.raw_payload ?? entry,
-      synced_at: new Date().toISOString(),
+      synced_at: now.toISOString(),
+      created_at: createdAt,
     });
   });
+  if (missingSubmissionTime) {
+    return NextResponse.json({ ok: false, error: 'Include a valid original submitted_at timestamp for every new legacy form response imported after October 28. Update the Apps Script to send response.getTimestamp().toISOString().' }, { status: 400 });
+  }
   const rows = Array.from(rowsByEmail.values());
 
   if (rows.length === 0) {
     return NextResponse.json({ ok: false, error: 'No valid Wanderlist emails provided.', invalid }, { status: 400 });
   }
 
-  const admin = createAdminSupabaseClient();
   const { error } = await admin
     .from('waitlist_entries')
     .upsert(rows, { onConflict: 'normalized_email' });
@@ -95,7 +117,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    await syncWaitlistContacts(admin, rows);
+    await syncWaitlistContacts(admin);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return NextResponse.json({ ok: false, error: `Wanderlist synced, but contact tags failed: ${message}` }, { status: 500 });

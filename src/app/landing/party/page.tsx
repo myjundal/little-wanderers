@@ -687,7 +687,7 @@ export default function PartyPage() {
                 padding: '0 16px',
               }}
             >
-              Login / Join My Little Wanderers
+              Join/Login to My Little Wanderers
             </Link>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { earliestClassTime } from '@/lib/class-config';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 export type PublicClassItem = {
@@ -176,7 +177,7 @@ async function selectClasses(limit: number) {
   const primary = await admin
     .from('classes')
     .select(CLASS_SELECT)
-    .gte('start_time', new Date().toISOString())
+    .gte('start_time', earliestClassTime())
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
     .limit(limit);
@@ -187,7 +188,7 @@ async function selectClasses(limit: number) {
   const fallback = await admin
     .from('classes')
     .select(CLASS_SELECT_BASE)
-    .gte('start_time', new Date().toISOString())
+    .gte('start_time', earliestClassTime())
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
     .limit(limit);

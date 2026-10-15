@@ -22,21 +22,29 @@ function hasIgnoreCookie() {
 
 function hasIgnoreLocalStorage() {
   if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem(OPT_OUT_STORAGE_KEY) === OPT_OUT_STORAGE_VALUE;
+  try {
+    return window.localStorage.getItem(OPT_OUT_STORAGE_KEY) === OPT_OUT_STORAGE_VALUE;
+  } catch {
+    return false;
+  }
 }
 
 export function setAnalyticsOptOut() {
   if (typeof window === 'undefined') return;
   window['ga-disable-G-RHZ3580FJ8'] = true;
-  document.cookie = `${OPT_OUT_COOKIE}; Max-Age=${COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`;
-  window.localStorage.setItem(OPT_OUT_STORAGE_KEY, OPT_OUT_STORAGE_VALUE);
+  const domain = PRODUCTION_HOSTNAME_ALIASES.has(window.location.hostname) ? `; Domain=${PRODUCTION_HOSTNAME}; Secure` : '';
+  document.cookie = `${OPT_OUT_COOKIE}; Max-Age=${COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${domain}`;
+  try { window.localStorage.setItem(OPT_OUT_STORAGE_KEY, OPT_OUT_STORAGE_VALUE); } catch { /* Cookie still excludes this browser. */ }
 }
 
 export function clearAnalyticsOptOut() {
   if (typeof window === 'undefined') return;
   window['ga-disable-G-RHZ3580FJ8'] = false;
   document.cookie = OPT_OUT_COOKIE_CLEAR;
-  window.localStorage.removeItem(OPT_OUT_STORAGE_KEY);
+  if (PRODUCTION_HOSTNAME_ALIASES.has(window.location.hostname)) {
+    document.cookie = `${OPT_OUT_COOKIE_CLEAR}; Domain=${PRODUCTION_HOSTNAME}; Secure`;
+  }
+  try { window.localStorage.removeItem(OPT_OUT_STORAGE_KEY); } catch { /* Cookie preference is cleared above. */ }
 }
 
 export function syncAnalyticsOptPreferenceFromUrl() {
@@ -64,7 +72,10 @@ export function shouldLoadAnalytics() {
 
   if (EXCLUDED_PATH_PREFIXES.some((prefix) => window.location.pathname.startsWith(prefix))) return false;
 
-  if (hasIgnoreCookie() || hasIgnoreLocalStorage()) return false;
+  if (hasIgnoreCookie() || hasIgnoreLocalStorage()) {
+    setAnalyticsOptOut();
+    return false;
+  }
 
   const hostname = window.location.hostname;
   if (LOCAL_HOSTNAMES.has(hostname)) return false;
