@@ -1,6 +1,7 @@
 'use client';
 
 import { CLASS_START_NOTE } from '@/lib/class-config';
+import { parseChildAge } from '@/lib/child-age';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
@@ -487,15 +488,9 @@ export default function ClassSchedulePage() {
   const selectedPersonNeedsAge = Boolean(selectedPerson && !selectedPerson.birthdate);
 
   const parsedQuickAge = () => {
-    const age = Number(quickChildAge);
-    if (!Number.isFinite(age) || age < 0) return null;
-    if (quickChildAgeUnit === 'months') {
-      const roundedMonths = Math.round(age);
-      if (roundedMonths > 144) return null;
-      return roundedMonths;
-    }
-    if (age > 12) return null;
-    return Math.round(age * 2) / 2;
+    const age = parseChildAge(quickChildAge, quickChildAgeUnit);
+    if (!age) return null;
+    return quickChildAgeUnit === 'months' ? age.months : age.months / 12;
   };
 
   const guardianPayload = () => {
@@ -512,7 +507,7 @@ export default function ClassSchedulePage() {
     if (selectedPersonId && !isAddingAdditionalChild && !selectedPersonNeedsAge) return selectedPersonId;
     const ageValue = parsedQuickAge();
     if (ageValue == null) {
-      setMessage('Please enter your child’s age.');
+      setMessage('Please enter your child’s age in years or months, not their birthday.');
       return null;
     }
 
@@ -770,7 +765,7 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          Pre-registration is free for now. If you are new, add your child’s name and age here, then choose the class you want. Birthdays can be corrected later in My Info/People.
+          Pre-registration is free for now. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
         </p>
         {isAuthenticated && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>

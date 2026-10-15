@@ -29,6 +29,20 @@ assert.equal(policy.signupSource(new Date(policy.resolveSignupTime('2026-11-01T1
 const classes = load('src/lib/class-config.ts');
 assert.equal(classes.earliestClassTime(new Date('2026-10-15')), '2026-11-09T05:00:00.000Z');
 assert.equal(classes.earliestClassTime(new Date('2026-12-01')), '2026-12-01T00:00:00.000Z');
+const childAge = load('src/lib/child-age.ts');
+for (const missing of ['', '   ', undefined, null, false, []]) {
+  assert.equal(childAge.parseChildAge(missing, 'years'), null, `Missing age: ${String(missing)}`);
+}
+assert.equal(childAge.parseChildAge('0', 'years').months, 0);
+assert.equal(childAge.parseChildAge(0, 'months').months, 0);
+assert.equal(childAge.parseChildAge('1.5', 'years').months, 18);
+assert.equal(childAge.parseChildAge('18', 'months').months, 18);
+assert.equal(childAge.parseChildAge('03/15/2022', 'years'), null);
+assert.equal(childAge.parseChildAge('20220315', 'years'), null);
+assert.equal(childAge.parseChildAge('13', 'years'), null);
+assert.equal(childAge.parseChildAge('12.2', 'years'), null);
+assert.equal(childAge.parseChildAge('144.4', 'months'), null);
+assert.equal(childAge.parseChildAge('145', 'months'), null);
 const birthday = load('src/lib/birthdate.ts');
 const today = new Date('2026-10-15T12:00:00Z');
 assert.equal(birthday.parseBirthdate('03/15/2022', today), '2022-03-15');

@@ -1,3 +1,4 @@
+import { parseChildAge as parseAge } from '@/lib/child-age';
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -23,27 +24,6 @@ function approximateBirthdateFromAgeMonths(ageMonths: number) {
   const approximate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
   approximate.setUTCMonth(approximate.getUTCMonth() - ageMonths);
   return approximate.toISOString().slice(0, 10);
-}
-
-function parseAge(value: unknown, unitValue: unknown): { months: number; label: string } | null {
-  const age = Number(value);
-  const unit: AgeUnit | null =
-    unitValue === undefined || unitValue === null
-      ? 'years'
-      : unitValue === 'months' || unitValue === 'years'
-      ? unitValue
-      : null;
-  if (!unit) return null;
-  if (!Number.isFinite(age) || age < 0) return null;
-  if (unit === 'months') {
-    const months = Math.round(age);
-    if (months > 144) return null;
-    return { months, label: `${months} ${months === 1 ? 'month' : 'months'}` };
-  }
-  const roundedYears = Math.round(age * 2) / 2;
-  if (roundedYears > 12) return null;
-  const months = Math.round(roundedYears * 12);
-  return { months, label: `${roundedYears} ${roundedYears === 1 ? 'year' : 'years'}` };
 }
 
 async function ensureHouseholdForSignedInUser(user: { id: string; email?: string | null }) {
@@ -99,7 +79,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please use a shorter child name.' }, { status: 400 });
   }
   if (requireAge && age == null) {
-    return NextResponse.json({ ok: false, error: 'Please enter your child’s age.' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'Please enter your child’s age in years or months, not their birthday.' }, { status: 400 });
   }
 
   try {
@@ -159,7 +139,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please choose a child.' }, { status: 400 });
   }
   if (age == null) {
-    return NextResponse.json({ ok: false, error: 'Please enter your child’s age.' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'Please enter your child’s age in years or months, not their birthday.' }, { status: 400 });
   }
 
   try {
