@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
+import BookingNextSteps from '@/components/landing/BookingNextSteps';
 import {
   SHOW_CUSTOMER_CROWD_STATUS,
   SHOW_CUSTOMER_MEMBERSHIP,
@@ -56,6 +57,7 @@ export default function AppHome() {
   const [ready, setReady] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   // household
   const [householdId, setHouseholdId] = useState<string | null>(null);
@@ -78,6 +80,7 @@ export default function AppHome() {
 
       setDisplayName(user?.email ?? user?.phone ?? null);
       setIsAuthenticated(Boolean(user));
+      setUserId(user?.id ?? null);
       if (!user) { setReady(true); return; }
 
       // 2) Resolve household from household_members first (source of truth)
@@ -284,12 +287,12 @@ export default function AppHome() {
       </section>
 
 
+      {!canUseOwnerDashboard && userId && <BookingNextSteps userId={userId} />}
+
       {!canUseOwnerDashboard && (
         <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
           <Link href="/landing/people" className="quickCard">My Info/People</Link>
           <Link href="/landing/qr" className="quickCard">My QR Code</Link>
-          <Link href="/landing/classschedule" className="quickCard">My Classes</Link>
-          <Link href="/landing/party" className="quickCard">My Party</Link>
         </section>
       )}
 

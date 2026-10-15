@@ -1,0 +1,41 @@
+.section { margin: 20px 0; padding: clamp(18px, 4vw, 26px); border: 1px solid #e2d5ed; border-radius: 24px; background: #fffdf9; }
+.headingRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.eyebrow { margin: 0 0 8px; color: #79628e; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.section h2, .dialog h2 { margin: 0; color: #4f3f68; font-size: clamp(23px, 4vw, 30px); line-height: 1.2; }
+.intro { margin: 12px 0 20px; color: #6d6179; font-size: 15px; line-height: 1.65; }
+.grid, .guideGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.card { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 22px; border-radius: 20px; border: 1px solid; color: #4f3f68; text-decoration: none; transition: transform .15s, box-shadow .15s; }
+.card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px #73548818; }
+.card:focus-visible, .help:focus-visible, .later:focus-visible, .close:focus-visible { outline: 3px solid #6e4596; outline-offset: 4px; }
+.party { background: #fcecf0; border-color: #ebcbd6; }
+.classes { background: #efeafa; border-color: #d9ccee; }
+.icon { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 14px; border-radius: 50%; background: #ffffffa6; color: #795197; font-size: 24px; }
+.card h3 { margin: 0; font-size: 21px; line-height: 1.25; }
+.card p { font-weight: 400; margin: 10px 0 20px; font-size: 14px; line-height: 1.6; }
+.action { display: flex; justify-content: space-between; align-items: center; gap: 16px; align-self: stretch; margin-top: auto; min-height: 44px; padding: 10px 15px; box-sizing: border-box; border-radius: 12px; background: #654485; color: white; font-weight: 800; }
+.help, .later { min-height: 44px; padding: 10px 14px; border: 1px solid #d9ccee; border-radius: 12px; background: white; color: #654485; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.dialog { inset: 0; margin: auto; width: min(720px, calc(100% - 28px)); max-height: calc(100dvh - 36px); padding: 0; box-sizing: border-box; border: 1px solid #e5d9ef; border-radius: 26px; background: #fffdf9; box-shadow: 0 28px 90px #38204740; color: #4f3f68; }
+.dialog::backdrop { background: #37284780; }
+.dialogBody { position: relative; padding: clamp(22px, 4vw, 34px); }
+.dialogBody > .eyebrow { padding-right: 30px; }
+.close { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border: 0; background: transparent; color: #654485; font-size: 28px; cursor: pointer; border-radius: 50%; }
+.guideChoice { display: flex; flex-direction: column; min-width: 0; }
+.guideChoice .card { flex: 1; }
+.pointer { margin: 0 0 10px; color: #795197; font-size: 14px; font-weight: 800; line-height: 1.5; }
+.pointer span { display: block; padding-left: 20px; font-size: 26px; line-height: 1.1; }
+.later { margin-top: 22px; width: 100%; }
+.footnote { margin: 12px 0 0; color: #766b7e; font-size: 12px; text-align: center; line-height: 1.5; }
+@media (max-width: 560px) {
+  .grid, .guideGrid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .card { padding: 18px; }
+  .dialog .card { padding: 14px 16px; }
+  .dialog .icon { display: none; }
+  .dialog .card h3 { font-size: 19px; }
+  .dialog .card p { font-weight: 400; margin: 7px 0 12px; }
+  .pointer { margin-bottom: 6px; font-size: 13px; }
+  .dialog h2 { font-size: 25px; }
+}
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } .card:hover { transform: none; } }
+
+.section .headingRow h2, .dialog .dialogBody h2, .grid .card h3, .guideGrid .card h3 { color: #4f3f68; }
+.dialog .close { padding: 0; box-shadow: none; }
