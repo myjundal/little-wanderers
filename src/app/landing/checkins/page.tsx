@@ -16,6 +16,7 @@ type CheckinRow = {
   person_id: string;
   price_cents: number | null;
   membership_applied: boolean | null;
+  checked_in_at?: string | null;
   created_at?: string | null;
   timestamp?: string | null;
 };
@@ -70,35 +71,18 @@ export default function CheckinsPage() {
           return;
         }
 
-        const createdAtResult = await supabase
-          .from('checkins')
-          .select('id, person_id, price_cents, membership_applied, created_at')
-          .in('person_id', personIds)
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        let rows = (createdAtResult.data ?? []) as CheckinRow[];
-
-        if (createdAtResult.error?.message.includes('created_at')) {
-          const timestampResult = await supabase
-            .from('checkins')
-            .select('id, person_id, price_cents, membership_applied, timestamp')
-            .in('person_id', personIds)
-            .order('timestamp', { ascending: false })
-            .limit(100);
-
-          rows = (timestampResult.data ?? []) as CheckinRow[];
-          if (timestampResult.error) throw timestampResult.error;
-        } else if (createdAtResult.error) {
-          throw createdAtResult.error;
-        }
+        const result = await supabase.from('checkins')
+          .select('id,person_id,price_cents,membership_applied,checked_in_at')
+          .in('person_id', personIds).order('checked_in_at', { ascending: false }).limit(100);
+        if (result.error) throw result.error;
+        const rows = (result.data ?? []) as CheckinRow[];
 
         setItems(rows.map((row) => {
           const person = byId.get(row.person_id);
           const covered = Boolean(row.membership_applied);
           return {
             id: row.id,
-            when: row.created_at ?? row.timestamp ?? new Date().toISOString(),
+            when: row.checked_in_at ?? row.created_at ?? row.timestamp ?? new Date().toISOString(),
             name: person?.first_name ?? 'Guest',
             role: person?.role ?? null,
             covered,

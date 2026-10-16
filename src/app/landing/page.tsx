@@ -38,6 +38,7 @@ type CheckinRow = {
   person_id: string;
   price_cents: number | null;
   membership_applied: boolean | null;
+  checked_in_at?: string | null;
   created_at?: string | null;
   timestamp?: string | null;
 };
@@ -197,33 +198,14 @@ export default function AppHome() {
       const personIds = peopleRows.map((p) => p.id);
       if (personIds.length === 0) { setRecent([]); setLoadingRecent(false); return; }
 
-      // 2) pull checkins by those person_ids (limit 5, newest first)
-      let rows: CheckinRow[] | null = null;
-
-      // try created_at
-      const r1 = await supabase
-        .from('checkins')
-        .select('id, person_id, price_cents, membership_applied, created_at')
-        .in('person_id', personIds as string[])
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (r1.error && r1.error.message && r1.error.message.includes('created_at')) {
-        // fallback to timestamp
-        const r2 = await supabase
-          .from('checkins')
-          .select('id, person_id, price_cents, membership_applied, timestamp')
-          .in('person_id', personIds as string[])
-          .order('timestamp', { ascending: false })
-          .limit(5);
-        rows = r2.data ?? [];
-      } else {
-        rows = r1.data ?? [];
-      }
+      const result = await supabase.from('checkins')
+        .select('id,person_id,price_cents,membership_applied,checked_in_at')
+        .in('person_id', personIds as string[]).order('checked_in_at', { ascending: false }).limit(5);
+      const rows = (result.data ?? []) as CheckinRow[];
 
       const items: RecentItem[] = (rows ?? []).map((row) => {
         const meta = byId.get(row.person_id) ?? { first_name: 'Guest', role: null };
-        const when = (row.created_at ?? row.timestamp ?? new Date().toISOString()) as string;
+        const when = (row.checked_in_at ?? row.created_at ?? row.timestamp ?? new Date().toISOString()) as string;
         const covered = !!row.membership_applied;
         return {
           id: row.id,
