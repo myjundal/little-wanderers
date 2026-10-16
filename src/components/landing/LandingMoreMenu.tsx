@@ -8,7 +8,7 @@ import { SHOW_CUSTOMER_MEMBERSHIP } from '@/lib/feature-flags';
 
 export default function LandingMoreMenu() {
   const [open, setOpen] = useState(false);
-  const { canUseOwnerDashboard, isStaff, isInstructor, isKiosk } = useOperatorAccess();
+  const { isLoading, canUseOwnerDashboard, isStaff, isInstructor, isKiosk } = useOperatorAccess();
 
   return (
     <div style={{ marginBottom: 12, position: 'sticky', top: 8, zIndex: 40 }}>
@@ -17,11 +17,11 @@ export default function LandingMoreMenu() {
           <Image src="/logo.png" alt="Little Wanderers logo" width={34} height={34} />
           Little Wanderers
         </Link>
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-label="Open more menu" style={{ border: '1px solid #d9c8f7', background: '#fff', borderRadius: 12, padding: '8px 10px', fontSize: 14, fontWeight: 700, color: '#4f3f82' }}>
+        <button type="button" disabled={isLoading} onClick={() => setOpen((v) => !v)} aria-label="Open more menu" style={{ border: '1px solid #d9c8f7', background: '#fff', borderRadius: 12, padding: '8px 10px', fontSize: 14, fontWeight: 700, color: '#4f3f82' }}>
           ☰ More
         </button>
       </header>
-      {open && (
+      {open && !isLoading && (
         <section style={{ display: 'grid', gap: 10, border: '1px solid #e3d0fb', borderRadius: 14, background: '#fffdf9', padding: 12 }}>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href="/">Main Homepage</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href={isKiosk && canUseOwnerDashboard ? '/staff/dashboard' : isInstructor && !canUseOwnerDashboard ? '/teaching' : '/landing'}>
