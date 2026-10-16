@@ -48,17 +48,15 @@ export async function POST(req: Request) {
 
   const mappedRole = normalizeFamilyInviteRole(invite.role);
 
-  const { error: memberError } = await admin.from('household_members').upsert(
-    {
-      household_id: invite.household_id,
-      user_id: user.id,
-      role: mappedRole,
-    },
-    { onConflict: 'household_id,user_id' }
-  );
-
-  if (memberError) {
-    return NextResponse.json({ ok: false, error: 'Unable to add you to this household right now.' }, { status: 500 });
+  const existing = await admin.from('household_members').select('role')
+    .eq('household_id', invite.household_id).eq('user_id', user.id).maybeSingle();
+  if (existing.error) return NextResponse.json({ ok: false, error: 'Unable to check family access.' }, { status: 500 });
+  // An invite must not downgrade an existing primary caregiver or caregiver.
+  if (!existing.data) {
+    const { error: memberError } = await admin.from('household_members').insert({
+      household_id: invite.household_id, user_id: user.id, role: mappedRole,
+    });
+    if (memberError) return NextResponse.json({ ok: false, error: 'Unable to add you to this household right now.' }, { status: 500 });
   }
 
   const { error: markError } = await admin

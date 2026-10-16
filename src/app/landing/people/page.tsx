@@ -166,7 +166,11 @@ export default function PeoplePage() {
     }
 
     setInviteForm({ email: '' });
-    setUiMessage('Invite sent.');
+    if (json.email_sent !== true) {
+      setUiError('The invitation was saved, but its email could not be sent. Please contact Little Wanderers for help.');
+    } else {
+      setUiMessage('Invite sent.');
+    }
     await load();
   };
 
