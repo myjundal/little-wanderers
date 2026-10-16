@@ -3,11 +3,11 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import styles from './StaffPortal.module.css';
-export default function StaffSessionBar() {
+export default function StaffSessionBar({ kioskOnly = false }: { kioskOnly?: boolean }) {
   const { canUseOwnerDashboard, isInstructor, isKiosk } = useOperatorAccess();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  if (!canUseOwnerDashboard && !isInstructor) return null;
+  if ((kioskOnly && !isKiosk) || (!canUseOwnerDashboard && !isInstructor)) return null;
   async function logout() {
     setBusy(true); setError('');
     try {
