@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SOFT_OPENING_START_DATE } from '@/lib/open-play-reservations';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 
 type Slot = {
@@ -51,7 +52,6 @@ type SlotActionInput = {
 
 type UpdateScope = 'window' | 'day' | 'week' | 'range' | 'timeRange';
 
-const SOFT_OPENING_START_DATE = '2026-10-15';
 const SOFT_OPENING_END_DATE = '2026-10-31';
 
 function ymd(date: Date) {

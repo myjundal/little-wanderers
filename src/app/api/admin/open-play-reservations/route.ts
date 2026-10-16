@@ -1,5 +1,6 @@
 import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
 import {
+  SOFT_OPENING_START,
   formatOpenPlayReservationError,
   isMissingOpenPlayReservationTable,
   OPEN_PLAY_RESERVATION_SELECT,
@@ -61,6 +62,7 @@ export async function GET() {
         .from('open_play_reservation_slots')
         .select(OPEN_PLAY_SLOT_SELECT)
         .eq('is_soft_opening', true)
+        .gte('starts_at', SOFT_OPENING_START)
         .order('starts_at', { ascending: true }),
       context.admin
         .from('open_play_reservations')

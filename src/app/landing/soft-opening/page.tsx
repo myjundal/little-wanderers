@@ -208,7 +208,7 @@ export default function SoftOpeningReservationPage() {
               Soft Opening Visit
             </h1>
             <p style={{ margin: 0, color: '#5f5570', fontSize: 'clamp(1rem,2vw,1.16rem)', lineHeight: 1.7 }}>
-              Choose a soft opening Open Play time from October 29–31 before Little Wanderers opens to the public. Reservations are limited
+              Choose a soft opening Open Play time from October 28–31 before Little Wanderers opens to the public. Reservations are limited
               so the space stays comfortable while our team practices the daily flow.
             </p>
             <p style={{ margin: '10px 0 0', color: '#5f5570', fontSize: 'clamp(1rem,2vw,1.16rem)', lineHeight: 1.7 }}>
