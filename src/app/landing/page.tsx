@@ -293,7 +293,6 @@ export default function AppHome() {
 
       {!canUseOwnerDashboard && userId && <BookingNextSteps userId={userId} />}
 
-      {isInstructor && <section style={{ padding: 20, marginBottom: 20, border: '1px solid #e3d0fb', borderRadius: 18, background: '#fffdf9' }}><h2>Teaching Classes</h2><p>Your class schedule, children and attendance.</p><Link href="/teaching">Open Teaching Classes →</Link><p><Link href="/landing/classschedule">My Classes</Link> · <Link href="/landing/party">My Parties</Link></p></section>}
       {canUseOwnerDashboard && <StaffDashboard view="occupancy" />}
 
       {!canUseOwnerDashboard && (
@@ -355,6 +354,8 @@ export default function AppHome() {
         </section>
       )}
 
+      {isInstructor && <section style={{ padding: 20, marginBottom: 20, border: '1px solid #e3d0fb', borderRadius: 18, background: '#fffdf9' }}><h2>Teaching Classes</h2><p>Your class schedule, children and attendance.</p><Link href="/teaching">Open Teaching Classes →</Link><p><Link href="/landing/classschedule">My Classes</Link> · <Link href="/landing/party">My Parties</Link></p></section>}
+
       {!canUseOwnerDashboard && (
       <section className="desktopOnly" style={{ marginTop: 16, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -395,7 +396,6 @@ export default function AppHome() {
       <nav className={['mobileBottom', canUseOwnerDashboard && !isInstructor ? 'mobileBottomStaff' : isInstructor && canUseOwnerDashboard ? 'mobileBottomInstructorStaff' : ''].filter(Boolean).join(' ')}>
         <Link href="/">Main</Link>
         <Link href="/landing">{canUseOwnerDashboard ? (isStaff ? 'Staff Dash' : 'Owner Dash') : 'My Dash'}</Link>
-        {isInstructor && <Link href="/teaching">Teaching</Link>}
         {canUseOwnerDashboard && <Link href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>}
         {canUseOwnerDashboard ? (
           <Link href="/staff/checkin">QR Check-in</Link>
@@ -406,6 +406,7 @@ export default function AppHome() {
           </>
         )}
         {canUseOwnerDashboard ? <Link href="/staff/families">Families</Link> : <><Link href="/landing/classschedule">Classes</Link><Link href="/landing/party">Party</Link></>}
+        {isInstructor && <Link href="/teaching">Teaching</Link>}
       </nav>
 
       <style jsx>{`
