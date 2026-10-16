@@ -1,11 +1,11 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireClassAttendanceContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
 const ALLOWED = new Set(['unknown', 'attended', 'cancelled', 'no_show']);
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const context = await requireStaffContext();
+  const context = await requireClassAttendanceContext(params.id);
   if (!context.ok) return context.response;
 
   try {
@@ -18,13 +18,22 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const { data: registration, error: regErr } = await context.admin
       .from('class_registrations')
-      .select('id,class_id')
+      .select('id,class_id,status')
       .eq('id', registrationId)
       .maybeSingle();
 
     if (regErr) return Response.json({ ok: false, error: regErr.message }, { status: 500 });
     if (!registration || registration.class_id !== params.id) {
       return Response.json({ ok: false, error: 'registration not found for class' }, { status: 404 });
+    }
+
+    if (context.role !== 'owner' && context.role !== 'admin' && attendanceStatus === 'cancelled') return Response.json({ ok: false, error: 'Instructors can record attendance only.' }, { status: 403 });
+
+    if (context.role !== 'owner' && context.role !== 'admin') {
+      if (!['scheduled', 'attended'].includes(registration.status)) return Response.json({ ok: false, error: 'Attendance is available for registered children only.' }, { status: 409 });
+      const { data: klass, error } = await context.admin.from('classes').select('status').eq('id', params.id).maybeSingle();
+      if (error) return Response.json({ ok: false, error: 'Unable to verify class status.' }, { status: 500 });
+      if (!klass || klass.status === 'cancelled') return Response.json({ ok: false, error: 'Attendance is unavailable for this class.' }, { status: 409 });
     }
 
     const updatePayload = {

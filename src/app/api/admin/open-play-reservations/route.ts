@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
 import {
   formatOpenPlayReservationError,
   isMissingOpenPlayReservationTable,
@@ -120,7 +120,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {
@@ -166,7 +166,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

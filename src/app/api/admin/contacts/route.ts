@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
 import { normalizeCampaignTags, normalizeContactEmail, validateEmail } from '@/lib/email-campaigns';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -74,7 +74,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
 import { syncWaitlistContacts } from '@/lib/email-campaigns';
 
 export const dynamic = 'force-dynamic';
@@ -54,7 +54,7 @@ export async function GET() {
 }
 
 export async function POST() {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

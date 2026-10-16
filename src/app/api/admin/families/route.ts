@@ -30,6 +30,9 @@ export async function GET(req: Request) {
   const query = new URL(req.url).searchParams.get('q')?.trim() ?? '';
   const admin = context.admin;
 
+  const { count: total, error: countError } = await admin.from('households').select('*', { count: 'exact', head: true });
+  if (countError) return Response.json({ ok: false, error: countError.message }, { status: 500 });
+
   const [{ data: households }, { data: people }, { data: memberships }, { data: waivers }] = await Promise.all([
     admin.from('households').select('id,name,phone,email,city,state').order('created_at', { ascending: false }).limit(400),
     admin.from('people').select('household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
@@ -100,5 +103,5 @@ export async function GET(req: Request) {
     })
     .slice(0, 100);
 
-  return Response.json({ ok: true, items });
+  return Response.json({ ok: true, items, total });
 }

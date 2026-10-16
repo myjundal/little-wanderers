@@ -1,3 +1,6 @@
+'use client';
+
+import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -24,20 +27,23 @@ function styleFor(active: boolean): CSSProperties {
 }
 
 export default function StaffToolNav({ active }: StaffToolNavProps) {
+  const { role, isStaff, isInstructor } = useOperatorAccess();
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       <Link href="/" style={linkStyle}>
         Main Homepage
       </Link>
       <Link href="/landing" style={linkStyle}>
-        Owner/Staff Dashboard
+        {!role ? 'Dashboard' : isStaff ? 'Staff Dashboard' : 'Owner Dashboard'}
       </Link>
       <Link href="/staff" style={styleFor(active === 'home')}>
-        Owner/Staff Tool
+        {!role ? 'Tools' : isStaff ? 'Staff Tool' : 'Owner Tool'}
       </Link>
       <Link href="/staff/families" style={styleFor(active === 'families')}>
         Family management
       </Link>
+      {isInstructor && <Link href="/teaching" style={linkStyle}>Teaching Classes</Link>}
+      {role && !isStaff && <>
       <Link href="/staff/campaigns" style={styleFor(active === 'campaigns')}>
         Email campaigns
       </Link>
@@ -50,6 +56,7 @@ export default function StaffToolNav({ active }: StaffToolNavProps) {
       <Link href="/staff/parties" style={styleFor(active === 'parties')}>
         Party management
       </Link>
+      </>}
     </div>
   );
 }

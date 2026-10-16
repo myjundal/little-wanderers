@@ -6,9 +6,13 @@ type StaffAccessResponse = {
   ok?: boolean;
   is_staff?: boolean;
   error?: string;
+  role?: string | null;
+  roles?: string[];
 };
 
-export function useOwnerDashboardAccess() {
+export function useOperatorAccess() {
+  const [roles, setRoles] = useState<string[]>([]);
+  const [role, setRole] = useState<string | null>(null);
   const [canUseOwnerDashboard, setCanUseOwnerDashboard] = useState(false);
 
   useEffect(() => {
@@ -26,6 +30,8 @@ export function useOwnerDashboardAccess() {
 
         if (!cancelled) {
           setCanUseOwnerDashboard(json.is_staff === true);
+          setRole(json.role ?? null);
+          setRoles(json.roles ?? []);
         }
       } catch (error) {
         console.warn('Unable to check owner dashboard access.', error);
@@ -39,5 +45,9 @@ export function useOwnerDashboardAccess() {
     };
   }, []);
 
-  return canUseOwnerDashboard;
+  return { canUseOwnerDashboard, isStaff: role === 'staff', isInstructor: roles.includes('instructor'), role, roles };
+}
+
+export function useOwnerDashboardAccess() {
+  return useOperatorAccess().canUseOwnerDashboard;
 }

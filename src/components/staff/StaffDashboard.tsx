@@ -83,7 +83,7 @@ type PartyBookingItem = {
   occasion_details: string | null;
 };
 
-type StaffDashboardView = 'overview' | 'classes' | 'parties';
+type StaffDashboardView = 'overview' | 'classes' | 'parties' | 'occupancy';
 type ClassRepeatMode = 'weekly' | 'daily' | 'weekdays';
 
 function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | 'birthday_age' | 'occasion_details'>) {
@@ -489,8 +489,8 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
 
     const [occupancyRes, classesRes, partyRes] = await Promise.all([
       fetch('/api/admin/occupancy', { cache: 'no-store' }),
-      fetch('/api/admin/classes', { cache: 'no-store' }),
-      fetch('/api/admin/party-bookings', { cache: 'no-store' }),
+      view === 'overview' || view === 'occupancy' ? Promise.resolve(Response.json({ ok: true, items: [] })) : fetch('/api/admin/classes', { cache: 'no-store' }),
+      view === 'overview' || view === 'occupancy' ? Promise.resolve(Response.json({ ok: true, items: [] })) : fetch('/api/admin/party-bookings', { cache: 'no-store' }),
     ]);
 
     const [occupancyJson, classesJson, partyJson] = await Promise.all([
@@ -521,7 +521,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     setClasses((classesJson.items ?? []) as ClassItem[]);
     setPartyBookings((partyJson.items ?? []) as PartyBookingItem[]);
     setLoading(false);
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     load();
@@ -746,7 +746,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
       {view === 'overview' && (
         <>
       <section style={{ ...sectionStyle, marginTop: 16 }}>
-        <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner/Staff tools</p>
+        <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Operator tools</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
           <Link href="/staff/checkin" style={ownerToolLinkStyle}>QR check-in</Link>
           <a href="#manual-family-registration" style={ownerToolLinkStyle}>Manual family registration</a>
@@ -758,10 +758,15 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         <StaffFamilyRegistration onSaved={load} />
       </div>
 
+        </>
+      )}
+
+      {(view === 'overview' || view === 'occupancy') && (
+        <>
       <section id="occupancy-management" style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Occupancy control</p>
+            <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Occupancy management</p>
             <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Current crowd level: {occupancy?.label ?? '-'}</h2>
             <p style={{ margin: 0, color: '#6d6480' }}>{occupancy?.description}</p>
           </div>

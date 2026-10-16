@@ -1,5 +1,5 @@
 import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
@@ -16,7 +16,7 @@ function displayNameFromEmail(email: string) {
 }
 
 export async function POST(req: Request) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

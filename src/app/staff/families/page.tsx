@@ -25,6 +25,7 @@ function waiverLabel(status: string) {
 }
 
 export default function StaffFamiliesPage() {
+  const [total, setTotal] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<FamilyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,7 @@ export default function StaffFamiliesPage() {
       const res = await fetch(`/api/admin/families?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
       const json = await res.json();
       setItems(json.items ?? []);
+      setTotal(json.total ?? null);
       setLoading(false);
     };
     void run();
@@ -46,6 +48,7 @@ export default function StaffFamiliesPage() {
         <div>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner/Staff tools</p>
           <h1 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Family Management</h1>
+          <p>Total families: {total ?? '—'}</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <StaffToolNav active="families" />

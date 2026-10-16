@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 import {
   formatOpenPlayReservationError,
   isMissingOpenPlayReservationTable,
@@ -12,7 +12,7 @@ const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 const ALLOWED_STATUSES = new Set(['reserved', 'cancelled', 'checked_in', 'no_show']);
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

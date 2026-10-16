@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 import {
   CAMPAIGN_BATCH_SIZE,
   chunkArray,
@@ -19,7 +19,7 @@ function wait(ms: number) {
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {
