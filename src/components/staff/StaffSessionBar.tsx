@@ -1,13 +1,12 @@
 'use client';
-import Link from 'next/link';
 import { useState } from 'react';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import styles from './StaffPortal.module.css';
-export default function StaffSessionBar({ kioskOnly = false }: { kioskOnly?: boolean }) {
+export default function StaffSessionBar() {
   const { canUseOwnerDashboard, isInstructor, isKiosk } = useOperatorAccess();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  if ((kioskOnly && !isKiosk) || (!canUseOwnerDashboard && !isInstructor)) return null;
+  if (!isKiosk || (!canUseOwnerDashboard && !isInstructor)) return null;
   async function logout() {
     setBusy(true); setError('');
     try {
@@ -18,7 +17,7 @@ export default function StaffSessionBar({ kioskOnly = false }: { kioskOnly?: boo
     } catch (e) { setError(e instanceof Error ? e.message : 'Clock-out failed.'); setBusy(false); }
   }
   return <div className={styles.session}>
-    {isKiosk ? <><strong>iPad shift is active</strong><Link href="/employee">My Timecards</Link><button disabled={busy} onClick={() => void logout()}>{busy ? 'Recording clock-out…' : 'Log out & clock out'}</button></> : <Link href="/employee">My PIN & Timecards</Link>}
+    <strong>iPad shift is active</strong><button disabled={busy} onClick={() => void logout()}>{busy ? 'Recording clock-out…' : 'Log out & clock out'}</button>
     {error && <p role="alert">{error}</p>}
   </div>;
 }

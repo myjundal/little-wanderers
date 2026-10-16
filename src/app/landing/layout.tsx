@@ -10,5 +10,5 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session) redirect('/?signin=1'); // no session → send back to public page
-  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar kioskOnly />{children}</PastelDashboardShell>;
+  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}</PastelDashboardShell>;
 }
