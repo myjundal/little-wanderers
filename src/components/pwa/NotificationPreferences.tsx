@@ -21,6 +21,7 @@ const defaultPrefs: Prefs = {
 };
 
 export default function NotificationPreferences() {
+  const [available, setAvailable] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(defaultPrefs);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -28,6 +29,7 @@ export default function NotificationPreferences() {
     fetch('/api/push/preferences', { cache: 'no-store' })
       .then((r) => r.json())
       .then((json) => {
+        setAvailable(Boolean(json?.ok && json.available));
         if (json?.ok && json.preferences) {
           setPrefs((prev) => ({ ...prev, ...json.preferences }));
         }
@@ -55,6 +57,8 @@ export default function NotificationPreferences() {
 
     setMessage('Your notification preferences are saved.');
   };
+
+  if (!available) return null;
 
   return (
     <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>

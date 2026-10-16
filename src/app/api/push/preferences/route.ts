@@ -26,6 +26,10 @@ export async function GET() {
 
   if (!user) return NextResponse.json({ ok: false, error: 'Please sign in again.' }, { status: 401 });
 
+  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    return NextResponse.json({ ok: true, available: false, preferences: null });
+  }
+
   const { data, error } = await supabase
     .from('push_subscriptions')
     .select('less_crowded_enabled,notify_when_level_at_or_below,quiet_hours_enabled,quiet_start_hour,quiet_end_hour,timezone_offset_minutes')
@@ -33,10 +37,12 @@ export async function GET() {
     .limit(1)
     .maybeSingle();
 
+  if (error?.code === '42P01' || error?.code === 'PGRST205') return NextResponse.json({ ok: true, available: false, preferences: null });
   if (error) return NextResponse.json({ ok: false, error: 'Unable to load preferences.' }, { status: 500 });
 
   return NextResponse.json({
     ok: true,
+    available: true,
     preferences: data ?? {
       less_crowded_enabled: true,
       notify_when_level_at_or_below: 'moderate',
@@ -55,6 +61,10 @@ export async function PATCH(req: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ ok: false, error: 'Please sign in again.' }, { status: 401 });
+
+  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    return NextResponse.json({ ok: false, error: 'Push notifications are not available yet.' }, { status: 503 });
+  }
 
   const body = (await req.json()) as {
     less_crowded_enabled?: boolean;

@@ -1,3 +1,4 @@
+import { safeAuthNextPath } from '@/lib/auth-redirect';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getPostAuthRedirectForUser } from '@/lib/waitlist-claim';
@@ -19,8 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   const requestedNext = request.nextUrl.searchParams.get('next');
-  const destination = new URL(requestedNext || '/landing', request.url);
-  const next = destination.origin === request.nextUrl.origin ? `${destination.pathname}${destination.search}${destination.hash}` : '/landing';
+  const next = safeAuthNextPath(requestedNext, request.url);
   const redirectPath = await getPostAuthRedirectForUser(user, next);
   return NextResponse.redirect(getRedirectUrl(request, redirectPath));
 }

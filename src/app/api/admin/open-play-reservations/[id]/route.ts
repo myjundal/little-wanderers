@@ -38,6 +38,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       .select(OPEN_PLAY_RESERVATION_SELECT)
       .maybeSingle();
 
+    if (error?.code === '23514' || error?.code === '23505') {
+      return Response.json({ ok: false, error: error.message }, { status: 409, headers: NO_STORE_HEADERS });
+    }
     if (error) throw new Error(error.message);
     if (!data) return Response.json({ ok: false, error: 'reservation not found' }, { status: 404, headers: NO_STORE_HEADERS });
 
