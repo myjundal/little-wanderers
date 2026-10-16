@@ -24,7 +24,7 @@ type ReservationPayload = {
   notes?: string | null;
 };
 
-const SOFT_OPENING_START = '2026-10-15T00:00:00-04:00';
+const SOFT_OPENING_START = '2026-10-29T00:00:00-04:00';
 const SOFT_OPENING_END = '2026-11-01T00:00:00-04:00';
 
 async function getCurrentReservationContext() {

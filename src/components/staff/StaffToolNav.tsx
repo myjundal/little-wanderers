@@ -27,13 +27,13 @@ function styleFor(active: boolean): CSSProperties {
 }
 
 export default function StaffToolNav({ active }: StaffToolNavProps) {
-  const { role, isStaff, isInstructor } = useOperatorAccess();
+  const { role, isStaff, isInstructor, isKiosk } = useOperatorAccess();
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       <Link href="/" style={linkStyle}>
         Main Homepage
       </Link>
-      <Link href="/landing" style={linkStyle}>
+      <Link href={isKiosk ? '/staff/dashboard' : '/landing'} style={linkStyle}>
         {!role ? 'Dashboard' : isStaff ? 'Staff Dashboard' : 'Owner Dashboard'}
       </Link>
       <Link href="/staff" style={styleFor(active === 'home')}>

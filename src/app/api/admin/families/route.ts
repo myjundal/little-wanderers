@@ -33,6 +33,11 @@ export async function GET(req: Request) {
   const { count: total, error: countError } = await admin.from('households').select('*', { count: 'exact', head: true });
   if (countError) return Response.json({ ok: false, error: countError.message }, { status: 500 });
 
+  const [{ data: links, error: linksError }, { data: children, error: childrenError }] = await Promise.all([admin.from('household_members').select('household_id'), admin.from('people').select('household_id').eq('role', 'child')]);
+  if (linksError || childrenError) return Response.json({ ok: false, error: 'Unable to count family accounts.' }, { status: 500 });
+  const linkedFamilies = new Set((links ?? []).map(row => row.household_id)).size;
+  const familiesWithChildren = new Set((children ?? []).map(row => row.household_id)).size;
+
   const [{ data: households }, { data: people }, { data: memberships }, { data: waivers }] = await Promise.all([
     admin.from('households').select('id,name,phone,email,city,state').order('created_at', { ascending: false }).limit(400),
     admin.from('people').select('household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
@@ -103,5 +108,5 @@ export async function GET(req: Request) {
     })
     .slice(0, 100);
 
-  return Response.json({ ok: true, items, total });
+  return Response.json({ ok: true, items, total, linked_families: linkedFamilies, families_with_children: familiesWithChildren });
 }

@@ -750,7 +750,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
           <Link href="/staff/checkin" style={ownerToolLinkStyle}>QR check-in</Link>
           <a href="#manual-family-registration" style={ownerToolLinkStyle}>Manual family registration</a>
-          <a href="#occupancy-management" style={ownerToolLinkStyle}>Occupancy</a>
+          <Link href="/staff/occupancy" style={ownerToolLinkStyle}>Occupancy management</Link>
         </div>
       </section>
 
@@ -761,7 +761,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         </>
       )}
 
-      {(view === 'overview' || view === 'occupancy') && (
+      {view === 'occupancy' && (
         <>
       <section id="occupancy-management" style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
