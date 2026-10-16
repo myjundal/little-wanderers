@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,7 +156,7 @@ function parseClassPayload(body: Record<string, unknown>) {
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {
@@ -247,7 +247,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

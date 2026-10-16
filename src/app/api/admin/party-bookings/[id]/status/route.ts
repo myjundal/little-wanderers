@@ -1,11 +1,11 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'cancelled', 'early_access_hold']);
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

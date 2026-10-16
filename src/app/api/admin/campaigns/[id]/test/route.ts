@@ -1,10 +1,10 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 import { getSiteUrl, renderMarketingEmail, sendResendEmail, validateEmail } from '@/lib/email-campaigns';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   try {

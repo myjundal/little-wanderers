@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 
@@ -15,7 +15,7 @@ function getSquareBaseUrl() {
 }
 
 export async function POST(req: Request, { params }: Params) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   const householdId = params.id;

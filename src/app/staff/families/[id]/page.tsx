@@ -1,5 +1,6 @@
 'use client';
 
+import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -138,6 +139,8 @@ function getPartyBlackoutSlots(): CalendarSlot[] {
 }
 
 export default function StaffFamilyDetailPage({ params }: { params: { id: string } }) {
+  const { role } = useOperatorAccess();
+  const canEdit = role === 'owner' || role === 'admin';
   const familyId = params.id;
   const router = useRouter();
   const [item, setItem] = useState<FamilyDetail | null>(null);
@@ -353,13 +356,14 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         <StaffToolNav active="families" />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <p style={{ margin: 0 }}><Link href="/staff/families">← Back to Family Management</Link></p>
-        <p style={{ margin: 0 }}><Link href="/staff">← Back to Owner/Staff Tool</Link></p>
+        <p style={{ margin: 0 }}><Link href="/staff">← Back to tools</Link></p>
         </div>
       </div>
       <h1 style={{ color: '#4f3f82' }}>{item.household.name ?? 'Family detail'}</h1>
       <p style={{ color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {waiverLabel(item.waiver_status)} · QR: {item.qr_status}</p>
       {message && <p style={{ color: '#5f3da4' }}>{message}</p>}
 
+      {canEdit ? <>
       <section style={{ border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
         <h3 style={{ marginTop: 0 }}>Family location</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 10 }}>
@@ -416,6 +420,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
         )}
       </section>
 
+      </> : <section><h3>Family details</h3><p>Location: {item.household.city ?? '—'}, {item.household.state ?? '—'}</p>{[...item.guardians, ...item.children].map(person => <p key={person.id}>{person.first_name} {person.last_name} · {person.role}</p>)}</section>}
       <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
         <h3 style={{ marginTop: 0 }}>Generate / View QR</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
@@ -429,7 +434,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
       </section>
 
       <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
-        <h3 style={{ marginTop: 0 }}>Owner actions</h3>
+        <h3 style={{ marginTop: 0 }}>Registration</h3>
         <div style={{ marginTop: 12 }}>
           <h4 style={{ marginBottom: 8 }}>Manual class pre-registration</h4>
           {classes.length === 0 ? (

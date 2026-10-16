@@ -166,7 +166,7 @@ return (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Link href="/" style={navLinkStyle}>Main Homepage</Link>
           <Link href="/landing" style={navLinkStyle}>Owner/Staff Dashboard</Link>
-          <Link href="/staff" style={navLinkStyle}>Owner/Staff Tool</Link>
+          <Link href="/staff" style={navLinkStyle}>Operator tools</Link>
         </div>
       </div>
       <div id="qr-reader" style={{ width: 360, maxWidth: '100%', marginTop: 16 }} />

@@ -1,4 +1,4 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireOwnerContext } from '@/lib/authz';
 
 type Params = { params: { id: string } };
 
@@ -11,7 +11,7 @@ type MemberInput = {
 };
 
 export async function PUT(req: Request, { params }: Params) {
-  const context = await requireStaffContext();
+  const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
   const householdId = params.id;
