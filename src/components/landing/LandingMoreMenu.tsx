@@ -27,11 +27,6 @@ export default function LandingMoreMenu() {
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href={isInstructor && !canUseOwnerDashboard ? '/teaching' : '/landing'}>
             {canUseOwnerDashboard ? (isStaff ? 'Staff Dashboard' : 'Owner Dashboard') : isInstructor ? 'Teaching Classes' : 'My Dashboard'}
           </Link>
-          {isInstructor && <>
-            {canUseOwnerDashboard && <Link onClick={() => setOpen(false)} href="/teaching">Teaching Classes</Link>}
-            <Link onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link>
-            <Link onClick={() => setOpen(false)} href="/landing/party">My Parties</Link>
-          </>}
           {canUseOwnerDashboard && (
             <>
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
@@ -41,6 +36,11 @@ export default function LandingMoreMenu() {
               {!isStaff && <Link onClick={() => setOpen(false)} href="/staff/open-play-reservations">Open Play Reservations</Link>}
             </>
           )}
+          {isInstructor && <>
+            {canUseOwnerDashboard && <Link onClick={() => setOpen(false)} href="/teaching">Teaching Classes</Link>}
+            <Link onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link>
+            <Link onClick={() => setOpen(false)} href="/landing/party">My Parties</Link>
+          </>}
           {!canUseOwnerDashboard && !isInstructor && (
             <>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/people">My Info/People</Link>
