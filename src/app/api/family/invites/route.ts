@@ -89,6 +89,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Please enter a valid email address.' }, { status: 400 });
   }
 
+  if (email === user.email?.toLowerCase().trim()) {
+    return NextResponse.json({ ok: false, error: 'You already belong to this family account.' }, { status: 400 });
+  }
+
   const role = normalizeFamilyInviteRole(body?.role);
 
   const { data: membership } = await supabase
