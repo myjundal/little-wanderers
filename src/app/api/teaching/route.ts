@@ -10,9 +10,12 @@ export async function GET() {
   const ids = (assignments ?? []).map(row => row.class_id);
   if (!ids.length) return Response.json({ ok: true, items: [] });
   const { data: classes, error: classError } = await context.admin.from('classes')
-    .select('id,title,category,start_time,end_time,status,capacity,age_range,caregiver_participation,schedule_label,instructor_note')
+    .select('id,title,category,start_time,end_time,status,capacity,age_range,caregiver_participation,schedule_label')
     .in('id', ids).order('start_time');
   if (classError) return Response.json({ ok: false, error: 'Unable to load classes.' }, { status: 500 });
+  const { data: notes, error: noteError } = await context.admin.from('class_instructor_notes').select('class_id,note').in('class_id', ids);
+  if (noteError && !['42P01', 'PGRST205'].includes(noteError.code)) return Response.json({ ok: false, error: 'Unable to load private class notes.' }, { status: 500 });
+  const notesByClass = new Map((notes ?? []).map(row => [row.class_id, row.note]));
   const { data: registrations, error: registrationError } = await context.admin.from('class_registrations')
     .select('id,class_id,person_id,status,attendance_status').in('class_id', ids);
   if (registrationError) return Response.json({ ok: false, error: 'Unable to load attendance.' }, { status: 500 });
@@ -24,7 +27,7 @@ export async function GET() {
     for (const person of data ?? []) people.set(person.id, person);
   }
   // Only assigned-class data is returned; household, payment and contact data are excluded.
-  const items = (classes ?? []).map(klass => ({ ...klass, registrants: (registrations ?? []).filter(reg => reg.class_id === klass.id).map(reg => {
+  const items = (classes ?? []).map(klass => ({ ...klass, instructor_note: notesByClass.get(klass.id) ?? null, registrants: (registrations ?? []).filter(reg => reg.class_id === klass.id).map(reg => {
     const person = people.get(reg.person_id);
     const birthdate = person?.birthdate;
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });

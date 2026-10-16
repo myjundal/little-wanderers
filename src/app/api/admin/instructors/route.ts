@@ -6,17 +6,20 @@ export async function GET() {
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
   const [{ data: classes, error: classError }, { data: assignments, error }] = await Promise.all([
-    context.admin.from('classes').select('id,title,start_time,instructor_note').order('start_time'),
+    context.admin.from('classes').select('id,title,start_time').order('start_time'),
     context.admin.from('class_instructors').select('class_id,user_id'),
   ]);
   if (error || classError) return Response.json({ ok: false, error: 'Run the instructor access migration before assigning instructors.' }, { status: 500 });
+  const { data: notes, error: noteError } = await context.admin.from('class_instructor_notes').select('class_id,note');
+  if (noteError && !['42P01', 'PGRST205'].includes(noteError.code)) return Response.json({ ok: false, error: 'Unable to load private class notes.' }, { status: 500 });
+  const notesByClass = new Map((notes ?? []).map(row => [row.class_id, row.note]));
   const users = new Map<string, string>();
   for (const id of new Set((assignments ?? []).map(row => row.user_id))) {
     const { data, error: userError } = await context.admin.auth.admin.getUserById(id);
     if (userError) return Response.json({ ok: false, error: 'Unable to load instructor accounts.' }, { status: 500 });
     users.set(id, data.user?.email ?? id);
   }
-  return Response.json({ ok: true, classes, assignments: (assignments ?? []).map(row => ({ ...row, email: users.get(row.user_id) })) });
+  return Response.json({ ok: true, notes_ready: !noteError, classes: (classes ?? []).map(klass => ({ ...klass, instructor_note: notesByClass.get(klass.id) ?? null })), assignments: (assignments ?? []).map(row => ({ ...row, email: users.get(row.user_id) })) });
 }
 
 export async function POST(req: Request) {
@@ -30,7 +33,8 @@ export async function POST(req: Request) {
   if (classError || !klass) return Response.json({ ok: false, error: 'Class not found.' }, { status: 404 });
   if (action === 'note') {
     if (typeof body.note !== 'string' || body.note.length > 4000) return Response.json({ ok: false, error: 'Note must be at most 4,000 characters.' }, { status: 400 });
-    const { error } = await context.admin.from('classes').update({ instructor_note: body.note.trim() || null }).eq('id', class_id);
+    const { error } = await context.admin.from('class_instructor_notes').upsert({ class_id, note: body.note.trim() });
+    if (error && ['42P01', 'PGRST205'].includes(error.code)) return Response.json({ ok: false, error: 'Run the private instructor notes migration before saving notes.' }, { status: 503 });
     return Response.json({ ok: !error, error: error?.message }, { status: error ? 500 : 200 });
   }
   if (action === 'remove') {

@@ -11,6 +11,7 @@ export default function InstructorAssignments() {
   const [classId, setClassId] = useState('');
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
+  const [notesReady, setNotesReady] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
@@ -19,6 +20,7 @@ export default function InstructorAssignments() {
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error ?? 'Unable to load instructors.');
       setClasses(json.classes);
+      setNotesReady(json.notes_ready === true);
       setAssignments(json.assignments);
     } catch (e) { setMessage(e instanceof Error ? e.message : 'Unable to load instructors.'); }
   }, []);
@@ -42,7 +44,7 @@ export default function InstructorAssignments() {
       {classId && <>
         <form onSubmit={e => { e.preventDefault(); void save('assign'); }} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}><label>Instructor’s account email <input required type="email" value={email} disabled={busy} onChange={e => setEmail(e.target.value)} style={{ padding: 10, maxWidth: '100%' }} /></label><button disabled={busy || !email.trim()} type="submit">Assign instructor</button></form>
         <div>{assignments.filter(item => item.class_id === classId).map(item => <p key={item.user_id}>{item.email} <button disabled={busy} onClick={() => void save('remove', item.user_id)}>Remove from session</button></p>)}</div>
-        <label>Notes for assigned instructors<textarea maxLength={4000} rows={3} style={{ display: 'block', width: '100%' }} value={note} onChange={e => setNote(e.target.value)} disabled={busy} placeholder="Room, supplies, preparation and class instructions" /></label><button disabled={busy} onClick={() => void save('note')}>Save class notes</button>
+        <label>Notes for assigned instructors<textarea maxLength={4000} rows={3} style={{ display: 'block', width: '100%' }} value={note} onChange={e => setNote(e.target.value)} disabled={busy || !notesReady} placeholder="Room, supplies, preparation and class instructions" /></label><button disabled={busy || !notesReady} onClick={() => void save('note')}>Save class notes</button>{!notesReady && <p>Private class notes are being set up. Instructor assignments remain available.</p>}
       </>}
     </div>
     {message && <p role="status">{message}</p>}
