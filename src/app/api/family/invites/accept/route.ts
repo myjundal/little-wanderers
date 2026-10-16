@@ -59,6 +59,12 @@ export async function POST(req: Request) {
     if (memberError) return NextResponse.json({ ok: false, error: 'Unable to add you to this household right now.' }, { status: 500 });
   }
 
+  if (existing.data?.role === 'member' && mappedRole === 'caregiver') {
+    const { error } = await admin.from('household_members').update({ role: 'caregiver' })
+      .eq('household_id', invite.household_id).eq('user_id', user.id).eq('role', 'member');
+    if (error) return NextResponse.json({ ok: false, error: 'Unable to update family access.' }, { status: 500 });
+  }
+
   const { error: markError } = await admin
     .from('household_invites')
     .update({ status: 'accepted', accepted_at: new Date().toISOString(), accepted_by_user_id: user.id })
