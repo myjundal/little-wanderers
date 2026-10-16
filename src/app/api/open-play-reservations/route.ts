@@ -204,6 +204,9 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (reservationError) {
+      if (reservationError.code === '23514') {
+        return NextResponse.json({ ok: false, error: reservationError.message }, { status: 409, headers: NO_STORE_HEADERS });
+      }
       if (reservationError.code === '23505') {
         return NextResponse.json({ ok: false, error: 'You already have a reservation for this visit time.' }, { status: 409, headers: NO_STORE_HEADERS });
       }

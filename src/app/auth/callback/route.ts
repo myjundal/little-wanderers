@@ -1,14 +1,10 @@
+import { safeAuthNextPath } from '@/lib/auth-redirect';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { getPostAuthRedirectForUser } from '@/lib/waitlist-claim';
 
 export const dynamic = 'force-dynamic';
-
-function getSafeNextPath(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/landing';
-  return value;
-}
 
 function getRedirectUrl(request: NextRequest, path: string) {
   return new URL(path, request.url);
@@ -20,7 +16,7 @@ export async function GET(request: NextRequest) {
   const tokenHash = requestUrl.searchParams.get('token_hash');
   const type = requestUrl.searchParams.get('type');
   const mode = requestUrl.searchParams.get('mode');
-  const next = getSafeNextPath(requestUrl.searchParams.get('next'));
+  const next = safeAuthNextPath(requestUrl.searchParams.get('next'), request.url);
   const response = NextResponse.redirect(getRedirectUrl(request, next));
 
   if (!code && !tokenHash) {

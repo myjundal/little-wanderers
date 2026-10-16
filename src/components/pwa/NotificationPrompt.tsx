@@ -18,7 +18,7 @@ export default function NotificationPrompt() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !('Notification' in window) || !('PushManager' in window) || !process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return;
     if (Notification.permission === 'granted' || localStorage.getItem(DISMISS_KEY) === '1') return;
     setHidden(false);
   }, []);

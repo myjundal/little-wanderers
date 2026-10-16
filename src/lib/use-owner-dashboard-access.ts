@@ -12,6 +12,7 @@ type StaffAccessResponse = {
 };
 
 export function useOperatorAccess() {
+  const [isLoading, setIsLoading] = useState(true);
   const [isKiosk, setIsKiosk] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const [role, setRole] = useState<string | null>(null);
@@ -38,6 +39,8 @@ export function useOperatorAccess() {
         }
       } catch (error) {
         console.warn('Unable to check owner dashboard access.', error);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     };
 
@@ -48,7 +51,7 @@ export function useOperatorAccess() {
     };
   }, []);
 
-  return { canUseOwnerDashboard, isStaff: role === 'staff', isInstructor: roles.includes('instructor'), role, roles, isKiosk };
+  return { isLoading, canUseOwnerDashboard, isStaff: role === 'staff', isInstructor: roles.includes('instructor'), role, roles, isKiosk };
 }
 
 export function useOwnerDashboardAccess() {

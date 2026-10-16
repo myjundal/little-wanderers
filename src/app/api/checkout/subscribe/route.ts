@@ -1,3 +1,4 @@
+import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 // src/app/api/checkout/subscribe/route.ts
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,6 +17,9 @@ export async function GET() {
 }
 
 export async function POST() {
+  const unavailable = onlinePaymentsUnavailable();
+  if (unavailable) return unavailable;
+
   try {
     const supabase = createServerSupabaseClient();
     const {

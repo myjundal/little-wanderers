@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
+import { verifySquareWebhook } from '@/lib/square-webhook';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 
 const SUPA = () =>
@@ -13,35 +13,17 @@ const SUPA = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-// Support both sha1/sha256
-function verifySignature(rawBody: string, signature: string | null, algo: 'sha1'|'sha256') {
-  const key = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
-  if (!key || !signature) return false;
-  const hmac = crypto.createHmac(algo, key).update(rawBody, 'utf8').digest('base64');
-  try {
-    return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(signature));
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(req: NextRequest) {
   // Read raw body FIRST (signature is over raw text)
   const raw = await req.text();
 
-  // Signature header names can differ by Square env
-  const sigSha1 = req.headers.get('x-square-hmacsha1-signature');
-  const sigSha256 = req.headers.get('x-square-hmacsha256-signature');
-  const allowUnsigned = process.env.NODE_ENV !== 'production'; // local only
-
-  const sigOk =
-    (sigSha256 && verifySignature(raw, sigSha256, 'sha256')) ||
-    (sigSha1 && verifySignature(raw, sigSha1, 'sha1')) ||
-    allowUnsigned;
-
+  const notificationUrl = process.env.SQUARE_WEBHOOK_URL?.trim() || req.url;
+  const sigOk = verifySquareWebhook(raw, req.headers.get('x-square-hmacsha256-signature'), process.env.SQUARE_WEBHOOK_SIGNATURE_KEY, notificationUrl);
   if (!sigOk) return new Response('invalid signature', { status: 401 });
 
-  const payload = JSON.parse(raw);
+  let payload;
+  try { payload = JSON.parse(raw); } catch { return new Response('invalid JSON', { status: 400 }); }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return new Response('invalid event', { status: 400 });
   const supa = SUPA();
 
   // -------- idempotency guard --------

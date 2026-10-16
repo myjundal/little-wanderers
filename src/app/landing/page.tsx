@@ -65,7 +65,7 @@ export default function AppHome() {
 
   // widgets
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
-  const { canUseOwnerDashboard, isStaff, isInstructor } = useOperatorAccess();
+  const { isLoading: loadingAccess, canUseOwnerDashboard, isStaff, isInstructor } = useOperatorAccess();
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -242,7 +242,7 @@ export default function AppHome() {
 
 
 
-  if (!ready) return <main style={{ padding: 24 }}>Loading…</main>;
+  if (!ready || loadingAccess) return <main style={{ padding: 24 }}>Loading…</main>;
 
   if (!isAuthenticated) {
     return (

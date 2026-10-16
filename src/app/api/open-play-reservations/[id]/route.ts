@@ -65,10 +65,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       })
       .eq('id', params.id)
       .eq('household_id', householdId)
+      .eq('status', 'reserved')
       .select(OPEN_PLAY_RESERVATION_SELECT)
       .maybeSingle();
 
     if (updateError) throw new Error(updateError.message);
+    if (!updated) return NextResponse.json({ ok: false, error: 'Reservation status changed. Refresh and try again.' }, { status: 409, headers: NO_STORE_HEADERS });
 
     return NextResponse.json({ ok: true, reservation: updated }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {

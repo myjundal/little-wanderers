@@ -1,4 +1,5 @@
 import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
+import { toPartyDateTimeIso } from '@/lib/party-config';
 import {
   SOFT_OPENING_START,
   formatOpenPlayReservationError,
@@ -50,6 +51,14 @@ function easternTimeKey(iso: string) {
   const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
   const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
   return `${hour}:${minute}`;
+}
+
+function easternDayBoundary(value: string, nextDay = false): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const day = new Date(`${value}T00:00:00Z`);
+  if (!Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== value) return null;
+  if (nextDay) day.setUTCDate(day.getUTCDate() + 1);
+  return new Date(toPartyDateTimeIso(day.toISOString().slice(0, 10), 0));
 }
 
 export async function GET() {
@@ -137,6 +146,10 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'Choose a valid start and end time.' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
+    if (start.getTime() < new Date(SOFT_OPENING_START).getTime()) {
+      return Response.json({ ok: false, error: 'Open Play reservations begin October 28.' }, { status: 400, headers: NO_STORE_HEADERS });
+    }
+
     const capacityChildren = sanitizeReservationCount(body?.capacity_children, 10, 200);
     const capacityTotal = body?.capacity_total == null ? null : sanitizeReservationCount(body.capacity_total, capacityChildren * 2, 400);
     const notes = typeof body?.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 500) : null;
@@ -185,13 +198,11 @@ export async function PATCH(req: Request) {
       start = new Date(body.starts_at);
       end = new Date(body.ends_at);
     } else if (body.date) {
-      start = new Date(`${body.date}T00:00:00`);
-      end = new Date(`${body.date}T00:00:00`);
-      end.setDate(end.getDate() + 1);
+      start = easternDayBoundary(body.date);
+      end = easternDayBoundary(body.date, true);
     } else if (body.start_date && body.end_date) {
-      start = new Date(`${body.start_date}T00:00:00`);
-      end = new Date(`${body.end_date}T00:00:00`);
-      end.setDate(end.getDate() + 1);
+      start = easternDayBoundary(body.start_date);
+      end = easternDayBoundary(body.end_date, true);
     }
 
     if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
@@ -202,7 +213,7 @@ export async function PATCH(req: Request) {
       .from('open_play_reservation_slots')
       .select('id,starts_at,ends_at')
       .eq('is_soft_opening', true)
-      .gte('starts_at', start.toISOString())
+      .gte('starts_at', new Date(Math.max(start.getTime(), new Date(SOFT_OPENING_START).getTime())).toISOString())
       .lt('starts_at', end.toISOString());
 
     if (body.window_start && body.window_end) {
