@@ -86,6 +86,7 @@ test('teaching endpoint scopes every class and roster query to assignments and e
   const scopes = [];
   const rows = {
     class_instructors: [{ class_id: 'mine' }],
+    class_instructor_notes: [{ class_id: 'mine', note: 'Private preparation note' }],
     classes: [{ id: 'mine', title: 'Music', start_time: '2026-10-01T10:00:00Z', status: 'scheduled' }],
     class_registrations: [{ id: 'reg', class_id: 'mine', person_id: 'child', status: 'scheduled', attendance_status: 'attended' }],
     people: [{ id: 'child', first_name: 'Child', last_name: 'Name', birthdate: '2021-01-01', email: 'private@example.com', household_id: 'private-household' }],
@@ -101,6 +102,8 @@ test('teaching endpoint scopes every class and roster query to assignments and e
   assert.deepEqual(scopes.find(row => row[0] === 'class_instructors'), ['class_instructors', 'user_id', 'teacher']);
   assert.deepEqual(scopes.find(row => row[0] === 'classes'), ['classes', 'id', ['mine']]);
   assert.deepEqual(scopes.find(row => row[0] === 'class_registrations'), ['class_registrations', 'class_id', ['mine']]);
+  assert.deepEqual(scopes.find(row => row[0] === 'class_instructor_notes'), ['class_instructor_notes', 'class_id', ['mine']]);
+  assert.equal(result.items[0].instructor_note, 'Private preparation note');
   assert.equal(result.items[0].registrants[0].name, 'Child Name');
   assert.equal(result.items[0].registrants[0].attendance_status, 'attended');
   const serialized = JSON.stringify(result);
