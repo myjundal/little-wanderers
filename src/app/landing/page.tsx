@@ -12,7 +12,6 @@ import {
   SHOW_CUSTOMER_WAIVER_PROMPTS,
 } from '@/lib/feature-flags';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
-import StaffDashboard from '@/components/staff/StaffDashboard';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import { getWaiverStatus, getWaiverStatusLabel, type WaiverStatus } from '@/lib/waivers';
 
@@ -293,7 +292,6 @@ export default function AppHome() {
 
       {!canUseOwnerDashboard && userId && <BookingNextSteps userId={userId} />}
 
-      {canUseOwnerDashboard && <StaffDashboard view="occupancy" />}
 
       {!canUseOwnerDashboard && (
         <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
@@ -349,7 +347,10 @@ export default function AppHome() {
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
             <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Staff QR check-in</Link>
             <Link href="/staff/families">Family management</Link>
-            <Link href="#occupancy-management">Occupancy management</Link>
+            <Link href="/employee">My PIN & Timecards</Link>
+            {!isStaff && <Link href="/staff/team">Staff & Timecards</Link>}
+            {!isInstructor && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}
+            <Link href="/staff/occupancy">Occupancy management</Link>
           </div>
         </section>
       )}

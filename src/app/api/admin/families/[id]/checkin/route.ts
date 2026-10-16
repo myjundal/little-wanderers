@@ -10,7 +10,7 @@ export async function POST(req: Request) {
 
   const res = await fetch(new URL('/api/checkin', req.url), {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: req.headers.get('cookie') ?? '' },
     body: JSON.stringify({ person_id, source: 'staff_manual', created_by_user_id: context.user.id, created_by_role: context.role }),
   });
 

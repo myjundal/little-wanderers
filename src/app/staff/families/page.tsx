@@ -25,6 +25,7 @@ function waiverLabel(status: string) {
 }
 
 export default function StaffFamiliesPage() {
+  const [counts, setCounts] = useState<{ linked: number; children: number } | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<FamilyItem[]>([]);
@@ -37,6 +38,7 @@ export default function StaffFamiliesPage() {
       const json = await res.json();
       setItems(json.items ?? []);
       setTotal(json.total ?? null);
+      setCounts(json.ok ? { linked: json.linked_families, children: json.families_with_children } : null);
       setLoading(false);
     };
     void run();
@@ -48,7 +50,7 @@ export default function StaffFamiliesPage() {
         <div>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner/Staff tools</p>
           <h1 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Family Management</h1>
-          <p>Total families: {total ?? '—'}</p>
+          <p>Family records: {total ?? '—'} · Linked to a login: {counts?.linked ?? '—'} · With child profiles: {counts?.children ?? '—'}</p><p style={{ color: '#6d6480', fontSize: 13 }}>Records include automatically created and manually registered families; this is not a count of completed family profiles.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <StaffToolNav active="families" />

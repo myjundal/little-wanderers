@@ -17,6 +17,7 @@ function auth({ primary = 'user', extra = [], assigned = false, signedIn = true,
     return query;
   } };
   return { filters, api: load('src/lib/authz.ts', {
+    '@/lib/staff-kiosk': { getKioskIdentity: async () => null },
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
     '@/lib/supabase/server': { createServerSupabaseClient: () => ({ auth: { getUser: async () => ({ data: { user: signedIn ? { id: 'teacher' } : null } }) } }) },
   }) };

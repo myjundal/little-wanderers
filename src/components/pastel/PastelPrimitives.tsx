@@ -33,7 +33,7 @@ export function PastelCard({ children }: { children: ReactNode }) {
   return <div className={styles.card}>{children}</div>;
 }
 
-export function PastelHeader({ isAuthenticated = false, waitlistCount }: { isAuthenticated?: boolean; waitlistCount?: WaitlistDisplayCount }) {
+export function PastelHeader({ isAuthenticated = false, waitlistCount, dashboardHref, accessLabel }: { isAuthenticated?: boolean; waitlistCount?: WaitlistDisplayCount; dashboardHref?: string; accessLabel?: string }) {
   return (
     <header className={styles.header}>
       <Link href="/" className={styles.logoWrap}>
@@ -55,8 +55,8 @@ export function PastelHeader({ isAuthenticated = false, waitlistCount }: { isAut
       </nav>
 
       <div className={styles.headerActions}>
-        <PastelButton href={isAuthenticated ? '/landing' : '/login'} className={styles.accessButton}>
-          <span>Join/Login to My Little Wanderers</span>
+        <PastelButton href={dashboardHref ?? (isAuthenticated ? '/landing' : '/login')} className={styles.accessButton}>
+          <span>{accessLabel ?? 'Join/Login to My Little Wanderers'}</span>
         </PastelButton>
         {waitlistCount && <WaitlistCountCard initialCount={waitlistCount} variant="compact" />}
       </div>
