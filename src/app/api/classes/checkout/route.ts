@@ -1,3 +1,4 @@
+import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -306,6 +307,9 @@ async function createSquarePaymentLink(context: LoadedContext, userEmail?: strin
 }
 
 export async function POST(req: Request) {
+  const unavailable = onlinePaymentsUnavailable();
+  if (unavailable) return unavailable;
+
   try {
     const body = (await req.json()) as CheckoutBody;
     const mode = body.mode ?? 'create_payment_link';

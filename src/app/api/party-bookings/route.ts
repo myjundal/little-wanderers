@@ -1,3 +1,4 @@
+import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -221,6 +222,10 @@ export async function POST(req: Request) {
     const occasionDetails = typeof body.occasion_details === 'string' ? body.occasion_details.trim().slice(0, 120) : null;
     const guardianName = parseGuardianName(body);
     const mode = body.mode ?? 'create_payment_link';
+    if (mode !== 'early_access_hold') {
+      const unavailable = onlinePaymentsUnavailable();
+      if (unavailable) return unavailable;
+    }
     const bookingId = typeof body.booking_id === 'string' ? body.booking_id : null;
 
     if (!startTime || !endTime) {

@@ -1,9 +1,13 @@
+import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 export const dynamic = 'force-dynamic'; export const runtime = 'nodejs';
 
 export async function POST() {
+  const unavailable = onlinePaymentsUnavailable();
+  if (unavailable) return unavailable;
+
   const supa = createServerSupabaseClient();
   const { data: { user } } = await supa.auth.getUser();
   if (!user) return NextResponse.redirect('/landing/membership?error=unauthorized');
