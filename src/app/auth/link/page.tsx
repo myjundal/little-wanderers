@@ -12,15 +12,26 @@ export default function AuthLinkPage() {
   useEffect(() => {
     if (hasAuthToken) return;
     const checkSession = async () => {
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      const accessToken = fragment.get('access_token');
+      const refreshToken = fragment.get('refresh_token');
+      if (accessToken && refreshToken) {
+        // Invitations have no PKCE challenge. Remove bearer tokens before initializing the PKCE client.
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
       const supabase = createBrowserSupabaseClient();
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (error) return;
+      }
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (session) window.location.replace('/auth/finish');
+      if (session) window.location.replace(`/auth/finish?next=${encodeURIComponent(searchParams.get('next') || '/landing')}`);
     };
 
     void checkSession();
-  }, [hasAuthToken]);
+  }, [hasAuthToken, searchParams]);
 
   function finishSignIn() {
     if (opening) return;
