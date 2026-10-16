@@ -16,11 +16,11 @@ export default function AuthLinkPage() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (session) window.location.replace('/auth/finish');
+      if (session) window.location.replace(`/auth/finish?next=${encodeURIComponent(searchParams.get('next') || '/landing')}`);
     };
 
     void checkSession();
-  }, [hasAuthToken]);
+  }, [hasAuthToken, searchParams]);
 
   function finishSignIn() {
     if (opening) return;

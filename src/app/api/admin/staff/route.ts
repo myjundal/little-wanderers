@@ -79,7 +79,7 @@ export async function POST(req: Request) {
   let invited = false;
   if (!userId) {
     const origin = new URL(req.headers.get('origin')!).origin;
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${origin}/auth/callback?next=/employee` });
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${origin}/auth/link?next=/employee` });
     if (error || !data.user) return fail('Invitation could not be sent. Check the email and Supabase email settings.', 502);
     userId = data.user.id; invited = true;
   }

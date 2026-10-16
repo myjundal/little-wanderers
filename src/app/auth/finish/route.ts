@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(getRedirectUrl(request, '/login'));
   }
 
-  const redirectPath = await getPostAuthRedirectForUser(user, '/landing');
+  const requestedNext = request.nextUrl.searchParams.get('next');
+  const destination = new URL(requestedNext || '/landing', request.url);
+  const next = destination.origin === request.nextUrl.origin ? `${destination.pathname}${destination.search}${destination.hash}` : '/landing';
+  const redirectPath = await getPostAuthRedirectForUser(user, next);
   return NextResponse.redirect(getRedirectUrl(request, redirectPath));
 }
