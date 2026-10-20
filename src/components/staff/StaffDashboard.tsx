@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 import Link from 'next/link';
+import ClassPreRegistrationRosters, { ClassViewSwitcher } from '@/components/classes/ClassPreRegistrationRosters';
+import type { RosterSession } from '@/lib/class-rosters';
 
 type OccupancyEvent = {
   id: string;
@@ -425,6 +427,27 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
   const [partyAttendanceNotes, setPartyAttendanceNotes] = useState<Record<string, string>>({});
   const [partyCountDrafts, setPartyCountDrafts] = useState<Record<string, { child: string; adult: string; total: string }>>({});
   const [classWeekStart, setClassWeekStart] = useState(() => startOfWeek(new Date()));
+  const [classView, setClassView] = useState<'rosters' | 'sessions'>('rosters');
+  const [focusedSessionId, setFocusedSessionId] = useState('');
+  const rosterSessions = useMemo<RosterSession[]>(() => classes.map(item => ({
+    id: item.id, title: item.title, startTime: item.start_time, endTime: item.end_time,
+    status: item.status, scheduleLabel: item.schedule_label,
+    registrations: item.registrants.map(reg => ({ id: reg.registration_id, personId: reg.person_id, name: reg.person_name, status: reg.registration_status, householdId: reg.household_id })),
+  })), [classes]);
+
+  useEffect(() => {
+    if (classView === 'sessions' && focusedSessionId && !loading) {
+      document.getElementById(`staff-class-session-${focusedSessionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [classView, focusedSessionId, loading, classWeekStart]);
+
+  const openRosterSession = (id: string) => {
+    const session = classes.find(item => item.id === id);
+    if (!session) return;
+    setClassWeekStart(startOfWeek(new Date(session.start_time)));
+    setFocusedSessionId(id);
+    setClassView('sessions');
+  };
 
   const selectedBooking = useMemo(
     () => partyBookings.find((item) => item.id === selectedBookingId) ?? partyBookings[0] ?? null,
@@ -487,40 +510,45 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
     setLoading(true);
     setMessage(null);
 
-    const [occupancyRes, classesRes, partyRes] = await Promise.all([
-      fetch('/api/admin/occupancy', { cache: 'no-store' }),
-      view === 'overview' || view === 'occupancy' ? Promise.resolve(Response.json({ ok: true, items: [] })) : fetch('/api/admin/classes', { cache: 'no-store' }),
-      view === 'overview' || view === 'occupancy' ? Promise.resolve(Response.json({ ok: true, items: [] })) : fetch('/api/admin/party-bookings', { cache: 'no-store' }),
-    ]);
+    try {
+      const [occupancyRes, classesRes, partyRes] = await Promise.all([
+        view === 'overview' || view === 'occupancy' ? fetch('/api/admin/occupancy', { cache: 'no-store' }) : Promise.resolve(Response.json({ ok: true })),
+        view === 'classes' ? fetch('/api/admin/classes', { cache: 'no-store' }) : Promise.resolve(Response.json({ ok: true, items: [] })),
+        view === 'parties' ? fetch('/api/admin/party-bookings', { cache: 'no-store' }) : Promise.resolve(Response.json({ ok: true, items: [] })),
+      ]);
 
-    const [occupancyJson, classesJson, partyJson] = await Promise.all([
-      occupancyRes.json(),
-      classesRes.json(),
-      partyRes.json(),
-    ]);
+      const [occupancyJson, classesJson, partyJson] = await Promise.all([
+        occupancyRes.json(),
+        classesRes.json(),
+        partyRes.json(),
+      ]);
 
-    if (!occupancyRes.ok || !occupancyJson.ok) {
-      setMessage(occupancyJson.error ?? 'Failed to load occupancy controls.');
+      if (!occupancyRes.ok || !occupancyJson.ok) {
+        setMessage(occupancyJson.error ?? 'Failed to load occupancy controls.');
+        setLoading(false);
+        return;
+      }
+
+      if (!classesRes.ok || !classesJson.ok) {
+        setMessage(classesJson.error ?? 'Failed to load classes.');
+        setLoading(false);
+        return;
+      }
+
+      if (!partyRes.ok || !partyJson.ok) {
+        setMessage(partyJson.error ?? 'Failed to load party bookings.');
+        setLoading(false);
+        return;
+      }
+
+      setOccupancy(occupancyJson as OccupancyState);
+      setClasses((classesJson.items ?? []) as ClassItem[]);
+      setPartyBookings((partyJson.items ?? []) as PartyBookingItem[]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to load the dashboard. Please try again.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (!classesRes.ok || !classesJson.ok) {
-      setMessage(classesJson.error ?? 'Failed to load classes.');
-      setLoading(false);
-      return;
-    }
-
-    if (!partyRes.ok || !partyJson.ok) {
-      setMessage(partyJson.error ?? 'Failed to load party bookings.');
-      setLoading(false);
-      return;
-    }
-
-    setOccupancy(occupancyJson as OccupancyState);
-    setClasses((classesJson.items ?? []) as ClassItem[]);
-    setPartyBookings((partyJson.items ?? []) as PartyBookingItem[]);
-    setLoading(false);
   }, [view]);
 
   useEffect(() => {
@@ -807,7 +835,12 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
         </>
       )}
 
-      {view === 'classes' && (
+      {view === 'classes' && <>
+        <ClassViewSwitcher value={classView} onChange={setClassView} />
+        {classView === 'rosters' && <ClassPreRegistrationRosters sessions={rosterSessions} onSessionSelect={openRosterSession} onRefresh={load} showFamilyLinks />}
+      </>}
+
+      {view === 'classes' && classView === 'sessions' && (
       <section id="class-management" style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
@@ -1075,7 +1108,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
             tone="active"
           >
             {classesThisWeek.map((item) => (
-              <div key={item.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 16, background: '#fff' }}>
+              <div id={`staff-class-session-${item.id}`} key={item.id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 16, background: '#fff', scrollMarginTop: 100 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div>
                     <h3 style={{ margin: 0, color: '#4f3f82' }}>{item.title}</h3>

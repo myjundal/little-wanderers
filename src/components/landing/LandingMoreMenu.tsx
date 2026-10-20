@@ -32,6 +32,7 @@ export default function LandingMoreMenu() {
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff/checkin">Staff QR check-in</Link>
               <Link onClick={() => setOpen(false)} href="/staff/families">Family management</Link>
+              <Link onClick={() => setOpen(false)} href="/staff/classes">Class pre-registrations</Link>
               <Link onClick={() => setOpen(false)} href="/staff/occupancy">Occupancy management</Link>
               {!isStaff && <Link onClick={() => setOpen(false)} href="/staff/open-play-reservations">Open Play Reservations</Link>}
               <Link onClick={() => setOpen(false)} href="/employee">{isKiosk ? 'My Timecards' : 'My PIN & Timecards'}</Link>

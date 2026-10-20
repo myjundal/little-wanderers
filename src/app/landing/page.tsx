@@ -327,6 +327,7 @@ export default function AppHome() {
         <section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
+            <Link href="/staff/classes" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Class pre-registration rosters</Link>
             <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Staff QR check-in</Link>
             <Link href="/staff/families">Family management</Link>
             <Link href="/employee">My PIN & Timecards</Link>
