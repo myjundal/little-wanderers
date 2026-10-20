@@ -20,7 +20,7 @@ export default async function StaffClassesPage() {
       </div>
 
       <StaffDashboard view="classes" />
-      <InstructorAssignments />
+      {(role === 'owner' || role === 'admin') && <InstructorAssignments />}
     </main>
   );
 }

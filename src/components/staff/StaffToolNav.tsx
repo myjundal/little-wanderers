@@ -43,12 +43,12 @@ export default function StaffToolNav({ active }: StaffToolNavProps) {
         Family management
       </Link>
       {isInstructor && <Link href="/teaching" style={linkStyle}>Teaching Classes</Link>}
+      <Link href="/staff/classes" style={styleFor(active === 'classes')}>
+        Class pre-registrations
+      </Link>
       {role && !isStaff && <>
       <Link href="/staff/campaigns" style={styleFor(active === 'campaigns')}>
         Email campaigns
-      </Link>
-      <Link href="/staff/classes" style={styleFor(active === 'classes')}>
-        Class management
       </Link>
       <Link href="/staff/open-play-reservations" style={styleFor(active === 'openPlayReservations')}>
         Open Play reservations

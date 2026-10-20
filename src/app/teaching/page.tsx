@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AvailabilityCalendar from '@/components/calendar/AvailabilityCalendar';
 import { PARTY_TIME_ZONE } from '@/lib/party-config';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import styles from './teaching.module.css';
+import ClassPreRegistrationRosters, { ClassViewSwitcher } from '@/components/classes/ClassPreRegistrationRosters';
+import type { RosterSession } from '@/lib/class-rosters';
 
 type Registrant = { id: string; person_id: string; name: string; age: number | null; status: string; attendance_status: string };
 type TeachingClass = { id: string; title: string; category: string | null; start_time: string; end_time: string; status: string; capacity: number | null; age_range: string | null; caregiver_participation: string | null; schedule_label: string | null; instructor_note: string | null; registrants: Registrant[] };
@@ -21,6 +23,12 @@ export default function TeachingPage() {
   const [selectedId, setSelectedId] = useState('');
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
+  const [classView, setClassView] = useState<'rosters' | 'sessions'>('rosters');
+  const rosterSessions = useMemo<RosterSession[]>(() => items.map(item => ({
+    id: item.id, title: item.title, startTime: item.start_time, endTime: item.end_time,
+    status: item.status, scheduleLabel: item.schedule_label,
+    registrations: item.registrants.map(reg => ({ id: reg.id, personId: reg.person_id, name: reg.name, age: reg.age, status: reg.status })),
+  })), [items]);
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/teaching', { cache: 'no-store' });
@@ -35,6 +43,8 @@ export default function TeachingPage() {
   const visible = items.filter(item => !title || item.title === title);
   const selected = visible.find(item => item.id === selectedId);
   const select = (id: string) => {
+    if (title && items.find(item => item.id === id)?.title !== title) setTitle('');
+    setClassView('sessions');
     setSelectedId(id);
     window.setTimeout(() => document.getElementById('class-roster')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
@@ -51,11 +61,13 @@ export default function TeachingPage() {
     finally { setSaving(null); }
   }
   return <main className={styles.main}>
-    <div className={styles.heading}><div><p>Little Wanderers</p><h1>Teaching Classes</h1><p>Your assigned classes, rosters and attendance.</p></div>
+    <div className={styles.heading}><div><p>Little Wanderers</p><h1>Teaching Classes</h1><p>Your assigned class rosters across dates, with session attendance when needed.</p></div>
       <nav className={styles.links}><Link href="/">Main Homepage</Link>{!isKiosk && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}{canUseOwnerDashboard && <Link href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>}</nav>
     </div>
     {error && <p role="alert" className={styles.error}>{error} <button onClick={() => void load()}>Retry</button></p>}
     {loading ? <p>Loading your classes…</p> : !items.length ? <section className={styles.card}><h2>No classes assigned yet</h2><p>Your classes will appear here when the owner assigns your account.</p></section> : <>
+      <ClassViewSwitcher value={classView} onChange={setClassView} />
+      {classView === 'rosters' ? <ClassPreRegistrationRosters sessions={rosterSessions} onSessionSelect={select} onRefresh={load} /> : <>
       <label className={styles.filter}>Class <select value={title} onChange={e => { setTitle(e.target.value); setSelectedId(''); }}><option value="">All my classes</option>{[...new Set(items.map(item => item.title))].map(value => <option key={value}>{value}</option>)}</select></label>
       <AvailabilityCalendar title="Teaching calendar" subtitle="Select a date and class to see its roster. Times are shown in the studio’s time zone." timeZone={PARTY_TIME_ZONE} slots={visible.map(item => ({ id: item.id, start: item.start_time, end: item.end_time, label: `${item.title}${item.status === 'cancelled' ? ' (Cancelled)' : ''}`, status: item.status === 'cancelled' ? 'closed' as const : 'available' as const }))} selectableStatuses={['available', 'closed']} onSlotSelect={slot => select(slot.id)} showUpcoming={false} />
       <section className={styles.card}><h2>Class sessions</h2><div className={styles.sessions}>{visible.map(item => <button key={item.id} className={styles.session} aria-pressed={selectedId === item.id} onClick={() => select(item.id)}><strong>{item.title}</strong><span>{dateLabel(item.start_time)}</span><span>{item.status === 'cancelled' ? 'Cancelled' : `${item.registrants.filter(activeRegistration).length} / ${item.capacity ?? 'No limit'} registered`}</span></button>)}</div></section>
@@ -74,6 +86,7 @@ export default function TeachingPage() {
           </article>;
         })}
       </section>}
+      </>}
     </>}
     <nav className={styles.bottom}><Link href="/">Main</Link><Link href="/teaching">Teaching</Link>{!isKiosk && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}{canUseOwnerDashboard && <Link href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>}</nav>
   </main>;
