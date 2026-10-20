@@ -56,12 +56,15 @@ export async function ensureGuardianProfile(input: {
   if (input.email) householdPatch.email = input.email;
   if (fullName) householdPatch.name = `${fullName} Family`;
 
-  await input.admin.from('households').update(householdPatch).eq('id', input.householdId);
+  const [existing] = await Promise.all([
+    firstName || lastName ? getPrimaryGuardianProfile(input.admin, input.householdId) : Promise.resolve(null),
+    input.admin.from('households').update(householdPatch).eq('id', input.householdId),
+  ]);
 
   if (!firstName && !lastName) return null;
 
-  const existing = await getPrimaryGuardianProfile(input.admin, input.householdId);
   if (existing?.id) {
+    if ((firstName ?? existing.first_name) === existing.first_name && (lastName ?? existing.last_name) === existing.last_name) return existing;
     const { data, error } = await input.admin
       .from('people')
       .update({

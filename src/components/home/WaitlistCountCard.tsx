@@ -27,7 +27,6 @@ export default function WaitlistCountCard({ initialCount, variant = 'default' }:
       }
     };
 
-    void refreshCount();
     const intervalId = window.setInterval(refreshCount, REFRESH_INTERVAL_MS);
 
     return () => {

@@ -11,6 +11,21 @@ type StaffAccessResponse = {
   is_kiosk?: boolean;
 };
 
+let pendingAccessRequest: Promise<StaffAccessResponse> | null = null;
+
+export function loadOperatorAccess(): Promise<StaffAccessResponse> {
+  if (!pendingAccessRequest) {
+    pendingAccessRequest = fetch('/api/auth/staff', { cache: 'no-store' })
+      .then(async response => {
+        const json = (await response.json()) as StaffAccessResponse;
+        if (!response.ok || !json.ok) throw new Error(json.error ?? 'Unable to check dashboard access.');
+        return json;
+      })
+      .finally(() => { pendingAccessRequest = null; });
+  }
+  return pendingAccessRequest;
+}
+
 export function useOperatorAccess() {
   const [isLoading, setIsLoading] = useState(true);
   const [isKiosk, setIsKiosk] = useState(false);
@@ -23,13 +38,7 @@ export function useOperatorAccess() {
 
     const load = async () => {
       try {
-        const response = await fetch('/api/auth/staff', { cache: 'no-store' });
-        const json = (await response.json()) as StaffAccessResponse;
-
-        if (!response.ok || !json.ok) {
-          console.warn('Unable to check owner dashboard access.', json.error ?? response.statusText);
-          return;
-        }
+        const json = await loadOperatorAccess();
 
         if (!cancelled) {
           setCanUseOwnerDashboard(json.is_staff === true);

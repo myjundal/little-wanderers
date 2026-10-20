@@ -6,10 +6,10 @@ import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import {
   WEEKDAY_COLUMNS,
   buildGeneralWeeklySchedule,
-  getPublicClasses,
   groupPublicClassSeries,
   timeOnlyLabel,
 } from '@/lib/public-classes';
+import { getPublicClasses } from '@/lib/public-class-data';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';

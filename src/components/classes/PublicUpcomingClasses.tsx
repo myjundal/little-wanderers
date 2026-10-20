@@ -9,28 +9,10 @@ import {
   buildGeneralWeeklySchedule,
   compactCaregiverLabel,
   timeOnlyLabel,
+  type PublicClassItem,
 } from '@/lib/public-classes';
 
-type ClassItem = {
-  id: string;
-  title: string;
-  category: string | null;
-  start_time: string;
-  end_time: string;
-  duration_minutes: number | null;
-  instructor_name: string | null;
-  description: string | null;
-  age_range: string | null;
-  caregiver_participation: string | null;
-  schedule_note: string | null;
-  schedule_label: string | null;
-  capacity: number | null;
-  price_cents: number;
-  booked_count: number;
-  seats_left: number | null;
-  waitlist_offer_pending?: boolean;
-  waitlist_count?: number;
-};
+type ClassItem = PublicClassItem;
 
 type ClassSeries = ClassItem & {
   occurrences: ClassItem[];
@@ -169,41 +151,8 @@ function ScheduleLine({ item }: { item: Pick<ClassItem, 'schedule_note' | 'sched
   return <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.6 }}>{item.schedule_note ?? formatClassTime(item.start_time, item.end_time)}</p>;
 }
 
-export default function PublicUpcomingClasses() {
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function PublicUpcomingClasses({ classes }: { classes: PublicClassItem[] }) {
   const [focusedSeriesId, setFocusedSeriesId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const loadClasses = async () => {
-      try {
-        const response = await fetch('/api/classes?limit=60', { cache: 'no-store' });
-        const payload = (await response.json()) as { ok?: boolean; items?: ClassItem[]; error?: string };
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.error ?? 'Unable to load classes.');
-        }
-        if (isActive) {
-          setClasses(payload.items ?? []);
-          setError(null);
-        }
-      } catch {
-        if (isActive) {
-          setError('Class schedule details are still being finalized.');
-        }
-      } finally {
-        if (isActive) setLoading(false);
-      }
-    };
-
-    void loadClasses();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
 
   const visibleClasses = useMemo(() => groupClassSeries(classes).slice(0, 6), [classes]);
   const weeklySchedule = useMemo(() => buildGeneralWeeklySchedule(visibleClasses), [visibleClasses]);
@@ -230,7 +179,7 @@ export default function PublicUpcomingClasses() {
     window.location.assign(data.user ? next : `/login?mode=new&next=${encodeURIComponent(next)}`);
   };
 
-  if (loading || error || visibleClasses.length === 0) return null;
+  if (visibleClasses.length === 0) return null;
 
   return (
     <section style={sectionStyle}>

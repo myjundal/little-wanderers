@@ -13,16 +13,15 @@ import {
 import { sendClassRegistrationNotification } from '@/lib/admin-notifications';
 import { ensureGuardianProfile, getPrimaryGuardianProfile, parseGuardianName } from '@/lib/family-profile';
 import { logger } from '@/lib/logger';
+import { waitUntil } from '@vercel/functions';
+
+export const maxDuration = 60;
 
 const admin = () =>
   createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-
-async function getHouseholdIdForUser(userId: string) {
-  return getLatestHouseholdIdForUser(admin(), userId);
-}
 
 async function notifyClassRegistrationSaved(input: {
   admin: ReturnType<typeof admin>;
@@ -46,12 +45,10 @@ async function notifyClassRegistrationSaved(input: {
   };
 }) {
   try {
-    const { data: household } = await input.admin
-      .from('households')
-      .select('name,email')
-      .eq('id', input.householdId)
-      .maybeSingle();
-    const guardian = await getPrimaryGuardianProfile(input.admin, input.householdId).catch(() => null);
+    const [{ data: household }, guardian] = await Promise.all([
+      input.admin.from('households').select('name,email').eq('id', input.householdId).maybeSingle(),
+      getPrimaryGuardianProfile(input.admin, input.householdId).catch(() => null),
+    ]);
 
     const notification = await sendClassRegistrationNotification({
       registrationId: input.registrationId,
@@ -86,7 +83,7 @@ async function notifyClassRegistrationSaved(input: {
   }
 }
 
-async function sendClassRegistrationSideEffects(input: {
+function queueClassRegistrationSideEffects(input: {
   admin: ReturnType<typeof admin>;
   registrationId?: string | null;
   status: 'scheduled' | 'waitlist';
@@ -108,14 +105,13 @@ async function sendClassRegistrationSideEffects(input: {
     price_cents?: number | null;
   };
 }) {
-  if (!input.registrationId) return { ok: false as const, error: 'Missing pre-registration ID.' };
+  if (!input.registrationId) return;
 
-  const email = await sendClassRegistrationEmail(input.admin, input.registrationId, input.fallbackEmail).catch((emailError) => ({
+  const emailTask = sendClassRegistrationEmail(input.admin, input.registrationId, input.fallbackEmail).catch((emailError) => ({
     ok: false as const,
     error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
-  }));
-  if (!email.ok || 'skipped' in email) {
-    logger.warn({
+  })).then(email => {
+    if (!email.ok || 'skipped' in email) logger.warn({
       action: 'class.registration_email_not_sent',
       userId: input.userId,
       householdId: input.householdId,
@@ -123,9 +119,9 @@ async function sendClassRegistrationSideEffects(input: {
       status: input.status,
       result: email,
     });
-  }
+  });
 
-  await notifyClassRegistrationSaved({
+  const notificationTask = notifyClassRegistrationSaved({
     admin: input.admin,
     registrationId: input.registrationId,
     status: input.status,
@@ -134,7 +130,9 @@ async function sendClassRegistrationSideEffects(input: {
     person: input.person,
     klass: input.klass,
   });
-  return email;
+  waitUntil(Promise.all([emailTask, notificationTask]).catch(error => {
+    logger.error({ action: 'class.registration_side_effects_failed', registrationId: input.registrationId }, error);
+  }));
 }
 
 export async function POST(req: Request) {
@@ -157,22 +155,18 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
     }
 
-    const householdId = await getHouseholdIdForUser(user.id);
+    const supa = admin();
+    const householdId = await getLatestHouseholdIdForUser(supa, user.id);
     if (!householdId) {
       return Response.json({ ok: false, error: 'household not found' }, { status: 404 });
     }
 
-    const supa = admin();
-    await ensureGuardianProfile({
-      admin: supa,
-      householdId,
-      userId: user.id,
-      email: user.email,
-      firstName: guardianName.firstName,
-      lastName: guardianName.lastName,
-    });
-
-    const { data: roleRow } = await supa.from('roles').select('role').eq('id', user.id).maybeSingle();
+    const [{ data: roleRow }, { data: person }, { data: klass }, existingResult] = await Promise.all([
+      supa.from('roles').select('role').eq('id', user.id).maybeSingle(),
+      supa.from('people').select('id,role,first_name,last_name,birthdate').eq('id', personId).eq('household_id', householdId).maybeSingle(),
+      supa.from('classes').select('id,title,category,capacity,status,start_time,end_time,schedule_label,instructor_name,price_cents').eq('id', classId).maybeSingle(),
+      supa.from('class_registrations').select('id,status').eq('class_id', classId).eq('person_id', personId).maybeSingle(),
+    ]);
     const isOperator = roleRow?.role === 'owner' || roleRow?.role === 'staff' || roleRow?.role === 'admin';
     const onWanderlist = isOperator || (await isUserOnWanderlist(supa, user.email));
     if (isWanderlistSignupWindow() && !onWanderlist) {
@@ -182,22 +176,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: person } = await supa
-      .from('people')
-      .select('id,role,first_name,last_name,birthdate')
-      .eq('id', personId)
-      .eq('household_id', householdId)
-      .maybeSingle();
-
     if (!person) {
       return Response.json({ ok: false, error: 'person not found in your household' }, { status: 403 });
     }
-
-    const { data: klass } = await supa
-      .from('classes')
-      .select('id,title,category,capacity,status,start_time,end_time,schedule_label,instructor_name,price_cents')
-      .eq('id', classId)
-      .maybeSingle();
 
     if (!klass) return Response.json({ ok: false, error: 'class not found' }, { status: 404 });
     if (new Date(klass.start_time).getTime() < new Date(CLASS_START_AT).getTime()) {
@@ -207,12 +188,8 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'class is not open for booking' }, { status: 409 });
     }
 
-    const { data: already } = await supa
-      .from('class_registrations')
-      .select('id,status')
-      .eq('class_id', classId)
-      .eq('person_id', personId)
-      .maybeSingle();
+    if (existingResult.error) throw new Error(existingResult.error.message);
+    const already = existingResult.data;
 
     if (already && already.status !== 'cancelled') {
       return Response.json({ ok: true, id: already.id, status: already.status, already_registered: true });
@@ -222,6 +199,7 @@ export async function POST(req: Request) {
       countConfirmedClassRegistrations(supa, classId),
       hasActiveWaitlistOffer(supa, classId),
       countWaitlistRegistrations(supa, classId),
+      ensureGuardianProfile({ admin: supa, householdId, userId: user.id, email: user.email, firstName: guardianName.firstName, lastName: guardianName.lastName }),
     ]);
     const isFull = klass.capacity != null && booked >= klass.capacity;
     const offerPending = !isFull && offerPendingResult;
@@ -242,7 +220,7 @@ export async function POST(req: Request) {
         .eq('id', already.id);
       if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
-      const email = await sendClassRegistrationSideEffects({
+      queueClassRegistrationSideEffects({
         admin: supa,
         registrationId: already.id,
         status: nextStatus,
@@ -253,7 +231,7 @@ export async function POST(req: Request) {
         klass,
       });
 
-      return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email });
+      return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email_pending: true });
     }
 
     const { data: inserted, error: insertErr } = await supa
@@ -272,7 +250,7 @@ export async function POST(req: Request) {
 
     if (insertErr) return Response.json({ ok: false, error: insertErr.message }, { status: 500 });
 
-    const email = await sendClassRegistrationSideEffects({
+    queueClassRegistrationSideEffects({
       admin: supa,
       registrationId: inserted?.id ?? null,
       status: nextStatus,
@@ -283,7 +261,7 @@ export async function POST(req: Request) {
       klass,
     });
 
-    return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email });
+    return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email_pending: true });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
