@@ -86,7 +86,7 @@ async function notifyClassRegistrationSaved(input: {
   }
 }
 
-function queueClassRegistrationSideEffects(input: {
+async function sendClassRegistrationSideEffects(input: {
   admin: ReturnType<typeof admin>;
   registrationId?: string | null;
   status: 'scheduled' | 'waitlist';
@@ -108,39 +108,33 @@ function queueClassRegistrationSideEffects(input: {
     price_cents?: number | null;
   };
 }) {
-  if (!input.registrationId) return;
+  if (!input.registrationId) return { ok: false as const, error: 'Missing pre-registration ID.' };
 
-  void (async () => {
-    const email = await sendClassRegistrationEmail(input.admin, input.registrationId!, input.status, input.fallbackEmail).catch((emailError) => ({
-      ok: false as const,
-      error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
-    }));
-    if (!email.ok || 'skipped' in email) {
-      logger.warn({
-        action: 'class.registration_email_not_sent',
-        userId: input.userId,
-        householdId: input.householdId,
-        registrationId: input.registrationId,
-        status: input.status,
-        result: email,
-      });
-    }
-
-    await notifyClassRegistrationSaved({
-      admin: input.admin,
+  const email = await sendClassRegistrationEmail(input.admin, input.registrationId, input.fallbackEmail).catch((emailError) => ({
+    ok: false as const,
+    error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
+  }));
+  if (!email.ok || 'skipped' in email) {
+    logger.warn({
+      action: 'class.registration_email_not_sent',
+      userId: input.userId,
+      householdId: input.householdId,
       registrationId: input.registrationId,
       status: input.status,
-      householdId: input.householdId,
-      fallbackEmail: input.fallbackEmail,
-      person: input.person,
-      klass: input.klass,
+      result: email,
     });
-  })().catch((error) => {
-    logger.error(
-      { action: 'class.registration_side_effects_failed', registrationId: input.registrationId, status: input.status },
-      error
-    );
+  }
+
+  await notifyClassRegistrationSaved({
+    admin: input.admin,
+    registrationId: input.registrationId,
+    status: input.status,
+    householdId: input.householdId,
+    fallbackEmail: input.fallbackEmail,
+    person: input.person,
+    klass: input.klass,
   });
+  return email;
 }
 
 export async function POST(req: Request) {
@@ -221,7 +215,7 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (already && already.status !== 'cancelled') {
-      return Response.json({ ok: false, error: 'already registered' }, { status: 409 });
+      return Response.json({ ok: true, id: already.id, status: already.status, already_registered: true });
     }
 
     const [booked, offerPendingResult, waitlistCount] = await Promise.all([
@@ -248,7 +242,7 @@ export async function POST(req: Request) {
         .eq('id', already.id);
       if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
-      queueClassRegistrationSideEffects({
+      const email = await sendClassRegistrationSideEffects({
         admin: supa,
         registrationId: already.id,
         status: nextStatus,
@@ -259,7 +253,7 @@ export async function POST(req: Request) {
         klass,
       });
 
-      return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email_pending: true });
+      return Response.json({ ok: true, id: already.id, restored: true, status: nextStatus, email });
     }
 
     const { data: inserted, error: insertErr } = await supa
@@ -278,7 +272,7 @@ export async function POST(req: Request) {
 
     if (insertErr) return Response.json({ ok: false, error: insertErr.message }, { status: 500 });
 
-    queueClassRegistrationSideEffects({
+    const email = await sendClassRegistrationSideEffects({
       admin: supa,
       registrationId: inserted?.id ?? null,
       status: nextStatus,
@@ -289,7 +283,7 @@ export async function POST(req: Request) {
       klass,
     });
 
-    return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email_pending: true });
+    return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

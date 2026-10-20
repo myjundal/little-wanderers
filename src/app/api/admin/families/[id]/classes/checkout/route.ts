@@ -45,7 +45,7 @@ async function notifyManualClassRegistration(input: {
   if (!input.registrationId) return;
 
   void (async () => {
-    const email = await sendClassRegistrationEmail(input.admin, input.registrationId!, input.status, input.fallbackEmail).catch((emailError) => ({
+    const email = await sendClassRegistrationEmail(input.admin, input.registrationId!, input.fallbackEmail).catch((emailError) => ({
       ok: false as const,
       error: emailError instanceof Error ? emailError.message : 'Unable to send class email.',
     }));
