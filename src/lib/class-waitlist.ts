@@ -1,4 +1,5 @@
 import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
+import { CLASS_PRE_REGISTRATION_NOTE } from '@/lib/class-config';
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendResendEmail } from '@/lib/email-campaigns';
@@ -46,19 +47,6 @@ function formatPrice(priceCents: number | null) {
     currency: 'USD',
     maximumFractionDigits: priceCents % 100 === 0 ? 0 : 2,
   }).format(priceCents / 100);
-}
-
-async function getWaitlistPosition(admin: SupabaseClient, classId: string, registrationId: string) {
-  const { data, error } = await admin
-    .from('class_registrations')
-    .select('id')
-    .eq('class_id', classId)
-    .eq('status', 'waitlist')
-    .order('created_at', { ascending: true });
-
-  if (error) throw new Error(error.message);
-  const index = (data ?? []).findIndex((row) => row.id === registrationId);
-  return index >= 0 ? index + 1 : null;
 }
 
 async function getAuthUserEmail(admin: SupabaseClient, userId: string | null | undefined) {
@@ -167,7 +155,6 @@ export async function countWaitlistRegistrations(admin: SupabaseClient, classId:
 export async function sendClassRegistrationEmail(
   admin: SupabaseClient,
   registrationId: string,
-  status: 'scheduled' | 'waitlist',
   fallbackEmail?: string | null
 ) {
   const { data: reg, error: regError } = await admin
@@ -203,19 +190,8 @@ export async function sendClassRegistrationEmail(
   const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';
   const classTime = formatClassDateTime(klass.start_time, klass.end_time);
   const scheduleLabel = typeof klass.schedule_label === 'string' && klass.schedule_label.trim() ? klass.schedule_label.trim() : null;
-  const waitlistPosition = status === 'waitlist' ? await getWaitlistPosition(admin, reg.class_id, reg.id) : null;
-  const heading = status === 'waitlist' ? 'You are on the waitlist' : 'You are pre-registered';
-  const intro =
-    status === 'waitlist'
-      ? `We added ${childName} to the waitlist for ${klass.title}.`
-      : `We received ${childName}'s pre-registration for ${klass.title}.`;
-  const positionLine = waitlistPosition
-    ? `<p><strong>Waitlist position:</strong> #${waitlistPosition}</p>`
-    : '';
-  const waitlistNote =
-    status === 'waitlist'
-      ? '<p>If a spot opens, we will email the next family in line a private claim link before opening that seat to anyone else.</p>'
-      : '<p>This is a pre-registration confirmation. We will follow up with any final class details before the start date.</p>';
+  const heading = 'Pre-registration received';
+  const intro = `We received ${childName}'s pre-registration for ${klass.title}.`;
 
   const details = [
     ['Class', klass.title],
@@ -237,11 +213,13 @@ export async function sendClassRegistrationEmail(
     <main style="max-width:620px;margin:0 auto;">
       <h1 style="font-size:22px;margin:0 0 14px;color:#4f3f82;">${escapeHtml(heading)}</h1>
       <p>${escapeHtml(intro)}</p>
-      ${positionLine}
+      <div style="padding:14px 16px;border:1px solid #d9c8f7;border-radius:12px;background:#f3ebff;">
+        <strong>Pre-registration only — your spot is not yet confirmed</strong>
+        <p style="margin:6px 0 0;">${escapeHtml(CLASS_PRE_REGISTRATION_NOTE)}</p>
+      </div>
       <table style="width:100%;border-collapse:collapse;border:1px solid #efe3ff;border-radius:12px;overflow:hidden;margin:18px 0;">
         <tbody>${details}</tbody>
       </table>
-      ${waitlistNote}
       <p style="color:#6d6480;font-size:13px;">Questions? Reply to this email and we will help.</p>
     </main>
   </body>
@@ -249,7 +227,7 @@ export async function sendClassRegistrationEmail(
 
   return sendResendEmail({
     to,
-    subject: status === 'waitlist' ? `Waitlist confirmation: ${klass.title}` : `Pre-registration confirmation: ${klass.title}`,
+    subject: `Pre-registration confirmation: ${klass.title}`,
     html,
   });
 }

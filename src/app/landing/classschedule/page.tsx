@@ -218,6 +218,13 @@ function classCardDomId(series: ClassSeries) {
   return `class-card-${series.id}`;
 }
 
+function registrationFieldError(fieldId: string, message: string): never {
+  const field = document.getElementById(fieldId);
+  field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  field?.focus({ preventScroll: true });
+  throw new Error(message);
+}
+
 export default function ClassSchedulePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -234,6 +241,12 @@ export default function ClassSchedulePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
   const [registeringClassId, setRegisteringClassId] = useState<string | null>(null);
+  const registrationInFlightRef = useRef(false);
+  const [registrationFeedback, setRegistrationFeedback] = useState<{
+    classId: string;
+    message: string;
+    tone: 'success' | 'warning' | 'error';
+  } | null>(null);
   const [claimingWaitlist, setClaimingWaitlist] = useState(false);
   const claimingWaitlistTokenRef = useRef<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -250,55 +263,69 @@ export default function ClassSchedulePage() {
     }
     const requestKey = Date.now();
 
-    const [classRes, myRes, profileRes] = await Promise.all([
-      fetch(`/api/classes?limit=200&ts=${requestKey}`, { cache: 'no-store' }),
-      fetch(`/api/classes/my?ts=${requestKey}`, { cache: 'no-store' }),
-      fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' }),
-    ]);
+    try {
+      const [classRes, myRes, profileRes] = await Promise.all([
+        fetch(`/api/classes?limit=200&ts=${requestKey}`, { cache: 'no-store' }),
+        fetch(`/api/classes/my?ts=${requestKey}`, { cache: 'no-store' }),
+        fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' }),
+      ]);
 
-    const classJson = await classRes.json();
-    const myJson = await myRes.json();
-    const profileJson = (await profileRes.json().catch(() => null)) as FamilyProfileResponse | null;
+      const classJson = await classRes.json();
+      const myJson = await myRes.json();
+      const profileJson = (await profileRes.json().catch(() => null)) as FamilyProfileResponse | null;
 
-    if (!classRes.ok || !classJson.ok) {
-      setMessage(classJson.error ?? 'Failed to load classes.');
-      setLoading(false);
-      return;
-    }
+      if (profileRes.status !== 401 && (!profileRes.ok || !profileJson?.ok)) {
+        throw new Error(profileJson?.error ?? 'Unable to load your family profile. Please reload the page.');
+      }
 
-    if (!myRes.ok || !myJson.ok) {
-      if (myRes.status === 401) {
-        setMyItems([]);
-      } else {
-        setMessage(myJson.error ?? 'Failed to load my classes.');
+      if (!classRes.ok || !classJson.ok) {
+        setMessage(classJson.error ?? 'Failed to load classes.');
         setLoading(false);
         return;
       }
-    }
 
-    const loadedClasses = (classJson.items ?? []) as ClassItem[];
-    setClasses(loadedClasses);
-    setMyItems(myJson.items ?? []);
+      if (!myRes.ok || !myJson.ok) {
+        if (myRes.status === 401) {
+          setMyItems([]);
+        } else {
+          setMessage(myJson.error ?? 'Failed to load my classes.');
+          setLoading(false);
+          return;
+        }
+      }
 
-    const authenticated = profileRes.ok && profileJson?.ok;
-    setIsAuthenticated(Boolean(authenticated));
-    if (!authenticated) {
-      setPeople([]);
-      setSelectedPersonId('');
+      const loadedClasses = (classJson.items ?? []) as ClassItem[];
+      setClasses(loadedClasses);
+      setMyItems(myJson.items ?? []);
+
+      const authenticated = profileRes.ok && profileJson?.ok;
+      setIsAuthenticated(Boolean(authenticated));
+      if (!authenticated) {
+        setPeople([]);
+        setSelectedPersonId('');
+        setLoading(false);
+        return;
+      }
+
+      if (profileJson?.guardian) {
+        setGuardianFirstName((prev) => prev || profileJson.guardian?.first_name || '');
+        setGuardianLastName((prev) => prev || profileJson.guardian?.last_name || '');
+      }
+
+      const casted = (profileJson?.children ?? []) as Person[];
+      setPeople(casted);
+      if (casted[0]?.id) setSelectedPersonId((prev) => prev || casted[0].id);
+
       setLoading(false);
-      return;
+    } catch (error) {
+      if (showLoading) {
+        const errorMessage = error instanceof Error ? error.message : 'Unable to load classes. Please reload the page.';
+        setMessage(errorMessage);
+        setToast({ message: errorMessage, tone: 'error' });
+      }
+    } finally {
+      if (showLoading) setLoading(false);
     }
-
-    if (profileJson?.guardian) {
-      setGuardianFirstName((prev) => prev || profileJson.guardian?.first_name || '');
-      setGuardianLastName((prev) => prev || profileJson.guardian?.last_name || '');
-    }
-
-    const casted = (profileJson?.children ?? []) as Person[];
-    setPeople(casted);
-    if (casted[0]?.id) setSelectedPersonId((prev) => prev || casted[0].id);
-
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -478,23 +505,24 @@ export default function ClassSchedulePage() {
     const firstName = guardianFirstName.trim();
     const lastName = guardianLastName.trim();
     if (!firstName || !lastName) {
-      setMessage('Please enter the parent/guardian first and last name.');
-      return null;
+      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then press Pre-register again.');
     }
     return { guardian_first_name: firstName, guardian_last_name: lastName };
   };
 
   const ensureSelectedChild = async () => {
-    if (selectedPersonId && !isAddingAdditionalChild && !selectedPersonNeedsAge) return selectedPersonId;
+    if (selectedPerson && !selectedPersonNeedsAge) return selectedPerson;
+    const name = quickChildName.trim();
+    if (!selectedPerson && !name) {
+      registrationFieldError('class-child-name', 'Please enter your child’s name above, then press Pre-register again.');
+    }
     const ageValue = parsedQuickAge();
     if (ageValue == null) {
-      setMessage('Please enter your child’s age in years or months, not their birthday.');
-      return null;
+      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then press Pre-register again.');
     }
 
     if (selectedPersonId && !isAddingAdditionalChild && selectedPersonNeedsAge) {
       const guardian = guardianPayload();
-      if (!guardian) return null;
       setCreatingChild(true);
       const res = await fetch('/api/family/children', {
         method: 'PATCH',
@@ -505,24 +533,17 @@ export default function ClassSchedulePage() {
       setCreatingChild(false);
 
       if (!res.ok || !json?.ok || !json.child?.id) {
-        setMessage(json?.error ?? 'Could not save your child’s age yet.');
-        return null;
+        throw new Error(json?.error ?? 'Could not save your child’s age yet. Please try again.');
       }
 
       const updatedChild = json.child as Person;
       setPeople((current) => current.map((person) => person.id === updatedChild.id ? updatedChild : person));
       setQuickChildAge('');
       setQuickChildAgeUnit('years');
-      return selectedPersonId;
+      return updatedChild;
     }
 
-    const name = quickChildName.trim();
-    if (!name) {
-      setMessage('Please enter your child’s name first.');
-      return null;
-    }
     const guardian = guardianPayload();
-    if (!guardian) return null;
 
     setCreatingChild(true);
     const res = await fetch('/api/family/children', {
@@ -534,8 +555,7 @@ export default function ClassSchedulePage() {
     setCreatingChild(false);
 
     if (!res.ok || !json?.ok || !json.child?.id) {
-      setMessage(json?.error ?? 'Could not save your child yet.');
-      return null;
+      throw new Error(json?.error ?? 'Could not save your child yet. Please try again.');
     }
 
     setPeople((current) => [...current, json.child as Person]);
@@ -543,75 +563,86 @@ export default function ClassSchedulePage() {
     setQuickChildName('');
     setQuickChildAge('');
     setQuickChildAgeUnit('years');
-    return json.child.id;
+    return json.child;
   };
 
   const preRegisterClass = async (classId: string) => {
+    if (registrationInFlightRef.current) return;
     if (!isAuthenticated) {
-      sessionStorage.setItem('post_login_redirect', '/landing/classschedule');
-      window.location.assign(`/login?mode=new&next=${encodeURIComponent('/landing/classschedule')}`);
+      const next = `/landing/classschedule?class=${encodeURIComponent(classId)}`;
+      sessionStorage.setItem('post_login_redirect', next);
+      window.location.assign(`/login?mode=new&next=${encodeURIComponent(next)}`);
       return;
     }
-    const guardian = guardianPayload();
-    if (!guardian) return;
-    const personId = await ensureSelectedChild();
-    if (!personId) {
-      return;
-    }
-
+    registrationInFlightRef.current = true;
     setRegisteringClassId(classId);
+    setRegistrationFeedback(null);
     setMessage(null);
 
-    const res = await fetch('/api/classes/register', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ class_id: classId, person_id: personId, ...guardian }),
-    });
-    const json = await res.json();
-    setRegisteringClassId(null);
+    try {
+      const guardian = guardianPayload();
+      const registeredPerson = await ensureSelectedChild();
+      const personId = registeredPerson.id;
+      const res = await fetch('/api/classes/register', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ class_id: classId, person_id: personId, ...guardian }),
+      });
+      const json = await res.json().catch(() => null);
 
-    if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Pre-registration failed.');
-      return;
-    }
+      if (!res.ok || !json?.ok) {
+        throw new Error(res.status === 401 ? 'Your session has expired. Please sign in again.' : json?.error ?? 'Pre-registration could not be saved. Please try again.');
+      }
 
-    const emailFailed = json.email && (!json.email.ok || json.email.skipped);
-    const emailPending = Boolean(json.email_pending);
-    const registeredClass = classes.find((item) => item.id === classId) ?? null;
-    const registeredPerson = people.find((person) => person.id === personId) ?? null;
-    const optimisticStatus: RegistrationItem['status'] = json.status === 'waitlist' ? 'waitlist' : 'scheduled';
-    if (json.id && registeredClass && registeredPerson) {
-      const optimisticItem: RegistrationItem = {
-        id: json.id,
-        person_id: personId,
-        status: optimisticStatus,
-        attendance_status: 'unknown',
-        attendance_display_status: optimisticStatus === 'waitlist' ? 'waitlist' : 'upcoming',
-        attendance_marked_at: null,
-        person_name: `${registeredPerson.first_name} ${registeredPerson.last_name ?? ''}`.trim(),
-        created_at: new Date().toISOString(),
-        customer_favorite: false,
-        customer_note: null,
-        customer_note_updated_at: null,
-        class: {
-          id: registeredClass.id,
-          title: registeredClass.title,
-          start_time: registeredClass.start_time,
-          end_time: registeredClass.end_time,
-          category: registeredClass.category,
-          status: 'scheduled',
-        },
-      };
-      setMyItems((current) => [...current.filter((item) => item.id !== json.id), optimisticItem]);
+      const emailFailed = json.email && (!json.email.ok || json.email.skipped);
+      const emailPending = Boolean(json.email_pending);
+      const registeredClass = classes.find((item) => item.id === classId) ?? null;
+      const optimisticStatus: RegistrationItem['status'] = json.status === 'waitlist' ? 'waitlist' : 'scheduled';
+      if (json.id && registeredClass && registeredPerson) {
+        const optimisticItem: RegistrationItem = {
+          id: json.id,
+          person_id: personId,
+          status: optimisticStatus,
+          attendance_status: 'unknown',
+          attendance_display_status: optimisticStatus === 'waitlist' ? 'waitlist' : 'upcoming',
+          attendance_marked_at: null,
+          person_name: `${registeredPerson.first_name} ${registeredPerson.last_name ?? ''}`.trim(),
+          created_at: new Date().toISOString(),
+          customer_favorite: false,
+          customer_note: null,
+          customer_note_updated_at: null,
+          class: {
+            id: registeredClass.id,
+            title: registeredClass.title,
+            start_time: registeredClass.start_time,
+            end_time: registeredClass.end_time,
+            category: registeredClass.category,
+            status: 'scheduled',
+          },
+        };
+        setMyItems((current) => [...current.filter((item) => item.id !== json.id), optimisticItem]);
+      }
+      const doneMessage = json.already_registered
+        ? 'Your child is already pre-registered for this class.'
+        : emailPending
+        ? 'Pre-registration received. A confirmation email will arrive shortly.'
+        : emailFailed
+          ? 'Pre-registration received, but we could not send the confirmation email yet.'
+          : 'Pre-registration received. Confirmation email sent.';
+      setMessage(`${doneMessage} ${CLASS_PRE_REGISTRATION_NOTE}`);
+      setRegistrationFeedback({ classId, message: `${doneMessage} ${CLASS_PRE_REGISTRATION_NOTE}`, tone: emailFailed ? 'warning' : 'success' });
+      setToast({ message: 'Pre-registration received.', tone: emailFailed ? 'warning' : 'success' });
+      void load(false);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Pre-registration could not be saved. Please try again.';
+      setMessage(errorMessage);
+      setRegistrationFeedback({ classId, message: errorMessage, tone: 'error' });
+      setToast({ message: errorMessage, tone: 'error' });
+    } finally {
+      setCreatingChild(false);
+      setRegisteringClassId(null);
+      registrationInFlightRef.current = false;
     }
-    const doneMessage = emailPending
-      ? 'Pre-registration received. A confirmation email will arrive shortly.'
-      : emailFailed
-        ? 'Pre-registration received, but we could not send the confirmation email yet.'
-        : 'Pre-registration received. Confirmation email sent.';
-    setMessage(`${doneMessage} ${CLASS_PRE_REGISTRATION_NOTE}`);
-    setToast({ message: 'Pre-registration received.', tone: emailFailed ? 'warning' : 'success' });
-    void load(false);
   };
 
   const cancelRegistration = async (registrationId: string) => {
@@ -747,6 +778,7 @@ export default function ClassSchedulePage() {
             <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
               Parent first name
               <input
+                id="class-guardian-first-name"
                 value={guardianFirstName}
                 onChange={(e) => setGuardianFirstName(e.target.value)}
                 placeholder="First name"
@@ -756,6 +788,7 @@ export default function ClassSchedulePage() {
             <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
               Parent last name
               <input
+                id="class-guardian-last-name"
                 value={guardianLastName}
                 onChange={(e) => setGuardianLastName(e.target.value)}
                 placeholder="Last name"
@@ -778,6 +811,7 @@ export default function ClassSchedulePage() {
                 <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
                   Additional child’s name
                   <input
+                    id="class-child-name"
                     value={quickChildName}
                     onChange={(e) => setQuickChildName(e.target.value)}
                     placeholder="Child name"
@@ -788,6 +822,7 @@ export default function ClassSchedulePage() {
                   Child age
                   <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <input
+                      id="class-child-age"
                       value={quickChildAge}
                       onChange={(e) => setQuickChildAge(e.target.value)}
                       type="number"
@@ -813,6 +848,7 @@ export default function ClassSchedulePage() {
                 Child age
                 <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <input
+                    id="class-child-age"
                     value={quickChildAge}
                     onChange={(e) => setQuickChildAge(e.target.value)}
                     type="number"
@@ -839,6 +875,7 @@ export default function ClassSchedulePage() {
             <label style={{ display: 'grid', gap: 6, color: '#6f628d', fontWeight: 700 }}>
               Child’s name
               <input
+                id="class-child-name"
                 value={quickChildName}
                 onChange={(e) => setQuickChildName(e.target.value)}
                 placeholder="Child name"
@@ -849,6 +886,7 @@ export default function ClassSchedulePage() {
               Child age
               <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <input
+                  id="class-child-age"
                   value={quickChildAge}
                   onChange={(e) => setQuickChildAge(e.target.value)}
                   type="number"
@@ -936,10 +974,15 @@ export default function ClassSchedulePage() {
                     <div style={{ minWidth: 220, flex: '1 1 240px', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
                       {classSizeLabel(target.capacity)}
                     </div>
-                    <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId === target.id || creatingChild || alreadyBooked}>
+                    <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
                       {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? 'Pre-registered' : 'Pre-register'}
                     </button>
                   </div>
+                  {registrationFeedback?.classId === target.id && (
+                    <p role={registrationFeedback.tone === 'error' ? 'alert' : 'status'} style={{ margin: '12px 0 0', padding: 12, borderRadius: 10, background: registrationFeedback.tone === 'error' ? '#fff5f8' : '#f3ebff', color: registrationFeedback.tone === 'error' ? '#8a3f6b' : '#4f3f82', lineHeight: 1.6 }}>
+                      {registrationFeedback.message}
+                    </p>
+                  )}
                 </div>
               );
             })}
