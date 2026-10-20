@@ -9,9 +9,11 @@ export function isStaffRole(role: string | null | undefined): role is AppRole {
 }
 
 export async function getCurrentUserRole() {
-  const kiosk = await getKioskIdentity();
   const server = createServerSupabaseClient();
-  const { data: { user: personalUser } } = await server.auth.getUser();
+  const [kiosk, { data: { user: personalUser } }] = await Promise.all([
+    getKioskIdentity(),
+    server.auth.getUser(),
+  ]);
   const admin = createAdminSupabaseClient();
   const user = kiosk ? (await admin.auth.admin.getUserById(kiosk.user_id)).data.user : personalUser;
 
@@ -19,9 +21,10 @@ export async function getCurrentUserRole() {
     return { user: null, role: null as string | null, roles: [] as string[], isKiosk: false };
   }
 
-  const { data: roleRow } = await admin.from('roles').select('role').eq('id', user.id).maybeSingle();
-
-  const { data: extraRoles, error } = await admin.from('user_roles').select('role').eq('user_id', user.id);
+  const [{ data: roleRow }, { data: extraRoles, error }] = await Promise.all([
+    admin.from('roles').select('role').eq('id', user.id).maybeSingle(),
+    admin.from('user_roles').select('role').eq('user_id', user.id),
+  ]);
   if (error && error.code !== '42P01' && error.code !== 'PGRST205') throw new Error('Unable to load account permissions.');
   let roles = [...new Set([roleRow?.role, ...(extraRoles ?? []).map(row => row.role)].filter((value): value is string => Boolean(value)))];
   if (kiosk) {

@@ -1,6 +1,3 @@
-import { earliestClassTime } from '@/lib/class-config';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-
 export type PublicClassItem = {
   id: string;
   title: string;
@@ -16,18 +13,12 @@ export type PublicClassItem = {
   schedule_label: string | null;
   capacity: number | null;
   price_cents: number;
-  booked_count: number;
-  seats_left: number | null;
-  waitlist_offer_pending?: boolean;
-  waitlist_count?: number;
 };
 
 export type PublicClassSeries = PublicClassItem & {
   occurrences: PublicClassItem[];
 };
 
-const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
-const CLASS_SELECT_BASE = 'id,title,category,start_time,end_time,capacity,price_cents,status';
 const CLASS_TIME_ZONE = 'America/New_York';
 const WEEKDAY_VALUES = new Map([
   ['Sun', 0],
@@ -39,10 +30,6 @@ const WEEKDAY_VALUES = new Map([
   ['Sat', 6],
 ]);
 
-type ClassRow = Omit<PublicClassItem, 'booked_count' | 'seats_left' | 'waitlist_offer_pending' | 'waitlist_count'> & {
-  status: string;
-};
-
 export const WEEKDAY_COLUMNS = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -50,10 +37,6 @@ export const WEEKDAY_COLUMNS = [
   { value: 4, label: 'Thu' },
   { value: 5, label: 'Fri' },
 ];
-
-function isMissingClassDetailColumn(message: string) {
-  return /column .* does not exist|Could not find the '.*' column/i.test(message);
-}
 
 export function publicClassSeriesKey(item: Pick<PublicClassItem, 'title' | 'category' | 'schedule_label' | 'duration_minutes' | 'capacity' | 'price_cents'>) {
   return [
@@ -162,82 +145,4 @@ export function compactCaregiverLabel(value: string | null) {
   if (!value) return 'Participation TBA';
   if (value.toLowerCase().includes('drop')) return 'Drop-off';
   return value;
-}
-
-async function selectClasses(limit: number) {
-  const admin = createAdminSupabaseClient();
-  const primary = await admin
-    .from('classes')
-    .select(CLASS_SELECT)
-    .gte('start_time', earliestClassTime())
-    .eq('status', 'scheduled')
-    .order('start_time', { ascending: true })
-    .limit(limit);
-
-  if (!primary.error) return (primary.data ?? []) as ClassRow[];
-  if (!isMissingClassDetailColumn(primary.error.message)) throw primary.error;
-
-  const fallback = await admin
-    .from('classes')
-    .select(CLASS_SELECT_BASE)
-    .gte('start_time', earliestClassTime())
-    .eq('status', 'scheduled')
-    .order('start_time', { ascending: true })
-    .limit(limit);
-
-  if (fallback.error) throw fallback.error;
-  return (fallback.data ?? []) as ClassRow[];
-}
-
-export async function getPublicClasses(limit = 80): Promise<PublicClassItem[]> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
-
-  try {
-    const admin = createAdminSupabaseClient();
-    const classes = await selectClasses(limit);
-    const ids = classes.map((item) => item.id);
-    const countsByClass = new Map<string, number>();
-    const waitlistCountsByClass = new Map<string, number>();
-    const waitlistOfferPendingByClass = new Map<string, boolean>();
-
-    if (ids.length > 0) {
-      const { data: regs } = await admin
-        .from('class_registrations')
-        .select('class_id,status,waitlist_offer_expires_at')
-        .in('class_id', ids);
-      const nowIso = new Date().toISOString();
-
-      (regs ?? []).forEach((row) => {
-        if (row.status === 'scheduled' || row.status === 'attended') {
-          countsByClass.set(row.class_id, (countsByClass.get(row.class_id) ?? 0) + 1);
-        }
-        if (row.status === 'waitlist') {
-          waitlistCountsByClass.set(row.class_id, (waitlistCountsByClass.get(row.class_id) ?? 0) + 1);
-          if (typeof row.waitlist_offer_expires_at === 'string' && row.waitlist_offer_expires_at > nowIso) {
-            waitlistOfferPendingByClass.set(row.class_id, true);
-          }
-        }
-      });
-    }
-
-    return classes.map((item) => {
-      const booked = countsByClass.get(item.id) ?? 0;
-      return {
-        ...item,
-        duration_minutes: item.duration_minutes ?? Math.max(Math.round((new Date(item.end_time).getTime() - new Date(item.start_time).getTime()) / 60_000), 1),
-        instructor_name: item.instructor_name ?? null,
-        description: item.description ?? null,
-        age_range: item.age_range ?? null,
-        caregiver_participation: item.caregiver_participation ?? null,
-        schedule_note: item.schedule_note ?? null,
-        schedule_label: item.schedule_label ?? null,
-        booked_count: booked,
-        seats_left: item.capacity == null ? null : Math.max(item.capacity - booked, 0),
-        waitlist_offer_pending: waitlistOfferPendingByClass.get(item.id) ?? false,
-        waitlist_count: waitlistCountsByClass.get(item.id) ?? 0,
-      };
-    });
-  } catch {
-    return [];
-  }
 }

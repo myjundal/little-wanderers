@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { CLASS_START_NOTE } from '@/lib/class-config';
 import PublicUpcomingClasses from '@/components/classes/PublicUpcomingClasses';
 import PreRegistrationNotice from '@/components/classes/PreRegistrationNotice';
+import { getPublicClasses } from '@/lib/public-class-data';
 
 export const metadata = {
   title: 'Classes & Programs — Little Wanderers',
@@ -20,7 +21,8 @@ const pageStyle = {
   boxShadow: '0 24px 50px rgba(123, 106, 168, 0.1)',
 } satisfies CSSProperties;
 
-export default function ClassesPage() {
+export default async function ClassesPage() {
+  const classes = await getPublicClasses(60);
   return (
     <main style={pageStyle}>
       <section style={{ marginBottom: 24 }}>
@@ -36,7 +38,7 @@ export default function ClassesPage() {
         <p style={{ color: '#6f628d', fontWeight: 700 }}>{CLASS_START_NOTE}</p>
         <PreRegistrationNotice />
       </section>
-      <PublicUpcomingClasses />
+      <PublicUpcomingClasses classes={classes} />
     </main>
   );
 }

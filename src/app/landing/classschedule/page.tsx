@@ -331,8 +331,8 @@ export default function ClassSchedulePage() {
   useEffect(() => {
     load();
     const interval = window.setInterval(() => {
-      load(false);
-    }, 30000);
+      if (document.visibilityState === 'visible') void load(false);
+    }, 60000);
 
     return () => window.clearInterval(interval);
   }, [load]);

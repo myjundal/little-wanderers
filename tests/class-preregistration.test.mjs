@@ -122,6 +122,8 @@ test('confirmation email uses pre-registration and payment terms for both stored
 function registrationApi({ existing = null, email = async () => ({ ok: true, id: 'email' }) } = {}) {
   const inserts = [];
   const emails = [];
+  const background = [];
+  const warnings = [];
   const admin = { from(table) {
     let inserted = false;
     const query = {
@@ -139,6 +141,7 @@ function registrationApi({ existing = null, email = async () => ({ ok: true, id:
   } };
   const { POST } = loadModule('src/app/api/classes/register/route.ts', {
     '@/lib/signup-policy': { isWanderlistSignupWindow: () => true },
+    '@vercel/functions': { waitUntil: task => { background.push(task); } },
     '@/lib/class-config': classConfig,
     '@supabase/supabase-js': { createClient: () => admin },
     '@/lib/supabase/server': { createServerSupabaseClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'parent', email: 'parent@example.com' } } }) } }) },
@@ -155,9 +158,9 @@ function registrationApi({ existing = null, email = async () => ({ ok: true, id:
       ensureGuardianProfile: async () => {}, getPrimaryGuardianProfile: async () => null,
       parseGuardianName: () => ({ firstName: 'Parent', lastName: 'Family' }),
     },
-    '@/lib/logger': { logger: { warn() {}, error() {} } },
+    '@/lib/logger': { logger: { warn(message) { warnings.push(message); }, error() {} } },
   }, { process: { env: {} } });
-  return { inserts, emails, post: () => POST({ json: async () => ({ class_id: 'painting', person_id: 'child' }) }) };
+  return { inserts, emails, background, warnings, post: () => POST({ json: async () => ({ class_id: 'painting', person_id: 'child' }) }) };
 }
 
 test('retrying a saved request returns the existing pre-registration without another insert or email', async () => {
@@ -171,28 +174,32 @@ test('retrying a saved request returns the existing pre-registration without ano
   assert.equal(api.emails.length, 0);
 });
 
-test('the request stays alive until its confirmation email finishes', async () => {
+test('saving responds before email delivery while Vercel tracks the background work', async () => {
   let release;
   let completed = false;
   const api = registrationApi({ email: () => new Promise(resolve => { release = resolve; }) });
   const request = api.post().then(response => { completed = true; return response; });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(completed, false);
+  assert.equal(completed, true);
   assert.equal(api.inserts.length, 1);
-  release({ ok: true, id: 'email' });
   const result = await (await request).json();
   assert.equal(result.ok, true);
-  assert.equal(result.email.ok, true);
+  assert.equal(result.email_pending, true);
+  assert.equal(api.background.length, 1);
+  release({ ok: true, id: 'email' });
+  await Promise.all(api.background);
   assert.equal(api.emails[0][2], 'parent@example.com');
 });
 
-test('email delivery failure reports a warning without losing the saved pre-registration', async () => {
+test('background email delivery failure is logged without losing the saved pre-registration', async () => {
   const api = registrationApi({ email: async () => { throw new Error('Email provider unavailable'); } });
   const response = await api.post();
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.ok, true);
   assert.equal(result.id, 'registration');
-  assert.equal(result.email.ok, false);
+  assert.equal(result.email_pending, true);
+  await Promise.all(api.background);
+  assert.equal(api.warnings[0].action, 'class.registration_email_not_sent');
   assert.equal(api.inserts.length, 1);
 });

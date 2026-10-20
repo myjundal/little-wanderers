@@ -1,5 +1,6 @@
 import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { unstable_cache } from 'next/cache';
 
 export const WAITLIST_COUNT_FALLBACK = 370;
 
@@ -34,7 +35,7 @@ function fallbackWaitlistCount() {
   );
 }
 
-export async function getWaitlistCount(): Promise<WaitlistCount> {
+async function loadWaitlistCount(): Promise<WaitlistCount> {
   const fallback = fallbackWaitlistCount();
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -43,7 +44,8 @@ export async function getWaitlistCount(): Promise<WaitlistCount> {
       const { count, error } = await admin
         .from('waitlist_entries')
         .select('id', { count: 'exact', head: true })
-        .lt('created_at', WANDERLIST_CUTOFF);
+        .lt('created_at', WANDERLIST_CUTOFF)
+        .abortSignal(AbortSignal.timeout(1500));
 
       if (!error) return toWaitlistCount(count) ?? fallback;
     } catch {
@@ -59,6 +61,7 @@ export async function getWaitlistCount(): Promise<WaitlistCount> {
     const response = await fetch(endpoint, {
       headers: { accept: 'application/json' },
       next: { revalidate: 60 },
+      signal: AbortSignal.timeout(1500),
     });
 
     if (!response.ok) return fallback;
@@ -68,4 +71,14 @@ export async function getWaitlistCount(): Promise<WaitlistCount> {
   } catch {
     return fallback;
   }
+}
+
+const readWaitlistCount = unstable_cache(loadWaitlistCount, ['public-wanderlist-count-v1'], { revalidate: 60 });
+let pendingCount: Promise<WaitlistCount> | null = null;
+
+export function getWaitlistCount(): Promise<WaitlistCount> {
+  if (!pendingCount) {
+    pendingCount = readWaitlistCount().finally(() => { pendingCount = null; });
+  }
+  return pendingCount;
 }

@@ -5,6 +5,7 @@ import GoogleAnalytics from '@/components/GoogleAnalytics';
 import PwaBoot from '@/components/pwa/PwaBoot';
 import AddToHomeScreenPrompt from '@/components/pwa/AddToHomeScreenPrompt';
 import NotificationPrompt from '@/components/pwa/NotificationPrompt';
+import { Suspense } from 'react';
 
 const SHOW_INSTALL_PROMPT = true;
 const SHOW_PUSH_PROMPT = false;
@@ -71,7 +72,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${headingFont.variable} ${bodyFont.variable} ${scriptFont.variable}`}>
       <body className="antialiased">
-        <GoogleAnalytics />
+        <Suspense fallback={null}><GoogleAnalytics /></Suspense>
         {children}
         <PwaBoot />
         {SHOW_INSTALL_PROMPT && <AddToHomeScreenPrompt />}
