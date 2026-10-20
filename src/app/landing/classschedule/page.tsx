@@ -1,11 +1,12 @@
 'use client';
 
-import { CLASS_START_NOTE } from '@/lib/class-config';
+import { CLASS_START_NOTE, CLASS_PRE_REGISTRATION_NOTE, classSizeLabel } from '@/lib/class-config';
 import { parseChildAge } from '@/lib/child-age';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import ActionToast from '@/components/ui/ActionToast';
+import PreRegistrationNotice from '@/components/classes/PreRegistrationNotice';
 
 type Person = {
   id: string;
@@ -159,21 +160,6 @@ function classScheduleLabel(item: ClassItem) {
   return item.schedule_note ?? item.schedule_label ?? classDateLabel(item);
 }
 
-function seatsLine(item: ClassItem) {
-  if (item.capacity == null) return 'Seats: Unlimited';
-  if (item.waitlist_offer_pending) return `Seats: ${item.booked_count}/${item.capacity} (waitlist offer pending)`;
-  if ((item.waitlist_count ?? 0) > 0) return `Seats: ${item.booked_count}/${item.capacity} (waitlist: ${item.waitlist_count})`;
-  return `Seats: ${item.booked_count}/${item.capacity} (left: ${item.seats_left ?? 0})`;
-}
-
-function compactSeatsLine(item: ClassItem) {
-  if (item.capacity == null) return 'Unlimited seats';
-  if (item.waitlist_offer_pending || (item.waitlist_count ?? 0) > 0) return 'Waitlist open';
-  const seatsLeft = item.seats_left ?? Math.max(item.capacity - item.booked_count, 0);
-  if (seatsLeft <= 0) return 'Waitlist';
-  return `${seatsLeft}/${item.capacity} seats left`;
-}
-
 function compactCaregiverLabel(value: string | null) {
   if (!value) return 'Participation TBA';
   if (value.toLowerCase().includes('drop')) return 'Drop-off';
@@ -253,7 +239,7 @@ export default function ClassSchedulePage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [savingClassMemoId, setSavingClassMemoId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [historyTab, setHistoryTab] = useState<'upcoming' | 'waitlist' | 'past' | 'cancelled' | 'favorites'>('upcoming');
+  const [historyTab, setHistoryTab] = useState<'upcoming' | 'past' | 'cancelled' | 'favorites'>('upcoming');
   const [historyPersonFilter, setHistoryPersonFilter] = useState<string>('all');
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
 
@@ -353,7 +339,7 @@ export default function ClassSchedulePage() {
           json.error === 'waitlist offer not found' ||
           json.error === 'waitlist offer is no longer available';
         if (!quietAlreadyHandled) {
-          setMessage(json.error ?? 'Could not claim waitlist spot.');
+          setMessage('Could not update your pre-registration. Please try again.');
         }
         setClaimingWaitlist(false);
         return;
@@ -361,7 +347,7 @@ export default function ClassSchedulePage() {
 
       const childName = typeof json.person_name === 'string' && json.person_name.trim() ? json.person_name.trim() : 'Your child';
       setMessage(null);
-      setToast({ message: `${childName} automatically registered.`, tone: 'success' });
+      setToast({ message: `${childName} is pre-registered.`, tone: 'success' });
       setClaimingWaitlist(false);
       await load(false);
     };
@@ -439,14 +425,10 @@ export default function ClassSchedulePage() {
     () => myItems.filter((item) => item.status !== 'cancelled' && item.class?.status !== 'cancelled'),
     [myItems]
   );
-  const waitlistItems = useMemo(
-    () => activeItems.filter((item) => item.status === 'waitlist' || item.attendance_display_status === 'waitlist'),
-    [activeItems]
-  );
   const upcomingHistoryItems = useMemo(
     () =>
       activeItems.filter((item) => {
-        if (item.status === 'waitlist' || item.attendance_display_status === 'waitlist') return false;
+        if (item.status === 'waitlist' || item.attendance_display_status === 'waitlist') return true;
         const startsAt = item.class?.start_time ? new Date(item.class.start_time).getTime() : 0;
         return startsAt > Date.now() || item.attendance_display_status === 'upcoming';
       }),
@@ -471,11 +453,10 @@ export default function ClassSchedulePage() {
   );
   const selectedHistoryItems = useMemo(() => {
     if (historyTab === 'upcoming') return upcomingHistoryItems;
-    if (historyTab === 'waitlist') return waitlistItems;
     if (historyTab === 'past') return pastHistoryItems;
     if (historyTab === 'favorites') return favoriteItems;
     return cancelledItems;
-  }, [cancelledItems, favoriteItems, historyTab, pastHistoryItems, upcomingHistoryItems, waitlistItems]);
+  }, [cancelledItems, favoriteItems, historyTab, pastHistoryItems, upcomingHistoryItems]);
   const visibleHistoryItems = useMemo(
     () => selectedHistoryItems.filter((item) => historyPersonFilter === 'all' || item.person_id === historyPersonFilter),
     [historyPersonFilter, selectedHistoryItems]
@@ -623,20 +604,13 @@ export default function ClassSchedulePage() {
       };
       setMyItems((current) => [...current.filter((item) => item.id !== json.id), optimisticItem]);
     }
-    const doneMessage =
-      emailPending
-        ? json.status === 'waitlist'
-          ? 'Class is full. You are on the waitlist. Confirmation email will arrive shortly.'
-          : 'Pre-registration complete. Confirmation email will arrive shortly.'
-        : emailFailed
-        ? json.status === 'waitlist'
-          ? 'Class is full. You are on the waitlist, but we could not send the confirmation email yet.'
-          : 'Pre-registration complete, but we could not send the confirmation email yet.'
-        : json.status === 'waitlist'
-          ? 'Class is full. You are on the waitlist. Confirmation email sent.'
-          : 'Pre-registration complete. Confirmation email sent.';
-    setMessage(doneMessage);
-    setToast({ message: json.status === 'waitlist' ? 'Waitlist joined.' : 'Pre-registration complete.', tone: emailFailed ? 'warning' : 'success' });
+    const doneMessage = emailPending
+      ? 'Pre-registration received. A confirmation email will arrive shortly.'
+      : emailFailed
+        ? 'Pre-registration received, but we could not send the confirmation email yet.'
+        : 'Pre-registration received. Confirmation email sent.';
+    setMessage(`${doneMessage} ${CLASS_PRE_REGISTRATION_NOTE}`);
+    setToast({ message: 'Pre-registration received.', tone: emailFailed ? 'warning' : 'success' });
     void load(false);
   };
 
@@ -704,11 +678,12 @@ export default function ClassSchedulePage() {
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Pre-registration</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Wanderlist families get first access. Register for available spots or join the waitlist when a class is full.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Wanderlist families get first access to pre-registration. Choose a class below to share your interest.</p>
+      <PreRegistrationNotice />
 
       <p style={{ color: '#6f628d' }}>{CLASS_START_NOTE}</p>
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
-      {claimingWaitlist && <p style={{ marginTop: 12, color: '#5a4a8f' }}>Claiming your waitlist spot...</p>}
+      {claimingWaitlist && <p style={{ marginTop: 12, color: '#5a4a8f' }}>Updating your pre-registration...</p>}
 
       <section className="weeklySchedule" aria-label="Weekly class schedule">
         <div className="weeklyScheduleHeader">
@@ -749,7 +724,7 @@ export default function ClassSchedulePage() {
                             <span className="classPillMeta">
                               {item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}
                             </span>
-                            <span className="classPillSeats">{compactSeatsLine(item)}</span>
+                            <span className="classPillSeats">{classSizeLabel(item.capacity)}</span>
                           </button>
                         );
                       })
@@ -765,7 +740,7 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          Pre-registration is free for now. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
+          No payment is collected for pre-registration. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
         </p>
         {isAuthenticated && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>
@@ -915,8 +890,6 @@ export default function ClassSchedulePage() {
                 : null;
               const target = selectedOccurrence ?? series.occurrences[0] ?? series;
               const isActiveSeries = Boolean(selectedOccurrence);
-              const isFull = target.seats_left != null && target.seats_left <= 0;
-              const shouldWaitlist = isFull || Boolean(target.waitlist_offer_pending) || (target.waitlist_count ?? 0) > 0;
               const existingStatus = selectedPersonId
                 ? series.occurrences
                     .map((occurrence) => registrationStatusByClassAndPerson.get(`${occurrence.id}:${selectedPersonId}`))
@@ -961,10 +934,10 @@ export default function ClassSchedulePage() {
                   {series.description && <p style={{ margin: '6px 0', color: '#666' }}>{series.description}</p>}
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff', marginTop: 12 }}>
                     <div style={{ minWidth: 220, flex: '1 1 240px', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
-                      {seatsLine(target)}
+                      {classSizeLabel(target.capacity)}
                     </div>
                     <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId === target.id || creatingChild || alreadyBooked}>
-                      {registeringClassId === target.id || creatingChild ? 'Saving...' : existingStatus === 'waitlist' ? 'Waitlisted' : alreadyBooked ? 'Registered' : shouldWaitlist ? 'Join waitlist' : 'Pre-register'}
+                      {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? 'Pre-registered' : 'Pre-register'}
                     </button>
                   </div>
                 </div>
@@ -986,10 +959,7 @@ export default function ClassSchedulePage() {
             {people.map((p) => <option key={`hist-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
           </select>
           <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
-            Upcoming ({upcomingHistoryItems.length})
-          </button>
-          <button onClick={() => setHistoryTab('waitlist')} style={historyTab === 'waitlist' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
-            Waitlist ({waitlistItems.length})
+            Pre-registrations ({upcomingHistoryItems.length})
           </button>
           <button onClick={() => setHistoryTab('past')} style={historyTab === 'past' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Past ({pastHistoryItems.length})
@@ -1005,11 +975,7 @@ export default function ClassSchedulePage() {
           <p>Loading…</p>
         ) : historyTab === 'upcoming' && visibleHistoryItems.length === 0 ? (
           <div style={{ border: '1px dashed #ccc', borderRadius: 12, padding: 16 }}>
-            <p>You do not have any class bookings yet.</p>
-          </div>
-        ) : historyTab === 'waitlist' && visibleHistoryItems.length === 0 ? (
-          <div style={{ border: '1px dashed #d8c6f2', borderRadius: 12, padding: 16, background: '#fbf8ff' }}>
-            <p>No waitlisted classes.</p>
+            <p>You do not have any class pre-registrations yet.</p>
           </div>
         ) : historyTab === 'cancelled' && visibleHistoryItems.length === 0 ? (
           <div style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 16, background: '#fff7fc' }}>
@@ -1027,7 +993,7 @@ export default function ClassSchedulePage() {
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status:{' '}
                   <b style={{ textTransform: 'uppercase' }}>
-                    {item.status === 'waitlist' ? 'waitlist' : item.attendance_display_status}
+                    {item.status === 'waitlist' || item.attendance_display_status === 'upcoming' ? 'pre-registered' : item.attendance_display_status}
                   </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>
@@ -1079,7 +1045,7 @@ export default function ClassSchedulePage() {
                 )}
                 {item.status !== 'cancelled' && item.class?.status !== 'cancelled' && (
                   <button onClick={() => cancelRegistration(item.id)} disabled={cancellingId === item.id}>
-                    {cancellingId === item.id ? 'Cancelling...' : item.status === 'waitlist' ? 'Leave Waitlist' : 'Cancel Booking'}
+                    {cancellingId === item.id ? 'Cancelling...' : 'Cancel pre-registration'}
                   </button>
                 )}
               </div>

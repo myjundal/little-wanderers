@@ -1,12 +1,11 @@
 import styles from '@/app/(public)/home.module.css';
-import { CLASS_START_NOTE } from '@/lib/class-config';
+import { CLASS_START_NOTE, CLASS_PRE_REGISTRATION_NOTE, classSizeLabel } from '@/lib/class-config';
 import WaitlistCountCard from '@/components/home/WaitlistCountCard';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
 import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import {
   WEEKDAY_COLUMNS,
   buildGeneralWeeklySchedule,
-  compactSeatsLine,
   getPublicClasses,
   groupPublicClassSeries,
   timeOnlyLabel,
@@ -151,8 +150,9 @@ export default async function HomeComingSoon() {
           <h2>Class pre-registration is open</h2>
           <p>{CLASS_START_NOTE}</p>
           <p>
-            Browse our first small-group classes and reserve a spot with your My Little Wanderers account. New families can sign in by email, add a child&apos;s name and approximate age, then choose a class.
+            Browse our first small-group classes and pre-register with your My Little Wanderers account. New families can sign in by email, add a child&apos;s name and approximate age, then choose a class.
           </p>
+          <p><strong>{CLASS_PRE_REGISTRATION_NOTE}</strong></p>
           {!isAuthenticated && (
             <p className={styles.accessNote}>
               Magic link sign-in will bring you back to class pre-registration.
@@ -186,7 +186,7 @@ export default async function HomeComingSoon() {
                           <span className={styles.classWeekTime}>{timeOnlyLabel(item.start_time)}</span>
                           <span className={styles.classWeekTitle}>{item.title}</span>
                           <span className={styles.classWeekMeta}>
-                            {item.age_range ?? 'Ages TBA'} · {compactSeatsLine(item)}
+                            {item.age_range ?? 'Ages TBA'} · {classSizeLabel(item.capacity)}
                           </span>
                         </a>
                       ))
