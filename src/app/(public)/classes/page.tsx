@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 
 import { CLASS_START_NOTE } from '@/lib/class-config';
 import PublicUpcomingClasses from '@/components/classes/PublicUpcomingClasses';
+import PreRegistrationNotice from '@/components/classes/PreRegistrationNotice';
 
 export const metadata = {
   title: 'Classes & Programs — Little Wanderers',
@@ -33,6 +34,7 @@ export default function ClassesPage() {
           Playful small-group programs for curious kids and families. Browse what is opening first, then use My Little Wanderers to get early access to class pre-registration.
         </p>
         <p style={{ color: '#6f628d', fontWeight: 700 }}>{CLASS_START_NOTE}</p>
+        <PreRegistrationNotice />
       </section>
       <PublicUpcomingClasses />
     </main>

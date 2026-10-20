@@ -158,14 +158,6 @@ export function timeOnlyLabel(iso: string) {
   return date.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }
 
-export function compactSeatsLine(item: Pick<PublicClassItem, 'capacity' | 'seats_left' | 'booked_count' | 'waitlist_offer_pending' | 'waitlist_count'>) {
-  if (item.capacity == null) return 'Open';
-  if (item.waitlist_offer_pending || (item.waitlist_count ?? 0) > 0) return 'Waitlist open';
-  const seatsLeft = item.seats_left ?? Math.max(item.capacity - item.booked_count, 0);
-  if (seatsLeft <= 0) return 'Waitlist';
-  return `${seatsLeft}/${item.capacity} seats left`;
-}
-
 export function compactCaregiverLabel(value: string | null) {
   if (!value) return 'Participation TBA';
   if (value.toLowerCase().includes('drop')) return 'Drop-off';

@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { classSizeLabel } from '@/lib/class-config';
 import {
   WEEKDAY_COLUMNS,
   buildGeneralWeeklySchedule,
   compactCaregiverLabel,
-  compactSeatsLine,
   timeOnlyLabel,
 } from '@/lib/public-classes';
 
@@ -103,10 +103,6 @@ function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function formatCapacity(capacity: number | null) {
-  return capacity == null ? 'Class size varies' : `Max ${capacity} kids`;
-}
-
 function seriesKey(item: ClassItem) {
   return [
     item.title,
@@ -151,13 +147,6 @@ function groupClassSeries(items: ClassItem[]) {
     const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     return { ...seriesBase(sorted), occurrences: sorted } satisfies ClassSeries;
   });
-}
-
-function seatsLine(item: ClassItem) {
-  if (item.capacity == null) return 'Seats: Unlimited';
-  if (item.waitlist_offer_pending) return `Seats: ${item.booked_count}/${item.capacity} (waitlist offer pending)`;
-  if ((item.waitlist_count ?? 0) > 0) return `Seats: ${item.booked_count}/${item.capacity} (waitlist: ${item.waitlist_count})`;
-  return `Seats: ${item.booked_count}/${item.capacity} (left: ${item.seats_left ?? 0})`;
 }
 
 function ScheduleLine({ item }: { item: Pick<ClassItem, 'schedule_note' | 'schedule_label' | 'start_time' | 'end_time'> }) {
@@ -286,7 +275,7 @@ export default function PublicUpcomingClasses() {
                         <strong style={{ color: '#7b5ead', fontSize: 11, lineHeight: 1.1 }}>{timeOnlyLabel(item.start_time)}</strong>
                         <span style={{ minWidth: 0, color: '#4b4360', fontSize: 12, fontWeight: 850, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{item.title}</span>
                         <small style={{ minWidth: 0, color: '#6f628d', fontSize: 10, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{item.age_range ?? 'Ages TBA'} · {compactCaregiverLabel(item.caregiver_participation)}</small>
-                        <em style={{ color: '#7b4d1f', fontSize: 10, fontStyle: 'normal', fontWeight: 850, lineHeight: 1.15 }}>{compactSeatsLine(item)}</em>
+                        <em style={{ color: '#7b4d1f', fontSize: 10, fontStyle: 'normal', fontWeight: 850, lineHeight: 1.15 }}>{classSizeLabel(item.capacity)}</em>
                       </button>
                     ))
                   )}
@@ -358,15 +347,12 @@ export default function PublicUpcomingClasses() {
                 {item.duration_minutes ? `${item.duration_minutes} min` : 'Length TBA'}
               </span>
               <span style={{ borderRadius: 14, border: '1px solid #efe3ff', background: '#fcf9ff', padding: '9px 10px', color: '#6f628d', fontWeight: 700 }}>
-                {formatCapacity(item.capacity)}
+                {classSizeLabel(item.capacity)}
               </span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
               <strong style={{ color: '#7b6aa8' }}>{formatPrice(item.price_cents)}</strong>
-              <span style={{ color: '#8f85a5', fontSize: 13, fontWeight: 700 }}>
-                {seatsLine(item)}
-              </span>
             </div>
             <button
               type="button"
