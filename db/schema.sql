@@ -231,7 +231,7 @@ alter table public.classes
   add constraint classes_status_check check (status in ('scheduled','cancelled','completed'));
 
 alter table public.class_registrations
-  add constraint class_registrations_status_check check (status in ('scheduled','cancelled','waitlist','attended'));
+  add constraint class_registrations_status_check check (status in ('preregistered','scheduled','cancelled','waitlist','attended'));
 
 alter table public.checkins
   add constraint checkins_price_cents_check check (price_cents >= 0);

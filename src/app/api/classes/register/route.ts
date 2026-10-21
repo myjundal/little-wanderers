@@ -4,9 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import {
-  countConfirmedClassRegistrations,
-  countWaitlistRegistrations,
-  hasActiveWaitlistOffer,
   isUserOnWanderlist,
   sendClassRegistrationEmail,
 } from '@/lib/class-waitlist';
@@ -26,7 +23,7 @@ const admin = () =>
 async function notifyClassRegistrationSaved(input: {
   admin: ReturnType<typeof admin>;
   registrationId?: string | null;
-  status: 'scheduled' | 'waitlist';
+  status: 'preregistered';
   householdId: string;
   fallbackEmail?: string | null;
   person: {
@@ -86,7 +83,7 @@ async function notifyClassRegistrationSaved(input: {
 function queueClassRegistrationSideEffects(input: {
   admin: ReturnType<typeof admin>;
   registrationId?: string | null;
-  status: 'scheduled' | 'waitlist';
+  status: 'preregistered';
   householdId: string;
   fallbackEmail?: string | null;
   userId: string;
@@ -195,17 +192,9 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, id: already.id, status: already.status, already_registered: true });
     }
 
-    const [booked, offerPendingResult, waitlistCount] = await Promise.all([
-      countConfirmedClassRegistrations(supa, classId),
-      hasActiveWaitlistOffer(supa, classId),
-      countWaitlistRegistrations(supa, classId),
-      ensureGuardianProfile({ admin: supa, householdId, userId: user.id, email: user.email, firstName: guardianName.firstName, lastName: guardianName.lastName }),
-    ]);
-    const isFull = klass.capacity != null && booked >= klass.capacity;
-    const offerPending = !isFull && offerPendingResult;
-    const waitlistExists = !isFull && waitlistCount > 0;
-    const shouldWaitlist = isFull || offerPending || waitlistExists;
-    const nextStatus: 'scheduled' | 'waitlist' = shouldWaitlist ? 'waitlist' : 'scheduled';
+    await ensureGuardianProfile({ admin: supa, householdId, userId: user.id, email: user.email, firstName: guardianName.firstName, lastName: guardianName.lastName });
+    // Interest only: pre-registration never consumes capacity or establishes waitlist priority.
+    const nextStatus = 'preregistered' as const;
 
     if (already && already.status === 'cancelled') {
       const { error } = await supa

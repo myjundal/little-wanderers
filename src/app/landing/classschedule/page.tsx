@@ -52,9 +52,9 @@ type FamilyProfileResponse = {
 type RegistrationItem = {
   id: string;
   person_id: string;
-  status: 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
+  status: 'preregistered' | 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
   attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
-  attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming' | 'waitlist';
+  attendance_display_status: 'preregistered' | 'attended' | 'cancelled' | 'not_attended' | 'upcoming' | 'waitlist';
   attendance_marked_at: string | null;
   person_name: string;
   created_at: string;
@@ -597,14 +597,14 @@ export default function ClassSchedulePage() {
       const emailFailed = json.email && (!json.email.ok || json.email.skipped);
       const emailPending = Boolean(json.email_pending);
       const registeredClass = classes.find((item) => item.id === classId) ?? null;
-      const optimisticStatus: RegistrationItem['status'] = json.status === 'waitlist' ? 'waitlist' : 'scheduled';
+      const optimisticStatus: RegistrationItem['status'] = json.status === 'preregistered' ? 'preregistered' : json.status === 'waitlist' ? 'waitlist' : 'scheduled';
       if (json.id && registeredClass && registeredPerson) {
         const optimisticItem: RegistrationItem = {
           id: json.id,
           person_id: personId,
           status: optimisticStatus,
           attendance_status: 'unknown',
-          attendance_display_status: optimisticStatus === 'waitlist' ? 'waitlist' : 'upcoming',
+          attendance_display_status: optimisticStatus === 'preregistered' ? 'preregistered' : optimisticStatus === 'waitlist' ? 'waitlist' : 'upcoming',
           attendance_marked_at: null,
           person_name: `${registeredPerson.first_name} ${registeredPerson.last_name ?? ''}`.trim(),
           created_at: new Date().toISOString(),
@@ -1036,7 +1036,7 @@ export default function ClassSchedulePage() {
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status:{' '}
                   <b style={{ textTransform: 'uppercase' }}>
-                    {item.status === 'waitlist' || item.attendance_display_status === 'upcoming' ? 'pre-registered' : item.attendance_display_status}
+                    {item.status === 'preregistered' || item.status === 'waitlist' || item.attendance_display_status === 'upcoming' ? 'pre-registered' : item.attendance_display_status}
                   </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>

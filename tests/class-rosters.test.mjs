@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { loadModule } from './helpers/class-preregistration-harness.mjs';
 
 const rosters = loadModule('src/lib/class-rosters.ts');
-const child = (id, name, status = 'scheduled') => ({ id: `reg-${id}`, personId: id, name, status, householdId: `family-${id}` });
+const child = (id, name, status = 'preregistered') => ({ id: `reg-${id}`, personId: id, name, status, householdId: `family-${id}` });
 const session = (id, registrations, overrides = {}) => ({
   id, title: 'Little Hands, Big Canvases', startTime: '2026-11-12T22:00:00Z', endTime: '2026-11-12T22:45:00Z',
   scheduleLabel: 'Thursdays at 5pm', status: 'scheduled', registrations, ...overrides,
@@ -31,12 +31,12 @@ test('children with identical names stay separate and each class has its own lis
   assert.equal(result.find(group => group.title === 'Baby Music').children.length, 1);
 });
 
-test('both internal pre-registration statuses are included and cancelled records are excluded', () => {
+test('interest and legacy registrations are included and cancelled records are excluded', () => {
   const result = rosters.groupClassRosters([
-    session('active', [child('scheduled', 'Scheduled'), child('waiting', 'Waiting', 'waitlist'), child('cancelled', 'Cancelled', 'cancelled')]),
+    session('active', [child('interest', 'Interest'), child('scheduled', 'Scheduled', 'scheduled'), child('waiting', 'Waiting', 'waitlist'), child('cancelled', 'Cancelled', 'cancelled')]),
     session('cancelled-class', [child('other', 'Other')], { status: 'cancelled' }),
   ]);
-  assert.deepEqual(Array.from(result[0].children, item => item.personId), ['scheduled', 'waiting']);
+  assert.deepEqual(Array.from(result[0].children, item => item.personId), ['interest', 'scheduled', 'waiting']);
   assert.equal(result[0].sessionCount, 1);
 });
 

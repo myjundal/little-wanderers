@@ -74,6 +74,7 @@ function queueClassCancellationSideEffects(input: {
   householdId: string;
   email?: string | null;
   origin: string;
+  releaseSeat: boolean;
 }) {
   void (async () => {
     const [cancellationEmail] = await Promise.all([
@@ -98,6 +99,7 @@ function queueClassCancellationSideEffects(input: {
       });
     }
 
+    if (!input.releaseSeat) return;
     const waitlistOffer = await offerNextWaitlistSpot(input.admin, input.classId, input.origin, {
       email: input.email,
       householdId: input.householdId,
@@ -182,9 +184,10 @@ export async function POST(req: Request) {
       householdId,
       email: user.email,
       origin: new URL(req.url).origin,
+      releaseSeat: reg.status === 'scheduled' || reg.status === 'attended',
     });
 
-    return Response.json({ ok: true, cancellation_email_pending: true, waitlist_offer_pending: true });
+    return Response.json({ ok: true, cancellation_email_pending: true, waitlist_offer_pending: reg.status === 'scheduled' || reg.status === 'attended' });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

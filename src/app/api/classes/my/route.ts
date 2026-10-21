@@ -99,13 +99,15 @@ export async function GET() {
       const classStartMs = cls?.start_time ? new Date(cls.start_time).getTime() : null;
       const isUpcoming = classStartMs != null && classStartMs > now;
 
-      let attendance_display_status: 'attended' | 'cancelled' | 'not_attended' | 'upcoming' | 'waitlist';
-      if (r.status === 'waitlist') {
+      let attendance_display_status: 'preregistered' | 'attended' | 'cancelled' | 'not_attended' | 'upcoming' | 'waitlist';
+      if (r.status === 'cancelled' || cls?.status === 'cancelled' || r.attendance_status === 'cancelled') {
+        attendance_display_status = 'cancelled';
+      } else if (r.status === 'preregistered') {
+        attendance_display_status = 'preregistered';
+      } else if (r.status === 'waitlist') {
         attendance_display_status = 'waitlist';
       } else if (isUpcoming) {
         attendance_display_status = 'upcoming';
-      } else if (r.status === 'cancelled' || cls?.status === 'cancelled' || r.attendance_status === 'cancelled') {
-        attendance_display_status = 'cancelled';
       } else if (r.attendance_status === 'attended' || r.status === 'attended') {
         attendance_display_status = 'attended';
       } else {
