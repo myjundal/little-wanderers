@@ -5,6 +5,41 @@ import { fixtureClass, fixtureChild, loadModule } from './helpers/class-preregis
 const serverMock = { createServerSupabaseClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'parent', email: 'parent@example.com' } } }) } }) };
 const householdsMock = { getLatestHouseholdIdForUser: async () => 'family' };
 
+test('staff checkout promotes existing interest without inserting a duplicate or changing its ID', async () => {
+  for (const status of ['preregistered', 'cancelled', 'scheduled']) {
+    const writes = [];
+    const admin = { from(table) {
+      const query = {
+        select() { return query; }, eq() { return query; }, in() { return query; }, order() { return query; },
+        insert(row) { throw new Error(`Unexpected duplicate insert: ${row.person_id}`); },
+        update(row) { writes.push(row); return query; },
+        maybeSingle: async () => ({ data: { id: 'existing' }, error: null }),
+        then(resolve) { resolve({ data: {
+          people: [{ id: 'guardian', role: 'adult' }, { id: 'child', role: 'child' }],
+          classes: [{ ...fixtureClass, capacity: 1 }],
+          class_registrations: [{ id: 'existing', person_id: 'child', status }],
+        }[table], error: null }); },
+      };
+      return query;
+    } };
+    const api = loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts', {
+      '@/lib/authz': { requireStaffContext: async () => ({ ok: true, admin, role: 'owner', user: { id: 'employee' } }) },
+      crypto: {}, '@/lib/square': {},
+      '@/lib/class-waitlist': { countConfirmedClassRegistrations: async () => status === 'scheduled' ? 1 : 0 },
+      '@/lib/admin-notifications': {}, '@/lib/family-profile': {}, '@/lib/logger': {},
+    });
+    const response = await api.POST({ json: async () => ({ mode: 'finalize', person_id: 'child', items: [{ class_id: 'painting' }] }) }, { params: { id: 'family' } });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).checkout_summary.registration_ids, ['existing']);
+    assert.equal(writes.length, status === 'scheduled' ? 0 : 1);
+    if (writes.length) {
+      assert.equal(writes[0].status, 'scheduled');
+      assert.equal(writes[0].person_id, 'child');
+      assert.equal(writes[0].waitlist_offer_token, null);
+    }
+  }
+});
+
 test('manual pre-registration also ignores capacity and waitlist priority', async () => {
   for (const existing of [null, { id: 'old', status: 'cancelled' }]) {
     const writes = [];
