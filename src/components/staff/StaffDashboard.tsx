@@ -50,7 +50,7 @@ type ClassItem = {
     person_id: string;
     person_name: string;
     household_id: string | null;
-    registration_status: 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
+    registration_status: 'preregistered' | 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
     attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
     attendance_marked_at: string | null;
     attendance_marked_by: string | null;
@@ -409,7 +409,7 @@ function hasCancellationRequest(item: Pick<PartyBookingItem, 'notes' | 'status'>
   return item.status !== 'cancelled' && (item.notes ?? '').includes('[Cancellation requested');
 }
 
-export default function StaffDashboard({ view = 'overview' }: { view?: StaffDashboardView }) {
+export default function StaffDashboard({ view = 'overview', canManageClasses = false }: { view?: StaffDashboardView; canManageClasses?: boolean }) {
   const [occupancy, setOccupancy] = useState<OccupancyState | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [partyBookings, setPartyBookings] = useState<PartyBookingItem[]>([]);
@@ -442,6 +442,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
   }, [classView, focusedSessionId, loading, classWeekStart]);
 
   const openRosterSession = (id: string) => {
+    if (!canManageClasses) return;
     const session = classes.find(item => item.id === id);
     if (!session) return;
     setClassWeekStart(startOfWeek(new Date(session.start_time)));
@@ -836,11 +837,11 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
       )}
 
       {view === 'classes' && <>
-        <ClassViewSwitcher value={classView} onChange={setClassView} />
-        {classView === 'rosters' && <ClassPreRegistrationRosters sessions={rosterSessions} onSessionSelect={openRosterSession} onRefresh={load} showFamilyLinks />}
+        {canManageClasses && <ClassViewSwitcher value={classView} onChange={setClassView} />}
+        {(!canManageClasses || classView === 'rosters') && <ClassPreRegistrationRosters sessions={rosterSessions} onSessionSelect={canManageClasses ? openRosterSession : undefined} onRefresh={load} showFamilyLinks />}
       </>}
 
-      {view === 'classes' && classView === 'sessions' && (
+      {view === 'classes' && canManageClasses && classView === 'sessions' && (
       <section id="class-management" style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
@@ -1145,7 +1146,7 @@ export default function StaffDashboard({ view = 'overview' }: { view?: StaffDash
                             </div>
                             <select
                               value={reg.attendance_status}
-                              disabled={savingAttendanceKey === key}
+                              disabled={savingAttendanceKey === key || reg.registration_status === 'preregistered'}
                               onChange={(e) => updateClassAttendance(item.id, reg.registration_id, e.target.value as 'unknown' | 'attended' | 'cancelled' | 'no_show')}
                               style={{ ...inputStyle, width: '100%' }}
                             >

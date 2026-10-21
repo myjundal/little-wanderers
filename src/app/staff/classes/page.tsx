@@ -19,7 +19,7 @@ export default async function StaffClassesPage() {
         <StaffToolNav active="classes" />
       </div>
 
-      <StaffDashboard view="classes" />
+      <StaffDashboard view="classes" canManageClasses={role === 'owner' || role === 'admin'} />
       {(role === 'owner' || role === 'admin') && <InstructorAssignments />}
     </main>
   );
