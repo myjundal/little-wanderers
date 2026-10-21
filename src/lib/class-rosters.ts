@@ -29,7 +29,7 @@ export type ClassRoster = {
   children: RosterChild[];
 };
 
-const ACTIVE_STATUSES = new Set(['scheduled', 'attended', 'waitlist', 'waitlisted']);
+const ACTIVE_STATUSES = new Set(['preregistered', 'scheduled', 'attended', 'waitlist', 'waitlisted']);
 
 export function groupClassRosters(sessions: RosterSession[], scope: 'upcoming' | 'all' = 'all', now = Date.now()): ClassRoster[] {
   const groups = new Map<string, { roster: ClassRoster; children: Map<string, RosterChild>; sessionIds: Set<string> }>();

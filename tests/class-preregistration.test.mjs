@@ -88,8 +88,8 @@ test('rapid clicks share one registration request and keep the Saving state unti
   assert.equal(page.button().props.children, 'Pre-registered');
 });
 
-test('confirmation email uses pre-registration and payment terms for both stored statuses', async () => {
-  for (const status of ['scheduled', 'waitlist']) {
+test('confirmation email uses pre-registration and payment terms for interest and legacy statuses', async () => {
+  for (const status of ['preregistered', 'scheduled', 'waitlist']) {
     let sent;
     const admin = { from(table) {
       const query = { select() { return query; }, eq() { return query; },
@@ -119,8 +119,9 @@ test('confirmation email uses pre-registration and payment terms for both stored
   }
 });
 
-function registrationApi({ existing = null, email = async () => ({ ok: true, id: 'email' }) } = {}) {
+function registrationApi({ existing = null, klass = fixtureClass, email = async () => ({ ok: true, id: 'email' }) } = {}) {
   const inserts = [];
+  const updates = [];
   const emails = [];
   const background = [];
   const warnings = [];
@@ -129,10 +130,10 @@ function registrationApi({ existing = null, email = async () => ({ ok: true, id:
     const query = {
       select() { return query; }, eq() { return query; },
       insert(row) { inserts.push(row); inserted = true; return query; },
-      update() { return query; },
+      update(row) { updates.push(row); return query; },
       then(resolve) { resolve({ error: null }); },
       maybeSingle: async () => ({ error: null, data: {
-        roles: { role: 'owner' }, people: { ...fixtureChild, role: 'child' }, classes: fixtureClass,
+        roles: { role: 'owner' }, people: { ...fixtureChild, role: 'child' }, classes: klass,
         class_registrations: inserted ? { id: 'registration' } : existing,
         households: { name: 'Family', email: 'parent@example.com' },
       }[table] }),
@@ -148,9 +149,9 @@ function registrationApi({ existing = null, email = async () => ({ ok: true, id:
     '@/lib/households': { getLatestHouseholdIdForUser: async () => 'family' },
     '@/lib/class-waitlist': {
       isUserOnWanderlist: async () => true,
-      countConfirmedClassRegistrations: async () => 7,
-      hasActiveWaitlistOffer: async () => false,
-      countWaitlistRegistrations: async () => 2,
+      countConfirmedClassRegistrations: async () => { throw new Error('Pre-registration must not check capacity'); },
+      hasActiveWaitlistOffer: async () => { throw new Error('Pre-registration must not check seat offers'); },
+      countWaitlistRegistrations: async () => { throw new Error('Pre-registration must not check queue priority'); },
       sendClassRegistrationEmail: async (...args) => { emails.push(args); return email(); },
     },
     '@/lib/admin-notifications': { sendClassRegistrationNotification: async () => ({ ok: true }) },
@@ -160,8 +161,40 @@ function registrationApi({ existing = null, email = async () => ({ ok: true, id:
     },
     '@/lib/logger': { logger: { warn(message) { warnings.push(message); }, error() {} } },
   }, { process: { env: {} } });
-  return { inserts, emails, background, warnings, post: () => POST({ json: async () => ({ class_id: 'painting', person_id: 'child' }) }) };
+  return { inserts, updates, emails, background, warnings, post: () => POST({ json: async () => ({ class_id: 'painting', person_id: 'child' }) }) };
 }
+
+test('pre-registration saves interest regardless of capacity, seat offers, or waitlist priority', async () => {
+  for (const capacity of [0, 1, 7, null]) {
+    const api = registrationApi({ klass: { ...fixtureClass, capacity } });
+    const response = await api.post();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).status, 'preregistered');
+    assert.equal(api.inserts[0].status, 'preregistered');
+    await Promise.all(api.background);
+  }
+});
+
+test('restoring cancelled interest does not reserve a seat and clears stale seat offers', async () => {
+  const api = registrationApi({ existing: { id: 'existing', status: 'cancelled' } });
+  const response = await api.post();
+  const result = await response.json();
+  assert.equal(result.restored, true);
+  assert.equal(result.status, 'preregistered');
+  assert.equal(api.inserts.length, 0);
+  assert.equal(api.updates[0].status, 'preregistered');
+  assert.equal(api.updates[0].waitlist_offer_token, null);
+  await Promise.all(api.background);
+});
+
+test('retrying interest remains idempotent', async () => {
+  const api = registrationApi({ existing: { id: 'existing', status: 'preregistered' } });
+  const result = await (await api.post()).json();
+  assert.equal(result.status, 'preregistered');
+  assert.equal(result.already_registered, true);
+  assert.equal(api.inserts.length, 0);
+  assert.equal(api.emails.length, 0);
+});
 
 test('retrying a saved request returns the existing pre-registration without another insert or email', async () => {
   const api = registrationApi({ existing: { id: 'existing', status: 'waitlist' } });

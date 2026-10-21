@@ -4,8 +4,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 import {
   countConfirmedClassRegistrations,
-  countWaitlistRegistrations,
-  hasActiveWaitlistOffer,
   sendClassRegistrationEmail,
 } from '@/lib/class-waitlist';
 import { sendClassRegistrationNotification } from '@/lib/admin-notifications';
@@ -23,7 +21,7 @@ function getSquareBaseUrl() {
 async function notifyManualClassRegistration(input: {
   admin: SupabaseClient;
   registrationId?: string | null;
-  status: 'scheduled' | 'waitlist';
+  status: 'preregistered';
   householdId: string;
   fallbackEmail?: string | null;
   userId: string;
@@ -156,15 +154,8 @@ export async function POST(req: Request, { params }: Params) {
       return Response.json({ ok: false, error: 'already registered' }, { status: 409 });
     }
 
-    const [booked, offerPendingResult, waitlistCount, { data: household }] = await Promise.all([
-      countConfirmedClassRegistrations(admin, classId),
-      hasActiveWaitlistOffer(admin, classId),
-      countWaitlistRegistrations(admin, classId),
-      admin.from('households').select('email').eq('id', householdId).maybeSingle(),
-    ]);
-    const isFull = klass.capacity != null && booked >= klass.capacity;
-    const shouldWaitlist = isFull || (!isFull && offerPendingResult) || (!isFull && waitlistCount > 0);
-    const nextStatus: 'scheduled' | 'waitlist' = shouldWaitlist ? 'waitlist' : 'scheduled';
+    const { data: household } = await admin.from('households').select('email').eq('id', householdId).maybeSingle();
+    const nextStatus = 'preregistered' as const;
 
     if (already && already.status === 'cancelled') {
       const { error } = await admin
@@ -229,13 +220,9 @@ export async function POST(req: Request, { params }: Params) {
       const klass = classById.get(item.class_id);
       if (!klass || klass.status !== 'scheduled') return Response.json({ ok: false, error: 'class not available' }, { status: 409 });
 
-      const { count } = await admin
-        .from('class_registrations')
-        .select('id', { count: 'exact', head: true })
-        .eq('class_id', item.class_id)
-        .neq('status', 'cancelled');
+      const count = await countConfirmedClassRegistrations(admin, item.class_id);
 
-      if (klass.capacity != null && (count ?? 0) + item.quantity > klass.capacity) {
+      if (klass.capacity != null && count + item.quantity > klass.capacity) {
         return Response.json({ ok: false, error: `${klass.title} does not have enough seats` }, { status: 409 });
       }
 

@@ -56,13 +56,13 @@ test('assignment lookup errors fail closed', async () => {
 test('legacy owners retain attendance access without instructor assignment', async () => {
   assert.equal((await auth({ primary: 'owner' }).api.requireClassAttendanceContext('any')).ok, true);
 });
-function attendance({ registrationClass = 'mine', registrationStatus = 'scheduled', classStatus = 'scheduled' } = {}) {
+function attendance({ registrationClass = 'mine', registrationStatus = 'scheduled', classStatus = 'scheduled', role = 'instructor' } = {}) {
   let writes = 0;
   const admin = { from(table) {
     const query = { select() { return query; }, eq() { return query; }, maybeSingle: async () => ({ data: table === 'classes' ? { status: classStatus } : { id: 'registration', class_id: registrationClass, status: registrationStatus } }), update() { writes++; return query; }, then(resolve) { resolve({ error: null }); } };
     return query;
   } };
-  const api = load('src/app/api/admin/classes/[id]/attendance/route.ts', { '@/lib/authz': { requireClassAttendanceContext: async () => ({ ok: true, role: 'instructor', user: { id: 'teacher' }, admin }) } });
+  const api = load('src/app/api/admin/classes/[id]/attendance/route.ts', { '@/lib/authz': { requireClassAttendanceContext: async () => ({ ok: true, role, user: { id: 'teacher' }, admin }) } });
   return { writes: () => writes, run: status => api.PATCH(new Request('http://localhost', { method: 'PATCH', body: JSON.stringify({ registration_id: 'registration', attendance_status: status }) }), { params: { id: 'mine' } }) };
 }
 test('instructor cannot modify registration from another class', async () => {
@@ -81,6 +81,13 @@ test('instructor can mark registered child present', async () => {
   const handler = attendance();
   assert.equal((await handler.run('attended')).status, 200);
   assert.equal(handler.writes(), 1);
+});
+test('interest cannot be marked attended by instructors, owners or admins', async () => {
+  for (const role of ['instructor', 'owner', 'admin']) {
+    const handler = attendance({ registrationStatus: 'preregistered', role });
+    assert.equal((await handler.run('attended')).status, 409);
+    assert.equal(handler.writes(), 0);
+  }
 });
 
 test('teaching endpoint scopes every class and roster query to assignments and excludes private fields', async () => {

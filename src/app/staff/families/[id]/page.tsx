@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import StaffToolNav from '@/components/staff/StaffToolNav';
+import { classSizeLabel } from '@/lib/class-config';
 import {
   getDefaultPartyBookingSlot,
   getPartyBookingSlotOptionsForDate,
@@ -82,14 +83,6 @@ function waiverLabel(status: string) {
 
 function toIsoLocal(date: string, hourLocal: number) {
   return new Date(`${date}T${String(hourLocal).padStart(2, '0')}:00:00`).toISOString();
-}
-
-function classSeatsLabel(klass: StaffClass) {
-  if (klass.capacity == null) return 'Open';
-  if (klass.waitlist_offer_pending || (klass.waitlist_count ?? 0) > 0) return 'Waitlist open';
-  const seatsLeft = klass.seats_left ?? Math.max(klass.capacity - klass.booked_count, 0);
-  if (seatsLeft <= 0) return 'Waitlist';
-  return `${seatsLeft}/${klass.capacity} seats left`;
 }
 
 function classGroupKey(klass: StaffClass) {
@@ -278,7 +271,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
       return;
     }
     setSelectedClassId(classId);
-    setMessage(json.status === 'waitlist' ? 'Added to the class waitlist.' : 'Class pre-registration saved.');
+    setMessage('Class pre-registration saved.');
     await load();
   };
 
@@ -461,7 +454,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
               <div style={{ border: '1px solid #eadfff', borderRadius: 12, background: '#fbf8ff', padding: 10, color: '#4f3f82', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
                 <p style={{ margin: '0 0 4px', fontWeight: 800 }}>{compactClassGroupLabel(selectedClass)}</p>
                 <p style={{ margin: 0, color: '#6f628d', fontSize: 13 }}>General class pre-registration</p>
-                <p style={{ margin: '4px 0 0', color: '#7b4d1f', fontSize: 13, fontWeight: 800 }}>{classSeatsLabel(selectedClass)}</p>
+                <p style={{ margin: '4px 0 0', color: '#7b4d1f', fontSize: 13, fontWeight: 800 }}>{classSizeLabel(selectedClass.capacity)}</p>
               </div>
               <button
                 type="button"
@@ -476,7 +469,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
                   fontWeight: 800,
                 }}
               >
-                {registeringClassId === selectedClass.id ? 'Saving...' : classSeatsLabel(selectedClass).toLowerCase().includes('waitlist') ? 'Join waitlist' : 'Pre-register'}
+                {registeringClassId === selectedClass.id ? 'Saving...' : 'Pre-register'}
               </button>
             </div>
           ) : null}

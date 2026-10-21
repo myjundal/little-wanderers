@@ -26,6 +26,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!registration || registration.class_id !== params.id) {
       return Response.json({ ok: false, error: 'registration not found for class' }, { status: 404 });
     }
+    if (registration.status === 'preregistered') {
+      return Response.json({ ok: false, error: 'Pre-registration does not confirm a place. Complete official registration before recording attendance.' }, { status: 409 });
+    }
 
     if (context.role !== 'owner' && context.role !== 'admin' && attendanceStatus === 'cancelled') return Response.json({ ok: false, error: 'Instructors can record attendance only.' }, { status: 403 });
 

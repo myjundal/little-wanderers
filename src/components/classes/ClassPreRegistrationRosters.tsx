@@ -18,7 +18,7 @@ function dateLabel(value: string) {
 
 export default function ClassPreRegistrationRosters({ sessions, onSessionSelect, onRefresh, showFamilyLinks = false }: {
   sessions: RosterSession[];
-  onSessionSelect: (id: string) => void;
+  onSessionSelect?: (id: string) => void;
   onRefresh: () => void | Promise<void>;
   showFamilyLinks?: boolean;
 }) {
@@ -31,6 +31,9 @@ export default function ClassPreRegistrationRosters({ sessions, onSessionSelect,
   const total = rosters.reduce((count, roster) => count + roster.children.length, 0);
   const shown = visible.reduce((count, roster) => count + roster.children.length, 0);
   const showAges = sessions.some(session => session.registrations.some(reg => reg.age !== undefined));
+  const renderDate = (date: { sessionId: string; startTime: string }, name: string) => onSessionSelect
+    ? <button type="button" className={styles.dateButton} onClick={() => onSessionSelect(date.sessionId)} aria-label={`Open ${name}’s session on ${dateLabel(date.startTime)}`}>{dateLabel(date.startTime)}</button>
+    : <span>{dateLabel(date.startTime)}</span>;
 
   return <section className={styles.panel} aria-labelledby="preregistration-rosters-heading">
     <div className={styles.heading}>
@@ -59,8 +62,8 @@ export default function ClassPreRegistrationRosters({ sessions, onSessionSelect,
               <td data-label="Child"><strong>{child.name}</strong>{showFamilyLinks && child.householdId && <Link className={styles.familyLink} href={`/staff/families/${encodeURIComponent(child.householdId)}`}>View family</Link>}</td>
               {showAges && <td data-label="Age">{child.age == null ? 'Not provided' : `${child.age} ${child.age === 1 ? 'year' : 'years'}`}</td>}
               <td data-label="Selected dates">{child.dates.length === 1
-                ? <button type="button" className={styles.dateButton} onClick={() => onSessionSelect(child.dates[0].sessionId)} aria-label={`Open ${child.name}’s session on ${dateLabel(child.dates[0].startTime)}`}>{dateLabel(child.dates[0].startTime)}</button>
-                : <details><summary>{child.dates.length} selected dates</summary><ul className={styles.dates}>{child.dates.map(date => <li key={date.sessionId}><button type="button" className={styles.dateButton} onClick={() => onSessionSelect(date.sessionId)}>{dateLabel(date.startTime)}</button></li>)}</ul></details>}
+                ? renderDate(child.dates[0], child.name)
+                : <details><summary>{child.dates.length} selected dates</summary><ul className={styles.dates}>{child.dates.map(date => <li key={date.sessionId}>{renderDate(date, child.name)}</li>)}</ul></details>}
               </td>
             </tr>)}</tbody>
           </table></div>}
