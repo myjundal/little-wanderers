@@ -2,7 +2,7 @@ import { requireOwnerContext } from '@/lib/authz';
 import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 type MembershipBody = {
   action?: 'create_payment_link' | 'finalize_start' | 'pause' | 'end';
@@ -14,7 +14,8 @@ function getSquareBaseUrl() {
   return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
 }
 
-export async function POST(req: Request, { params }: Params) {
+export async function POST(req: Request, { params: pendingParams }: Params) {
+  const params = await pendingParams;
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 
@@ -41,7 +42,7 @@ export async function POST(req: Request, { params }: Params) {
       return Response.json({ ok: false, error: 'Square membership payment is not configured' }, { status: 500 });
     }
 
-    const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
     const redirectUrl = `${base}/staff/families/${householdId}/membership?membership_checkout=success`;
 
     const payload = {

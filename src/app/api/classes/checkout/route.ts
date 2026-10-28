@@ -314,7 +314,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as CheckoutBody;
     const mode = body.mode ?? 'create_payment_link';
 
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();

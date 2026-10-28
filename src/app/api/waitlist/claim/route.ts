@@ -5,7 +5,7 @@ import { claimWaitlistForUser } from '@/lib/waitlist-claim';
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
     error: userError,

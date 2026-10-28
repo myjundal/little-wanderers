@@ -16,12 +16,12 @@ export async function GET() {
   return NextResponse.json({ ok: true, where: '/api/checkout/subscribe' });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   const unavailable = onlinePaymentsUnavailable();
   if (unavailable) return unavailable;
 
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -40,7 +40,7 @@ export async function POST() {
     }
 
     const idempotencyKey = crypto.randomUUID();
-    const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
 
     const body = {
       idempotency_key: idempotencyKey,

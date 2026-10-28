@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'Reschedule is only available for Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
     }
 
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();

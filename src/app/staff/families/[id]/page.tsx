@@ -1,4 +1,5 @@
 'use client';
+import { useParams } from 'next/navigation';
 
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import Link from 'next/link';
@@ -138,7 +139,8 @@ function getPartyBlackoutSlots(): CalendarSlot[] {
   return slots;
 }
 
-export default function StaffFamilyDetailPage({ params }: { params: { id: string } }) {
+export default function StaffFamilyDetailPage() {
+  const params = useParams<{ id: string }>();
   const { role } = useOperatorAccess();
   const canEdit = role === 'owner' || role === 'admin';
   const familyId = params.id;
@@ -348,7 +350,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
   if (!item) return <main style={{ padding: 24 }}>Loading family…</main>;
   const partySlotOptions = getPartyBookingSlotOptionsForDate(partyForm.party_date);
   const waiver = item.waiver ?? { status: item.waiver_status, signed_at: null, expires_at: null, days_until_expiration: null };
-  const waiverUrl = process.env.NEXT_PUBLIC_WAIVER_URL ?? 'https://docs.google.com/forms/d/e/1FAIpQLSeleoqMn8UslZs8RiEg_02Ld4t-5WuIyhhHySoyb_3mCYJMUw/viewform?usp=dialog';
+  const waiverUrl = '/waiver';
 
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box' }}>
@@ -413,7 +415,7 @@ export default function StaffFamilyDetailPage({ params }: { params: { id: string
             {(waiver.status === 'required' || waiver.status === 'expired') && (
               <p style={{ margin: '6px 0 0', color: '#9a3412' }}>
                 A valid waiver is needed.{' '}
-                <a href={waiverUrl} target="_blank" rel="noreferrer">Open waiver form</a>
+                Ask the parent or legal guardian to sign in on their own device and open <a href={waiverUrl} target="_blank" rel="noreferrer">Family Waiver</a>.
               </p>
             )}
           </div>

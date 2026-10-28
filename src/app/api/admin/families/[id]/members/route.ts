@@ -1,6 +1,6 @@
 import { requireOwnerContext } from '@/lib/authz';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 type MemberInput = {
   id?: string;
@@ -10,7 +10,8 @@ type MemberInput = {
   role: 'adult' | 'child';
 };
 
-export async function PUT(req: Request, { params }: Params) {
+export async function PUT(req: Request, { params: pendingParams }: Params) {
+  const params = await pendingParams;
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 

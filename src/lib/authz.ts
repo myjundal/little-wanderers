@@ -9,7 +9,7 @@ export function isStaffRole(role: string | null | undefined): role is AppRole {
 }
 
 export async function getCurrentUserRole() {
-  const server = createServerSupabaseClient();
+  const server = await createServerSupabaseClient();
   const [kiosk, { data: { user: personalUser } }] = await Promise.all([
     getKioskIdentity(),
     server.auth.getUser(),

@@ -13,23 +13,23 @@ export async function GET() {
   const admin = createAdminSupabaseClient();
   const { data, error } = await admin.from('staff_profiles').select('user_id,display_name,pin_hash').eq('active', true).not('pin_hash', 'is', null).order('display_name');
   if (error) return fail('Unable to load staff login. Run the staff timeclock migration.', 503);
-  const { data: { user } } = await createServerSupabaseClient().auth.getUser();
+  const { data: { user } } = await (await createServerSupabaseClient()).auth.getUser();
   const identity = await getCurrentUserRole();
-  return NextResponse.json({ ok: true, paired: true, device_name: device.name, personal_session: Boolean(user), signed_in: identity.isKiosk, has_shift_session: Boolean(cookies().get(KIOSK_SESSION_COOKIE)?.value), staff: (data ?? []).map(row => ({ id: row.user_id, name: row.display_name })) }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ ok: true, paired: true, device_name: device.name, personal_session: Boolean(user), signed_in: identity.isKiosk, has_shift_session: Boolean((await cookies()).get(KIOSK_SESSION_COOKIE)?.value), staff: (data ?? []).map(row => ({ id: row.user_id, name: row.display_name })) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return fail('Invalid request origin.', 403);
-  const deviceToken = cookies().get(KIOSK_DEVICE_COOKIE)?.value;
+  const deviceToken = (await cookies()).get(KIOSK_DEVICE_COOKIE)?.value;
   if (!deviceToken || !await getKioskDevice()) return fail('An owner must register this iPad first.', 403);
   let body: { action?: string; user_id?: string; pin?: string };
   try { body = await req.json(); } catch { return fail('Invalid request.'); }
   if (body.action === 'signout_personal') {
-    const { error } = await createServerSupabaseClient().auth.signOut({ scope: 'local' });
+    const { error } = await (await createServerSupabaseClient()).auth.signOut({ scope: 'local' });
     if (error) return fail('Could not sign out of this device. Please try again.', 503);
     return NextResponse.json({ ok: true });
   }
   if (body.action === 'logout') {
-    const token = cookies().get(KIOSK_SESSION_COOKIE)?.value;
+    const token = (await cookies()).get(KIOSK_SESSION_COOKIE)?.value;
     if (!token) return fail('No iPad shift session was found.', 409);
     const { data, error } = await createAdminSupabaseClient().rpc('staff_kiosk_clock_out', { p_session_hash: staffTokenHash(token), p_device_hash: staffTokenHash(deviceToken) });
     if (error || !data?.ok) return fail(data?.error ?? 'Clock-out failed. Your shift remains open; try again or ask the owner.', 409);
@@ -38,9 +38,9 @@ export async function POST(req: Request) {
     return response;
   }
   if (body.action !== 'login' || !validStaffPin(body.pin) || !body.user_id || !/^[0-9a-f-]{36}$/i.test(body.user_id)) return fail('Choose your name and enter your 4-digit PIN.');
-  const { data: { user: personalUser } } = await createServerSupabaseClient().auth.getUser();
+  const { data: { user: personalUser } } = await (await createServerSupabaseClient()).auth.getUser();
   if (personalUser) return fail('Sign out of the personal account on this iPad before starting a shift.', 409);
-  if (cookies().get(KIOSK_SESSION_COOKIE)?.value && (await getCurrentUserRole()).isKiosk) return fail('The previous employee must log out first.', 409);
+  if ((await cookies()).get(KIOSK_SESSION_COOKIE)?.value && (await getCurrentUserRole()).isKiosk) return fail('The previous employee must log out first.', 409);
   const admin = createAdminSupabaseClient();
   const { data: attempt, error } = await admin.rpc('staff_kiosk_begin_attempt', { p_device_hash: staffTokenHash(deviceToken), p_user_id: body.user_id });
   if (error) return fail('Staff login is not ready. Ask the owner.', 503);

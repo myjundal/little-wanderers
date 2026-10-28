@@ -42,7 +42,8 @@ export const metadata = {
   },
 };
 
-export default function HomePage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function HomePage({ searchParams: pendingSearchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   if (searchParams?.code || searchParams?.token_hash) {
     const params = new URLSearchParams();
     Object.entries(searchParams).forEach(([key, value]) => {

@@ -16,7 +16,7 @@ type Membership = {
 };
 
 export default async function MembershipPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   try {
     const {

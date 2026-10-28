@@ -7,7 +7,7 @@ import { getLatestHouseholdIdForUser } from '@/lib/households';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const server = createServerSupabaseClient();
+  const server = await createServerSupabaseClient();
   const {
     data: { user },
     error: userError,

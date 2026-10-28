@@ -1,9 +1,10 @@
 import { requireStaffContext } from '@/lib/authz';
 import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
-export async function POST(req: Request, { params }: Params) {
+export async function POST(req: Request, { params: pendingParams }: Params) {
+  const params = await pendingParams;
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
 

@@ -146,7 +146,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'class_id and person_id are required' }, { status: 400 });
     }
 
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();

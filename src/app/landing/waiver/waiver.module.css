@@ -1,0 +1,11 @@
+.main { max-width: 780px; margin: 0 auto 100px; padding: 24px; color: #493d61; line-height: 1.65; }
+.main h1 { color: #4f3f82; }
+.main h2 { font-size: 1.2rem; line-height: 1.4; }
+.card, .success { margin: 24px 0; padding: 24px; border: 1px solid #dfd1ee; border-radius: 18px; background: #fffdf9; min-width: 0; }
+.success { background: #effaf0; border-color: #a5d6ac; }
+.check { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; cursor: pointer; }
+.check input { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 3px; accent-color: #65469c; }
+.name { display: block; width: 100%; box-sizing: border-box; margin: 8px 0 20px; padding: 12px; font: inherit; border: 1px solid #b8a2ce; border-radius: 10px; }
+.submit { padding: 14px 22px; border: 0; border-radius: 14px; background: #65469c; color: white; font: inherit; font-weight: 700; }
+.error { color: #8c2330; background: #fff0f1; padding: 12px; border-radius: 10px; }
+@media (max-width: 500px) { .main { padding: 18px; } .card { padding: 18px; } }

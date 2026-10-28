@@ -48,6 +48,7 @@ export default function QRPage() {
     <main style={{ padding: 24 }}>
       <h1>My QR Codes</h1>
       <p>Please scan QR codes for everyone upon entrance, including child and adult.</p>
+      <p>A signed <Link href="/landing/waiver">family waiver</Link> is required before check-in.</p>
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', marginTop: 16 
 }}>
         {people.map(p => (

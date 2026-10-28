@@ -12,7 +12,7 @@ import { sendClassRegistrationNotification } from '@/lib/admin-notifications';
 import { getPrimaryGuardianProfile } from '@/lib/family-profile';
 import { logger } from '@/lib/logger';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 type CheckoutBody = { person_id?: string; items?: Array<{ class_id: string; quantity?: number }>; mode?: 'create_payment_link' | 'finalize' | 'register' };
 
 function getSquareBaseUrl() {
@@ -93,7 +93,8 @@ async function notifyManualClassRegistration(input: {
   });
 }
 
-export async function POST(req: Request, { params }: Params) {
+export async function POST(req: Request, { params: pendingParams }: Params) {
+  const params = await pendingParams;
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
 
@@ -275,7 +276,7 @@ export async function POST(req: Request, { params }: Params) {
     base_price_money: { amount: classById.get(item.class_id)?.price_cents ?? 0, currency: 'USD' },
   }));
 
-  const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
   const redirectParams = new URLSearchParams({
     class_checkout: 'success',
     person_id: personId,
