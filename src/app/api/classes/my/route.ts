@@ -21,7 +21,7 @@ function isMissingColumnError(message: string) {
 
 export async function GET() {
   try {
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();

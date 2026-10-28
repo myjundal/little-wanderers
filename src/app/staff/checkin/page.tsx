@@ -119,7 +119,7 @@ const s = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 }, false);
         ]);
 
         const price = ((data.price_cents ?? 0) / 100).toFixed(2);
-        if (data.membership_applied || (data.price_cents ?? 0) === 0) {
+        if ((data.price_cents ?? 0) === 0) {
           setServerMsg(`Check-in OK ✅ (No payment required)`);
         } else {
           setServerMsg(`Check-in OK ✅ • Price: $${price}`);
@@ -141,7 +141,7 @@ const s = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 }, false);
 
 // 결제가 필요한 방문자만 필터링
   const unpaidVisits = visits.filter(
-    (v) => !v.membership_applied && v.price_cents > 0
+    (v) => v.price_cents > 0
   );
 
 

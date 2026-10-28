@@ -28,7 +28,7 @@ type ReservationPayload = {
 const SOFT_OPENING_END = '2026-11-01T00:00:00-04:00';
 
 async function getCurrentReservationContext() {
-  const server = createServerSupabaseClient();
+  const server = await createServerSupabaseClient();
   const {
     data: { user },
   } = await server.auth.getUser();

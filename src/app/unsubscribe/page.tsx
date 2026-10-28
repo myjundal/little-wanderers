@@ -4,7 +4,8 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Unsubscribe — Little Wanderers' };
 
-export default async function UnsubscribePage({ searchParams }: { searchParams?: { token?: string } }) {
+export default async function UnsubscribePage({ searchParams: pendingSearchParams }: { searchParams?: Promise<{ token?: string }> }) {
+  const searchParams = await pendingSearchParams;
   const token = String(searchParams?.token ?? '').trim();
   let title = 'Unable to unsubscribe';
   let message = 'This unsubscribe link is missing or no longer valid.';

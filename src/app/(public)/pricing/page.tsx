@@ -9,22 +9,22 @@ export const metadata = {
 const openPlayItems = [
   {
     title: 'First child',
-    detail: '7 months+',
-    price: '$15',
+    detail: 'Over 6 months',
+    price: '$16',
   },
   {
     title: 'Sibling',
-    detail: 'If a sibling is an infant, that sibling is free',
+    detail: 'Each additional sibling',
     price: '$10',
   },
   {
     title: '1 infant',
     detail: '0–6 months',
-    price: '$8',
+    price: '$10',
   },
   {
     title: 'Additional adults',
-    detail: 'For grownups beyond the included family adults',
+    detail: '2 adults included per family; $5 for each additional adult',
     price: '$5',
   },
 ];
@@ -120,8 +120,8 @@ export default function PricingPage() {
         </div>
 
         <p style={{ margin: '16px 4px 0', color: '#7e7695', lineHeight: 1.7 }}>
-          Child pricing includes up to 2 adults per family, whether you&apos;re booking the $15 first-child visit or the
-          $8 infant visit.
+          Child pricing includes up to 2 adults per family, whether you&apos;re booking the $16 first-child visit or the
+          $10 infant visit. Each additional sibling is $10, and each additional adult is $5.
         </p>
       </section>
 

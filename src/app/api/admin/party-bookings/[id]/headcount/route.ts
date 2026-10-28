@@ -11,7 +11,8 @@ type Action =
   | 'finalize'
   | 'reopen';
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 

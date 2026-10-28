@@ -10,9 +10,10 @@ function isMissingColumnError(message: string) {
   return /column .* does not exist|Could not find the '.*' column/i.test(message);
 }
 
-export async function PATCH(req: Request, { params }: { params: { registrationId: string } }) {
+export async function PATCH(req: Request, { params: pendingParams }: { params: Promise<{ registrationId: string }> }) {
+  const params = await pendingParams;
   try {
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();

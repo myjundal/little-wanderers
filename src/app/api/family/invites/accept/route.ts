@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 export async function POST(req: Request) {
-  const server = createServerSupabaseClient();
+  const server = await createServerSupabaseClient();
   const {
     data: { user },
   } = await server.auth.getUser();

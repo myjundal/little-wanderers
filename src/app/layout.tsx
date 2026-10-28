@@ -61,8 +61,9 @@ export const metadata = {
     'business:contact_data:region': 'CT',
     'business:contact_data:country_name': 'United States',
   },
-  viewport: 'width=device-width, initial-scale=1',
 };
+
+export const viewport = { width: 'device-width', initialScale: 1 };
 
 export default function RootLayout({
   children,

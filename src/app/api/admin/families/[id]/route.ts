@@ -1,9 +1,10 @@
 import { requireStaffContext } from '@/lib/authz';
-import { getWaiverStatus } from '@/lib/waivers';
+import { getWaiverStatus, WAIVER_STATUS_SELECT } from '@/lib/waivers';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_: Request, { params }: Params) {
+export async function GET(_: Request, { params: pendingParams }: Params) {
+  const params = await pendingParams;
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
 
@@ -14,7 +15,7 @@ export async function GET(_: Request, { params }: Params) {
     admin.from('households').select('id,name,phone,email,city,state,created_at').eq('id', id).maybeSingle(),
     admin.from('people').select('id,first_name,last_name,gender,birthdate,role,created_at').eq('household_id', id).order('created_at', { ascending: true }),
     admin.from('memberships').select('id,renews_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
-    admin.from('waivers').select('id,signed_at,signed_date,waiver_expires_at,created_at').eq('household_id', id).order('created_at', { ascending: false }),
+    admin.from('waivers').select(WAIVER_STATUS_SELECT).eq('household_id', id).order('created_at', { ascending: false }),
     admin.from('party_bookings').select('id,start_time,end_time,status,headcount_expected,notes,created_at').eq('household_id', id).order('start_time', { ascending: true }),
   ]);
 
@@ -34,7 +35,7 @@ export async function GET(_: Request, { params }: Params) {
   const now = new Date().toISOString();
 
   const activeMembership = (memberships ?? []).some((m) => !m.renews_at || m.renews_at > now);
-  const waiverStatus = getWaiverStatus(waivers ?? []);
+  const waiverStatus = getWaiverStatus(waivers ?? [], new Date(), peopleRows.filter(person => person.role === 'child').map(person => person.id));
 
   const normalizedRegs = (classRegs ?? []).map((reg) => ({
     ...reg,

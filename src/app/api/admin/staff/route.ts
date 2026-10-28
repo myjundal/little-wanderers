@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const token = newStaffToken();
     const { error } = await admin.from('staff_kiosk_devices').insert({ name, secret_hash: staffTokenHash(token), registered_by: context.user.id });
     if (error) return fail('Could not register device. Run the staff timeclock migration.', 503);
-    const { error: signoutError } = await createServerSupabaseClient().auth.signOut({ scope: 'local' });
+    const { error: signoutError } = await (await createServerSupabaseClient()).auth.signOut({ scope: 'local' });
     if (signoutError) return fail('Sign out of this personal session before registering the iPad.', 409);
     const response = NextResponse.json({ ok: true, next: '/staff-login' });
     response.cookies.set(KIOSK_DEVICE_COOKIE, token, { ...kioskCookieOptions, maxAge: 90 * 86400 });

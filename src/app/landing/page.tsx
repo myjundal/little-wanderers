@@ -13,7 +13,7 @@ import {
 } from '@/lib/feature-flags';
 import { ensureHouseholdForUser, getLatestHouseholdIdForUser } from '@/lib/households';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
-import { getWaiverStatus, getWaiverStatusLabel, type WaiverStatus } from '@/lib/waivers';
+import { getWaiverStatusLabel, type WaiverStatus, type WaiverStatusDetails } from '@/lib/waivers';
 
 type RecentItem = {
   id: string;
@@ -68,6 +68,8 @@ export default function AppHome() {
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
   const { isLoading: loadingAccess, canUseOwnerDashboard, isStaff, isInstructor } = useOperatorAccess();
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
+  const [waiverLoaded, setWaiverLoaded] = useState(false);
+  const [waiverError, setWaiverError] = useState(false);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
 
@@ -157,27 +159,22 @@ export default function AppHome() {
 
   useEffect(() => {
     if (!SHOW_CUSTOMER_WAIVER_PROMPTS || !householdId) return;
-    (async () => {
-      const supabase = createBrowserSupabaseClient();
-      const { data, error } = await supabase
-        .from('waivers')
-        .select('signed_at,signed_date,waiver_expires_at,created_at')
-        .eq('household_id', householdId)
-        .order('created_at', { ascending: false })
-        .limit(25);
-
-      if (error) {
-        setWaiver({ status: 'required', expires_at: null, days_until_expiration: null });
-        return;
-      }
-
-      const details = getWaiverStatus(data ?? []);
-      setWaiver({
-        status: details.status,
-        expires_at: details.expiresAt,
-        days_until_expiration: details.daysUntilExpiration,
-      });
-    })();
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch('/api/waivers', { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok) throw new Error();
+        const details = result.waiver as WaiverStatusDetails;
+        if (active) {
+          setWaiver({ status: details.status, expires_at: details.expiresAt, days_until_expiration: details.daysUntilExpiration });
+          setWaiverLoaded(true); setWaiverError(false);
+        }
+      } catch { if (active) setWaiverError(true); }
+    };
+    void refresh();
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
   }, [householdId]);
 
   // recent visits widget (last 5 check-ins for this household)
@@ -239,10 +236,10 @@ export default function AppHome() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
-      {!canUseOwnerDashboard && SHOW_CUSTOMER_WAIVER_PROMPTS && (waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)) && (
+      {!canUseOwnerDashboard && SHOW_CUSTOMER_WAIVER_PROMPTS && (waiverError || (waiverLoaded && (waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)))) && (
         <section style={{ marginBottom: 14, padding: 14, borderRadius: 12, border: '1px solid #f1cf8a', background: '#fff6e8' }}>
           <p style={{ margin: 0, fontWeight: 700, color: '#7f4a04' }}>
-            {waiver.status === 'completed'
+            {waiverError ? 'Unable to check your waiver. Please open your family waiver to try again.' : waiver.status === 'completed'
               ? `Waiver renewal reminder: your waiver expires in ${waiver.days_until_expiration} day${waiver.days_until_expiration === 1 ? '' : 's'}.`
               : waiver.status === 'expired'
                 ? 'Waiver expired / renewal needed.'
@@ -251,7 +248,7 @@ export default function AppHome() {
           <p style={{ margin: '6px 0 0', color: '#6f4c1c' }}>
             Please sign the current waiver form to keep your family check-in ready.
             {' '}
-            <a href={process.env.NEXT_PUBLIC_WAIVER_URL ?? 'https://docs.google.com/forms/d/e/1FAIpQLSeleoqMn8UslZs8RiEg_02Ld4t-5WuIyhhHySoyb_3mCYJMUw/viewform?usp=dialog'} target="_blank" rel="noreferrer">Sign waiver</a>
+            <Link href="/landing/waiver">Sign waiver</Link>
           </p>
         </section>
       )}
@@ -279,6 +276,7 @@ export default function AppHome() {
         <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
           <Link href="/landing/people" className="quickCard">My Info/People</Link>
           <Link href="/landing/qr" className="quickCard">My QR Code</Link>
+          <Link href="/landing/waiver" className="quickCard">Family Waiver{waiverLoaded && !waiverError && waiver.status === 'completed' ? ' · Completed' : ''}</Link>
         </section>
       )}
 
