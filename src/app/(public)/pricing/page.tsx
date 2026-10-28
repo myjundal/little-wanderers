@@ -181,7 +181,7 @@ export default function PricingPage() {
       >
         <p style={{ margin: 0, color: '#4b4360', fontWeight: 700 }}>Helpful note</p>
         <p style={{ margin: '8px 0 0', color: '#7e7695', lineHeight: 1.75 }}>
-          Infant siblings are free when listed under the sibling option. For the latest updates and opening info, you
+          Open Play visits are untimed, and each additional sibling is $10. For the latest updates and opening info, you
           can also{' '}
           <Link href="/login?mode=new">
             Join/Login to My Little Wanderers
