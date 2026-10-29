@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
+import fs from 'node:fs';
+import { PGlite } from '@electric-sql/pglite';
 import { loadModule } from './helpers/class-preregistration-harness.mjs';
 import { loadSquareModules } from './helpers/admission-pos-harness.mjs';
 
@@ -8,7 +10,7 @@ const family = { id: '10000000-0000-4000-8000-000000000001', name: 'Older Family
 const people = [{ id: 'child', household_id: family.id, first_name: 'Sam', last_name: 'Family', role: 'child' }, { id: 'parent', household_id: family.id, first_name: 'Alex', last_name: 'Family', role: 'adult' }];
 const deskFamily = { ...family, people, waiver_status: 'completed', reservations: [] };
 
-function apiHarness({ allowed = true, failTable = '', many = false } = {}) {
+function apiHarness({ allowed = true, failTable = '', many = false, aliases = [], householdRows = [family], peopleRows = people } = {}) {
   const calls = [];
   const admin = { from(table) {
     const filters = [];
@@ -17,7 +19,8 @@ function apiHarness({ allowed = true, failTable = '', many = false } = {}) {
       select(value) { fields = value; return q; },
       then(resolve) {
         calls.push({ table, fields, filters });
-        let data = table === 'households' ? [family] : table === 'people' ? people : table === 'waivers' ? [] : [{ id: 'booking', household_id: family.id, child_count: 1, adult_count: 1, slot: [{ label: 'Open Play', starts_at: '2026-10-29T14:00:00Z', ends_at: '2026-10-29T16:00:00Z' }] }];
+        let data = table === 'staff_family_search_aliases' ? aliases : table === 'households' ? householdRows : table === 'people' ? peopleRows : table === 'waivers' ? [] : [{ id: 'booking', household_id: family.id, child_count: 1, adult_count: 1, slot: [{ label: 'Open Play', starts_at: '2026-10-29T14:00:00Z', ends_at: '2026-10-29T16:00:00Z' }] }];
+        for (const [op, key, values] of filters) if (op === 'in') data = data.filter(row => values.includes(row[key]));
         if (many && table === 'households' && fields === 'id') data = Array.from({ length: 101 }, () => family);
         resolve({ data, error: table === failTable ? { message: 'Database offline' } : null });
       },
@@ -153,4 +156,47 @@ test('failed payment-status refresh and pending Square checkout disable further 
     assert.ok(!h.button('Pay $16.00') || h.button('Pay $16.00').props.disabled);
     assert.equal(h.button('Select everyone remaining').props.disabled, true);
   }
+});
+
+
+test('confirmed alternate profiles produce one family with its children, including alternate email searches and direct links', async () => {
+  const alternate = { ...family, id: '10000000-0000-4000-8000-000000000002', email: 'alternate@example.test' };
+  const alternateAdult = { ...people[1], id: 'other-parent', household_id: alternate.id };
+  const h = apiHarness({ aliases: [{ alias_household_id: alternate.id, canonical_household_id: family.id }], householdRows: [family, alternate], peopleRows: [...people, alternateAdult] });
+  for (const query of ['?q=Family', '?q=alternate@example.test', `?family=${alternate.id}`]) {
+    const data = await (await h.get(query)).json();
+    assert.equal(data.items.length, 1);
+    assert.equal(data.items[0].id, family.id);
+    assert.deepEqual(data.items[0].people.map(person => person.id), ['child', 'parent']);
+  }
+});
+
+test('families with identical names remain separate without an explicit confirmed directory link', async () => {
+  const unrelated = { ...family, id: '10000000-0000-4000-8000-000000000002', email: 'someone-else@example.test' };
+  const h = apiHarness({ householdRows: [family, unrelated], peopleRows: [...people, { ...people[1], id: 'unrelated', household_id: unrelated.id }] });
+  const data = await (await h.get('?q=Family')).json();
+  assert.equal(data.items.length, 2);
+});
+
+test('directory aliases fail visibly on database errors or ambiguous chains', async () => {
+  assert.equal((await apiHarness({ failTable: 'staff_family_search_aliases' }).get('?q=Sam')).status, 503);
+  const h = apiHarness({ aliases: [{ alias_household_id: family.id, canonical_household_id: 'other' }, { alias_household_id: 'other', canonical_household_id: 'third' }] });
+  assert.equal((await h.get('?q=Sam')).status, 503);
+});
+
+test('directory link configuration is service-only and preserves both source households', async t => {
+  const db = new PGlite(); t.after(() => db.close());
+  await db.exec('create role anon; create role authenticated; create role service_role bypassrls; create table households(id uuid primary key);');
+  await db.exec(fs.readFileSync('db/migrations/20261029_staff_family_search_aliases.sql', 'utf8'));
+  const alternate = '10000000-0000-4000-8000-000000000002';
+  await db.query('insert into households values($1),($2)', [family.id, alternate]);
+  await db.exec('set role authenticated');
+  await assert.rejects(db.query('select * from staff_family_search_aliases'), /permission denied/);
+  await assert.rejects(db.query('insert into staff_family_search_aliases values($1,$2,$3,now())', [alternate, family.id, 'Confirmed by family']), /permission denied/);
+  await db.exec('reset role; set role service_role');
+  await db.query('insert into staff_family_search_aliases(alias_household_id,canonical_household_id,reason) values($1,$2,$3)', [alternate, family.id, 'Confirmed by family']);
+  assert.equal((await db.query('select * from staff_family_search_aliases')).rows.length, 1);
+  await assert.rejects(db.query('insert into staff_family_search_aliases(alias_household_id,canonical_household_id,reason) values($1,$1,$2)', [family.id, 'Self']), /check constraint/);
+  await db.exec('reset role');
+  assert.equal((await db.query('select * from households')).rows.length, 2);
 });

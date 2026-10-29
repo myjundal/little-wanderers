@@ -77,3 +77,11 @@ Recheck: `node --test tests/*.test.mjs`, `npm run lint`, `npm run build`. Explic
 - Validation: 87 automated tests pass, including seven new desk/API and interaction regressions; ESLint, TypeScript and production build pass. The sandboxed build's optional public class-catalog fetch could not reach Supabase; compilation and generation completed successfully.
 
 - Release build repair: self-host the existing Fraunces, Poppins and Sacramento font assets and preserve their subset CSS, fallback metrics and Latin preloads. Vercel’s Next Google Fonts loader failed parsing an upstream file URL; the build no longer downloads font CSS/files.
+
+## Confirmed duplicate family search results — October 29, 2026
+
+- Staff name/contact searches and Family Management now honor explicit `staff_family_search_aliases` records. An alternate profile resolves to the family with the full member list, including when an alternate contact or old check-in link is used. The active payment family follows the resolved ID.
+- Equal names, surnames or family labels never automatically combine unrelated families. Only a family-confirmed directory link suppresses an alternate result.
+- Apply `db/migrations/20261029_staff_family_search_aliases.sql` before deploying. Link configuration is protected by RLS and service-role permissions; it is not editable by browser clients.
+- The reported duplicate was confirmed against live family/member records. The alternate profile had no children, waiver, membership, party, Open Play reservation, check-in or class registration. A guarded transaction added its directory link; both login memberships, people, source households and all existing histories were preserved. No login access was granted or changed.
+- Live-data execution of the revised search returned exactly one family with its existing adult and two children for both the reported surname and alternate email. Directory links change staff display only; they do not merge account data or move payments.

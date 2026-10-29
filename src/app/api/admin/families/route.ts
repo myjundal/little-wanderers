@@ -1,6 +1,7 @@
 import { requireStaffContext } from '@/lib/authz';
 import { US_CITIES_BY_STATE, type UsStateCode } from '@/lib/us-cities';
 import { getWaiverStatus, WAIVER_STATUS_SELECT, type WaiverRow } from '@/lib/waivers';
+import { getStaffFamilySearchAliases } from '@/lib/staff-family-search';
 
 type HouseholdRow = {
   id: string;
@@ -29,6 +30,9 @@ export async function GET(req: Request) {
 
   const query = new URL(req.url).searchParams.get('q')?.trim() ?? '';
   const admin = context.admin;
+  let aliases: Map<string, string>;
+  try { aliases = await getStaffFamilySearchAliases(admin); }
+  catch { return Response.json({ ok: false, error: 'Unable to load family directory links.' }, { status: 503 }); }
 
   const { count: total, error: countError } = await admin.from('households').select('*', { count: 'exact', head: true });
   if (countError) return Response.json({ ok: false, error: countError.message }, { status: 500 });
@@ -54,6 +58,14 @@ export async function GET(req: Request) {
     admin.from('memberships').select('household_id,renews_at').limit(2000),
     admin.from('waivers').select(`household_id,${WAIVER_STATUS_SELECT}`).order('signed_at', { ascending: false }).limit(2000),
   ]);
+
+  // A recent duplicate must not push its older canonical family outside the directory window.
+  const missingCanonicalIds = [...new Set(aliases.values())].filter(id => !(households ?? []).some(row => row.id === id));
+  if (missingCanonicalIds.length) {
+    const canonical = await admin.from('households').select('id,name,phone,email,city,state').in('id', missingCanonicalIds);
+    if (canonical.error || !households) return Response.json({ ok: false, error: 'Unable to load linked families.' }, { status: 503 });
+    households.push(...(canonical.data ?? []));
+  }
 
   const peopleByHousehold = new Map<string, PersonRow[]>();
   ((people ?? []) as PersonRow[]).forEach((p) => {
@@ -81,6 +93,7 @@ export async function GET(req: Request) {
   const normalized = query.toLowerCase();
 
   const items = ((households ?? []) as HouseholdRow[])
+    .filter(household => !aliases.has(household.id))
     .map((household) => {
       const familyPeople = peopleByHousehold.get(household.id) ?? [];
       const adults = familyPeople.filter((p) => p.role !== 'child');
@@ -110,6 +123,8 @@ export async function GET(req: Request) {
         item.city,
         item.state,
         ...item.children_names,
+        ...(households ?? []).filter(row => aliases.get(row.id) === item.household_id)
+          .flatMap(row => [row.name, row.email, row.phone, ...(peopleByHousehold.get(row.id) ?? []).map(person => `${person.first_name ?? ''} ${person.last_name ?? ''}`)]),
       ]
         .filter(Boolean)
         .join(' ')
