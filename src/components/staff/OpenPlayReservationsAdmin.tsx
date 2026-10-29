@@ -127,13 +127,18 @@ function reservationTotals(items: Reservation[]) {
     );
 }
 
-export default function OpenPlayReservationsAdmin() {
+type Props = { canManage: boolean; onCheckIn: (householdId: string) => void; onReservationsChange?: () => void; checkedInFamilyIds?: string[] };
+
+export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onReservationsChange, checkedInFamilyIds = [] }: Props) {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(SOFT_OPENING_START_DATE);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = easternYmd(new Date().toISOString());
+    return today >= SOFT_OPENING_START_DATE && today <= SOFT_OPENING_END_DATE ? today : SOFT_OPENING_START_DATE;
+  });
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const [rangeStart, setRangeStart] = useState(SOFT_OPENING_START_DATE);
   const [rangeEnd, setRangeEnd] = useState(SOFT_OPENING_END_DATE);
@@ -141,19 +146,17 @@ export default function OpenPlayReservationsAdmin() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/admin/open-play-reservations', { cache: 'no-store' });
-    const json = (await res.json().catch(() => ({}))) as AdminResponse;
-    if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Could not load Open Play reservations.');
+    try {
+      const res = await fetch('/api/admin/open-play-reservations', { cache: 'no-store' });
+      const json = (await res.json().catch(() => ({}))) as AdminResponse;
+      if (!res.ok || !json.ok) throw new Error(json.error ?? 'Could not load Open Play reservations.');
+      setSlots(json.slots ?? []);
+      setReservations(json.reservations ?? []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not load Open Play reservations.');
       setSlots([]);
       setReservations([]);
-      setLoading(false);
-      return;
-    }
-
-    setSlots(json.slots ?? []);
-    setReservations(json.reservations ?? []);
-    setLoading(false);
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -240,6 +243,7 @@ export default function OpenPlayReservationsAdmin() {
   };
 
   const updateSlots = async (status: 'open' | 'closed') => {
+    if (!canManage) return;
     const input = buildSlotAction(status);
     if (!input) {
       setMessage('Choose a window first.');
@@ -249,44 +253,34 @@ export default function OpenPlayReservationsAdmin() {
     setSubmitting(true);
     setMessage(null);
 
-    const res = await fetch('/api/admin/open-play-reservations', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'update_slots', ...input }),
-    });
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; updated_count?: number };
-
-    if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Could not update windows.');
-      setSubmitting(false);
-      return;
-    }
-
-    setMessage(`${status === 'closed' ? 'Closed' : 'Reopened'} ${json.updated_count ?? 0} window${json.updated_count === 1 ? '' : 's'}.`);
-    setSubmitting(false);
-    await load();
+    try {
+      const res = await fetch('/api/admin/open-play-reservations', {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'update_slots', ...input }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; updated_count?: number };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? 'Could not update windows.');
+      setMessage(`${status === 'closed' ? 'Closed' : 'Reopened'} ${json.updated_count ?? 0} window${json.updated_count === 1 ? '' : 's'}.`);
+      await load();
+      onReservationsChange?.();
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not update windows.'); }
+    finally { setSubmitting(false); }
   };
 
   const updateReservation = async (reservationId: string, status: Reservation['status']) => {
+    if (!canManage) return;
     setSubmitting(true);
     setMessage(null);
-
-    const res = await fetch(`/api/admin/open-play-reservations/${reservationId}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-
-    if (!res.ok || !json.ok) {
-      setMessage(json.error ?? 'Could not update reservation.');
-      setSubmitting(false);
-      return;
-    }
-
-    setMessage(`Reservation marked ${status.replace('_', ' ')}.`);
-    setSubmitting(false);
-    await load();
+    try {
+      const res = await fetch(`/api/admin/open-play-reservations/${reservationId}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? 'Could not update reservation.');
+      setMessage(`Reservation marked ${status.replace('_', ' ')}.`);
+      await load();
+      onReservationsChange?.();
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not update reservation.'); }
+    finally { setSubmitting(false); }
   };
 
   return (
@@ -330,7 +324,7 @@ export default function OpenPlayReservationsAdmin() {
             setSelectedDate(easternYmd(slot.start));
           }}
           selectableStatuses={['available', 'booked', 'full', 'closed']}
-          initialMonth="2026-10"
+          initialMonth={selectedDate.slice(0, 7)}
           maxVisibleSlotsPerDay={4}
           formatSlotPillLabel={(slot) => slot.label}
           timeZone="America/New_York"
@@ -392,10 +386,12 @@ export default function OpenPlayReservationsAdmin() {
             </div>
             {reservation.people.length > 0 && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>People: {reservation.people.join(', ')}</p>}
             {reservation.notes && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Notes: {reservation.notes}</p>}
+            {reservation.slot && easternYmd(reservation.slot.starts_at) === easternYmd(new Date().toISOString()) && checkedInFamilyIds.includes(reservation.household_id) && <p style={{ color: '#2f7a47', fontWeight: 700 }}>Admission recorded today</p>}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-              {(['reserved', 'checked_in', 'no_show', 'cancelled'] as const).map((status) => (
+              {reservation.status !== 'cancelled' && <button type="button" onClick={() => onCheckIn(reservation.household_id)} disabled={submitting} style={{ border: 0, borderRadius: 12, padding: '12px 18px', background: '#65449b', color: '#fff', fontWeight: 800 }}>Check in &amp; pay</button>}
+              {canManage && (['reserved', 'no_show', 'cancelled'] as const).map((status) => (
                 <button key={status} type="button" onClick={() => updateReservation(reservation.id, status)} disabled={submitting || reservation.status === status} style={{ border: '1px solid #d9c8f7', borderRadius: 999, background: reservation.status === status ? '#f3ebff' : '#fff', color: status === 'cancelled' ? '#8a3f6b' : '#5f3da4', padding: '8px 12px', fontWeight: 800 }}>
-                  {status.replace('_', ' ')}
+                  {status === 'cancelled' ? 'Cancel reservation' : status === 'no_show' ? 'Mark no-show' : 'Mark reserved'}
                 </button>
               ))}
             </div>
@@ -403,7 +399,7 @@ export default function OpenPlayReservationsAdmin() {
         ))}
       </section>
 
-      <section style={{ border: '1px solid #e8dfef', borderRadius: 18, background: '#fffdf9', padding: 16 }}>
+      {canManage && <section style={{ border: '1px solid #e8dfef', borderRadius: 18, background: '#fffdf9', padding: 16 }}>
         <h2 style={{ margin: 0, color: '#4f3f82' }}>Close or reopen windows</h2>
         <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.5 }}>
           Closing windows makes them unavailable on the family calendar. Existing reservations stay visible above.
@@ -449,7 +445,7 @@ export default function OpenPlayReservationsAdmin() {
             Reopen target
           </button>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }
