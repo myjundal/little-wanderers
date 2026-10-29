@@ -62,6 +62,18 @@ Production deployment configuration:
 - The Production webhook stays disabled in this release. POS receipts are verified on return using Square APIs; public online payments and subscription billing are not activated.
 - To stop new handoffs, set `ADMISSION_POS_PAYMENTS_ENABLED=false` and redeploy. Verification of an already completed payment remains available.
 
-At the store: log into **Square Point of Sale**, choose **Little Wanderers**, connect the Stand, and open the staff URL in Safari with a staff/owner account. Scan the family, review the total, press the Square payment button, let the customer tap/insert their card, then return and confirm **Payment verified**. If Square shows a successful payment but the website cannot verify it, retry verification; do not collect a second payment.
+At the store: log into **Square Point of Sale**, choose **Little Wanderers**, connect the Stand, and open the staff URL in Safari with a staff/owner account. Find the family by name or today’s reservation, select the arriving children/adults, record check-in, review the total, press the Square payment button, let the customer tap/insert their card, then return and confirm **Payment verified**. If Square shows a successful payment but the website cannot verify it, retry verification; do not collect a second payment.
 
 Recheck: `node --test tests/*.test.mjs`, `npm run lint`, `npm run build`. Explicit fake-card provider test: `node scripts/test-admission-pos-sandbox.mjs` (or add `--tip`); it refuses Production credentials and never connects to Supabase.
+
+## Name-based admission desk — October 29, 2026
+
+- Replace the camera/scanner at `/staff/checkin` with parent/child name, email and phone search and today's active Open Play reservations (Eastern local day). Searches query stored family/member records before limiting and show a narrowing hint when results are truncated.
+- Staff choose a family, select only the people actually arriving, record their visits, review the server-calculated family total, then use the existing Square payment button. Family Management list/detail screens link directly to the selected family's desk.
+- Reuse `checkin_person` for waiver enforcement, membership/prepayment pricing, same-day duplicate prevention, staff audit and occupancy. Each selected person commits separately: a failure stops the batch, preserves successful entries, refreshes current visits and lets staff retry the remainder. No reservation is marked paid or attended merely because it appears on today's list.
+- Retire all customer/staff QR menus and family QR panels. Existing `/landing/qr` bookmarks redirect to the dashboard. The new desk requests no camera access.
+- Disable entry/payment if current admission status cannot be refreshed, if selected visitors have not been checked in, or if the selected family has a pending checkout. Keep Square's existing receipt verification and recovery behavior.
+- The owner confirmed **iPad + Square Stand**. This change uses **Safari → Square Point of Sale on the same iPad → Safari**. Open the staff website in Safari, signed in as staff/owner, and keep Square Point of Sale signed in to Little Wanderers with the Stand connected. No new hardware integration, real check-in, legal signature or live charge is performed by these tests. No database migration is required for this UI/search release.
+- Validation: 87 automated tests pass, including seven new desk/API and interaction regressions; ESLint, TypeScript and production build pass. The sandboxed build's optional public class-catalog fetch could not reach Supabase; compilation and generation completed successfully.
+
+- Release build repair: self-host the existing Fraunces, Poppins and Sacramento font assets and preserve their subset CSS, fallback metrics and Latin preloads. Vercel’s Next Google Fonts loader failed parsing an upstream file URL; the build no longer downloads font CSS/files.

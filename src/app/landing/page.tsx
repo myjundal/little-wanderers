@@ -275,7 +275,6 @@ export default function AppHome() {
       {!canUseOwnerDashboard && (
         <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
           <Link href="/landing/people" className="quickCard">My Info/People</Link>
-          <Link href="/landing/qr" className="quickCard">My QR Code</Link>
           <Link href="/landing/waiver" className="quickCard">Family Waiver{waiverLoaded && !waiverError && waiver.status === 'completed' ? ' · Completed' : ''}</Link>
         </section>
       )}
@@ -326,7 +325,7 @@ export default function AppHome() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
             <Link href="/staff/classes" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Class pre-registration rosters</Link>
-            <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Staff QR check-in</Link>
+            <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Check-in &amp; payment</Link>
             <Link href="/staff/families">Family management</Link>
             <Link href="/employee">My PIN & Timecards</Link>
             {!isStaff && <Link href="/staff/team">Staff & Timecards</Link>}
@@ -380,11 +379,10 @@ export default function AppHome() {
         <Link href="/landing">{canUseOwnerDashboard ? (isStaff ? 'Staff Dash' : 'Owner Dash') : 'My Dash'}</Link>
         {canUseOwnerDashboard && <Link href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>}
         {canUseOwnerDashboard ? (
-          <Link href="/staff/checkin">QR Check-in</Link>
+          <Link href="/staff/checkin">Check-in</Link>
         ) : (
           <>
             <Link href="/landing/people">Info</Link>
-            <Link href="/landing/qr">QR</Link>
           </>
         )}
         {canUseOwnerDashboard ? <Link href="/staff/families">Families</Link> : <><Link href="/landing/classschedule">Classes</Link><Link href="/landing/party">Party</Link></>}

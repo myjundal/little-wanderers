@@ -3,10 +3,8 @@ import { useParams } from 'next/navigation';
 
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import QRCode from 'qrcode';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import { classSizeLabel } from '@/lib/class-config';
@@ -34,7 +32,6 @@ type FamilyDetail = {
     expires_at: string | null;
     days_until_expiration: number | null;
   };
-  qr_status: string;
   upcoming_classes: Array<{ id: string; person_id: string; person_name: string; class: { id?: string; title: string; start_time: string } | null }>;
   upcoming_parties: Array<{ id: string; start_time: string; end_time: string; status: string }>;
   visit_history: Array<{ id: string; person_id: string; person_name: string; checked_in_at: string }>;
@@ -149,7 +146,6 @@ export default function StaffFamilyDetailPage() {
   const [editableMembers, setEditableMembers] = useState<MemberForm[]>([]);
   const [familyLocation, setFamilyLocation] = useState({ city: '', state: 'CT' });
   const [message, setMessage] = useState<string | null>(null);
-  const [qrMap, setQrMap] = useState<Record<string, string>>({});
   const [showWaiverPanel, setShowWaiverPanel] = useState(false);
 
   const load = useCallback(async () => {
@@ -185,17 +181,6 @@ export default function StaffFamilyDetailPage() {
     setFamilyLocation({ city: item.household.city ?? '', state: item.household.state ?? 'CT' });
   }, [item]);
 
-  useEffect(() => {
-    if (!item) return;
-    const run = async () => {
-      const map: Record<string, string> = {};
-      for (const p of [...item.guardians, ...item.children]) {
-        map[p.id] = await QRCode.toDataURL(`lw://person/${p.id}`, { width: 180, margin: 1 });
-      }
-      setQrMap(map);
-    };
-    void run();
-  }, [item]);
 
   const memberOptions = useMemo(() => ([...(item?.guardians ?? []), ...(item?.children ?? [])]), [item]);
   const classRegistrationOptions = useMemo(() => (item?.children.length ? item.children : memberOptions), [item?.children, memberOptions]);
@@ -355,7 +340,7 @@ export default function StaffFamilyDetailPage() {
         </div>
       </div>
       <h1 style={{ color: '#4f3f82' }}>{item.household.name ?? 'Family detail'}</h1>
-      <p style={{ color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {waiverLabel(item.waiver_status)} · QR: {item.qr_status}</p>
+      <p style={{ color: '#6d6480' }}>Membership: {item.membership_status} · Waiver: {waiverLabel(item.waiver_status)}</p>
       {message && <p style={{ color: '#5f3da4' }}>{message}</p>}
 
       {canEdit ? <>
@@ -416,16 +401,10 @@ export default function StaffFamilyDetailPage() {
       </section>
 
       </> : <section><h3>Family details</h3><p>Location: {item.household.city ?? '—'}, {item.household.state ?? '—'}</p>{[...item.guardians, ...item.children].map(person => <p key={person.id}>{person.first_name} {person.last_name} · {person.role}</p>)}</section>}
-      <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>
-        <h3 style={{ marginTop: 0 }}>Generate / View QR</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
-          {[...item.guardians, ...item.children].map((person) => (
-            <div key={person.id} style={{ border: '1px solid #eee', borderRadius: 10, padding: 8 }}>
-              <p style={{ margin: 0 }}>{person.first_name} {person.last_name ?? ''} ({person.role ?? 'member'})</p>
-              {qrMap[person.id] ? <Image src={qrMap[person.id]} alt={`QR for ${person.first_name ?? 'member'}`} width={150} height={150} /> : <p>Generating...</p>}
-            </div>
-          ))}
-        </div>
+      <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 20, background: '#fff' }}>
+        <h3 style={{ marginTop: 0 }}>Admission</h3>
+        <p>Select the visiting children and adults, record their check-in, and take one family payment in Square.</p>
+        <Link href={`/staff/checkin?family=${familyId}`} style={{ display: 'inline-block', padding: '14px 20px', borderRadius: 12, background: '#65449b', color: '#fff', fontWeight: 700, textDecoration: 'none' }}>Check in &amp; pay</Link>
       </section>
 
       <section style={{ marginTop: 16, border: '1px solid #eadfff', borderRadius: 16, padding: 14, background: '#fff' }}>

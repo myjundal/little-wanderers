@@ -30,7 +30,7 @@ export default function LandingMoreMenu() {
           {canUseOwnerDashboard && (
             <>
               <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
-              <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff/checkin">Staff QR check-in</Link>
+              <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff/checkin">Check-in &amp; payment</Link>
               <Link onClick={() => setOpen(false)} href="/staff/families">Family management</Link>
               <Link onClick={() => setOpen(false)} href="/staff/classes">Class pre-registrations</Link>
               <Link onClick={() => setOpen(false)} href="/staff/occupancy">Occupancy management</Link>
@@ -50,7 +50,6 @@ export default function LandingMoreMenu() {
           {!canUseOwnerDashboard && !isInstructor && (
             <>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/people">My Info/People</Link>
-              <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/qr">My QR Codes</Link>
               {SHOW_CUSTOMER_MEMBERSHIP && (
                 <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/membership">My Membership</Link>
               )}

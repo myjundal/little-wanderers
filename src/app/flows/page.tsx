@@ -27,7 +27,7 @@ export default function FlowsPage() {
 
       <Card title="B. On-site Check-in (Members Only)">
         <ul className="list-disc pl-5">
-          <li>Find family via email/name/QR</li>
+          <li>Find family via name or email</li>
           <li>Gate: membership active &amp; latest waiver signed</li>
           <li>Insert Visit on success; otherwise prompt to subscribe/resume or sign waiver</li>
         </ul>

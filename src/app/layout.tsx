@@ -1,4 +1,4 @@
-import { Fraunces, Poppins, Sacramento } from 'next/font/google';
+import './fonts.css';
 import './globals.css';
 import AnalyticsBoot from '@/components/AnalyticsBoot';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
@@ -9,27 +9,6 @@ import { Suspense } from 'react';
 
 const SHOW_INSTALL_PROMPT = true;
 const SHOW_PUSH_PROMPT = false;
-
-const headingFont = Fraunces({
-  variable: '--font-heading',
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  display: 'swap',
-});
-
-const scriptFont = Sacramento({
-  variable: '--font-script',
-  subsets: ['latin'],
-  weight: ['400'],
-  display: 'swap',
-});
-
-const bodyFont = Poppins({
-  variable: '--font-body',
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-});
 
 export const metadata = {
   title: {
@@ -71,7 +50,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${headingFont.variable} ${bodyFont.variable} ${scriptFont.variable}`}>
+    <html lang="en">
+      <head>
+        <link rel="preload" href="/fonts/fraunces-500-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/sacramento-400-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/poppins-400-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/poppins-500-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/poppins-600-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/poppins-700-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
       <body className="antialiased">
         <Suspense fallback={null}><GoogleAnalytics /></Suspense>
         {children}

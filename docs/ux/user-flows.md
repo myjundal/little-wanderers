@@ -29,7 +29,7 @@ flowchart TD
   SB-->Dash
 
 flowchart TD
-  Entry[Front Desk]-->Find[Find Family by email/name/QR]
+  Entry[Front Desk]-->Find[Find Family by name or email]
   Find-->Gate{membership == active AND waiver signed?}
   Gate-->|YES| Visit[Insert Visit record (family/child)]
   Visit-->Allow[Admit]

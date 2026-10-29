@@ -56,7 +56,7 @@ export default function WaiverPage() {
     {data?.waiver.status === 'completed' && !renew ? <section className={styles.success}>
       <h2>Waiver completed</h2>
       <p>Your family waiver is saved. Expires {new Date(data.waiver.expiresAt!).toLocaleString('en-US', { timeZone: 'America/New_York' })} (Eastern).</p>
-      <p><Link href="/landing/qr">Open my QR codes</Link> · <Link href="/landing">Back to my dashboard</Link></p>
+      <p><Link href="/landing">Back to my dashboard</Link></p>
       {data.can_sign && <button onClick={() => setRenew(true)}>Review and renew waiver</button>}
     </section> : data && <>
       <section className={styles.card}>
