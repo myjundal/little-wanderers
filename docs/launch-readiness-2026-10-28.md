@@ -41,3 +41,27 @@ Both migrations were applied to the existing production database before app rele
 - SMS/email delivery, camera hardware and a live Square charge were not exercised. Empty staff profile/timecard tables mean employees still need onboarding and PIN setup before shared-iPad clock-in.
 
 Known security advisory addressed by the framework upgrade: https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw
+
+## QR admission POS release — October 29, 2026
+
+This focused release uses the prepared Square integration for staff iPad payments. It does not merge PR #68's public checkout changes. Free pre-opening party reservations, existing class pre-registration, and the two manually prepared $300 draft party invoices remain in place.
+
+- Staff scan the visiting family's person QR codes in Safari at `https://www.thelittlewanderers.com/staff/checkin`.
+- The scanned family is selected automatically; server-calculated unpaid check-ins are grouped by household. Finish scanning the whole family, then press **Pay $… in Square** once.
+- Square POS opens on the same iPad with the frozen total. It is an amount-based sale, not a catalog cart. `clear_default_fees` prevents default taxes being added again.
+- After customer card payment, Square returns to the same page. The server retrieves the actual Order and every Payment, validates environment, location, card receipt, reference, currency, amount, timestamp and refunds, and records paid check-ins only after verification.
+- A provider callback alone never marks attendance paid. Failed verification retains the return information for retry without charging again. Interrupted/cancelled payments show an explicit recovery control after staff check Square on the iPad and confirm the checkout is closed with no completed, pending or offline payment. After a one-minute wait the server scans Square history: a completed matching receipt is verified as paid; pending, unclear, refunded or incomplete history blocks reset. Only a reviewed unpaid launch is cancelled with an operator/timestamp audit so a new checkout can be prepared.
+- Square POS cannot run in Sandbox. Actual Stand/app switching still needs a physical iPad check. The backend was exercised with an actual Sandbox fake-card $26 order and an additional Sandbox $26 + $2 voluntary-tip order against an isolated local PostgreSQL fixture. No Production customer, booking or card charge was created by those tests.
+
+Production deployment configuration:
+
+- `ADMISSION_POS_PAYMENTS_ENABLED=true` enables this staff-only handoff independently.
+- Keep `ADMISSION_PAYMENTS_ENABLED`, `PARTY_PAYMENTS_ENABLED`, `CLASS_PAYMENTS_ENABLED` and `MEMBERSHIP_PAYMENTS_ENABLED` disabled.
+- Reuse the existing Production `SQUARE_ENVIRONMENT`, `SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`, `SQUARE_APPLICATION_ID`, `SQUARE_API_VERSION` and `NEXT_PUBLIC_SITE_URL` values. The exact registered web callback is `https://www.thelittlewanderers.com/staff/checkin`.
+- Existing Square foundation migrations were applied to the Production DB before this focused release. `20261029_qr_admission_pos_family.sql` adds one-household/full-family guards to that existing schema. Its execution is server-only and preserves free party booking behavior.
+- The Production webhook stays disabled in this release. POS receipts are verified on return using Square APIs; public online payments and subscription billing are not activated.
+- To stop new handoffs, set `ADMISSION_POS_PAYMENTS_ENABLED=false` and redeploy. Verification of an already completed payment remains available.
+
+At the store: log into **Square Point of Sale**, choose **Little Wanderers**, connect the Stand, and open the staff URL in Safari with a staff/owner account. Scan the family, review the total, press the Square payment button, let the customer tap/insert their card, then return and confirm **Payment verified**. If Square shows a successful payment but the website cannot verify it, retry verification; do not collect a second payment.
+
+Recheck: `node --test tests/*.test.mjs`, `npm run lint`, `npm run build`. Explicit fake-card provider test: `node scripts/test-admission-pos-sandbox.mjs` (or add `--tip`); it refuses Production credentials and never connects to Supabase.
