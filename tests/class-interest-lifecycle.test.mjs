@@ -76,8 +76,17 @@ test('manual pre-registration also ignores capacity and waitlist priority', asyn
   }
 });
 
-test('cancelling interest or a waitlist entry never offers a seat; cancelling a booking can', async () => {
-  for (const status of ['preregistered', 'waitlist', 'scheduled']) {
+test('cancellation advances confirmed seats and active waitlist offers, without reserving interest', async () => {
+  for (const { status, token = null, expires = null, release = false } of [
+    { status: 'preregistered' },
+    { status: 'preregistered', token: 'stale', expires: '2099-01-01T00:00:00Z' },
+    { status: 'waitlist' },
+    { status: 'waitlist', token: 'offer', expires: '2099-01-01T00:00:00Z', release: true },
+    { status: 'waitlist', token: 'expired', expires: '2020-01-01T00:00:00Z' },
+    { status: 'waitlist', expires: '2099-01-01T00:00:00Z' },
+    { status: 'scheduled', release: true },
+    { status: 'attended', release: true },
+  ]) {
     let offered = 0;
     let emailed = 0;
     const writes = [];
@@ -85,7 +94,7 @@ test('cancelling interest or a waitlist entry never offers a seat; cancelling a 
       const query = {
         select() { return query; }, eq() { return query; },
         update(patch) { writes.push(patch); return query; },
-        maybeSingle: async () => ({ data: { id: 'interest', class_id: 'painting', person_id: 'child', household_id: 'family', status }, error: null }),
+        maybeSingle: async () => ({ data: { id: 'interest', class_id: 'painting', person_id: 'child', household_id: 'family', status, waitlist_offer_token: token, waitlist_offer_expires_at: expires }, error: null }),
         then(resolve) { resolve({ error: null }); },
       };
       return query;
@@ -103,9 +112,9 @@ test('cancelling interest or a waitlist entry never offers a seat; cancelling a 
     }, { process: { env: {} } });
     const response = await api.POST({ url: 'http://localhost/api/classes/cancel', json: async () => ({ registration_id: 'interest' }) });
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).waitlist_offer_pending, status === 'scheduled');
+    assert.equal((await response.json()).waitlist_offer_pending, release);
     await new Promise(resolve => setImmediate(resolve));
-    assert.equal(offered, status === 'scheduled' ? 1 : 0);
+    assert.equal(offered, release ? 1 : 0);
     assert.equal(emailed, 1);
     assert.equal(writes[0].status, 'cancelled');
     assert.equal(writes[0].waitlist_offer_token, null);
