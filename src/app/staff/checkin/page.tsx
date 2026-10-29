@@ -60,7 +60,8 @@ export default function StaffCheckinPage() {
         body: JSON.stringify({ mode: 'verify', state: callback.state, transaction_id: callback.transaction_id }) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Payment verification is pending.');
-      // Keep the callback in the URL until both Square and the database confirm payment.
+      await refreshPayments();
+      // Keep the callback until payment is confirmed and the paid view can be refreshed.
       const url = new URL(window.location.href);
       url.searchParams.delete('data');
       url.searchParams.delete('square_pos_return');
@@ -69,7 +70,6 @@ export default function StaffCheckinPage() {
       setLaunchUrl('');
       paymentPending.current = false;
       setMessage('Payment verified — this family’s admission is paid. Scan the next family when ready.');
-      await refreshPayments();
     } catch (error) {
       setMessage(`${error instanceof Error ? error.message : 'Unable to verify payment.'} Do not charge again. Retry verification or refresh this page.`);
     } finally { callbackBusy.current = false; setBusy(false); }
@@ -94,6 +94,7 @@ export default function StaffCheckinPage() {
       lastScan.current = { id, time: Date.now() };
       scanInFlight.current = true;
       setScanning(true);
+      setActiveFamily('');
       setLaunchUrl('');
       try {
         setMessage('Checking waiver, membership and admission…');
