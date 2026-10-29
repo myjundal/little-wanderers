@@ -36,6 +36,9 @@ type ClassItem = {
   waitlist_count?: number;
   is_popular: boolean;
   recommended_class_ids: string[];
+  payment_available?: boolean;
+  payment_program_key?: string | null;
+  payment_program_session_count?: number | null;
 };
 
 type ClassSeries = ClassItem & {
@@ -228,6 +231,9 @@ function registrationFieldError(fieldId: string, message: string): never {
 export default function ClassSchedulePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [paymentsEnabled, setPaymentsEnabled] = useState(false);
+  const [pendingCheckout, setPendingCheckout] = useState<{id:string;payment_url:string|null;expected_amount_cents:number}|null>(null);
+  const [cancellingCheckout, setCancellingCheckout] = useState(false);
   const [myItems, setMyItems] = useState<RegistrationItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
@@ -296,6 +302,7 @@ export default function ClassSchedulePage() {
 
       const loadedClasses = (classJson.items ?? []) as ClassItem[];
       setClasses(loadedClasses);
+      setPaymentsEnabled(classJson.payments_enabled === true);
       setMyItems(myJson.items ?? []);
 
       const authenticated = profileRes.ok && profileJson?.ok;
@@ -336,6 +343,65 @@ export default function ClassSchedulePage() {
 
     return () => window.clearInterval(interval);
   }, [load]);
+
+  useEffect(() => {
+    const checkoutId = new URLSearchParams(window.location.search).get('checkout_id');
+    if (!paymentsEnabled || !checkoutId) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    let attempts = 0;
+    const controller = new AbortController();
+    const verifyPayment = async () => {
+      try {
+        const response = await fetch('/api/classes/checkout', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, signal: controller.signal,
+          body: JSON.stringify({ mode: 'finalize', checkout_id: checkoutId }),
+        });
+        const result = await response.json();
+        if (cancelled) return;
+        if (!response.ok || !result.ok) throw new Error(result.error || 'Payment verification needs staff assistance.');
+        if (result.status === 'completed' || result.status === 'cancelled') {
+          const completed = result.status === 'completed';
+          setToast({message: completed ? 'Payment verified. Your class registration is confirmed.' : 'This checkout was cancelled.', tone: completed ? 'success' : 'warning'});
+          const url = new URL(window.location.href);
+          url.searchParams.delete('checkout_id'); url.searchParams.delete('checkout');
+          window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+          await load(false);
+        } else {
+          setMessage('Your payment is being verified. Please keep this page open; do not pay again.');
+          if (++attempts < 12) timer = window.setTimeout(() => void verifyPayment(), 5000);
+        }
+      } catch (error) {
+        if (!cancelled) setMessage(error instanceof Error ? error.message : 'Payment verification needs staff assistance. Please do not pay again.');
+      }
+    };
+    void verifyPayment();
+    return () => { cancelled = true; controller.abort(); if (timer) window.clearTimeout(timer); };
+  }, [paymentsEnabled, load]);
+
+  useEffect(() => {
+    if (!paymentsEnabled || new URLSearchParams(window.location.search).has('checkout_id')) return;
+    let cancelled=false;
+    void fetch('/api/classes/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'current'})})
+      .then(response=>response.json()).then(result=>{if(!cancelled&&result.ok)setPendingCheckout(result.checkout??null);})
+      .catch(()=>undefined);
+    return ()=>{cancelled=true;};
+  },[paymentsEnabled]);
+
+  const cancelPendingCheckout = async () => {
+    if (!pendingCheckout || cancellingCheckout) return;
+    setCancellingCheckout(true);
+    try {
+      const response=await fetch('/api/classes/checkout',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({mode:'cancel',checkout_id:pendingCheckout.id})});
+      const result=await response.json();
+      if(!response.ok||!result.ok)throw new Error(result.error||'Unable to cancel checkout. Please contact the studio.');
+      setPendingCheckout(null);
+      setToast({message:result.status==='completed'?'Your payment was already completed. Registration is confirmed.':'Unpaid checkout cancelled. You can choose another class.',tone:'success'});
+      await load(false);
+    } catch(error) {setToast({message:error instanceof Error?error.message:'Unable to cancel checkout.',tone:'error'});}
+    finally{setCancellingCheckout(false);}
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -505,7 +571,7 @@ export default function ClassSchedulePage() {
     const firstName = guardianFirstName.trim();
     const lastName = guardianLastName.trim();
     if (!firstName || !lastName) {
-      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then press Pre-register again.');
+      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then try again.');
     }
     return { guardian_first_name: firstName, guardian_last_name: lastName };
   };
@@ -514,11 +580,11 @@ export default function ClassSchedulePage() {
     if (selectedPerson && !selectedPersonNeedsAge) return selectedPerson;
     const name = quickChildName.trim();
     if (!selectedPerson && !name) {
-      registrationFieldError('class-child-name', 'Please enter your child’s name above, then press Pre-register again.');
+      registrationFieldError('class-child-name', 'Please enter your child’s name above, then try again.');
     }
     const ageValue = parsedQuickAge();
     if (ageValue == null) {
-      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then press Pre-register again.');
+      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then try again.');
     }
 
     if (selectedPersonId && !isAddingAdditionalChild && selectedPersonNeedsAge) {
@@ -645,6 +711,35 @@ export default function ClassSchedulePage() {
     }
   };
 
+  const payForClass = async (classId: string) => {
+    if (registrationInFlightRef.current) return;
+    if (!isAuthenticated) {
+      const next = `/landing/classschedule?class=${encodeURIComponent(classId)}`;
+      sessionStorage.setItem('post_login_redirect', next);
+      window.location.assign(`/login?mode=new&next=${encodeURIComponent(next)}`);
+      return;
+    }
+    registrationInFlightRef.current = true;
+    setRegisteringClassId(classId);
+    setMessage(null);
+    try {
+      guardianPayload();
+      const child = await ensureSelectedChild();
+      const response = await fetch('/api/classes/checkout', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ person_id: child.id, items: [{ class_id: classId, quantity: 1 }] }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !result.payment_url) throw new Error(result.error || 'Unable to start checkout.');
+      window.location.assign(result.payment_url);
+    } catch (error) {
+      setToast({message: error instanceof Error ? error.message : 'Unable to start checkout.', tone: 'error'});
+    } finally {
+      registrationInFlightRef.current = false;
+      setRegisteringClassId(null);
+    }
+  };
+
   const cancelRegistration = async (registrationId: string) => {
     setCancellingId(registrationId);
     setMessage(null);
@@ -708,9 +803,14 @@ export default function ClassSchedulePage() {
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Pre-registration</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Wanderlist families get first access to pre-registration. Choose a class below to share your interest.</p>
-      <PreRegistrationNotice />
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>{paymentsEnabled ? 'Class Registration' : 'Class Pre-registration'}</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>{paymentsEnabled ? 'Choose a class date and pay to confirm your child’s spot. You can also pre-register to share your interest.' : 'Wanderlist families get first access to pre-registration. Choose a class below to share your interest.'}</p>
+      <PreRegistrationNotice paymentsEnabled={paymentsEnabled} />
+      {pendingCheckout && <section role="status" style={{border:'1px solid #d9c8f7',borderRadius:12,padding:14,marginTop:14}}>
+        <p>You have an unfinished class checkout for ${(pendingCheckout.expected_amount_cents/100).toFixed(2)}. Continue it, or cancel the unpaid checkout before choosing a different class.</p>
+        {pendingCheckout.payment_url && <a href={pendingCheckout.payment_url} style={{marginRight:14}}>Continue checkout</a>}
+        <button onClick={cancelPendingCheckout} disabled={cancellingCheckout||!pendingCheckout.payment_url}>{cancellingCheckout?'Checking with Square…':'Cancel unpaid checkout'}</button>
+      </section>}
 
       <p style={{ color: '#6f628d' }}>{CLASS_START_NOTE}</p>
       {message && <p style={{ marginTop: 12, color: '#5a4a8f' }}>{message}</p>}
@@ -721,7 +821,7 @@ export default function ClassSchedulePage() {
           <div>
             <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82' }}>Weekly class map</h2>
             <p style={{ margin: '6px 0 0', color: '#6f628d', fontSize: 14 }}>
-              Tap a class time to bring its card and pre-registration button to the top.
+              Tap a class time to bring its registration card to the top.
             </p>
           </div>
         </div>
@@ -771,7 +871,7 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          No payment is collected for pre-registration. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
+          Pre-registration is free and does not reserve a spot. Payment confirms your registration. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
         </p>
         {isAuthenticated && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>
@@ -934,6 +1034,10 @@ export default function ClassSchedulePage() {
                     .find(Boolean)
                 : undefined;
               const alreadyBooked = Boolean(existingStatus);
+              const paidOccurrences = target.payment_program_key
+                ? series.occurrences.filter(item => item.payment_program_key === target.payment_program_key)
+                : [target];
+              const alreadyPaid = paidOccurrences.some(item => ['scheduled', 'attended'].includes(registrationStatusByClassAndPerson.get(`${item.id}:${selectedPersonId}`) ?? ''));
               return (
                 <div
                   id={classCardDomId(series)}
@@ -969,6 +1073,15 @@ export default function ClassSchedulePage() {
                   <p style={{ margin: '6px 0' }}>Caregiver: {series.caregiver_participation ?? '-'}</p>
                   <p style={{ margin: '6px 0' }}>Duration: {series.duration_minutes ?? Math.round((new Date(series.end_time).getTime() - new Date(series.start_time).getTime()) / 60000)} min</p>
                   <p style={{ margin: '6px 0' }}>Price: ${(series.price_cents / 100).toFixed(2)}</p>
+                  {paymentsEnabled && target.payment_program_key && <p style={{ margin: '6px 0', color: '#5f3da4' }}>One payment includes all {target.payment_program_session_count} program dates.</p>}
+                  {paymentsEnabled && !target.payment_program_key && (
+                    <label style={{ display: 'grid', gap: 6, margin: '10px 0', color: '#5f3da4' }}>
+                      Class date
+                      <select value={target.id} onChange={event => setActiveClassId(event.target.value)}>
+                        {series.occurrences.map(item => <option key={item.id} value={item.id}>{classDateLabel(item)}</option>)}
+                      </select>
+                    </label>
+                  )}
                   {series.description && <p style={{ margin: '6px 0', color: '#666' }}>{series.description}</p>}
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff', marginTop: 12 }}>
                     <div style={{ minWidth: 220, flex: '1 1 240px', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
@@ -977,6 +1090,12 @@ export default function ClassSchedulePage() {
                     <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
                       {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? 'Pre-registered' : 'Pre-register'}
                     </button>
+                    {paymentsEnabled && (
+                      <button style={{ flex: '0 0 auto', background: '#5f3da4', color: '#fff' }}
+                        onClick={() => payForClass(target.id)} disabled={!target.payment_available || alreadyPaid || registeringClassId !== null || creatingChild}>
+                        {registeringClassId === target.id ? 'Opening checkout…' : alreadyPaid ? 'Registered' : `Pay $${(target.price_cents / 100).toFixed(2)} & register`}
+                      </button>
+                    )}
                   </div>
                   {registrationFeedback?.classId === target.id && (
                     <p role={registrationFeedback.tone === 'error' ? 'alert' : 'status'} style={{ margin: '12px 0 0', padding: 12, borderRadius: 10, background: registrationFeedback.tone === 'error' ? '#fff5f8' : '#f3ebff', color: registrationFeedback.tone === 'error' ? '#8a3f6b' : '#4f3f82', lineHeight: 1.6 }}>
@@ -1002,7 +1121,7 @@ export default function ClassSchedulePage() {
             {people.map((p) => <option key={`hist-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
           </select>
           <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
-            Pre-registrations ({upcomingHistoryItems.length})
+            Upcoming ({upcomingHistoryItems.length})
           </button>
           <button onClick={() => setHistoryTab('past')} style={historyTab === 'past' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Past ({pastHistoryItems.length})
@@ -1018,7 +1137,7 @@ export default function ClassSchedulePage() {
           <p>Loading…</p>
         ) : historyTab === 'upcoming' && visibleHistoryItems.length === 0 ? (
           <div style={{ border: '1px dashed #ccc', borderRadius: 12, padding: 16 }}>
-            <p>You do not have any class pre-registrations yet.</p>
+            <p>You do not have any upcoming class registrations yet.</p>
           </div>
         ) : historyTab === 'cancelled' && visibleHistoryItems.length === 0 ? (
           <div style={{ border: '1px dashed #d8b1d0', borderRadius: 12, padding: 16, background: '#fff7fc' }}>
@@ -1036,7 +1155,7 @@ export default function ClassSchedulePage() {
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status:{' '}
                   <b style={{ textTransform: 'uppercase' }}>
-                    {item.status === 'preregistered' || item.status === 'waitlist' || item.attendance_display_status === 'upcoming' ? 'pre-registered' : item.attendance_display_status}
+                    {item.status === 'preregistered' ? 'pre-registered' : item.status === 'waitlist' ? 'waitlist' : item.attendance_display_status === 'upcoming' ? 'confirmed' : item.attendance_display_status}
                   </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>
@@ -1086,10 +1205,13 @@ export default function ClassSchedulePage() {
                     </div>
                   </div>
                 )}
-                {item.status !== 'cancelled' && item.class?.status !== 'cancelled' && (
+                {(item.status === 'preregistered' || item.status === 'waitlist') && item.class?.status !== 'cancelled' && (
                   <button onClick={() => cancelRegistration(item.id)} disabled={cancellingId === item.id}>
                     {cancellingId === item.id ? 'Cancelling...' : 'Cancel pre-registration'}
                   </button>
+                )}
+                {(item.status === 'scheduled' || item.status === 'attended') && item.class?.status !== 'cancelled' && (
+                  <p style={{ color: '#6d6480', fontSize: 13 }}>Please contact the studio for registration changes or refund requests.</p>
                 )}
               </div>
             ))}

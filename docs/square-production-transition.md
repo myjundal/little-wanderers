@@ -1,6 +1,8 @@
 # Square Production 전환 안내
 
-현재 상태: **운영 미배포 / 운영 DB 미변경 / 실제 청구 없음.**
+현재 상태: **새 코드 운영 미배포 / 운영 설정 준비 중 / 실제 청구 없음.**
+최초 결제 migration은 사용자가 운영 DB에 적용했고, 주요 테이블·함수 존재를 읽기 전용으로 확인했다.
+아래 추가 클래스 프로그램 migration과 상품 매핑 SQL은 준비했으며 아직 운영 DB에 적용하지 않았다.
 기존 Next.js 예약 화면, Supabase 예약 ID와 테이블, Square Hosted Checkout 및 웹훅 서명 검증을 재사용한다.
 새 Supabase 프로젝트는 필수가 아니다. 자동 테스트와 Sandbox 검증은 로컬의 격리된 PostgreSQL(PGlite)을 사용한다.
 
@@ -10,6 +12,9 @@
 - Sandbox 카드로 예약금 결제 → 로컬 예약 `pending → confirmed`를 확인했다.
 - **같은 Invoice**에서 잔금 결제 → 총 납부 $300, 잔액 $0을 확인했다.
 - 클래스 Hosted Checkout Sandbox 테스트 패널의 결제 후, 실제 Order/Payment 재조회와 로컬 등록 반영을 확인했다.
+- 추가 Sandbox 프로그램 결제로 **$150 한 번 → 5회 전체 등록**, 기존 사전등록 ID 보존, 중복 확인의 멱등성을 확인했다.
+- 실제 Sandbox 미결제 링크 삭제 후 Square 주문 `CANCELED`와 로컬 checkout `cancelled`를 확인했다. 청구 금액은 $0이다.
+- 자동 테스트 96개, ESLint, Next.js production build가 통과했다.
 - 서명 위조, 금액·통화·매장·고객 불일치, URL만으로 확정 시도, DB 장애 후 웹훅 재시도, 중복 이벤트,
   오래된 Invoice 버전, 미납 멤버십, 기존 클래스 사전등록 ID 보존은 자동 테스트로 검증한다.
 - 임시 Sandbox 콜백으로 **Square가 실제 발송한 `invoice.payment_made`**의 서명 검증 → HTTP 200 →
@@ -45,15 +50,27 @@
 기존 예약은 그대로 보존하며 자동 Invoice 생성·미납 판정·재청구를 하지 않는다.
 기존 예약의 실제 납부 내역과 연결이 필요한 경우 소유자가 먼저 수동 대조해야 한다.
 
-## 운영 DB 변경 — 아직 실행하지 말 것
+## 운영 DB 적용 순서
 
-승인된 전환 시 `db/migrations/20261029_square_payment_fulfillment.sql`을 적용한다.
+`db/migrations/20261029_square_payment_fulfillment.sql`은 사용자가 이미 적용했다. 다시 실행하지 않는다.
 새 Invoice 연결 컬럼, 환경별 Catalog 매핑, 결제 시도/영수증, 처리 상태와 서버 전용 함수가 추가된다.
 브라우저 역할은 예약·멤버십·클래스 등록·Square 고객 매핑을 직접 수정할 수 없고 기존 인증된 서버 API를 사용한다.
 기존 예약 ID·시간·고객 정보는 수정하지 않는다.
 
-새 결제 기능은 이 migration 적용 전에는 열지 않는다. 이전 코드의 무입금 예약 확정도 새 DB 보호에 막히므로,
-운영 적용은 예약 접수를 잠시 닫고 migration → 새 코드 배포 → 승인된 결제 기능 활성화 순서로 맞춘다.
+다음 운영 작업은 사용자의 배포 승인 후 진행한다.
+
+1. `db/migrations/20261029_square_class_program_checkout.sql` 적용.
+2. `db/operations/20261029_square_production_catalog_mappings.sql` 적용. 검토한 클래스 45건을 연결하며,
+   이름·가격·날짜가 달라졌거나 기존 매핑이 다르면 전체 작업을 중지한다. 같은 매핑으로 다시 실행할 수 있다.
+3. 새 코드 배포 후 소유자 로그인으로 `/api/admin/square/readiness`를 조회한다. 이 점검은 Square 상품·매장·
+   웹훅 서명키 일치 여부만 확인하며 주문·고객·구독·청구를 만들지 않는다. 비밀값은 응답하지 않는다.
+4. 승인된 결제 기능과 운영 웹훅을 활성화한다. 실제 카드 검증은 금액과 대상을 별도로 승인받는다.
+
+클래스 결제가 열리면 기존 사전등록 버튼 옆에 `Pay & register`가 표시된다. 사전등록은 그대로 보존하며,
+입금은 Square Order/Payment를 재조회한 후에만 수강 등록으로 바뀐다. 일반 수업은 선택 날짜별로 결제한다.
+미술 프로그램은 명시적으로 연결한 5회 모두에 자리와 동일 참가자가 있을 때만 $150 한 번을 청구한다.
+미결제 checkout은 이어서 진행하거나 Square에서 주문 취소를 확인한 뒤 해제할 수 있다.
+이미 결제한 수강 등록의 취소·환불은 직원 검토가 필요하다.
 
 ## 환경변수: 누가 어디에 입력하는가
 
@@ -174,3 +191,55 @@ Checkout 링크는 Square Sandbox Testing Panel로 열린다.
 6. 문제가 생기면 해당 `*_PAYMENTS_ENABLED=false`로 새 결제를 닫고 다시 배포한다.
    이미 발행한 Invoice·구독은 Square에서 계속 유효할 수 있으므로, flag를 내리는 것만으로 청구가 취소되지는 않는다.
    기존 Invoice·구독은 Square에서 별도 확인하고, 웹훅과 결제 매핑 DB는 보존한다.
+
+## 사용자가 직접 진행한 운영 설정 — 이어서 할 작업
+
+사용자가 입력한 값과 이후 읽기 전용 확인 결과를 구분해 기록한다.
+Access Token, 서명키 등 비밀값은 이 문서에 기록하지 않는다.
+
+- `20261029_square_payment_fulfillment.sql` 적용 완료를 보고했다.
+- Vercel **Production**에 `PARTY_PAYMENTS_ENABLED`, `MEMBERSHIP_PAYMENTS_ENABLED`,
+  `CLASS_PAYMENTS_ENABLED`를 모두 `false`로 추가했다.
+- `SQUARE_ENVIRONMENT=production`, 운영 `SQUARE_ACCESS_TOKEN`, 운영 `SQUARE_LOCATION_ID`,
+  `SQUARE_API_VERSION=2026-07-15`를 저장했다. 기존 Square 환경변수는 없었다.
+- 운영 매장의 주소를 실제 매장 주소로 수정했다고 알렸다.
+- `SQUARE_WEBHOOK_URL=https://www.thelittlewanderers.com/api/webhooks/square`와
+  `SQUARE_WEBHOOK_SIGNATURE_KEY`를 저장했다.
+- Production 웹훅에 위 14개 이벤트를 선택했고, 구독은 **비활성화**해 두었다.
+- 파티 상품 `Birthday Party - Base Package` 조회 응답에서 고정 가격 USD 30000을 확인했다.
+  `SQUARE_PARTY_ITEM_VARIATION_ID=GODQOHDHWLFU4646F7VMBBXG`를 저장했다.
+- 기존 멤버십 옵션 2개는 `RELATIVE` 가격이어서 고정 $60 검증에 사용할 수 없었다.
+  기존 플랜 `4PFC5GATDWEV4MNFX2ZOGMQE` 아래에 `Little Wanderers Monthly - $60`
+  옵션을 추가했다. 사용자 제공 응답에서 단일 `MONTHLY` phase와 `STATIC` USD 6000을 확인했다.
+  `SQUARE_PLAN_VARIATION_ID=NRR5O4YJNHVIB4KRDJD5VEAM`를 저장했다.
+
+추가로 확인·준비한 내용:
+
+- Vercel에서 위 Square 환경변수들이 Production에 등록돼 있고, Cron·메일 키가 있는 것을 확인했다.
+  비밀값의 유효성은 배포 후 소유자 전용 readiness 점검으로 확인한다.
+- 실제 운영 도메인 연결과 HTTPS 응답을 확인했다. `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_BASE_URL`은
+  **Production만** `https://www.thelittlewanderers.com`으로 저장했다. 기존 Preview·Development 값은 유지했다.
+- 사용자 확인에 따라 저녁 미술은 회당 $30 대신 **5회 프로그램 총액 $150**으로 연결한다.
+  Square의 기존 저녁 미술 상품 아래 `5-week program package` 고정 USD 15000 옵션을 추가했다.
+  Production ITEM_VARIATION ID: `LPIZJFHU5NCJPXV2OHHHOHWE`.
+- 클래스 45건의 매핑 SQL을 격리 PostgreSQL에서 두 번 실행해 멱등성과 5회 프로그램 연결을 검증했고,
+  검토 이후 가격이 바뀌면 적용을 거부하는 것도 확인했다. 운영 적용은 아직 하지 않았다.
+- 기존 PR #68 Preview를 Chrome에서 열어 공개 화면을 확인했다. 남아 있던 “no deposit” 문구도 새 결제 방식에 맞췄다.
+- 운영 배포는 여전히 `main`의 `3207909`였다. PR #68은 아직 머지하지 않았다.
+- 멤버십 전체 결제 검증은 아직 완료되지 않았다. 월 $60 요금제 준비와 실제 구독 청구 검증을 구분한다.
+
+## Square Stand 현장 사용
+
+사용자가 설명한 회전식 iPad 스탠드와 내장 터치·삽입 리더는 Square Stand 2세대와 일치한다.
+모델은 현장에서 확인한다. iPad에 Square POS 앱을 설치하고 실제 운영 매장으로 로그인한 뒤 전원·네트워크·리더를 확인한다.
+기기 카드 결제는 Square POS 앱을 사용한다. 웹사이트의 Hosted Checkout은 온라인 결제 흐름이다.
+
+- 일반 입장·카페: Square POS 앱의 해당 상품으로 판매한다.
+- 클래스: 사이트의 선택 날짜/프로그램 checkout으로 결제해야 수강 등록과 연결된다.
+  POS에서 별도 클래스 상품만 판매하면 사이트 수강 등록이 자동 확정되는 흐름은 아니다.
+- 파티 잔금: POS의 **Invoices → 기존 예약의 Invoice → Remaining amount**로 받는다.
+  새 $150 판매를 만들면 해당 예약의 Invoice 납부로 연결되지 않는다.
+- 멤버십: 사이트의 검증된 구독 checkout을 사용한다. POS에서 $60 상품을 한 번 판매하는 것은 정기 구독 생성과 다르다.
+
+[Square Stand 설치](https://squareup.com/help/us/en/article/8352-set-up-square-stand-2nd-generation),
+[Square Stand 결제](https://squareup.com/help/us/en/article/5175-accept-payments-with-square-stand).

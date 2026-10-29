@@ -108,6 +108,31 @@ export async function verifyCheckoutOrder(attempt: CheckoutAttempt) {
   return { paid: true as const, order, payments };
 }
 
+export async function cancelUnpaidClassCheckout(admin: SupabaseClient, attempt: CheckoutAttempt) {
+  if (attempt.kind !== 'class') throw new Error('Only unpaid class checkouts can be cancelled here');
+  if (attempt.status === 'cancelled') return {status:'cancelled'};
+  if (!['creating','open'].includes(attempt.status)) throw new Error('This payment requires staff review');
+  const verified = await verifyCheckoutOrder(attempt);
+  if (verified.paid) return reconcileCheckout(admin,attempt);
+  if (verified.order.tenders?.length) throw new Error('Payment is in progress; please contact staff');
+  if (verified.order.state !== 'CANCELED') {
+    if (!attempt.payment_link_id) throw new Error('Checkout is still being prepared; please retry the original class');
+    try {
+      await squareRequest(`/v2/online-checkout/payment-links/${encodeURIComponent(attempt.payment_link_id)}`, 'DELETE');
+    } catch {
+      // A retry may find an already deleted link. Only the current order proves it is safe to release seats.
+    }
+  }
+  const {order} = await squareRequest<{order:SquareOrder}>(`/v2/orders/${encodeURIComponent(attempt.order_id!)}`);
+  if (order.id!==attempt.order_id || order.location_id!==attempt.location_id || order.state!=='CANCELED' || order.tenders?.length) {
+    throw new Error('Square has not confirmed cancellation; your checkout is still reserved');
+  }
+  const {error} = await admin.from('square_checkout_attempts').update({status:'cancelled'})
+    .eq('id',attempt.id).in('status',['creating','open']);
+  if (error) throw new Error(error.message);
+  return {status:'cancelled'};
+}
+
 export async function reconcileCheckout(admin: SupabaseClient, attempt: CheckoutAttempt) {
   const verified = await verifyCheckoutOrder(attempt);
   if (!verified.paid) {

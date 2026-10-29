@@ -127,20 +127,20 @@ export default async function HomeComingSoon() {
 
       <section className={styles.partyFeature}>
         <div>
-          <p className={styles.partyEyebrow}>Early access parties</p>
-          <h2>Party holds are open for Wanderlist families</h2>
+          <p className={styles.partyEyebrow}>Birthday parties</p>
+          <h2>Plan your Little Wanderers celebration</h2>
           <p>
-            With our buildout and opening timeline in mind, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}. Peek at available Friday afternoon, Saturday, and Sunday slots, then request a hold with no deposit today.
+            Party dates are available starting {PARTY_BOOKING_START_LABEL}. Choose a Friday afternoon, Saturday, or Sunday slot. The base package is $300, with a $150 deposit to confirm your reservation and a $150 remaining balance.
           </p>
           {!isAuthenticated && (
             <p className={styles.accessNote}>
-              Requesting a party hold requires My Little Wanderers access. Sign up through October 28, 2026 to join the Wanderlist. From October 29, new accounts are regular website signups.
+              Sign in to My Little Wanderers to book your party and pay the deposit. Your reservation is confirmed after the deposit payment is verified.
             </p>
           )}
         </div>
         <PastelButton href="/party">
           <span>View party calendar</span>
-          <small>{isAuthenticated ? 'Request a hold from your account' : 'Sign in when you are ready to reserve'}</small>
+          <small>{isAuthenticated ? 'Book from your account' : 'Sign in when you are ready to reserve'}</small>
         </PastelButton>
       </section>
 

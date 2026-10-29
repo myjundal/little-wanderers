@@ -79,11 +79,12 @@ test('cancellation advances confirmed seats and active waitlist offers, without 
     let offered = 0;
     let emailed = 0;
     const writes = [];
-    const admin = { from() {
+    const admin = { from(table) {
       const query = {
         select() { return query; }, eq() { return query; },
+        contains() { return query; }, limit() { return query; },
         update(patch) { writes.push(patch); return query; },
-        maybeSingle: async () => ({ data: { id: 'interest', class_id: 'painting', person_id: 'child', household_id: 'family', status, waitlist_offer_token: token, waitlist_offer_expires_at: expires }, error: null }),
+        maybeSingle: async () => ({ data: table==='square_checkout_attempts' ? null : { id: 'interest', class_id: 'painting', person_id: 'child', household_id: 'family', status, waitlist_offer_token: token, waitlist_offer_expires_at: expires }, error: null }),
         then(resolve) { resolve({ error: null }); },
       };
       return query;

@@ -87,7 +87,7 @@ export default async function MembershipPage({ searchParams }: { searchParams?: 
           <section style={{ marginTop: 16, overflow: 'visible' }}>
             <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
             <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
-              <StartSubscriptionButton plan="monthly" />
+              <StartSubscriptionButton plan="monthly" enabled={paymentFlowEnabled('membership')} />
             </div>
           </section>
           <section style={{ marginTop: 24 }}>
@@ -116,7 +116,7 @@ export default async function MembershipPage({ searchParams }: { searchParams?: 
             <section style={{ marginTop: 16, overflow: 'visible' }}>
               <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
               <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
-                <StartSubscriptionButton plan="monthly" />
+                <StartSubscriptionButton plan="monthly" enabled={paymentFlowEnabled('membership')} />
               </div>
             </section>
           )}

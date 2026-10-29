@@ -40,7 +40,8 @@ export async function squareTestDatabase() {
     create schema auth; create table auth.users(id uuid primary key);
     create table households(id uuid primary key, name text, email text, user_id uuid);
     create table people(id uuid primary key,household_id uuid,role text,first_name text,created_at timestamptz default now());
-    create table classes(id uuid primary key,title text,status text,price_cents integer,capacity integer);
+    create table classes(id uuid primary key,title text,status text,price_cents integer,capacity integer,
+      start_time timestamptz not null default now()+interval '30 days');
     create table class_registrations(id uuid primary key default gen_random_uuid(),class_id uuid,person_id uuid,
       household_id uuid,child_id uuid,status text,created_at timestamptz default now(),created_by_user_id uuid,created_by_role text,
       waitlist_offer_token uuid,waitlist_offer_expires_at timestamptz,waitlist_offered_at timestamptz,unique(class_id,person_id));
@@ -57,11 +58,12 @@ export async function squareTestDatabase() {
     grant all on all tables in schema public to anon,authenticated;
   `);
   await db.exec(fs.readFileSync('db/migrations/20261029_square_payment_fulfillment.sql','utf8'));
+  await db.exec(fs.readFileSync('db/migrations/20261029_square_class_program_checkout.sql','utf8'));
   await db.exec(`
     insert into auth.users values('${ids.user}');
     insert into households values('${ids.household}','Test Family','test@example.invalid','${ids.user}'),('${ids.other}','Other Family','other@example.invalid',null);
     insert into people(id,household_id,role,first_name) values('${ids.person}','${ids.household}','child','Test'),('${ids.otherPerson}','${ids.other}','child','Other');
-    insert into classes values('${ids.klass}','Test Class','scheduled',2000,1);
+    insert into classes(id,title,status,price_cents,capacity) values('${ids.klass}','Test Class','scheduled',2000,1);
   `);
   return db;
 }

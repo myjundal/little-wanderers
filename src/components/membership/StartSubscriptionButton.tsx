@@ -1,12 +1,12 @@
 'use client';
 import { useState } from 'react';
 
-export default function StartSubscriptionButton({ plan = 'monthly' }: { plan?: string }) {
+export default function StartSubscriptionButton({ plan = 'monthly', enabled = false }: { plan?: string; enabled?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [uiError, setUiError] = useState<string | null>(null);
 
   async function handleClick() {
-    if (loading) return;
+    if (loading || !enabled) return;
     setUiError(null);
     setLoading(true);
     try {
@@ -29,7 +29,7 @@ return (
   <>
     <button
       onClick={handleClick}
-      disabled={loading}
+      disabled={loading || !enabled}
       style={{
         background: loading ? '#a3bffa' : '#4f46e5', // indigo-600
         color: 'white',
@@ -63,7 +63,7 @@ return (
         }
       }}
     >
-      {loading ? 'Starting…' : 'Start Monthly Membership'}
+      {loading ? 'Starting…' : enabled ? 'Start Monthly Membership' : 'Contact us to start your membership'}
     </button>
     {uiError && <p style={{ marginTop: 8, color: '#8a3f6b' }}>{uiError}</p>}
   </>
