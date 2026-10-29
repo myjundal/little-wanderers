@@ -40,6 +40,10 @@ type PartyBooking = {
   birthday_child_name: string | null;
   birthday_age: number | null;
   occasion_details: string | null;
+  square_invoice_url?: string | null;
+  deposit_paid_cents?: number;
+  balance_paid_cents?: number;
+  payment_review_required?: boolean;
 };
 
 type PartyForm = {
@@ -132,9 +136,9 @@ export default function PartyPage() {
   const [items, setItems] = useState<PartyBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
-  const [confirmation, setConfirmation] = useState<string | null>(null);
   const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
   const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
   const finalizingPaymentRef = useRef(false);
@@ -197,64 +201,44 @@ export default function PartyPage() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('party_checkout') !== 'success') return;
+  const checkPayment = useCallback(async (bookingId: string) => {
     if (finalizingPaymentRef.current) return;
-
-    const startTime = params.get('start_time');
-    const endTime = params.get('end_time');
-    const bookingId = params.get('booking_id');
-      const headcount = params.get('headcount_expected');
-      const slot = params.get('slot');
-    const notes = params.get('notes');
-    const birthdayChildName = params.get('birthday_child_name');
-    const birthdayAge = params.get('birthday_age');
-    const occasionDetails = params.get('occasion_details');
-    const guardianFirstNameParam = params.get('guardian_first_name');
-    const guardianLastNameParam = params.get('guardian_last_name');
-    if (!startTime || !endTime) return;
-
-    const finalize = async () => {
-      finalizingPaymentRef.current = true;
-      setSubmitting(true);
-      const res = await fetch('/api/party-bookings', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'finalize',
-          booking_id: bookingId || undefined,
-          start_time: startTime,
-          end_time: endTime,
-          headcount_expected: headcount ? Number(headcount) : null,
-          notes: notes || null,
-          birthday_child_name: birthdayChildName || null,
-          birthday_age: birthdayAge ? Number(birthdayAge) : null,
-          occasion_details: occasionDetails || null,
-          guardian_first_name: guardianFirstNameParam || null,
-          guardian_last_name: guardianLastNameParam || null,
-          slot: slot || undefined,
-        }),
-      });
+    finalizingPaymentRef.current = true;
+    try {
+      const res = await fetch(`/api/party-bookings/${bookingId}/payment`, { cache: 'no-store' });
       const json = await res.json();
       if (!res.ok || !json.ok) {
-        setMessage(json.error ?? 'Could not finalize party booking after payment.');
-        setSubmitting(false);
-        finalizingPaymentRef.current = false;
+        setMessage(json.error ?? 'Payment verification is temporarily unavailable.');
         return;
       }
-
-      const emailFailed = json.party_email && (!json.party_email.ok || json.party_email.skipped);
-      setMessage(emailFailed ? 'Deposit paid. Your party is scheduled, but we could not send the confirmation email yet.' : 'Deposit paid. Your party is scheduled. Confirmation email sent.');
-      setToast({ message: 'Party booking complete.', tone: emailFailed ? 'warning' : 'success' });
-      setSubmitting(false);
-      finalizingPaymentRef.current = false;
+      if (json.payment_review_required) {
+        setMessage('Your payment needs a staff review. Please contact Little Wanderers.');
+      } else if (json.status === 'confirmed' && json.deposit_paid_cents >= 15000) {
+        if (sessionStorage.getItem('party_invoice_booking') === bookingId && json.start_time && json.end_time) {
+          setConfirmation(formatPartySummary(json.start_time,json.end_time));
+        }
+        sessionStorage.removeItem('party_invoice_booking');
+        setToast({ message: 'Deposit verified. Your party is confirmed.', tone: 'success' });
+      } else {
+        setMessage('Your reservation is pending until Square confirms the $150 deposit.');
+      }
       await load();
-      window.history.replaceState({}, '', '/landing/party');
-    };
-
-    void finalize();
+    } catch {
+      setMessage('Could not verify payment yet. Please try again.');
+    } finally {
+      finalizingPaymentRef.current = false;
+    }
   }, [load]);
+
+  useEffect(() => {
+    const check = () => {
+      const bookingId = sessionStorage.getItem('party_invoice_booking');
+      if (bookingId) void checkPayment(bookingId);
+    };
+    check();
+    window.addEventListener('focus', check);
+    return () => window.removeEventListener('focus', check);
+  }, [checkPayment]);
 
   const submit = async () => {
     if (!isAuthenticated) {
@@ -297,7 +281,7 @@ export default function PartyPage() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        mode: 'early_access_hold',
+        mode: 'create_payment_link',
         start_time: startIso,
         end_time: endIso,
         headcount_expected: form.headcount_expected ? Number(form.headcount_expected) : null,
@@ -318,13 +302,14 @@ export default function PartyPage() {
       return;
     }
 
-    const emailFailed = json.party_email && (!json.party_email.ok || json.party_email.skipped);
-    setConfirmation(formatPartySummary(startIso, endIso));
-    setToast({ message: 'Party booking saved.', tone: emailFailed ? 'warning' : 'success' });
-    setMessage(null);
+    if (!json.payment_url || !json.id) {
+      setMessage('The invoice is not ready. Please try again.');
+      setSubmitting(false);
+      return;
+    }
+    sessionStorage.setItem('party_invoice_booking', json.id);
     setForm(getDefaultPartyForm());
-    setSubmitting(false);
-    await load();
+    window.location.assign(json.payment_url);
   };
 
   const requestCancel = async (bookingId: string) => {
@@ -453,12 +438,13 @@ export default function PartyPage() {
       <p style={{ color: '#6f628d', marginTop: 8 }}>Celebrate your little one with a calm, playful, space-inspired birthday experience designed for young children and their caregivers.</p>
 
       {message && <p style={{ marginTop: 12 }}>{message}</p>}
+
       {confirmation && (
         <div role="dialog" aria-modal="true" aria-labelledby="party-confirmation-title" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'grid', placeItems: 'center', padding: 18, background: 'rgba(54, 42, 77, 0.32)' }}>
           <div style={{ width: 'min(460px, 100%)', borderRadius: 18, border: '1px solid #d6f0dc', background: '#fff', boxShadow: '0 18px 48px rgba(54, 42, 77, 0.2)', padding: 20 }}>
-            <p id="party-confirmation-title" style={{ margin: 0, color: '#2f7a47', fontWeight: 800, fontSize: 18 }}>Party booking saved</p>
+            <p id="party-confirmation-title" style={{ margin: 0, color: '#2f7a47', fontWeight: 800, fontSize: 18 }}>Party booking confirmed</p>
             <p style={{ margin: '10px 0 0', color: '#4f3f82', lineHeight: 1.55 }}>
-              We saved your party booking for <strong>{confirmation}</strong>. We will contact you after our official opening so you can visit the space before deciding on the deposit.
+              Your $150 deposit is verified. Your party is confirmed for <strong>{confirmation}</strong>. The remaining $150 is due 1 day before your party.
             </p>
             <button type="button" onClick={() => setConfirmation(null)} style={{ marginTop: 16, width: '100%', border: 'none', borderRadius: 12, padding: '12px 16px', background: '#5f3da4', color: '#fff', fontWeight: 800 }}>
               Done
@@ -535,7 +521,7 @@ export default function PartyPage() {
         <div>
           <AvailabilityCalendar
             title="Party booking calendar"
-            subtitle={`Party holds are available starting ${PARTY_BOOKING_START_LABEL}. Select an available Friday afternoon, Saturday, or Sunday slot to fill the booking form below.`}
+            subtitle={`Party bookings are available starting ${PARTY_BOOKING_START_LABEL}. Select an available Friday afternoon, Saturday, or Sunday slot to fill the booking form below.`}
             slots={slots}
             onSlotSelect={selectSlot}
             visibleWeekdays={[5, 6, 0]}
@@ -549,18 +535,11 @@ export default function PartyPage() {
         <h3 style={{ marginTop: 0, color: '#4f3f82' }}>New party booking</h3>
 
         <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, border: '1px solid #eadfff', background: '#faf5ff' }}>
-          <strong>Early access party holds:</strong>
+          <strong>Reserve your party:</strong>
           <ul style={{ margin: '10px 0 0 20px', display: 'grid', gap: 6, lineHeight: 1.5 }}>
-            <li>We are giving Wanderlist families first priority for party dates.</li>
-            <li>Because our construction schedule is still moving, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}.</li>
-            {!loading && !isAuthenticated && (
-              <li>
-                Party holds now start through My Little Wanderers. Login or join with email first, then request your date.
-              </li>
-            )}
-            <li>During early access, we will hold your selected party slot without collecting a deposit today.</li>
-            <li>After our official opening, we will contact you so you can visit the space.</li>
-            <li>If you love it and want to keep the booking, we will collect the 50% deposit ($150) then.</li>
+            <li>The party package is $300: a $150 deposit and $150 remaining balance.</li>
+            <li>Your reservation is confirmed after Square verifies the deposit.</li>
+            <li>Pay the deposit and remaining balance through the same Square Invoice. You can also pay the balance in person.</li>
             {PARTY_FINAL_DETAILS.map((item) => <li key={item}>{item}</li>)}
           </ul>
         </div>
@@ -664,7 +643,7 @@ export default function PartyPage() {
           </label>
 
           <button style={{ width: '100%' }} onClick={submit} disabled={submitting}>
-            {submitting ? 'Requesting hold...' : 'Request to hold'}
+            {submitting ? 'Preparing invoice...' : 'Continue to $150 deposit'}
           </button>
         </div>
         ) : (
@@ -739,6 +718,15 @@ export default function PartyPage() {
                   <p style={{ margin: '6px 0', color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 600 }}>
                     Status: {item.status === 'confirmed' || item.status === 'early_access_hold' ? 'Party scheduled' : item.status === 'cancelled' ? 'Cancelled' : cancellationRequested ? 'Pending cancel' : isUpcoming ? 'Pending confirmation' : 'Pending (past date)'}
                   </p>
+                  {item.payment_review_required && <p role="status">Payment needs staff review. Please contact us.</p>}
+                  {item.square_invoice_url && item.status !== 'cancelled' && !item.payment_review_required && (
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '8px 0' }}>
+                      {((item.deposit_paid_cents ?? 0) + (item.balance_paid_cents ?? 0) < 30000) && (
+                        <a href={item.square_invoice_url}>{(item.deposit_paid_cents ?? 0) >= 15000 ? 'Pay remaining $150 balance' : 'Pay $150 deposit'}</a>
+                      )}
+                      <button type="button" onClick={() => checkPayment(item.id)}>Check payment status</button>
+                    </div>
+                  )}
                   {(item.status === 'confirmed' || item.status === 'early_access_hold') && <p style={{ margin: '6px 0', color: '#2f7a47', fontWeight: 700 }}>Confirmed booking</p>}
                   {item.status !== 'cancelled' && isUpcoming && !cancellationRequested && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

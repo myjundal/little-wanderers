@@ -20,6 +20,7 @@ type Result = {
   last_name?: string | null;
   birthday?: string | null;
   error?: string;
+  payment_status?:string;
   lineItems?: LineItem[];
 };
 
@@ -64,6 +65,20 @@ export default function StaffCheckinPage() {
   const [lastScan, setLastScan] = useState<string>('');
   const [serverMsg, setServerMsg] = useState<string>('');
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [unpaid,setUnpaid]=useState<Array<{id:string;person_id:string;price_cents:number;name:string}>>([]);
+  const [selected,setSelected]=useState<string[]>([]);
+  const [posBusy,setPosBusy]=useState(false);
+  async function loadUnpaid(){const r=await fetch('/api/admin/admission/pos');const j=await r.json();if(r.ok)setUnpaid(j.unpaid??[]);}
+  useEffect(()=>{void loadUnpaid();const raw=new URLSearchParams(window.location.search).get('data');if(!raw)return;
+    let callback;try{callback=JSON.parse(raw);}catch{return;}
+    window.history.replaceState({},'',window.location.pathname);
+    if(callback.status!=='ok'||!callback.transaction_id||!callback.state){setServerMsg('Square did not return a verified card receipt. Check Square before starting another payment.');return;}
+    setPosBusy(true);fetch('/api/admin/admission/pos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'verify',state:callback.state,transaction_id:callback.transaction_id})})
+      .then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j.error);setServerMsg('Square card payment verified. These check-ins are paid.');setSelected([]);await loadUnpaid();})
+      .catch(e=>setServerMsg(e.message)).finally(()=>setPosBusy(false));
+  },[]);
+  async function takeCard(){setPosBusy(true);try{const r=await fetch('/api/admin/admission/pos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({checkin_ids:selected})});const j=await r.json();if(!r.ok)throw new Error(j.error);if(!j.url){setServerMsg('A Square payment is already in progress. Return to Square to finish it; contact the owner if it was cancelled.');return;}window.location.assign(j.url);}catch(e){setServerMsg(e instanceof Error?e.message:'Unable to open Square');}finally{setPosBusy(false);}}
+
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const lastScanTimeRef = useRef<number>(0);
@@ -118,11 +133,12 @@ const s = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 }, false);
           },
         ]);
 
+        void loadUnpaid();
         const price = ((data.price_cents ?? 0) / 100).toFixed(2);
         if ((data.price_cents ?? 0) === 0) {
-          setServerMsg(`Check-in OK ✅ (No payment required)`);
+          setServerMsg(data.payment_status==='paid'?'Check-in OK ✅ — prepaid admission verified':'Check-in OK ✅ — no payment required');
         } else {
-          setServerMsg(`Check-in OK ✅ • Price: $${price}`);
+          setServerMsg(`Check-in recorded • $${price} still due — collect payment before entry`);
         }
       } catch {
         setServerMsg(`Network error`);
@@ -169,6 +185,7 @@ return (
           <Link href="/staff" style={navLinkStyle}>Operator tools</Link>
         </div>
       </div>
+      {unpaid.length>0&&<section style={{marginTop:20,padding:16,border:'2px solid #d9c8f7',borderRadius:16}}><h2>Admission payments due</h2><p>Select one visiting group, then take their card payment in Square on the iPad. Keep the browser open so the receipt can be verified on return. If Square is interrupted, finish or review the existing transaction before taking another payment.</p>{unpaid.map(row=><label key={row.id} style={{display:'block',padding:8}}><input type="checkbox" checked={selected.includes(row.id)} onChange={e=>setSelected(e.target.checked?[...selected,row.id]:selected.filter(id=>id!==row.id))}/> {row.name??visits.find(v=>v.id===row.id)?.first_name??`Check-in ${row.id.slice(0,8)}`} — ${(row.price_cents/100).toFixed(2)}</label>)}<button disabled={posBusy||!selected.length} onClick={takeCard}>Take ${(unpaid.filter(row=>selected.includes(row.id)).reduce((n,row)=>n+row.price_cents,0)/100).toFixed(2)} card payment in Square</button></section>}
       <div id="qr-reader" style={{ width: 360, maxWidth: '100%', marginTop: 16 }} />
       <div style={{ marginTop: 16, padding: 12, border: '1px solid #ddd' }}>
         <strong>Last Scan:</strong>

@@ -53,11 +53,12 @@ export async function POST(req: Request) {
     const supa = admin();
     const { data: booking } = await supa
       .from('party_bookings')
-      .select('id,start_time,notes,status')
+      .select('id,start_time,notes,status,square_environment')
       .eq('id', bookingId)
       .eq('household_id', householdId)
       .maybeSingle();
 
+    if (booking?.square_environment) return Response.json({ ok:false,error:'Please contact us to reschedule this invoiced booking so we can update its invoice and payment dates together.' }, { status:409 });
     if (!booking) return Response.json({ ok: false, error: 'booking not found' }, { status: 404 });
     if (booking.status === 'cancelled') return Response.json({ ok: false, error: 'booking is cancelled' }, { status: 409 });
     if ((booking.notes ?? '').includes('[Rescheduled once')) {

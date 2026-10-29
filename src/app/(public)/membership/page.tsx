@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 export const metadata = {
@@ -68,6 +69,7 @@ export default function MembershipPage() {
         </div>
       </section>
 
+      <p><Link href="/landing/membership">View your family membership and subscribe</Link></p>
       <section
         style={{
           display: 'grid',

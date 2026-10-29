@@ -28,6 +28,7 @@ export type EmailCampaign = {
 };
 
 type SendEmailInput = {
+  idempotencyKey?: string;
   to: string;
   subject: string;
   html: string;
@@ -238,6 +239,7 @@ export async function sendResendEmail(input: SendEmailInput) {
     headers: {
       Authorization: `Bearer ${resendKey}`,
       'content-type': 'application/json',
+      ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
     },
     body: JSON.stringify({
       from,

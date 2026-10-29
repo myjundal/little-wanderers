@@ -21,10 +21,10 @@ export default function StaffFamilyMembershipPage() {
       const res = await fetch(`/api/admin/families/${familyId}/membership`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'finalize_start' }),
+        body: JSON.stringify({ action: 'finalize_start', checkout_id: searchParams.get('checkout_id') }),
       });
       const json = await res.json();
-      setMessage(json.ok ? 'Membership started successfully.' : json.error ?? 'Could not finalize membership start.');
+      setMessage(json.ok ? (json.status === 'completed' ? 'Square subscription linked. Membership access follows verified paid invoices.' : 'Payment is still pending.') : json.error ?? 'Could not finalize membership start.');
       setBusy(false);
       window.history.replaceState({}, '', `/staff/families/${familyId}/membership`);
     };
@@ -69,7 +69,7 @@ export default function StaffFamilyMembershipPage() {
         <p style={{ margin: 0 }}><Link href={`/staff/families/${familyId}`}>← Back to family detail</Link></p>
       </div>
       <h1 style={{ color: '#4f3f82' }}>Manage membership</h1>
-      <p style={{ color: '#6d6480' }}>Start membership goes through Square payment. Pause and end are staff manual actions.</p>
+      <p style={{ color: '#6d6480' }}>Start membership goes through Square payment. Pause and end are sent to Square and may take effect at the next billing boundary.</p>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button type="button" onClick={startMembership} disabled={busy}>Start membership</button>

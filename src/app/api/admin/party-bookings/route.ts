@@ -2,7 +2,7 @@ import { requireStaffContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
-const PARTY_SELECT = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at,current_child_count,current_adult_count,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,attendance_recorded_by,attendance_notes,birthday_child_name,birthday_age,occasion_details';
+const PARTY_SELECT = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at,current_child_count,current_adult_count,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,attendance_recorded_by,attendance_notes,birthday_child_name,birthday_age,occasion_details,square_environment,square_invoice_id,square_invoice_url,square_invoice_status,deposit_paid_cents,balance_paid_cents,payment_review_required';
 const PARTY_SELECT_FALLBACK = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at';
 
 function isMissingColumnError(message: string) {
@@ -42,6 +42,7 @@ export async function GET() {
         birthday_child_name: null,
         birthday_age: null,
         occasion_details: null,
+        square_environment:null,square_invoice_id:null,square_invoice_url:null,square_invoice_status:null,deposit_paid_cents:0,balance_paid_cents:0,payment_review_required:false,
       }));
     }
 

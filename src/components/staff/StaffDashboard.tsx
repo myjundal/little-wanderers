@@ -83,6 +83,11 @@ type PartyBookingItem = {
   birthday_child_name: string | null;
   birthday_age: number | null;
   occasion_details: string | null;
+  square_invoice_id?: string | null;
+  square_invoice_url?: string | null;
+  deposit_paid_cents?: number;
+  balance_paid_cents?: number;
+  payment_review_required?: boolean;
 };
 
 type StaffDashboardView = 'overview' | 'classes' | 'parties' | 'occupancy';
@@ -1255,6 +1260,13 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                 )}
                 <p style={{ color: '#6d6480' }}><strong>Headcount (requested):</strong> {selectedBooking.headcount_expected ?? '-'}</p>
                 <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
+                {selectedBooking.square_invoice_id && <div style={{ margin: '10px 0' }}>
+                  <p>Deposit paid: {dollars(selectedBooking.deposit_paid_cents ?? 0)} · Balance paid: {dollars(selectedBooking.balance_paid_cents ?? 0)}</p>
+                  {selectedBooking.payment_review_required && <p role="status" style={{ color: '#8a3f6b', fontWeight: 700 }}>Payment needs owner review</p>}
+                  {selectedBooking.square_invoice_url && <a href={selectedBooking.square_invoice_url} target="_blank" rel="noreferrer">Open this Square Invoice</a>}
+                  <p style={{ color: '#6d6480' }}>For a POS balance payment, open this invoice in Square POS → Invoices → Add payment.</p>
+                </div>}
+
                 {celebrationLines(selectedBooking).map((line) => (
                   <p key={`detail-${line}`} style={{ color: '#6d6480' }}><strong>{line.split(':')[0]}:</strong> {line.split(':').slice(1).join(':').trim()}</p>
                 ))}
@@ -1342,7 +1354,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                 </p>
                 <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
-                  {selectedBooking.status === 'pending' && (
+                  {selectedBooking.status === 'pending' && !selectedBooking.square_invoice_id && (
                     <button style={{ ...buttonStyle, background: '#2f7a47', color: '#fff', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'confirmed')}>Confirm booking</button>
                   )}
                   {selectedBooking.status !== 'cancelled' && (

@@ -36,6 +36,11 @@ export async function classPageHarness({
   register = async () => Response.json({ ok: true, id: 'registration', status: 'preregistered', email: { ok: true } }),
   saveChild = async () => Response.json({ ok: true, child: fixtureChild }),
   failRefresh = false,
+  paymentsEnabled = false,
+  classItems = [fixtureClass],
+  registrations = [],
+  initialSearch = '',
+  checkout = async () => Response.json({ok:true,payment_url:'https://square.link/u/test-checkout'}),
 } = {}) {
   const hooks = [];
   let cursor = 0;
@@ -44,6 +49,7 @@ export async function classPageHarness({
   const requests = [];
   let focused;
   let posted = false;
+  let redirected;
   const memo = (factory, deps) => {
     const index = cursor++;
     if (!hooks[index] || !deps || deps.some((value, i) => !Object.is(value, hooks[index].deps?.[i]))) {
@@ -77,16 +83,18 @@ export async function classPageHarness({
     '@/components/ui/ActionToast': toast,
     '@/components/classes/PreRegistrationNotice': function Notice() {},
   }, {
-    React: react,
+    React: react, AbortController,
     document: { getElementById: id => ({ scrollIntoView() {}, focus() { focused = id; } }) },
-    window: { location: { search: '' }, setInterval() {}, clearInterval() {}, setTimeout() {} },
+    window: { location: { search: initialSearch, href: `https://test.example/landing/classschedule${initialSearch}`, assign(url) { redirected=url; } },
+      history: { replaceState() {} }, setInterval() {}, clearInterval() {}, setTimeout() {}, clearTimeout() {} },
     fetch: async (url, options) => {
       requests.push({ url, options });
+      if (url === '/api/classes/checkout') return JSON.parse(options.body).mode==='current' ? Response.json({ok:true,checkout:null}) : checkout(options);
       if (url === '/api/classes/register') { posted = true; return register(options); }
       if (url === '/api/family/children') return saveChild(options);
       if (posted && failRefresh) throw new Error('Refresh offline');
-      if (url.startsWith('/api/classes?')) return Response.json({ ok: true, items: [fixtureClass] });
-      if (url.startsWith('/api/classes/my')) return Response.json({ ok: true, items: [] });
+      if (url.startsWith('/api/classes?')) return Response.json({ ok: true, items: classItems, payments_enabled: paymentsEnabled });
+      if (url.startsWith('/api/classes/my')) return Response.json({ ok: true, items: registrations });
       if (url.startsWith('/api/family/profile')) return Response.json({ ok: true, guardian, children });
       throw new Error(`Unexpected request: ${url}`);
     },
@@ -118,6 +126,9 @@ export async function classPageHarness({
   await flush();
   return {
     requests, flush, button,
+    payButton: () => all(node => node.type === 'button' && typeof node.props.children === 'string' && /^(Pay \$|Registered$)/.test(node.props.children))[0],
+    get redirected() { return redirected; },
+    get tree() { return tree; },
     click: () => button().props.onClick(),
     field(id, value) {
       const input = all(node => node.props.id === id)[0];

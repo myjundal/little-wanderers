@@ -1,10 +1,13 @@
+import {expireSquareCheckoutHolds} from '@/lib/square-checkout-recovery';
 import { earliestClassTime } from '@/lib/class-config';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { paymentFlowEnabled, squareEnvironment } from '@/lib/square-client';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
+export const maxDuration=60;
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
 const CLASS_SELECT_BASE = 'id,title,category,start_time,end_time,capacity,price_cents,status';
 
@@ -69,6 +72,19 @@ export async function GET(req: NextRequest) {
     const limit = toInt(req.nextUrl.searchParams.get('limit'), 200);
     const supa = admin();
     const classes = await selectClasses(limit);
+    const paymentsEnabled = paymentFlowEnabled('class');
+    const paymentMappings = new Map<string, { program_key: string | null }>();
+    const programSessions = new Map<string, string[]>();
+    if (paymentsEnabled) {
+      await expireSquareCheckoutHolds(supa);
+      const { data: mappings, error } = await supa.from('square_catalog_mappings')
+        .select('entity_key,program_key').eq('environment', squareEnvironment()).eq('kind', 'class');
+      if (error) throw new Error(error.message);
+      for (const mapping of mappings ?? []) {
+        paymentMappings.set(mapping.entity_key, mapping);
+        if (mapping.program_key) programSessions.set(mapping.program_key, [...(programSessions.get(mapping.program_key) ?? []), mapping.entity_key]);
+      }
+    }
 
     const ids = classes.map((c) => c.id);
     let countsByClass = new Map<string, number>();
@@ -133,6 +149,12 @@ export async function GET(req: NextRequest) {
 
     const items = classes.map((c) => {
       const booked = countsByClass.get(c.id) ?? 0;
+      const mapping = paymentMappings.get(c.id);
+      const programIds = mapping?.program_key ? programSessions.get(mapping.program_key) ?? [] : [];
+      const programAvailable = !mapping?.program_key || (programIds.length > 1 && programIds.every(id => {
+        const occurrence = classes.find(row => row.id === id);
+        return occurrence && occurrence.price_cents === c.price_cents && (occurrence.capacity == null || (countsByClass.get(id) ?? 0) < occurrence.capacity);
+      }));
       const recommendations = classes
         .filter((candidate) => candidate.id !== c.id)
         .map((candidate) => {
@@ -158,10 +180,14 @@ export async function GET(req: NextRequest) {
         waitlist_count: waitlistCountsByClass.get(c.id) ?? 0,
         is_popular: booked > 0 && booked >= popularThreshold,
         recommended_class_ids: recommendations.map((entry) => entry.class_id),
+        payment_available: paymentsEnabled && (Boolean(mapping) || squareEnvironment() === 'sandbox') && programAvailable
+          && (c.capacity == null || booked < c.capacity),
+        payment_program_key: mapping?.program_key ?? null,
+        payment_program_session_count: programIds.length || null,
       };
     });
 
-    return Response.json({ ok: true, items }, { headers: NO_STORE_HEADERS });
+    return Response.json({ ok: true, items, payments_enabled: paymentsEnabled }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });

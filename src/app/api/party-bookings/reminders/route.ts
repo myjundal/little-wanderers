@@ -1,11 +1,15 @@
+import {expireSquareCheckoutHolds} from '@/lib/square-checkout-recovery';
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { sendDuePartyReminderEmails } from '@/lib/party-emails';
+import { expirePartyInvoiceHolds } from '@/lib/square-party';
+import { paymentFlowEnabled } from '@/lib/square-client';
 
+export const maxDuration=60;
 export const dynamic = 'force-dynamic';
 
 function isAuthorized(req: Request) {
-  const expected = process.env.PARTY_REMINDER_SECRET || process.env.CRON_SECRET;
+  const expected = process.env.CRON_SECRET || process.env.PARTY_REMINDER_SECRET;
   if (!expected) return process.env.NODE_ENV !== 'production';
   const auth = req.headers.get('authorization') ?? '';
   const querySecret = new URL(req.url).searchParams.get('secret') ?? '';
@@ -18,8 +22,11 @@ async function handle(req: Request) {
   }
 
   try {
-    const result = await sendDuePartyReminderEmails(createAdminSupabaseClient());
-    return NextResponse.json(result);
+    const admin = createAdminSupabaseClient();
+    const expired_holds = paymentFlowEnabled('party') ? await expirePartyInvoiceHolds(admin) : null;
+    const expired_checkouts=await expireSquareCheckoutHolds(admin);
+    const result = await sendDuePartyReminderEmails(admin);
+    return NextResponse.json({ ...result, expired_holds,expired_checkouts });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown error';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

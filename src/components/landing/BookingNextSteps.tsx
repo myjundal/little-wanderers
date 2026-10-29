@@ -9,7 +9,7 @@ const choices = [
     href: '/landing/party',
     icon: '✦',
     title: 'Book a birthday party',
-    description: 'Explore party dates and request a hold for your celebration.',
+    description: 'Explore party dates and confirm your celebration with a $150 deposit.',
     destination: 'My Parties',
     pointer: 'Book your birthday party here!',
     className: styles.party,

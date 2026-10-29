@@ -164,6 +164,14 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, already_cancelled: true });
     }
 
+    const { data: paidCheckout, error: paymentError } = await supa.from('square_checkout_attempts')
+      .select('id').eq('household_id', householdId).eq('kind', 'class').eq('status', 'completed')
+      .contains('payload', { summary: { registration_ids: [registrationId] } }).limit(1).maybeSingle();
+    if (paymentError) throw new Error(paymentError.message);
+    if (paidCheckout) {
+      return Response.json({ ok: false, error: 'Please contact Little Wanderers to change or cancel a paid registration. The studio will review any refund with you.' }, { status: 409 });
+    }
+
     const releaseSeat = reg.status === 'scheduled' || reg.status === 'attended' || (
       reg.status === 'waitlist' && Boolean(reg.waitlist_offer_token) &&
       new Date(reg.waitlist_offer_expires_at ?? '').getTime() > Date.now()

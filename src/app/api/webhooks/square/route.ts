@@ -1,121 +1,150 @@
-// ./src/app/api/webhooks/square/route.ts
+import {verifyAdmissionPos,type PosSale} from '@/lib/square-admission-pos';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { verifySquareWebhook } from '@/lib/square-webhook';
-import { getLatestHouseholdIdForUser } from '@/lib/households';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { squareConfig, squareRequest, type SquareInvoice } from '@/lib/square-client';
+import { reconcilePartyInvoice, type InvoiceBooking } from '@/lib/square-party';
+import { reconcileCheckout, reconcileMembership, saveSquarePaymentReceipt, type CheckoutAttempt, type SquarePayment } from '@/lib/square-checkout';
+import { sendPartyConfirmationEmail } from '@/lib/party-emails';
+import { logger } from '@/lib/logger';
 
-const SUPA = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-export async function POST(req: NextRequest) {
-  // Read raw body FIRST (signature is over raw text)
+export async function POST(req: Request) {
   const raw = await req.text();
-
-  const notificationUrl = process.env.SQUARE_WEBHOOK_URL?.trim() || req.url;
-  const sigOk = verifySquareWebhook(raw, req.headers.get('x-square-hmacsha256-signature'), process.env.SQUARE_WEBHOOK_SIGNATURE_KEY, notificationUrl);
-  if (!sigOk) return new Response('invalid signature', { status: 401 });
-
+  const url = process.env.SQUARE_WEBHOOK_URL?.trim() || req.url;
+  if (!verifySquareWebhook(raw, req.headers.get('x-square-hmacsha256-signature'), process.env.SQUARE_WEBHOOK_SIGNATURE_KEY, url)) {
+    return new Response('invalid signature', { status: 401 });
+  }
   let payload;
   try { payload = JSON.parse(raw); } catch { return new Response('invalid JSON', { status: 400 }); }
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return new Response('invalid event', { status: 400 });
-  const supa = SUPA();
-
-  // -------- idempotency guard --------
-  const eventId: string | null =
-    payload?.event_id ?? payload?.id ?? payload?.data?.id ?? null;
-
-  if (eventId) {
-    const { error: logError } = await supa.from('webhook_log').insert({
-      provider: 'square',
-      event_id: eventId,
-      payload,
-    });
-
-    if (logError) {
-      if (logError.code === '23505' || logError.message.toLowerCase().includes('duplicate')) {
-        return new Response('duplicate', { status: 200 });
+  if (!payload || typeof payload.event_id !== 'string' || typeof payload.type !== 'string') {
+    return new Response('invalid event', { status: 400 });
+  }
+  const admin = createAdminSupabaseClient();
+  const provider = `square:${squareConfig().environment}`;
+  const eventId = payload.event_id;
+  const { error: insertError } = await admin.from('webhook_log').insert({ provider, event_id: eventId, payload, processing_status: 'pending' });
+  if (insertError) {
+    if (insertError.code !== '23505') return new Response('unable to store event', { status: 500 });
+    const { data: existing, error } = await admin.from('webhook_log').select('processing_status').eq('provider', provider).eq('event_id', eventId).single();
+    if (error) return new Response('unable to read event', { status: 500 });
+    if (existing.processing_status === 'processed') return new Response('duplicate', { status: 200 });
+    // A previous delivery can have failed after recording receipt. All fulfillment is idempotent and is retried.
+  }
+  try {
+    const object = payload.data?.object ?? {};
+    const type = payload.type as string;
+    const environment = squareConfig().environment;
+    if (type.startsWith('invoice.')) {
+      const id = object.invoice?.id ?? payload.data?.id;
+      if (!id) throw new Error('Invoice event is missing its ID');
+      const { invoice } = await squareRequest<{ invoice: SquareInvoice }>(`/v2/invoices/${encodeURIComponent(id)}`);
+      const result = await admin.from('party_bookings').select('*')
+        .eq('square_environment', environment).eq('square_invoice_id', invoice.id).maybeSingle();
+      if (result.error) throw new Error(result.error.message);
+      let booking = result.data;
+      if (!booking && invoice.order_id) {
+        const result = await admin.from('party_bookings').select('*').eq('square_environment', environment).eq('square_order_id', invoice.order_id).maybeSingle();
+        if (result.error) throw new Error(result.error.message);
+        booking = result.data;
+        if (booking && !booking.square_invoice_id) {
+          // Invoice creation can succeed before its response/mapping is saved. Recover by the pre-persisted order.
+          const saved = await admin.from('party_bookings').update({ square_invoice_id: invoice.id }).eq('id', booking.id)
+            .is('square_invoice_id', null).select('*').maybeSingle();
+          if (saved.error) throw new Error(saved.error.message);
+          booking = saved.data ?? booking;
+        }
       }
-
-      return new Response(logError.message, { status: 500 });
-    }
-  } else {
-    // no event id → still log without unique guard
-    await supa.from('webhook_log').insert({
-      provider: 'square',
-      payload,
-    });
-  }
-
-  // -------- route events --------
-  const type: string = payload?.type ?? payload?.event_type ?? '';
-  const sub = payload?.data?.object?.subscription ?? null;
-  const payment = payload?.data?.object?.payment ?? null;
-  const customerId: string | null =
-    payload?.data?.object?.customer?.id ??
-    sub?.customer_id ??
-    null;
-
-  // resolve household via square_customers mapping
-  let householdId: string | null = null;
-  if (customerId) {
-    const { data: mapRows, error: mapErr } = await supa
-      .from('square_customers')
-      .select('household_id')
-      .eq('square_customer_id', customerId)
-      .limit(1);
-
-    if (!mapErr && mapRows && mapRows.length > 0) {
-      householdId = mapRows[0].household_id;
-    }
-  }
-
-  // If we still don't know household, try a best-effort email match (optional fallback)
-  if (!householdId) {
-    const email: string | undefined =
-      payload?.data?.object?.customer?.email_address ??
-      payload?.data?.object?.buyer_email_address ??
-      undefined;
-    if (email) {
-      // find user by email, then their latest household
-      const { data: users } = await supa
-        .from('auth.users') /* only works with service role + PG schema exposed */
-        .select('id')
-        .ilike('email', email)
-        .limit(1);
-
-      const userId = users?.[0]?.id ?? null;
-      if (userId) {
-        householdId = await getLatestHouseholdIdForUser(supa, userId);
+      if (booking) {
+        const verified = await reconcilePartyInvoice(admin, booking as InvoiceBooking, invoice);
+        if (verified.status === 'confirmed' && verified.deposit_paid_cents >= 15000 && !verified.payment_review_required && !verified.confirmation_email_sent_at) {
+          const result = await sendPartyConfirmationEmail(admin, verified.id);
+          if (!result.ok) throw new Error('Party confirmation email could not be sent');
+        }
+      } else if (invoice.subscription_id) {
+        const { data: attempt, error: attemptError } = await admin.from('square_checkout_attempts').select('*')
+          .eq('environment', environment).eq('square_subscription_id', invoice.subscription_id).maybeSingle();
+        if (attemptError) throw new Error(attemptError.message);
+        if (attempt) await reconcileMembership(admin, attempt as CheckoutAttempt, undefined, invoice);
+      }
+    } else if (type.startsWith('subscription.')) {
+      const id = object.subscription?.id ?? payload.data?.id;
+      if (!id) throw new Error('Subscription event is missing its ID');
+      const { data: attempt, error } = await admin.from('square_checkout_attempts').select('*')
+        .eq('environment', environment).eq('square_subscription_id', id).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (attempt) await reconcileMembership(admin, attempt as CheckoutAttempt);
+    } else if (type.startsWith('payment.') || type === 'order.updated' || type.startsWith('refund.')) {
+      let orderId = object.order_updated?.order_id ?? object.order?.id ?? null;
+      let paymentSnapshot: SquarePayment | undefined;
+      if (type.startsWith('payment.')) {
+        const id = object.payment?.id ?? payload.data?.id;
+        if (!id) throw new Error('Payment event is missing its ID');
+        const { payment } = await squareRequest<{ payment: SquarePayment }>(`/v2/payments/${encodeURIComponent(id)}`);
+        orderId = payment.order_id;
+        paymentSnapshot = payment;
+      }
+      if (type.startsWith('refund.')) {
+        const id = object.refund?.id ?? payload.data?.id;
+        if (!id) throw new Error('Refund event is missing its ID');
+        const { refund } = await squareRequest<{ refund: { payment_id: string } }>(`/v2/refunds/${encodeURIComponent(id)}`);
+        const { payment } = await squareRequest<{ payment: SquarePayment }>(`/v2/payments/${encodeURIComponent(refund.payment_id)}`);
+        orderId = payment.order_id;
+        paymentSnapshot = payment;
+      }
+      if (orderId) {
+        const { data: attempt, error } = await admin.from('square_checkout_attempts').select('*').eq('environment', environment).eq('order_id', orderId).maybeSingle();
+        if (error) throw new Error(error.message);
+        if (attempt) {
+          if (paymentSnapshot) await saveSquarePaymentReceipt(admin,paymentSnapshot);
+          try { await reconcileCheckout(admin, attempt as CheckoutAttempt); }
+          catch (error) {
+            if (type.startsWith('refund.')) {
+              const saved = await admin.from('square_checkout_attempts').update({ status: 'needs_review' }).eq('id', attempt.id);
+              if (saved.error) throw new Error(saved.error.message);
+              if(attempt.kind==='admission'){
+                const tickets=await admin.from('admission_passes').update({status:'needs_review'}).eq('attempt_id',attempt.id);
+                if(tickets.error)throw new Error(tickets.error.message);
+                const visits=await admin.from('checkins').update({payment_status:'needs_review'}).eq('admission_attempt_id',attempt.id);
+                if(visits.error)throw new Error(visits.error.message);
+              }
+              if (attempt.kind === 'membership' && attempt.square_subscription_id) {
+                const membership = await admin.from('memberships').update({payment_review_required:true,renews_at:new Date().toISOString()})
+                  .eq('square_environment',environment).eq('square_subscription_id',attempt.square_subscription_id).eq('household_id',attempt.household_id);
+                if (membership.error) throw new Error(membership.error.message);
+              }
+            } else throw error;
+          }
+        }
+        const noteId=paymentSnapshot?.note?.match(/^LW admission ([0-9a-f-]{36})$/i)?.[1];
+        const posQuery=admin.from('admission_pos_sales').select('*').eq('environment',environment);
+        const pos=noteId?await posQuery.eq('id',noteId).maybeSingle():await posQuery.eq('order_id',orderId).maybeSingle();
+        if(pos.error)throw new Error(pos.error.message);
+        if(pos.data&&paymentSnapshot?.status==='COMPLETED'){
+          if((paymentSnapshot.refunded_money?.amount??0)>0){
+            const sale=await admin.from('admission_pos_sales').update({status:'needs_review'}).eq('id',pos.data.id);
+            const visits=await admin.from('checkins').update({payment_status:'needs_review'}).eq('square_environment',environment).eq('square_order_id',orderId);
+            if(sale.error||visits.error)throw new Error('Unable to flag refunded admission');
+          }else await verifyAdmissionPos(admin,pos.data as PosSale,orderId);
+        }
+        const { data: booking, error: bookingError } = await admin.from('party_bookings').select('*')
+          .eq('square_environment', environment).eq('square_order_id', orderId).maybeSingle();
+        if (bookingError) throw new Error(bookingError.message);
+        if (booking?.square_invoice_id) {
+          if (paymentSnapshot) await saveSquarePaymentReceipt(admin,paymentSnapshot);
+          await reconcilePartyInvoice(admin, booking as InvoiceBooking);
+        }
       }
     }
+    const { error } = await admin.from('webhook_log').update({ processing_status: 'processed', processed_at: new Date().toISOString(), processing_error: null })
+      .eq('provider', provider).eq('event_id', eventId);
+    if (error) throw new Error(error.message);
+    return new Response('ok', { status: 200 });
+  } catch (error) {
+    logger.error({ action: 'square.webhook_processing_failed', eventId }, error);
+    await admin.from('webhook_log').update({ processing_status: 'failed', processing_error: error instanceof Error ? error.message : 'Processing failed' })
+      .eq('provider', provider).eq('event_id', eventId);
+    return new Response('processing failed; retry required', { status: 500 });
   }
-
-  // ---- subscription updates → household-level membership upsert ----
-  if (type.includes('subscription.updated') && householdId) {
-    const renewsAt: string | undefined = sub?.charged_through_date;
-
-    await supa.from('memberships').upsert(
-      {
-        household_id: householdId,
-        square_subscription_id: sub?.id ?? null,
-        renews_at: renewsAt ? new Date(renewsAt).toISOString() : null,
-      },
-      { onConflict: 'household_id' }
-    );
-  }
-
-  // ---- one-time payment completed → passes issue (stub) ----
-  if (type.includes('payment.updated') && payment?.status === 'COMPLETED' && householdId) {
-    // TODO:
-    // - read order line items from payload?.data?.object?.order_id (you may need to fetch order by id)
-    // - if item is '5-Pack', increment passes for household
-  }
-
-  return new Response('ok', { status: 200 });
 }

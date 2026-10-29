@@ -2,93 +2,17 @@ import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
-import crypto from 'crypto';
-import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
-import {
-  isBookablePartySlot,
-  isGrandfatheredFridayMorningPartySlot,
-  isOnOrAfterPartyBookingStart,
-  isRecognizedPartySlot,
-  PARTY_BOOKING_START_LABEL,
-} from '@/lib/party-config';
-import { normalizeWaitlistEmail } from '@/lib/waitlist';
-import { sendPartyBookingNotification } from '@/lib/admin-notifications';
-import { ensureGuardianProfile, getPrimaryGuardianProfile, parseGuardianName } from '@/lib/family-profile';
-import { logger } from '@/lib/logger';
-import { PARTY_DEPOSIT_CENTS, PARTY_TOTAL_FEE_CENTS } from '@/lib/party-info';
-import { sendPartyConfirmationEmail } from '@/lib/party-emails';
+import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
+import { ensureGuardianProfile, parseGuardianName } from '@/lib/family-profile';
+import { startPartyInvoice, reconcilePartyInvoice, type InvoiceBooking } from '@/lib/square-party';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
-
-const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,birthday_child_name,birthday_age,occasion_details';
+const admin = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+const PARTY_SELECT = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,birthday_child_name,birthday_age,occasion_details,square_invoice_url,square_invoice_status,deposit_paid_cents,balance_paid_cents,payment_review_required';
 const PARTY_SELECT_FALLBACK = 'id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at';
-
-type PartyPayload = {
-  start_time?: string;
-  end_time?: string;
-  headcount_expected?: number | null;
-  notes?: string | null;
-  slot?: '10:00' | '15:00';
-  mode?: 'create_payment_link' | 'finalize' | 'early_access_hold';
-  birthday_child_name?: string | null;
-  birthday_age?: number | null;
-  occasion_details?: string | null;
-  booking_id?: string;
-  guardian_first_name?: string | null;
-  guardian_last_name?: string | null;
-};
-
-const admin = () =>
-  createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-
-function isMissingColumnError(message: string) {
-  return /column .* does not exist|Could not find the '.*' column/i.test(message);
-}
-
-function getSquareBaseUrl() {
-  const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
-  return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
-}
-
-async function getHouseholdIdForUser(userId: string) {
-  return getLatestHouseholdIdForUser(admin(), userId);
-}
-
-async function tagPartyEarlyAccessContact(input: { email: string | undefined; householdId: string }) {
-  if (!input.email) return;
-
-  const email = input.email.trim().toLowerCase();
-  const normalizedEmail = normalizeWaitlistEmail(email);
-  if (!normalizedEmail) return;
-
-  const supa = admin();
-  const { data: contact, error } = await supa
-    .from('contacts')
-    .upsert({
-      email,
-      normalized_email: normalizedEmail,
-      source: 'customer',
-      raw_metadata: { household_id: input.householdId },
-    }, { onConflict: 'normalized_email' })
-    .select('id')
-    .maybeSingle();
-
-  if (error || !contact?.id) {
-    console.warn('party contact tag upsert failed', error?.message);
-    return;
-  }
-
-  const { error: customerTagError } = await supa
-    .from('contact_tags')
-    .upsert({ contact_id: contact.id, tag: 'customer' }, { onConflict: 'contact_id,tag' });
-  if (customerTagError) console.warn('customer contact tag failed', customerTagError.message);
-
-  const { error: partyTagError } = await supa
-    .from('contact_tags')
-    .upsert({ contact_id: contact.id, tag: 'party_early_access' }, { onConflict: 'contact_id,tag' });
-  if (partyTagError) console.warn('party early access contact tag failed', partyTagError.message);
-}
+const isMissingColumnError = (message: string) => /column .* does not exist|Could not find the '.*' column/i.test(message);
+const getHouseholdIdForUser = (userId: string) => getLatestHouseholdIdForUser(admin(), userId);
 
 async function selectPartyBookings(householdId: string) {
   const supa = admin();
@@ -113,82 +37,6 @@ async function selectPartyBookings(householdId: string) {
   }));
 }
 
-async function notifyPartyBookingSaved(input: {
-  bookingId?: string | null;
-  householdId?: string | null;
-  fallbackEmail?: string | null;
-  startTime: string;
-  endTime: string;
-  status: string;
-  birthdayChildName?: string | null;
-  birthdayAge?: number | null;
-  headcountExpected?: number | null;
-  occasionDetails?: string | null;
-  notes?: string | null;
-}) {
-  try {
-    let familyName: string | null = null;
-    let familyEmail: string | null = input.fallbackEmail ?? null;
-    let guardianFirstName: string | null = null;
-    let guardianLastName: string | null = null;
-    if (input.householdId) {
-      const supa = admin();
-      const { data: household } = await supa
-        .from('households')
-        .select('name,email')
-        .eq('id', input.householdId)
-        .maybeSingle();
-      familyName = household?.name ?? null;
-      familyEmail = household?.email ?? familyEmail;
-      const guardian = await getPrimaryGuardianProfile(supa, input.householdId).catch(() => null);
-      guardianFirstName = guardian?.first_name ?? null;
-      guardianLastName = guardian?.last_name ?? null;
-    }
-
-    const notification = await sendPartyBookingNotification({
-      bookingId: input.bookingId,
-      startTime: input.startTime,
-      endTime: input.endTime,
-      status: input.status,
-      familyName,
-      familyEmail,
-      guardianFirstName,
-      guardianLastName,
-      birthdayChildName: input.birthdayChildName,
-      birthdayAge: input.birthdayAge,
-      headcountExpected: input.headcountExpected,
-      occasionDetails: input.occasionDetails,
-      notes: input.notes,
-    });
-
-    if (!notification.ok) {
-      logger.error(
-        { action: 'party_booking_notification.failed', bookingId: input.bookingId ?? null, status: input.status },
-        new Error(notification.error)
-      );
-    }
-  } catch (notificationError) {
-    logger.error(
-      { action: 'party_booking_notification.failed', bookingId: input.bookingId ?? null, status: input.status },
-      notificationError
-    );
-  }
-}
-
-async function notifyPartyCustomerConfirmation(input: { admin: ReturnType<typeof admin>; bookingId?: string | null; fallbackEmail?: string | null }) {
-  if (!input.bookingId) return { ok: false as const, error: 'booking id missing' };
-  try {
-    const result = await sendPartyConfirmationEmail(input.admin, input.bookingId, input.fallbackEmail);
-    if (!result.ok || 'skipped' in result) {
-      logger.warn({ action: 'party_confirmation_email.not_sent', bookingId: input.bookingId, result });
-    }
-    return result;
-  } catch (emailError) {
-    logger.error({ action: 'party_confirmation_email.failed', bookingId: input.bookingId }, emailError);
-    return { ok: false as const, error: emailError instanceof Error ? emailError.message : 'Unable to send party confirmation email.' };
-  }
-}
-
 export async function GET() {
   try {
     const server = await createServerSupabaseClient();
@@ -210,400 +58,57 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const unavailable = onlinePaymentsUnavailable('party');
+  if (unavailable) return unavailable;
   try {
-    const body = (await req.json()) as PartyPayload;
-    const startTime = body?.start_time;
-    const endTime = body?.end_time;
-    const headcountExpected = body?.headcount_expected == null ? null : Number(body.headcount_expected);
-    const notes = (body?.notes as string | null) ?? null;
-    const slot = typeof body.slot === 'string' ? body.slot : undefined;
-    const birthdayChildName = typeof body.birthday_child_name === 'string' ? body.birthday_child_name.trim().slice(0, 80) : null;
-    const birthdayAge = body?.birthday_age == null ? null : Number(body.birthday_age);
-    const occasionDetails = typeof body.occasion_details === 'string' ? body.occasion_details.trim().slice(0, 120) : null;
-    const guardianName = parseGuardianName(body);
-    const mode = body.mode ?? 'create_payment_link';
-    if (mode !== 'early_access_hold') {
-      const unavailable = onlinePaymentsUnavailable();
-      if (unavailable) return unavailable;
-    }
-    const bookingId = typeof body.booking_id === 'string' ? body.booking_id : null;
-
-    if (!startTime || !endTime) {
-      return Response.json({ ok: false, error: 'start_time and end_time are required' }, { status: 400 });
-    }
-
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-      return Response.json({ ok: false, error: 'invalid time range' }, { status: 400 });
-    }
-
-    const isGrandfatheredSlot = isGrandfatheredFridayMorningPartySlot(start, slot);
-    if (!isRecognizedPartySlot(start, end, slot)) {
-      return Response.json({ ok: false, error: 'Party bookings are only available on Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
-    }
-    if (birthdayAge != null && (!Number.isInteger(birthdayAge) || birthdayAge <= 0 || birthdayAge > 21)) {
-      return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });
-    }
-
+    const body = await req.json();
     const server = await createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await server.auth.getUser();
-
+    const { data: { user } } = await server.auth.getUser();
     if (!user) return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
-
+    const supa = admin();
     const householdId = await getHouseholdIdForUser(user.id);
     if (!householdId) return Response.json({ ok: false, error: 'household not found' }, { status: 404 });
 
-    const supa = admin();
-    await ensureGuardianProfile({
-      admin: supa,
-      householdId,
-      userId: user.id,
-      email: user.email,
-      firstName: guardianName.firstName,
-      lastName: guardianName.lastName,
+    // Kept for old clients: this action only reads verified provider state. It cannot grant a reservation.
+    if (body.mode === 'finalize') {
+      if (!body.booking_id) return Response.json({ ok: false, error: 'booking_id is required' }, { status: 400 });
+      const { data: booking, error } = await supa.from('party_bookings').select('*').eq('id', body.booking_id).eq('household_id', householdId).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!booking?.square_invoice_id) return Response.json({ ok: false, error: 'Invoice not found' }, { status: 404 });
+      const verified = await reconcilePartyInvoice(supa, booking as InvoiceBooking);
+      return Response.json({ ok: true, id: verified.id, status: verified.status, deposit_paid_cents: verified.deposit_paid_cents,
+        balance_paid_cents: verified.balance_paid_cents, payment_review_required: verified.payment_review_required });
+    }
+    if (body.mode && body.mode !== 'create_payment_link') {
+      return Response.json({ ok: false, error: 'Unsupported booking action' }, { status: 400 });
+    }
+    const start = new Date(body.start_time), end = new Date(body.end_time);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || start.getTime() <= Date.now()) {
+      return Response.json({ ok: false, error: 'Choose a valid future party time' }, { status: 400 });
+    }
+    if (!isOnOrAfterPartyBookingStart(start) || !isBookablePartySlot(start, end, body.slot)) {
+      return Response.json({ ok: false, error: `Choose an available party slot on or after ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
+    }
+    const age = body.birthday_age == null ? null : Number(body.birthday_age);
+    const headcount = body.headcount_expected == null ? null : Number(body.headcount_expected);
+    if ((age != null && (!Number.isInteger(age) || age < 1 || age > 21))
+      || (headcount != null && (!Number.isInteger(headcount) || headcount < 1 || headcount > 300))) {
+      return Response.json({ ok: false, error: 'Invalid age or guest count' }, { status: 400 });
+    }
+    const guardian = parseGuardianName(body);
+    await ensureGuardianProfile({ admin: supa, householdId, userId: user.id, email: user.email,
+      firstName: guardian.firstName, lastName: guardian.lastName });
+    const result = await startPartyInvoice(supa, {
+      householdId, userId: user.id, role: 'customer', email: user.email,
+      booking: { start_time: start.toISOString(), end_time: end.toISOString(), headcount_expected: headcount,
+        birthday_age: age, birthday_child_name: typeof body.birthday_child_name === 'string' ? body.birthday_child_name.trim().slice(0,80) : null,
+        occasion_details: typeof body.occasion_details === 'string' ? body.occasion_details.trim().slice(0,120) : null,
+        notes: typeof body.notes === 'string' ? body.notes.slice(0,2000) : null },
     });
-    const { data: existingSameSlot } = await supa
-      .from('party_bookings')
-      .select('id,status')
-      .eq('household_id', householdId)
-      .eq('start_time', start.toISOString())
-      .eq('end_time', end.toISOString())
-      .neq('status', 'cancelled')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (isGrandfatheredSlot && !existingSameSlot) {
-      return Response.json({ ok: false, error: 'This Friday morning slot is grandfathered for an existing booking only.' }, { status: 400 });
-    }
-    if (!isOnOrAfterPartyBookingStart(start) && !existingSameSlot) {
-      return Response.json({ ok: false, error: `Party bookings are available starting ${PARTY_BOOKING_START_LABEL}.` }, { status: 400 });
-    }
-    if (!existingSameSlot && !isBookablePartySlot(start, end, slot) && !isGrandfatheredSlot) {
-      return Response.json({ ok: false, error: 'Friday morning party slots are no longer available.' }, { status: 400 });
-    }
-
-    if (mode === 'finalize' && existingSameSlot) {
-      const updateExisting = await supa.from('party_bookings').update({
-        headcount_expected: headcountExpected,
-        notes,
-        birthday_child_name: birthdayChildName,
-        birthday_age: birthdayAge,
-        occasion_details: occasionDetails,
-        status: 'confirmed',
-        status_updated_at: new Date().toISOString(),
-      }).eq('id', existingSameSlot.id).eq('household_id', householdId).select('id').maybeSingle();
-      if (!updateExisting.error && updateExisting.data?.id) {
-        await notifyPartyBookingSaved({
-          bookingId: updateExisting.data.id,
-          householdId,
-          fallbackEmail: user.email,
-          startTime: start.toISOString(),
-          endTime: end.toISOString(),
-          status: 'confirmed',
-          birthdayChildName,
-          birthdayAge,
-          headcountExpected,
-          occasionDetails,
-          notes,
-        });
-        const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: updateExisting.data.id, fallbackEmail: user.email });
-        return Response.json({ ok: true, id: updateExisting.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
-      }
-    }
-
-    const { data: conflicts, error: conflictErr } = await supa
-      .from('party_bookings')
-      .select('id,household_id,start_time,end_time,status')
-      .lt('start_time', end.toISOString())
-      .gt('end_time', start.toISOString())
-      .neq('status', 'cancelled');
-
-    if (conflictErr) return Response.json({ ok: false, error: conflictErr.message }, { status: 500 });
-    const conflictingBookings = (conflicts ?? []).filter((item) => item.household_id !== householdId && item.id !== existingSameSlot?.id);
-    if (conflictingBookings.length > 0) {
-      return Response.json({ ok: false, error: 'That party slot is already booked.' }, { status: 409 });
-    }
-
-    if (mode === 'early_access_hold') {
-      await tagPartyEarlyAccessContact({ email: user.email, householdId });
-
-      const holdPayload = {
-        household_id: householdId,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        headcount_expected: headcountExpected,
-        notes,
-        birthday_child_name: birthdayChildName,
-        birthday_age: birthdayAge,
-        occasion_details: occasionDetails,
-        status: 'confirmed',
-        status_updated_at: new Date().toISOString(),
-        price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-        created_by_user_id: user.id,
-        created_by_role: 'customer',
-      };
-
-      if (existingSameSlot) {
-        const updateExisting = await supa
-          .from('party_bookings')
-          .update(holdPayload)
-          .eq('id', existingSameSlot.id)
-          .eq('household_id', householdId)
-          .select('id')
-          .maybeSingle();
-
-        if (updateExisting.error) return Response.json({ ok: false, error: updateExisting.error.message }, { status: 500 });
-        await notifyPartyBookingSaved({
-          bookingId: updateExisting.data?.id ?? existingSameSlot.id,
-          householdId,
-          fallbackEmail: user.email,
-          startTime: holdPayload.start_time,
-          endTime: holdPayload.end_time,
-          status: 'confirmed',
-          birthdayChildName,
-          birthdayAge,
-          headcountExpected,
-          occasionDetails,
-          notes,
-        });
-        const bookingIdForEmail = updateExisting.data?.id ?? existingSameSlot.id;
-        const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: bookingIdForEmail, fallbackEmail: user.email });
-        return Response.json({ ok: true, id: bookingIdForEmail, status: 'confirmed', deposit_required_now: false, party_email });
-      }
-
-      const hold = await supa
-        .from('party_bookings')
-        .insert(holdPayload)
-        .select('id')
-        .maybeSingle();
-
-      if (hold.error) return Response.json({ ok: false, error: hold.error.message }, { status: 500 });
-      await notifyPartyBookingSaved({
-        bookingId: hold.data?.id ?? null,
-        householdId,
-        fallbackEmail: user.email,
-        startTime: holdPayload.start_time,
-        endTime: holdPayload.end_time,
-        status: 'confirmed',
-        birthdayChildName,
-        birthdayAge,
-        headcountExpected,
-        occasionDetails,
-        notes,
-      });
-      const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: hold.data?.id ?? null, fallbackEmail: user.email });
-      return Response.json({ ok: true, id: hold.data?.id ?? null, status: 'confirmed', deposit_required_now: false, party_email });
-    }
-
-    if (mode === 'create_payment_link') {
-      if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) {
-        return Response.json({ ok: false, error: 'Square payment is not configured' }, { status: 500 });
-      }
-
-      const idempotencyKey = crypto.randomUUID();
-      const reference = crypto.createHash('sha1').update(`${householdId}:${start.toISOString()}`).digest('hex').slice(0, 20);
-      const base = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
-      const encodedStart = encodeURIComponent(start.toISOString());
-      const encodedEnd = encodeURIComponent(end.toISOString());
-      const encodedHeadcount = encodeURIComponent(String(headcountExpected ?? ''));
-      const encodedNotes = encodeURIComponent(notes ?? '');
-      const encodedSlot = encodeURIComponent(slot ?? '');
-      const encodedBirthdayName = encodeURIComponent(birthdayChildName ?? '');
-      const encodedBirthdayAge = encodeURIComponent(birthdayAge == null ? '' : String(birthdayAge));
-      const encodedOccasion = encodeURIComponent(occasionDetails ?? '');
-      const encodedGuardianFirstName = encodeURIComponent(guardianName.firstName ?? '');
-      const encodedGuardianLastName = encodeURIComponent(guardianName.lastName ?? '');
-      const redirectUrl = `${base}/landing/party?party_checkout=success&start_time=${encodedStart}&end_time=${encodedEnd}&headcount_expected=${encodedHeadcount}&notes=${encodedNotes}&slot=${encodedSlot}&birthday_child_name=${encodedBirthdayName}&birthday_age=${encodedBirthdayAge}&occasion_details=${encodedOccasion}&guardian_first_name=${encodedGuardianFirstName}&guardian_last_name=${encodedGuardianLastName}`;
-
-      const squareBody = {
-        idempotency_key: idempotencyKey,
-        quick_pay: {
-          name: 'Little Wanderers Party Deposit (50%)',
-          price_money: {
-            amount: PARTY_DEPOSIT_CENTS,
-            currency: 'USD',
-          },
-          location_id: process.env.SQUARE_LOCATION_ID,
-        },
-        checkout_options: {
-          redirect_url: redirectUrl,
-          ask_for_shipping_address: false,
-        },
-        ...(buildPrePopulatedData(user.email) ? { pre_populated_data: buildPrePopulatedData(user.email) } : {}),
-        reference_id: `pb_${reference}`,
-        note: JSON.stringify({
-          party_type: 'party_booking',
-          birthday_child_name: birthdayChildName,
-          birthday_age: birthdayAge,
-          occasion_details: occasionDetails,
-        }),
-      };
-
-      logSquarePayload('party checkout payload', squareBody as Record<string, unknown>);
-
-      const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Square-Version': '2025-10-16',
-        },
-        body: JSON.stringify(squareBody),
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        return Response.json({ ok: false, error: `square_error: ${text}` }, { status: 500 });
-      }
-
-      const data = await resp.json();
-      const url: string | undefined = data?.payment_link?.url;
-      if (!url) return Response.json({ ok: false, error: 'no_url_returned' }, { status: 500 });
-
-      if (!existingSameSlot) {
-        const pendingInsert = await supa.from('party_bookings').insert({
-          household_id: householdId,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          headcount_expected: headcountExpected,
-          notes,
-          birthday_child_name: birthdayChildName,
-          birthday_age: birthdayAge,
-          occasion_details: occasionDetails,
-          status: 'pending',
-          status_updated_at: new Date().toISOString(),
-          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-          created_by_user_id: user.id,
-          created_by_role: 'customer',
-        });
-        if (pendingInsert.error && isMissingColumnError(pendingInsert.error.message)) {
-          const pendingFallback = await supa.from('party_bookings').insert({
-            household_id: householdId,
-            start_time: start.toISOString(),
-            end_time: end.toISOString(),
-            headcount_expected: headcountExpected,
-            notes,
-            price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-            created_by_user_id: user.id,
-            created_by_role: 'customer',
-          });
-          if (pendingFallback.error) {
-            console.warn('party pending fallback insert failed', pendingFallback.error.message);
-          }
-        } else if (pendingInsert.error) {
-          console.warn('party pending insert failed', pendingInsert.error.message);
-        }
-      }
-
-      return Response.json({ ok: true, payment_url: url, deposit_cents: PARTY_DEPOSIT_CENTS });
-    }
-
-    if (bookingId) {
-      const primaryUpdate = await supa.from('party_bookings').update({
-        headcount_expected: headcountExpected,
-        notes,
-        birthday_child_name: birthdayChildName,
-        birthday_age: birthdayAge,
-        occasion_details: occasionDetails,
-        status: 'confirmed',
-        status_updated_at: new Date().toISOString(),
-      }).eq('id', bookingId).eq('household_id', householdId).select('id').maybeSingle();
-      if (!primaryUpdate.error && primaryUpdate.data?.id) {
-        await notifyPartyBookingSaved({
-          bookingId: primaryUpdate.data.id,
-          householdId,
-          fallbackEmail: user.email,
-          startTime: start.toISOString(),
-          endTime: end.toISOString(),
-          status: 'confirmed',
-          birthdayChildName,
-          birthdayAge,
-          headcountExpected,
-          occasionDetails,
-          notes,
-        });
-        const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: primaryUpdate.data.id, fallbackEmail: user.email });
-        return Response.json({ ok: true, id: primaryUpdate.data.id, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
-      }
-    }
-
-    const insertPayload = {
-      household_id: householdId,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      headcount_expected: headcountExpected,
-      notes,
-      birthday_child_name: birthdayChildName,
-      birthday_age: birthdayAge,
-      occasion_details: occasionDetails,
-      status: 'confirmed',
-      status_updated_at: new Date().toISOString(),
-      price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-      created_by_user_id: user.id,
-      created_by_role: 'customer',
-    };
-
-    const primary = await supa.from('party_bookings').insert(insertPayload).select('id').maybeSingle();
-
-    if (primary.error && !isMissingColumnError(primary.error.message)) {
-      return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
-    }
-
-    if (primary.error) {
-      const fallback = await supa
-        .from('party_bookings')
-        .insert({
-          household_id: householdId,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          headcount_expected: headcountExpected,
-          notes,
-          price_quote_cents: PARTY_TOTAL_FEE_CENTS,
-          created_by_user_id: user.id,
-          created_by_role: 'customer',
-        })
-        .select('id')
-        .maybeSingle();
-
-      if (fallback.error) return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
-      await notifyPartyBookingSaved({
-        bookingId: fallback.data?.id ?? null,
-        householdId,
-        fallbackEmail: user.email,
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-        status: 'confirmed',
-        birthdayChildName,
-        birthdayAge,
-        headcountExpected,
-        occasionDetails,
-        notes,
-      });
-      const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: fallback.data?.id ?? null, fallbackEmail: user.email });
-      return Response.json({ ok: true, id: fallback.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
-    }
-
-    await notifyPartyBookingSaved({
-      bookingId: primary.data?.id ?? null,
-      householdId,
-      fallbackEmail: user.email,
-      startTime: insertPayload.start_time,
-      endTime: insertPayload.end_time,
-      status: 'confirmed',
-      birthdayChildName,
-      birthdayAge,
-      headcountExpected,
-      occasionDetails,
-      notes,
-    });
-    const party_email = await notifyPartyCustomerConfirmation({ admin: supa, bookingId: primary.data?.id ?? null, fallbackEmail: user.email });
-    return Response.json({ ok: true, id: primary.data?.id ?? null, status: 'confirmed', deposit_paid_cents: PARTY_DEPOSIT_CENTS, party_email });
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'unknown error';
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    return Response.json({ ok: true, id: result.booking.id, status: result.booking.status, payment_url: result.url,
+      deposit_cents: 15000, total_cents: 30000 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to start party checkout';
+    return Response.json({ ok: false, error: message }, { status: /already|slot|reservation exists/i.test(message) ? 409 : 500 });
   }
 }

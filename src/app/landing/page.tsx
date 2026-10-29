@@ -276,6 +276,8 @@ export default function AppHome() {
         <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
           <Link href="/landing/people" className="quickCard">My Info/People</Link>
           <Link href="/landing/qr" className="quickCard">My QR Code</Link>
+          <Link href="/landing/admission" className="quickCard">Open Play admission</Link>
+          <Link href="/landing/membership" className="quickCard">Membership</Link>
           <Link href="/landing/waiver" className="quickCard">Family Waiver{waiverLoaded && !waiverError && waiver.status === 'completed' ? ' · Completed' : ''}</Link>
         </section>
       )}

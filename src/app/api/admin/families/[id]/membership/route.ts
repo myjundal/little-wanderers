@@ -1,164 +1,38 @@
 import { requireOwnerContext } from '@/lib/authz';
-import crypto from 'crypto';
-import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
+import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
+import { startSquareCheckout, reconcileCheckout, changeSquareMembership, type CheckoutAttempt } from '@/lib/square-checkout';
+import { squareConfig } from '@/lib/square-client';
 
 type Params = { params: Promise<{ id: string }> };
-
-type MembershipBody = {
-  action?: 'create_payment_link' | 'finalize_start' | 'pause' | 'end';
-  notes?: string;
-};
-
-function getSquareBaseUrl() {
-  const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
-  return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
-}
-
-export async function POST(req: Request, { params: pendingParams }: Params) {
-  const params = await pendingParams;
+export async function POST(req: Request, { params }: Params) {
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
-
-  const householdId = params.id;
-  const body = (await req.json()) as MembershipBody;
-  const action = body.action;
-  if (!action) return Response.json({ ok: false, error: 'action is required' }, { status: 400 });
-
-  const admin = context.admin;
-
-  const insertEvent = async (membershipId: string | null, eventAction: string, notes?: string) => {
-    await admin.from('membership_events').insert({
-      household_id: householdId,
-      membership_id: membershipId,
-      action: eventAction,
-      notes: notes ?? null,
-      created_by_user_id: context.user.id,
-      created_by_role: context.role,
-    });
-  };
-
-  if (action === 'create_payment_link') {
-    if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) {
-      return Response.json({ ok: false, error: 'Square membership payment is not configured' }, { status: 500 });
+  try {
+    const householdId = (await params).id;
+    const body = await req.json();
+    if(['create_payment_link','resume'].includes(body.action)){const unavailable=onlinePaymentsUnavailable('membership');if(unavailable)return unavailable;}
+    if (body.action === 'create_payment_link') {
+      const { data: household, error } = await context.admin.from('households').select('email').eq('id',householdId).single();
+      if (error) throw new Error(error.message);
+      const result = await startSquareCheckout(context.admin, { householdId, userId: context.user.id, role: context.role,
+        kind: 'membership', email: household.email, returnPath: `/staff/families/${householdId}/membership?membership_checkout=success` });
+      return Response.json({ ok: true, url: result.url, checkout_id: result.id });
     }
-
-    const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
-    const redirectUrl = `${base}/staff/families/${householdId}/membership?membership_checkout=success`;
-
-    const payload = {
-      idempotency_key: crypto.randomUUID(),
-      quick_pay: {
-        name: 'Little Wanderers Monthly Membership',
-        price_money: {
-          amount: 6000,
-          currency: 'USD',
-        },
-        location_id: process.env.SQUARE_LOCATION_ID,
-      },
-      checkout_options: {
-        redirect_url: redirectUrl,
-        ask_for_shipping_address: false,
-      },
-      ...(buildPrePopulatedData(null) ? { pre_populated_data: buildPrePopulatedData(null) } : {}),
-      reference_id: `staff_membership_${householdId}`,
-    };
-
-    logSquarePayload('staff membership checkout payload', payload as Record<string, unknown>, {
-      householdId,
-      userId: context.user.id,
-    });
-
-    const resp = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Square-Version': '2025-10-16',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      return Response.json({ ok: false, error: `square_error: ${text}` }, { status: 500 });
+    if (body.action === 'finalize_start') {
+      if (!body.checkout_id) return Response.json({ ok: false, error: 'checkout_id is required' }, { status: 400 });
+      const { data, error } = await context.admin.from('square_checkout_attempts').select('*').eq('id',body.checkout_id)
+        .eq('household_id', householdId).eq('kind','membership').eq('environment',squareConfig().environment).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return Response.json({ ok: false, error: 'Checkout not found' }, { status: 404 });
+      const result = await reconcileCheckout(context.admin, data as CheckoutAttempt);
+      return Response.json({ ok: true, ...result });
     }
-
-    const data = await resp.json();
-    return Response.json({ ok: true, url: data?.payment_link?.url ?? null });
-  }
-
-  if (action === 'finalize_start') {
-    const renewsAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
-
-    const { data: existing } = await admin
-      .from('memberships')
-      .select('id')
-      .eq('household_id', householdId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let membershipId: string | null = null;
-
-    if (existing?.id) {
-      const { error } = await admin
-        .from('memberships')
-        .update({ renews_at: renewsAt })
-        .eq('id', existing.id);
-      if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-      membershipId = existing.id;
-    } else {
-      const { data, error } = await admin
-        .from('memberships')
-        .insert({ household_id: householdId, renews_at: renewsAt })
-        .select('id')
-        .maybeSingle();
-      if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-      membershipId = data?.id ?? null;
+    if (['pause','resume','end'].includes(body.action)) {
+      const result = await changeSquareMembership(context.admin, householdId, body.action === 'end' ? 'cancel' : body.action);
+      return Response.json({ ok: true, ...result });
     }
-
-    await insertEvent(membershipId, 'start', body.notes);
-    return Response.json({ ok: true });
+    return Response.json({ ok: false, error: 'Unsupported action' }, { status: 400 });
+  } catch (error) {
+    return Response.json({ ok: false, error: error instanceof Error ? error.message : 'Unable to update membership' }, { status: 502 });
   }
-
-  if (action === 'pause') {
-    const { data: membership } = await admin
-      .from('memberships')
-      .select('id')
-      .eq('household_id', householdId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!membership?.id) return Response.json({ ok: false, error: 'No membership to pause' }, { status: 404 });
-
-    const { error } = await admin
-      .from('memberships')
-      .update({ renews_at: new Date().toISOString() })
-      .eq('id', membership.id);
-    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-
-    await insertEvent(membership.id, 'pause', body.notes);
-    return Response.json({ ok: true });
-  }
-
-  if (action === 'end') {
-    const { data: membership } = await admin
-      .from('memberships')
-      .select('id')
-      .eq('household_id', householdId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!membership?.id) return Response.json({ ok: false, error: 'No membership to end' }, { status: 404 });
-
-    const { error } = await admin.from('memberships').delete().eq('id', membership.id);
-    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-
-    await insertEvent(membership.id, 'end', body.notes);
-    return Response.json({ ok: true });
-  }
-
-  return Response.json({ ok: false, error: 'Unsupported action' }, { status: 400 });
 }

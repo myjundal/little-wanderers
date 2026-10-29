@@ -1,23 +1,23 @@
 import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
-import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
-export const dynamic = 'force-dynamic'; export const runtime = 'nodejs';
-
+import { changeSquareMembership } from '@/lib/square-checkout';
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export async function POST() {
-  const unavailable = onlinePaymentsUnavailable();
+  const unavailable = onlinePaymentsUnavailable('membership');
   if (unavailable) return unavailable;
-
-  const supa = await createServerSupabaseClient();
-  const { data: { user } } = await supa.auth.getUser();
-  if (!user) return NextResponse.redirect('/landing/membership?error=unauthorized');
-
-  const householdId = await getLatestHouseholdIdForUser(supa, user.id);
-  if (!householdId) return NextResponse.redirect('/landing/membership?error=no-household');
-
-  await supa.from('memberships').upsert({ household_id: householdId, renews_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }, { 
-onConflict: 'household_id' });
-
-  return NextResponse.redirect('/landing/membership?success=1');
+  try {
+    const server = await createServerSupabaseClient();
+    const { data: { user } } = await server.auth.getUser();
+    if (!user) return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+    const admin = createAdminSupabaseClient();
+    const householdId = await getLatestHouseholdIdForUser(admin, user.id);
+    if (!householdId) return Response.json({ ok: false, error: 'household not found' }, { status: 404 });
+    const result = await changeSquareMembership(admin, householdId, 'resume');
+    return Response.json({ ok: true, ...result });
+  } catch (error) {
+    return Response.json({ ok: false, error: error instanceof Error ? error.message : 'Unable to update subscription' }, { status: 502 });
+  }
 }
-

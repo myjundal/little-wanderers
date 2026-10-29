@@ -3,12 +3,10 @@ import { requireOwnerContext } from '@/lib/authz';
 import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
+import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
+import { startPartyInvoice } from '@/lib/square-party';
 
 export const dynamic = 'force-dynamic';
-
-function isMissingColumnError(message: string) {
-  return /column .* does not exist|Could not find the '.*' column/i.test(message);
-}
 
 function displayNameFromEmail(email: string) {
   const local = email.split('@')[0] ?? 'Family';
@@ -18,6 +16,8 @@ function displayNameFromEmail(email: string) {
 export async function POST(req: Request) {
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
+  const unavailable = onlinePaymentsUnavailable('party');
+  if (unavailable) return unavailable;
 
   try {
     const body = (await req.json()) as {
@@ -126,39 +126,10 @@ export async function POST(req: Request) {
     const notes = String(body.notes ?? '').trim() || null;
     const birthdayChildName = String(body.birthday_child_name ?? '').trim() || null;
 
-    const bookingPayload = {
-      household_id: householdId,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      headcount_expected: headcount,
-      notes,
-      status: 'confirmed',
-      status_updated_at: new Date().toISOString(),
-      created_by_user_id: context.user.id,
-      created_by_role: context.role,
-      birthday_child_name: birthdayChildName,
-      birthday_age: birthdayAge,
-      occasion_details: 'Prebooked by staff for Wanderlist party access',
-    };
-
-    let booking = await admin.from('party_bookings').insert(bookingPayload).select('id').maybeSingle();
-
-    if (booking.error && isMissingColumnError(booking.error.message)) {
-      const fallbackPayload = {
-        household_id: bookingPayload.household_id,
-        start_time: bookingPayload.start_time,
-        end_time: bookingPayload.end_time,
-        headcount_expected: bookingPayload.headcount_expected,
-        notes: bookingPayload.notes,
-        status: bookingPayload.status,
-        status_updated_at: bookingPayload.status_updated_at,
-        created_by_user_id: bookingPayload.created_by_user_id,
-        created_by_role: bookingPayload.created_by_role,
-      };
-      booking = await admin.from('party_bookings').insert(fallbackPayload).select('id').maybeSingle();
-    }
-
-    if (booking.error) throw new Error(booking.error.message);
+    const invoice = await startPartyInvoice(admin, { householdId,userId:context.user.id,role:context.role,email,
+      booking:{start_time:start.toISOString(),end_time:end.toISOString(),headcount_expected:headcount,
+        birthday_child_name:birthdayChildName,birthday_age:birthdayAge,notes,occasion_details:'Booked by staff for Wanderlist party access'} });
+    const booking = { data: { id:invoice.booking.id } };
 
     const contact = await admin
       .from('contacts')
@@ -182,7 +153,7 @@ export async function POST(req: Request) {
         ], { onConflict: 'contact_id,tag' });
     }
 
-    return Response.json({ ok: true, household_id: householdId, booking_id: booking.data?.id ?? null });
+    return Response.json({ ok: true, household_id: householdId, booking_id: booking.data?.id ?? null, status:invoice.booking.status,payment_url:invoice.url });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
