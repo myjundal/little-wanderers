@@ -34,7 +34,6 @@ export default function LandingMoreMenu() {
               <Link onClick={() => setOpen(false)} href="/staff/families">Family management</Link>
               <Link onClick={() => setOpen(false)} href="/staff/classes">Class pre-registrations</Link>
               <Link onClick={() => setOpen(false)} href="/staff/occupancy">Occupancy management</Link>
-              {!isStaff && <Link onClick={() => setOpen(false)} href="/staff/open-play-reservations">Open Play Reservations</Link>}
               <Link onClick={() => setOpen(false)} href="/employee">{isKiosk ? 'My Timecards' : 'My PIN & Timecards'}</Link>
               {!isStaff && <Link onClick={() => setOpen(false)} href="/staff/team">Staff & Timecards</Link>}
               {!isInstructor && !isKiosk && <><Link onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link><Link onClick={() => setOpen(false)} href="/landing/party">My Parties</Link></>}

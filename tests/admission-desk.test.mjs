@@ -72,8 +72,8 @@ test('desk rejects invalid family ids, strips filter operators, and reports fail
   assert.equal((await apiHarness({ failTable: 'waivers' }).get(`?family=${family.id}`)).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '' } = {}) {
-  const hooks = [], effects = [], requests = [];
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner' } = {}) {
+  const hooks = [], effects = [], requests = [], navigations = [];
   let cursor = 0, tree, visits = [], timers = [], refreshes = 0;
   const memo = (factory, deps) => {
     const i = cursor++;
@@ -92,7 +92,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     if (url === '/api/checkin') {
       if (checkinCode) return Response.json({ ok: false, code: checkinCode, error: 'The family waiver must be renewed.' }, { status: 409 });
       if (body.person_id === failPerson) return Response.json({ ok: false, error: 'Birthday required' }, { status: 409 });
-      visits.push({ id: `visit-${body.person_id}`, person_id: body.person_id, household_id: family.id, household_name: family.name, name: body.person_id, price_cents: body.person_id === 'child' ? 1600 : 0, payment_status: body.person_id === 'child' ? 'due' : 'covered' });
+      visits.push({ id: `visit-${body.person_id}`, person_id: body.person_id, household_id: family.id, household_name: family.name, name: body.person_id, price_cents: !covered && body.person_id === 'child' ? 1600 : 0, payment_status: !covered && body.person_id === 'child' ? 'due' : 'covered' });
       return Response.json({ ok: true });
     }
     if (body) return Response.json({ ok: true, id: 'sale', url: 'square-commerce-v1://payment/create?fixture' });
@@ -101,10 +101,10 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     return Response.json({ ok: true, visits, enabled: squareEnabled, pending_sales: pending && visits.length ? [{ id: 'sale', checkin_ids: visits.map(visit => visit.id) }] : [] });
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
-  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/StaffToolNav': 'nav', '@/lib/admission-pos-ui': logic }, {
+  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-pos-ui': logic }, {
     React, fetch, AbortController,
     navigator: { userAgent: 'iPad' },
-    window: { location: { search: '', assign() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, sessionStorage: { setItem() {} } },
+    window: { location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, sessionStorage: { setItem() {} } },
   }).default;
   const render = () => { cursor = 0; tree = page(); return tree; };
   async function flush() {
@@ -119,7 +119,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const nodes = () => { const all = []; const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; all.push(node); walk(node.props?.children); }; walk(tree); return all; };
   const label = node => { if (Array.isArray(node)) return node.map(label).join(''); if (node == null || typeof node === 'boolean') return ''; if (typeof node !== 'object') return String(node); return label(node.props?.children); };
   const button = text => nodes().find(node => node.type === 'button' && label(node).includes(text));
-  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, setWaiver: value => { waiver = value; } };
+  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, setWaiver: value => { waiver = value; } };
 }
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
@@ -133,7 +133,11 @@ test('name-based UI checks in selected visitors manually, skips covered charges 
   assert.deepEqual(entries.map(request => request.body), [{ person_id: 'child', source: 'staff_manual' }, { person_id: 'parent', source: 'staff_manual' }]);
   assert.ok(h.text().includes('Total due: $16.00'));
   assert.equal(h.nodes().filter(node => node.type === 'input' && node.props.type === 'checkbox' && node.props.disabled).length, 2);
-  await h.button('Pay $16.00').props.onClick(); await h.flush();
+  assert.ok(h.nodes().some(node => node.type === 'dialog'));
+  assert.equal(h.navigations.length, 0);
+  await h.button('Continue to Square').props.onClick(); await h.flush();
+  assert.equal(h.navigations.length, 1);
+  assert.ok(!h.nodes().some(node => node.type === 'dialog'));
   assert.deepEqual(h.requests.find(request => request.body?.checkin_ids).body.checkin_ids, ['visit-child']);
 });
 
@@ -239,4 +243,53 @@ test('a waiver rejected by the server updates the local block and keeps feedback
   const feedback = h.nodes().find(node => node.props?.role === 'status' && node.type === 'p' && node.props.children.includes('waiver must be renewed'));
   assert.ok(feedback);
   assert.equal(h.visits().length, 0);
+});
+
+test('covered visits show a completion dialog without creating or opening a Square payment', async () => {
+  const h = uiHarness({ covered: true }); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  assert.ok(h.nodes().some(node => node.type === 'dialog'));
+  assert.ok(h.text().includes('No admission payment due.'));
+  assert.equal(h.button('Continue to Square'), undefined);
+  assert.equal(h.requests.filter(request => request.body?.checkin_ids).length, 0);
+  await h.button('Done').props.onClick(); await h.flush();
+  assert.ok(!h.nodes().some(node => node.type === 'dialog'));
+  assert.equal(h.visits().length, 2);
+});
+
+test('partial or unconfirmed check-ins never show a completion dialog or launch Square', async () => {
+  for (const options of [{ failPerson: 'parent' }, { failRefresh: true }]) {
+    const h = uiHarness(options); await choose(h);
+    h.button('Select everyone remaining').props.onClick(); await h.flush();
+    await h.button('Check in 2').props.onClick(); await h.flush();
+    assert.ok(!h.nodes().some(node => node.type === 'dialog'));
+    assert.equal(h.navigations.length, 0);
+    assert.equal(h.requests.filter(request => request.body?.checkin_ids).length, 0);
+  }
+});
+
+test('dismissing confirmation retains check-ins and the unpaid total; rapid Square clicks prepare only once', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  const continueAction = h.button('Continue to Square').props.onClick;
+  await continueAction(); await continueAction(); await h.flush();
+  assert.equal(h.requests.filter(request => request.body?.checkin_ids).length, 1);
+  const other = uiHarness(); await choose(other);
+  other.button('Select everyone remaining').props.onClick(); await other.flush();
+  await other.button('Check in 2').props.onClick(); await other.flush();
+  await other.button('Back to desk').props.onClick(); await other.flush();
+  assert.equal(other.visits().length, 2);
+  assert.equal(other.button('Pay $16.00').props.disabled, false);
+});
+
+test('reservation workspace opens from legacy deep links and selects a family in the same desk', async () => {
+  const h = uiHarness({ initialSearch: '?view=reservations', role: 'staff' }); await h.flush();
+  const admin = h.nodes().find(node => node.type === 'reservations-admin');
+  assert.ok(admin); assert.equal(admin.props.canManage, false);
+  admin.props.onCheckIn(family.id); await h.flush();
+  assert.ok(!h.nodes().some(node => node.type === 'reservations-admin'));
+  assert.ok(h.text().includes(family.name));
+  assert.ok(h.button('Select everyone remaining'));
 });

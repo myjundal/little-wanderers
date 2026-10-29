@@ -2,7 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
+import OpenPlayReservationsAdmin from '@/components/staff/OpenPlayReservationsAdmin';
+import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import { admissionGroups, squarePosCallback, type AdmissionVisit } from '@/lib/admission-pos-ui';
+import styles from './checkin.module.css';
 
 type DeskPerson = { id: string; first_name: string | null; last_name: string | null; role: string; birthdate: string | null };
 type DeskFamily = { id: string; name: string | null; email: string | null; phone: string | null; people: DeskPerson[]; waiver_status: string;
@@ -14,6 +17,10 @@ const panel: React.CSSProperties = { marginTop: 20, padding: 20, border: '1px so
 const button: React.CSSProperties = { padding: '14px 20px', borderRadius: 12, border: 0, background: '#65449b', color: '#fff', fontSize: 17, fontWeight: 700, cursor: 'pointer' };
 
 export default function StaffCheckinPage() {
+  const { role } = useOperatorAccess();
+  const [view, setView] = useState<'desk' | 'reservations'>('desk');
+  const [completion, setCompletion] = useState<{ familyName: string; visitors: string[] } | null>(null);
+  const completionDialog = useRef<HTMLDialogElement | null>(null);
   const [visits, setVisits] = useState<AdmissionVisit[]>([]);
   const [query, setQuery] = useState('');
   const [families, setFamilies] = useState<DeskFamily[]>([]);
@@ -49,11 +56,13 @@ export default function StaffCheckinPage() {
       const response = await fetch('/api/admin/admission/pos', { cache: 'no-store' });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to refresh admission payments.');
-      setVisits(result.visits ?? []);
-      setPeopleIds(previous => previous.filter(id => !(result.visits as AdmissionVisit[]).some(visit => visit.person_id === id)));
+      const currentVisits = (result.visits ?? []) as AdmissionVisit[];
+      setVisits(currentVisits);
+      setPeopleIds(previous => previous.filter(id => !currentVisits.some(visit => visit.person_id === id)));
       setPendingSales(result.pending_sales??[]);
       setEnabled(result.enabled === true);
       setPaymentsReady(true);
+      return currentVisits;
     } finally { setLoading(false); }
   }
 
@@ -115,6 +124,7 @@ export default function StaffCheckinPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'reservations' && !params.has('data')) setView('reservations');
     let id = params.get('family');
     if (!id && params.has('data')) {
       try { id = window.sessionStorage.getItem('admission-family'); } catch { /* Storage is optional. */ }
@@ -123,6 +133,19 @@ export default function StaffCheckinPage() {
     // Family management links open the same check-in and payment workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const dialog = completionDialog.current;
+    if (completion && dialog && !dialog.open) dialog.showModal();
+  }, [completion]);
+
+  function changeView(next: 'desk' | 'reservations') {
+    setView(next);
+    const url = new URL(window.location.href);
+    if (next === 'reservations') url.searchParams.set('view', next);
+    else url.searchParams.delete('view');
+    window.history.replaceState({}, '', url.pathname + url.search);
+  }
 
   async function openFamily(id: string, preserveSelection = false) {
     const request = ++familyRequest.current;
@@ -150,6 +173,7 @@ export default function StaffCheckinPage() {
     if (family.waiver_status !== 'completed') { setMessage('Check-in is blocked: a parent or legal guardian must complete the family waiver first.'); return; }
     checkinBusy.current = true;
     setCheckingIn(true);
+    let refreshed = false;
     try {
       // Each person is committed with occupancy and pricing by the existing server transaction.
       // Stop on a failure; refresh reveals any successful entries and retries skip duplicates.
@@ -161,13 +185,18 @@ export default function StaffCheckinPage() {
         if ((!response.ok || !result.ok) && result.code !== 'already_checked_in') throw new Error(result.error || 'Unable to record check-in.');
       }
       setPeopleIds([]);
-      setMessage('Selected visitors checked in. Review the family total below; members and prepaid visitors are applied automatically.');
+      const currentVisits = await refreshPayments();
+      refreshed = true;
+      if (!peopleIds.every(id => currentVisits.some(visit => visit.person_id === id))) throw new Error('Unable to confirm every selected visitor. Refresh admission status before continuing.');
+      setCompletion({ familyName: family.name || 'Selected family', visitors: family.people.filter(person => peopleIds.includes(person.id)).map(personName) });
+      setDeskRefresh(value => value + 1);
+      setMessage('Check-in complete. Review the family total and continue to Square for payment.');
     } catch (error) { setMessage(`${error instanceof Error ? error.message : 'Unable to check in.'} Any entries already recorded are shown below. Select remaining visitors to retry.`); }
-    finally { await refreshPayments().catch(error => setMessage(error.message)); checkinBusy.current = false; setCheckingIn(false); }
+    finally { if (!refreshed) await refreshPayments().catch(error => setMessage(error.message)); checkinBusy.current = false; setCheckingIn(false); }
   }
 
   async function takePayment() {
-    if (!selected || !paymentsReady || peopleIds.length || pendingSale || busy || loading || checkingIn || needsVerification) return;
+    if (!selected || !enabled || !paymentsReady || peopleIds.length || paymentPending.current || pendingSale || busy || loading || checkingIn || needsVerification) return;
     if (!/iPad|iPhone|iPod/.test(navigator.userAgent) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
       setMessage('Open this staff page in Safari on the Square iPad to take a card payment.');
       return;
@@ -181,6 +210,7 @@ export default function StaffCheckinPage() {
       if (!result.url) {await refreshPayments();throw new Error('A Square payment is already in progress. Check Square, then use the recovery section below.');}
       setPendingSales(previous=>[...previous.filter(sale=>sale.id!==result.id),{id:result.id,checkin_ids:selected.visits.map(visit=>visit.id)}]);
       setLaunchUrl(result.url);
+      setCompletion(null);
       try { window.sessionStorage.setItem('admission-family', selected.id); } catch { /* Payment can continue without browser storage. */ }
       setMessage('Opening Square with this family’s total. If it does not open, use the Open Square link below.');
       window.location.assign(result.url);
@@ -203,7 +233,7 @@ export default function StaffCheckinPage() {
     finally{setBusy(false);}
   }
 
-  const locked = busy || checkingIn || !!launchUrl || needsVerification;
+  const locked = busy || checkingIn || !!launchUrl || needsVerification || !!completion;
   const entriesLocked = locked || loading || !paymentsReady || !!pendingSale;
   const waiverBlocked = !!family && family.waiver_status !== 'completed';
   const checkinDisabled = entriesLocked || !peopleIds.length || waiverBlocked;
@@ -219,6 +249,15 @@ export default function StaffCheckinPage() {
   return <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
     <StaffToolNav active="checkin" />
     <h1 style={{ color: '#4f3f82', marginBottom: 8 }}>Check-in &amp; payment</h1>
+    <nav aria-label="Check-in workspace" style={{ display: 'flex', gap: 10, margin: '16px 0', flexWrap: 'wrap' }}>
+      <button type="button" aria-pressed={view === 'desk'} disabled={locked} onClick={() => changeView('desk')} className={styles.viewButton}>Check-in &amp; payment</button>
+      <button type="button" aria-pressed={view === 'reservations'} disabled={locked} onClick={() => changeView('reservations')} className={styles.viewButton}>Open Play reservations</button>
+    </nav>
+    {view === 'reservations' ? <section aria-label="Open Play reservation management">
+      <h2>Open Play reservations</h2>
+      <p>Review bookings and select a family to check in and take payment.</p>
+      <OpenPlayReservationsAdmin canManage={role === 'owner' || role === 'admin'} checkedInFamilyIds={[...new Set(visits.map(visit => visit.household_id))]} onCheckIn={id => { changeView('desk'); void openFamily(id); }} onReservationsChange={() => setDeskRefresh(value => value + 1)} />
+    </section> : <>
     <p>Find a family or choose today’s Open Play reservation. Select the people who are here, record their visit, then take one family payment in Square.</p>
     <section style={panel}>
       <label htmlFor="family-search" style={{ fontWeight: 700 }}>Search families</label>
@@ -292,5 +331,20 @@ export default function StaffCheckinPage() {
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
       <p><button disabled={busy || checkingIn} onClick={() => void refreshPayments().catch(error => setMessage(error.message))}>Refresh payment status</button></p>
     </section>
+    </>}
+    {completion && <dialog ref={completionDialog} className={styles.completionDialog} aria-labelledby="checkin-complete-title" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setCompletion(null)}>
+      <h2 id="checkin-complete-title">Check-in complete</h2>
+      <p><strong>{completion.familyName}</strong></p>
+      <p>{completion.visitors.length} visitor{completion.visitors.length === 1 ? '' : 's'} checked in. Their admission records are saved.</p>
+      <ul>{completion.visitors.map((name, index) => <li key={index}>{name}</li>)}</ul>
+      {selected ? <>
+        <p style={{ fontSize: 26 }}><strong>Total due: {money(selected.total)}</strong></p>
+        <p>Continue to Square on this iPad to collect this family’s payment.</p>
+        {!enabled && <p>Square handoff is currently closed. Admission is saved; collect payment at the counter.</p>}
+        <button type="button" style={button} disabled={!enabled || busy || loading || !paymentsReady || !!pendingSale || !!launchUrl || needsVerification} onClick={() => void takePayment()}>Continue to Square — {money(selected.total)}</button>
+      </> : <p><strong>No admission payment due.</strong> Membership, included or prepaid admission has been applied.</p>}
+      <p role="status" aria-live="polite">{message}</p>
+      <p><button type="button" disabled={busy} onClick={() => setCompletion(null)}>{selected ? 'Back to desk' : 'Done'}</button></p>
+    </dialog>}
   </main>;
 }
