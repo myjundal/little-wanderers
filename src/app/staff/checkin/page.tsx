@@ -124,10 +124,9 @@ export default function StaffCheckinPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function openFamily(id: string) {
+  async function openFamily(id: string, preserveSelection = false) {
     const request = ++familyRequest.current;
-    setFamily(null);
-    setPeopleIds([]);
+    if (!preserveSelection) { setFamily(null); setPeopleIds([]); }
     setActiveFamily(id);
     setRecoveryConfirmed(false);
     setDeskError('');
@@ -138,13 +137,17 @@ export default function StaffCheckinPage() {
       if (request !== familyRequest.current) return;
       setFamily(result.items[0]);
       setActiveFamily(result.items[0].id);
-      if (!new URLSearchParams(window.location.search).has('data')) setMessage('Select only the children and adults who are here today.');
+      if (preserveSelection) {
+        setPeopleIds(previous => previous.filter(id => (result.items[0].people as DeskPerson[]).some(person => person.id === id)));
+        setMessage(result.items[0].waiver_status === 'completed' ? 'Waiver completed. Your visitor selection is saved — you can check in now.' : 'Check-in is blocked: the family waiver still needs to be completed.');
+      } else if (!new URLSearchParams(window.location.search).has('data')) setMessage(result.items[0].waiver_status === 'completed' ? 'Select only the children and adults who are here today.' : 'Check-in is blocked: a parent or legal guardian must complete the family waiver first.');
       await refreshPayments();
     } catch (error) { if (request === familyRequest.current) setDeskError(error instanceof Error ? error.message : 'Unable to open family.'); }
   }
 
   async function checkInFamily() {
     if (!family || !peopleIds.length || !paymentsReady || checkinBusy.current || paymentPending.current || pendingSale || loading) return;
+    if (family.waiver_status !== 'completed') { setMessage('Check-in is blocked: a parent or legal guardian must complete the family waiver first.'); return; }
     checkinBusy.current = true;
     setCheckingIn(true);
     try {
@@ -154,6 +157,7 @@ export default function StaffCheckinPage() {
         if (visits.some(visit => visit.person_id === id)) continue;
         const response = await fetch('/api/checkin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ person_id: id, source: 'staff_manual' }) });
         const result = await response.json();
+        if (result.code === 'waiver_required') setFamily(previous => previous ? { ...previous, waiver_status: 'required' } : previous);
         if ((!response.ok || !result.ok) && result.code !== 'already_checked_in') throw new Error(result.error || 'Unable to record check-in.');
       }
       setPeopleIds([]);
@@ -201,6 +205,14 @@ export default function StaffCheckinPage() {
 
   const locked = busy || checkingIn || !!launchUrl || needsVerification;
   const entriesLocked = locked || loading || !paymentsReady || !!pendingSale;
+  const waiverBlocked = !!family && family.waiver_status !== 'completed';
+  const checkinDisabled = entriesLocked || !peopleIds.length || waiverBlocked;
+  const checkinBlockReason = waiverBlocked ? 'A parent or legal guardian must complete the family waiver before check-in.'
+    : needsVerification ? 'Verify the previous Square payment before recording another visit.'
+    : pendingSale || launchUrl ? 'Finish or reconcile this family’s Square checkout before adding visitors.'
+    : loading ? 'Loading current admission status…'
+    : !paymentsReady ? 'Admission status could not be loaded. Refresh payment status before checking in.'
+    : !peopleIds.length ? 'Select the children and adults who are visiting.' : '';
   const familyVisits = visits.filter(visit => visit.household_id === activeFamily);
   const notCheckedIn = family?.people.filter(person => !familyVisits.some(visit => visit.person_id === person.id)) ?? [];
 
@@ -241,7 +253,6 @@ export default function StaffCheckinPage() {
     {family && <section style={panel} aria-label="Visiting family members">
       <h2>{family.name || 'Selected family'}</h2>
       <p><Link href={`/staff/families/${family.id}`}>Open family details / edit people</Link> · <Link href="/waiver" target="_blank">Family waiver</Link></p>
-      {family.waiver_status !== 'completed' && <p>A parent or legal guardian must sign the family waiver on their own device before check-in. <button disabled={locked} onClick={() => void openFamily(family.id)}>Recheck waiver</button></p>}
       <p>Select everyone arriving now, including adults. Reserved headcounts are a reference; only selected people are checked in.</p>
       <button disabled={entriesLocked} onClick={() => setPeopleIds(peopleIds.length === notCheckedIn.length ? [] : notCheckedIn.map(person => person.id))}>{peopleIds.length && peopleIds.length === notCheckedIn.length ? 'Clear selection' : 'Select everyone remaining'}</button>
       <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
@@ -254,7 +265,15 @@ export default function StaffCheckinPage() {
         })}
       </div>
       {!family.people.length && <p>Add family members in Family Management before check-in.</p>}
-      <p><button style={button} disabled={entriesLocked || !peopleIds.length || family.waiver_status !== 'completed'} onClick={() => void checkInFamily()}>{checkingIn ? 'Recording visits…' : `Check in ${peopleIds.length || ''} selected visitors`}</button></p>
+      {waiverBlocked && <aside style={{ marginTop: 16, padding: 16, border: '1px solid #d9a145', borderRadius: 12, background: '#fff3d9', color: '#69420d' }}>
+        <h3 style={{ marginTop: 0 }}>Check-in blocked — family waiver needed</h3>
+        <p>Ask the parent or legal guardian to open <a href="/waiver" target="_blank" rel="noreferrer">thelittlewanderers.com/waiver</a> on their own device, sign in to the account showing these children, and complete the waiver.</p>
+        <p>After signing, recheck here. Your visitor selection will stay selected.</p>
+        <button type="button" disabled={locked || loading} onClick={() => void openFamily(family.id, true)}>Recheck waiver</button>
+      </aside>}
+      {checkinBlockReason && <p id="checkin-block-reason" style={{ color: waiverBlocked ? '#8a4b0f' : '#655876', fontWeight: 600 }}>{checkinBlockReason}</p>}
+      <p><button type="button" style={{ ...button, ...(checkinDisabled ? { background: '#e4dfeb', color: '#62586d', cursor: 'not-allowed' } : {}) }} disabled={checkinDisabled} aria-describedby={checkinBlockReason ? 'checkin-block-reason' : undefined} onClick={() => void checkInFamily()}>{checkingIn ? 'Recording visits…' : waiverBlocked ? 'Waiver required before check-in' : `Check in ${peopleIds.length || ''} selected visitors`}</button></p>
+      <p role="status" aria-live="polite">{message}</p>
     </section>}
     <section style={panel} aria-label="Family payment">
       <h2>Family payment</h2>

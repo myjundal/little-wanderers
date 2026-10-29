@@ -85,3 +85,10 @@ Recheck: `node --test tests/*.test.mjs`, `npm run lint`, `npm run build`. Explic
 - Apply `db/migrations/20261029_staff_family_search_aliases.sql` before deploying. Link configuration is protected by RLS and service-role permissions; it is not editable by browser clients.
 - The reported duplicate was confirmed against live family/member records. The alternate profile had no children, waiver, membership, party, Open Play reservation, check-in or class registration. A guarded transaction added its directory link; both login memberships, people, source households and all existing histories were preserved. No login access was granted or changed.
 - Live-data execution of the revised search returned exactly one family with its existing adult and two children for both the reported surname and alternate email. Directory links change staff display only; they do not merge account data or move payments.
+
+## Visible check-in blocking feedback — October 29, 2026
+
+- Investigated a reported unresponsive check-in button. The selected family had no current waiver and no recorded visits or pending Square sale. The existing button was disabled by the waiver rule but had the same purple style and pointer cursor as an active button.
+- Display a grey disabled button labeled **Waiver required before check-in**, a warning and guardian waiver link immediately beside the action, and a textual reason for other blocked admission states. Repeat request feedback beside the action so offscreen errors are visible.
+- Rechecking a completed waiver preserves selected visitors. A server rejection for a newly expired/changed waiver refreshes the local blocking state. No waiver is bypassed or signed by staff through this change.
+- Add regressions for visible waiver blocking, selected-visitor preservation after waiver recheck, stale-waiver rejection, and successful check-in while Square handoff is disabled. Check-in records are independent of whether the Square app/Stand is connected; Square opens only from the payment button.
