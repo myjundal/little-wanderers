@@ -1,10 +1,14 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 export default function AuthLinkPage() {
+  return <Suspense fallback={<main style={{ padding: 24 }}>Opening your sign-in link…</main>}><AuthLinkContent /></Suspense>;
+}
+
+function AuthLinkContent() {
   const searchParams = useSearchParams();
   const hasAuthToken = searchParams.has('code') || searchParams.has('token_hash');
   const [opening, setOpening] = useState(false);

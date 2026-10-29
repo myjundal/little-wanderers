@@ -9,13 +9,13 @@ export function sameOrigin(req: Request) {
   try { return Boolean(origin && new URL(origin).host === req.headers.get('host')); } catch { return false; }
 }
 export async function getKioskDevice() {
-  const token = cookies().get(KIOSK_DEVICE_COOKIE)?.value;
+  const token = (await cookies()).get(KIOSK_DEVICE_COOKIE)?.value;
   if (!token) return null;
   const { data, error } = await createAdminSupabaseClient().from('staff_kiosk_devices').select('id,name').eq('secret_hash', staffTokenHash(token)).eq('active', true).maybeSingle();
   return error ? null : data;
 }
 export async function getKioskIdentity() {
-  const token = cookies().get(KIOSK_SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(KIOSK_SESSION_COOKIE)?.value;
   const device = await getKioskDevice();
   if (!token || !device) return null;
   const admin = createAdminSupabaseClient();

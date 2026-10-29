@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED = new Set(['unknown', 'attended', 'cancelled', 'no_show']);
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const context = await requireClassAttendanceContext(params.id);
   if (!context.ok) return context.response;
 

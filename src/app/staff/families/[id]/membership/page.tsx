@@ -1,11 +1,13 @@
 'use client';
+import { useParams } from 'next/navigation';
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 
-export default function StaffFamilyMembershipPage({ params }: { params: { id: string } }) {
+export default function StaffFamilyMembershipPage() {
+  const params = useParams<{ id: string }>();
   const familyId = params.id;
   const searchParams = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);

@@ -13,7 +13,8 @@ export const dynamic = 'force-dynamic';
 
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   try {
     const body = (await req.json().catch(() => null)) as { action?: string } | null;
     if (body?.action !== 'cancel') {
@@ -23,7 +24,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return NextResponse.json({ ok: false, error: 'invalid reservation id' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();

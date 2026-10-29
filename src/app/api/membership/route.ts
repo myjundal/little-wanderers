@@ -8,7 +8,7 @@ export async function POST() {
   const unavailable = onlinePaymentsUnavailable();
   if (unavailable) return unavailable;
 
-  const supa = createServerSupabaseClient();
+  const supa = await createServerSupabaseClient();
   const { data: { user } } = await supa.auth.getUser();
   if (!user) return NextResponse.redirect('/landing/membership?error=unauthorized');
 

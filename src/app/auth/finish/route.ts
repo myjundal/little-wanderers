@@ -10,7 +10,7 @@ function getRedirectUrl(request: NextRequest, path: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'cancelled', 'early_access_hold']);
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
 

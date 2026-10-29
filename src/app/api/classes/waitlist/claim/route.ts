@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const token = typeof body.token === 'string' ? body.token.trim() : '';
     if (!token) return Response.json({ ok: false, error: 'token is required' }, { status: 400 });
 
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();

@@ -57,7 +57,7 @@ async function ensureHouseholdForSignedInUser(user: { id: string; email?: string
 }
 
 export async function POST(req: Request) {
-  const server = createServerSupabaseClient();
+  const server = await createServerSupabaseClient();
   const {
     data: { user },
     error: userError,
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const server = createServerSupabaseClient();
+  const server = await createServerSupabaseClient();
   const {
     data: { user },
     error: userError,

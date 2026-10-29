@@ -1,6 +1,6 @@
 import { requireStaffContext } from '@/lib/authz';
 import { US_CITIES_BY_STATE, type UsStateCode } from '@/lib/us-cities';
-import { getWaiverStatus } from '@/lib/waivers';
+import { getWaiverStatus, WAIVER_STATUS_SELECT, type WaiverRow } from '@/lib/waivers';
 
 type HouseholdRow = {
   id: string;
@@ -10,7 +10,7 @@ type HouseholdRow = {
   city: string | null;
   state: string | null;
 };
-type PersonRow = { household_id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null };
+type PersonRow = { id: string; household_id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null };
 
 function normalizeCityName(input: string) {
   return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
@@ -50,9 +50,9 @@ export async function GET(req: Request) {
 
   const [{ data: households }, { data: people }, { data: memberships }, { data: waivers }] = await Promise.all([
     admin.from('households').select('id,name,phone,email,city,state').order('created_at', { ascending: false }).limit(400),
-    admin.from('people').select('household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
+    admin.from('people').select('id,household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
     admin.from('memberships').select('household_id,renews_at').limit(2000),
-    admin.from('waivers').select('household_id,signed_at,signed_date,waiver_expires_at,created_at').limit(2000),
+    admin.from('waivers').select(`household_id,${WAIVER_STATUS_SELECT}`).order('signed_at', { ascending: false }).limit(2000),
   ]);
 
   const peopleByHousehold = new Map<string, PersonRow[]>();
@@ -70,7 +70,7 @@ export async function GET(req: Request) {
     if (active) membershipByHousehold.set(m.household_id, true);
   });
 
-  const waiversByHousehold = new Map<string, Array<{ signed_at: string | null; signed_date: string | null; waiver_expires_at: string | null; created_at: string | null }>>();
+  const waiversByHousehold = new Map<string, WaiverRow[]>();
   (waivers ?? []).forEach((w) => {
     if (!w.household_id) return;
     const arr = waiversByHousehold.get(w.household_id) ?? [];
@@ -97,7 +97,7 @@ export async function GET(req: Request) {
         location_needs_review: Boolean(household.city && !isKnownCity(household.city, household.state)),
         children_names: children.map((p) => `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()).filter(Boolean),
         membership_status: membershipByHousehold.get(household.id) ? 'active' : 'none',
-        waiver_status: getWaiverStatus(waiversByHousehold.get(household.id) ?? []).status,
+        waiver_status: getWaiverStatus(waiversByHousehold.get(household.id) ?? [], new Date(), children.map(child => child.id)).status,
       };
     })
     .filter((item) => {

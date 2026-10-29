@@ -50,7 +50,7 @@ const localBusinessJsonLd = {
 };
 
 export default async function HomeComingSoon() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const [
     {
       data: { user },

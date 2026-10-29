@@ -191,7 +191,7 @@ async function notifyPartyCustomerConfirmation(input: { admin: ReturnType<typeof
 
 export async function GET() {
   try {
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();
@@ -246,7 +246,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'birthday_age must be a positive whole number' }, { status: 400 });
     }
 
-    const server = createServerSupabaseClient();
+    const server = await createServerSupabaseClient();
     const {
       data: { user },
     } = await server.auth.getUser();
