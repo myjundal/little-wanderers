@@ -12,7 +12,9 @@
 - 클래스 Hosted Checkout Sandbox 테스트 패널의 결제 후, 실제 Order/Payment 재조회와 로컬 등록 반영을 확인했다.
 - 서명 위조, 금액·통화·매장·고객 불일치, URL만으로 확정 시도, DB 장애 후 웹훅 재시도, 중복 이벤트,
   오래된 Invoice 버전, 미납 멤버십, 기존 클래스 사전등록 ID 보존은 자동 테스트로 검증한다.
-- **실제 Square 웹훅의 새 핸들러까지의 외부 전달은 아직 검증하지 않았다.** 로컬 서명 테스트와 실제 결제 후 API 재조회는 외부 전달 증명이 아니다.
+- 임시 Sandbox 콜백으로 **Square가 실제 발송한 `invoice.payment_made`**의 서명 검증 → HTTP 200 →
+  `webhook_log.processing_status='processed'` → 로컬 예약 확정을 확인했다. 임시 웹훅 구독과 터널은 제거했다.
+  실제 운영 도메인 전달은 운영 웹훅 설정 후 별도 확인해야 한다.
 - **멤버십 전체 청구 검증은 미완료다.** Checkout Sandbox 시뮬레이터는 고객/구독 연결 정보를 생성하지 않았다.
   별도 Sandbox `CreateSubscription`도 `DEACTIVATED`, `invoice_ids=[]`가 되어 최초 유료 구독 Invoice를 얻지 못했다.
   취소 API는 성공했으나, 활성 상태가 필요한 일시정지와 정상 청구·갱신까지 성공했다고 볼 수 없다.
@@ -141,6 +143,19 @@ npm run build
 node scripts/test-square-sandbox.mjs
 node scripts/test-square-checkouts-sandbox.mjs
 ```
+
+외부 웹훅 전달을 재검증하려면 공식 `cloudflared` 바이너리를 준비한 뒤 다음을 실행한다.
+가짜 데이터만 사용하는 별도 콜백 하나를 잠시 공개하고, 새 Sandbox 웹훅 구독과 키는 메모리에만 보관한다.
+스크립트가 출력한 Sandbox Invoice에서 예약금을 결제하면 실제 웹훅에 의한 예약 확정을 확인하고,
+임시 웹훅 구독·터널 및 미완납 테스트 Invoice를 정리한다. 운영 DB는 연결하지 않는다.
+
+```sh
+node scripts/test-square-webhook-sandbox.mjs /absolute/path/to/cloudflared
+```
+
+결과는 `/tmp/little-wanderers-square-webhook.json`에 저장된다.
+이 검증에서도 운영 웹훅 설정을 바꾸거나 실제 카드를 사용하지 않는다.
+Preview 빌드는 성공했지만 Vercel SSO 보호로 브라우저 UI 검토는 아직 하지 못했다.
 
 스크립트가 출력한 **Sandbox URL**에서 테스트 결제를 진행한다. Invoice는 테스트 카드
 `4111111111111111`, 미래 유효기간, CVV `111`, 우편번호 `10001`을 사용할 수 있다.
