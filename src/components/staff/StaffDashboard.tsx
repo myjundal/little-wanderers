@@ -777,7 +777,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
       <section style={{ ...sectionStyle, marginTop: 16 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Operator tools</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-          <Link href="/staff/checkin" style={ownerToolLinkStyle}>QR check-in</Link>
+          <Link href="/staff/checkin" style={ownerToolLinkStyle}>Check-in &amp; payment</Link>
           <a href="#manual-family-registration" style={ownerToolLinkStyle}>Manual family registration</a>
           <Link href="/staff/occupancy" style={ownerToolLinkStyle}>Occupancy management</Link>
         </div>

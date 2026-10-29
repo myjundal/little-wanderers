@@ -80,7 +80,6 @@ export async function GET(_: Request, { params: pendingParams }: Params) {
         expires_at: waiverStatus.expiresAt,
         days_until_expiration: waiverStatus.daysUntilExpiration,
       },
-      qr_status: peopleRows.length > 0 ? 'available' : 'unavailable',
       upcoming_classes: upcomingClasses,
       upcoming_parties: upcomingParties,
       visit_history: visits,
