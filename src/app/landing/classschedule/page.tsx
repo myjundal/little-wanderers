@@ -807,7 +807,7 @@ export default function ClassSchedulePage() {
       <p style={{ color: '#6f628d', marginTop: 8 }}>{paymentsEnabled ? 'Choose a class date and pay to confirm your child’s spot. You can also pre-register to share your interest.' : 'Wanderlist families get first access to pre-registration. Choose a class below to share your interest.'}</p>
       <PreRegistrationNotice paymentsEnabled={paymentsEnabled} />
       {pendingCheckout && <section role="status" style={{border:'1px solid #d9c8f7',borderRadius:12,padding:14,marginTop:14}}>
-        <p>You have an unfinished class checkout for ${(pendingCheckout.expected_amount_cents/100).toFixed(2)}. Continue it, or cancel the unpaid checkout before choosing a different class.</p>
+        <p>You have an unfinished class checkout for ${(pendingCheckout.expected_amount_cents/100).toFixed(2)}. Please complete it within 30 minutes. Unpaid checkouts may be cancelled after that. You can also cancel it before choosing a different class.</p>
         {pendingCheckout.payment_url && <a href={pendingCheckout.payment_url} style={{marginRight:14}}>Continue checkout</a>}
         <button onClick={cancelPendingCheckout} disabled={cancellingCheckout||!pendingCheckout.payment_url}>{cancellingCheckout?'Checking with Square…':'Cancel unpaid checkout'}</button>
       </section>}

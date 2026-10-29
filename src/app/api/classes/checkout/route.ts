@@ -1,3 +1,4 @@
+import {expireSquareCheckoutHolds} from '@/lib/square-checkout-recovery';
 import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
@@ -5,6 +6,7 @@ import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { startSquareCheckout, reconcileCheckout, cancelUnpaidClassCheckout, type CheckoutAttempt } from '@/lib/square-checkout';
 import { squareConfig, assertSquarePaymentUrl } from '@/lib/square-client';
 
+export const maxDuration=60;
 export async function POST(req: Request) {
   const unavailable = onlinePaymentsUnavailable('class');
   if (unavailable) return unavailable;
@@ -16,8 +18,9 @@ export async function POST(req: Request) {
     const admin = createAdminSupabaseClient();
     const householdId = await getLatestHouseholdIdForUser(admin,user.id);
     if (!householdId) return Response.json({ ok: false, error: 'household not found' }, { status: 404 });
+    await expireSquareCheckoutHolds(admin,householdId);
     if (body.mode === 'current') {
-      const {data,error} = await admin.from('square_checkout_attempts').select('id,payment_url,expected_amount_cents')
+      const {data,error} = await admin.from('square_checkout_attempts').select('id,payment_url,expected_amount_cents,hold_expires_at')
         .eq('household_id',householdId).eq('kind','class').eq('environment',squareConfig().environment)
         .in('status',['creating','open']).maybeSingle();
       if (error) throw new Error(error.message);

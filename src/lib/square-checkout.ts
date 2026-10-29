@@ -7,7 +7,7 @@ import { toPartyDateTimeIso,getPartyDateKey } from '@/lib/party-config';
 
 export type CheckoutAttempt = {
   id: string; household_id: string; kind: 'membership' | 'class' | 'admission'; environment: string; location_id: string;
-  expected_amount_cents: number; status: string; order_id: string | null; payment_url: string | null;
+  hold_expires_at?:string; expected_amount_cents: number; status: string; order_id: string | null; payment_url: string | null;
   payment_link_id: string | null; square_subscription_id: string | null; created_at: string;
   payload: { request: { person_id?: string; items?: Array<{ class_id: string; quantity: number }>; plan_variation_id?: string; quoted_amount_cents?:number; visit_date?:string; person_ids?:string[] }; assignments?:EnrolledChild[]; summary?: unknown; line_items?: Array<Record<string, unknown>>; provider_request?: Record<string, unknown> };
 };
@@ -89,10 +89,11 @@ export async function startSquareCheckout(admin: SupabaseClient, input: {
   const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(link.order_id)}`);
   assertUsd(order.total_money, attempt.expected_amount_cents);
   if (order.location_id !== config.locationId) throw new Error('Checkout location mismatch');
-  const { error: saveError } = await admin.from('square_checkout_attempts').update({
+  const { data:saved,error: saveError } = await admin.from('square_checkout_attempts').update({
     order_id: link.order_id, payment_link_id: link.id, payment_url: url, status: 'open',
-  }).eq('id', attempt.id);
+  }).eq('id', attempt.id).in('status',['creating','open']).select('id').maybeSingle();
   if (saveError) throw new Error(saveError.message);
+  if(!saved)throw new Error('Checkout expired; please start again');
   return { id: attempt.id, url, total: attempt.expected_amount_cents };
 }
 

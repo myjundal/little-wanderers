@@ -14,7 +14,7 @@
 - 클래스 Hosted Checkout Sandbox 테스트 패널의 결제 후, 실제 Order/Payment 재조회와 로컬 등록 반영을 확인했다.
 - 추가 Sandbox 프로그램 결제로 **$150 한 번 → 5회 전체 등록**, 기존 사전등록 ID 보존, 중복 확인의 멱등성을 확인했다.
 - 실제 Sandbox 미결제 링크 삭제 후 Square 주문 `CANCELED`와 로컬 checkout `cancelled`를 확인했다. 청구 금액은 $0이다.
-- 자동 테스트 106개, ESLint, Next.js production build가 통과했다.
+- 자동 테스트 110개, ESLint, Next.js production build가 통과했다.
 - 서명 위조, 금액·통화·매장·고객 불일치, URL만으로 확정 시도, DB 장애 후 웹훅 재시도, 중복 이벤트,
   오래된 Invoice 버전, 미납 멤버십, 기존 클래스 사전등록 ID 보존은 자동 테스트로 검증한다.
 - 임시 Sandbox 콜백으로 **Square가 실제 발송한 `invoice.payment_made`**의 서명 검증 → HTTP 200 →
@@ -61,11 +61,12 @@
 
 1. `db/migrations/20261029_square_class_program_checkout.sql` 적용.
 2. `db/migrations/20261029_square_membership_admission.sql` 적용. 기존 체크인 함수의 다섯 인자 호출도 기본 Production 환경으로 호환한다. 기존 체크인은 `legacy`로 보존하며 과거 납부를 추정하지 않는다.
-3. `db/operations/20261029_square_production_catalog_mappings.sql` 적용. 검토한 클래스 45건을 연결하며,
+3. `db/migrations/20261029_square_checkout_recovery.sql` 적용.
+4. `db/operations/20261029_square_production_catalog_mappings.sql` 적용. 검토한 클래스 45건을 연결하며,
    이름·가격·날짜가 달라졌거나 기존 매핑이 다르면 전체 작업을 중지한다. 같은 매핑으로 다시 실행할 수 있다.
-4. 새 코드 배포 후 소유자 로그인으로 `/api/admin/square/readiness`를 조회한다. 이 점검은 Square 상품·매장·
+5. 새 코드 배포 후 소유자 로그인으로 `/api/admin/square/readiness`를 조회한다. 이 점검은 Square 상품·매장·
    웹훅 서명키 일치 여부만 확인하며 주문·고객·구독·청구를 만들지 않는다. 비밀값은 응답하지 않는다.
-5. 승인된 결제 기능과 운영 웹훅을 활성화한다. 실제 카드 검증은 금액과 대상을 별도로 승인받는다.
+6. 승인된 결제 기능과 운영 웹훅을 활성화한다. 실제 카드 검증은 금액과 대상을 별도로 승인받는다.
 
 클래스 결제가 열리면 기존 사전등록 버튼 옆에 `Pay & register`가 표시된다. 사전등록은 그대로 보존하며,
 입금은 Square Order/Payment를 재조회한 후에만 수강 등록으로 바뀐다. 일반 수업은 선택 날짜별로 결제한다.
@@ -300,3 +301,17 @@ Access Token, 서명키 등 비밀값은 이 문서에 기록하지 않는다.
 - 적용 후 조회: `mapped_classes=45`, `program_occurrences=5`, `admission_ready=true`,
   `checkin_ready=true`, `browser_cannot_mark_paid=true`. 기존 다섯 인자 체크인 호출은 인증되지 않은
   테스트 UUID를 `forbidden`으로 거부해 호환성을 확인했다. 실제 사람 체크인이나 결제는 생성하지 않았다.
+
+
+최종 PR 검토 사항도 반영했다:
+
+- 결제창을 연 다음 새로 만든 사전등록은 납부 반영 때 현재 등록을 다시 찾아 같은 ID로 확정한다.
+  결제 준비 시점의 null registration ID에 의존해 중복 insert를 하던 경로를 교체했다.
+- 클래스·입장권 대기에 30분 기한을 추가했다. 다음 클래스 조회/해당 가족의 checkout 요청 및 기존 일일 Cron에서
+  만료된 대기를 정리한다. 결제가 완료돼 있으면 등록을 반영하고, 미납이면 Square 링크 삭제와 주문 취소를 재조회한 뒤
+  대기를 해제한다. provider 장애/결제 진행 중인 경우에는 자리를 유지해 중복 판매하지 않는다.
+  고빈도 Cron이 필요하다고 가정하지 않아 Vercel Hobby의 일일 Cron 제한과 호환한다.
+- Square 응답 후 DB 매핑 저장이 실패한 경우에는 이미 저장한 동일 idempotency 요청을 재실행해 링크를 복구한다.
+  외부 요청을 보내기 전 중단된 대기는 DB 행 잠금으로 취소하고, 뒤늦은 provider 요청 freeze를 차단한다.
+- 실제 Sandbox 자동 만료 정리에서도 주문 CANCELED/로컬 cancelled/청구 $0을 확인했다.
+- `20261029_square_checkout_recovery.sql` 운영 적용: Success.

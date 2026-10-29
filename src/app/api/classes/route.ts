@@ -1,3 +1,4 @@
+import {expireSquareCheckoutHolds} from '@/lib/square-checkout-recovery';
 import { earliestClassTime } from '@/lib/class-config';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -6,6 +7,7 @@ import { paymentFlowEnabled, squareEnvironment } from '@/lib/square-client';
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
+export const maxDuration=60;
 const CLASS_SELECT = 'id,title,category,start_time,end_time,duration_minutes,instructor_name,description,age_range,caregiver_participation,schedule_note,schedule_label,capacity,price_cents,status';
 const CLASS_SELECT_BASE = 'id,title,category,start_time,end_time,capacity,price_cents,status';
 
@@ -74,6 +76,7 @@ export async function GET(req: NextRequest) {
     const paymentMappings = new Map<string, { program_key: string | null }>();
     const programSessions = new Map<string, string[]>();
     if (paymentsEnabled) {
+      await expireSquareCheckoutHolds(supa);
       const { data: mappings, error } = await supa.from('square_catalog_mappings')
         .select('entity_key,program_key').eq('environment', squareEnvironment()).eq('kind', 'class');
       if (error) throw new Error(error.message);

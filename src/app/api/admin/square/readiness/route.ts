@@ -22,6 +22,7 @@ export async function GET(){
       context.admin.from('admission_passes').select('id').limit(1),
       context.admin.from('admission_pos_sales').select('id').limit(1),
       context.admin.from('checkins').select('payment_status').limit(1),
+      context.admin.from('square_checkout_attempts').select('hold_expires_at').limit(1),
     ]);
     const partyId=process.env.SQUARE_PARTY_ITEM_VARIATION_ID,planId=process.env.SQUARE_PLAN_VARIATION_ID;
     const objectIds=[...new Set([partyId,planId,...(mappings??[]).map(m=>m.variation_id)].filter((id):id is string=>Boolean(id)))];

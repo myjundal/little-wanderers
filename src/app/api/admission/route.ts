@@ -1,8 +1,10 @@
+import {expireSquareCheckoutHolds} from '@/lib/square-checkout-recovery';
 import {customerPaymentContext} from '@/lib/customer-payment-context';
 import {paymentFlowEnabled,squareConfig} from '@/lib/square-client';
 import {startSquareCheckout,reconcileCheckout,cancelUnpaidClassCheckout,type CheckoutAttempt} from '@/lib/square-checkout';
 import {admissionPrice} from '@/lib/payment-pricing';
 import {getPartyDateKey} from '@/lib/party-config';
+export const maxDuration=60;
 export const dynamic='force-dynamic';
 export async function GET(){
  const c=await customerPaymentContext();if(!c.ok)return c.response;
@@ -42,6 +44,7 @@ export async function POST(req:Request){
   if(body.mode==='quote')return Response.json({ok:true,amount_cents:amount,covered_person_ids:covered});
   if(amount===0)throw new Error('No payment is needed. Please check in with staff.');
   if(body.quoted_amount_cents!==amount)throw new Error('The price changed. Please review it again.');
+  await expireSquareCheckoutHolds(c.admin,c.householdId);
   const result=await startSquareCheckout(c.admin,{householdId:c.householdId,userId:c.user.id,role:'customer',kind:'admission',email:c.user.email,personIds:selected,visitDate:date,quotedAmount:amount,returnPath:'/landing/admission'});
   return Response.json({ok:true,checkout_id:result.id,payment_url:result.url});
  }catch(error){return Response.json({ok:false,error:error instanceof Error?error.message:'Unable to prepare admission'},{status:409});}
