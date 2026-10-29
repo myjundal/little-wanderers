@@ -31,5 +31,23 @@ end $$;
 
 revoke all on function public.prepare_admission_pos(uuid[],uuid,text,text) from public,anon,authenticated;
 grant execute on function public.prepare_admission_pos(uuid[],uuid,text,text) to service_role;
-notify pgrst, 'reload schema';
+
+-- Recovery is an explicit staff reconciliation, never an automatic second charge.
+alter table public.admission_pos_sales add column if not exists cancelled_at timestamptz,
+  add column if not exists cancelled_by_user_id uuid;
+create or replace function public.cancel_admission_pos_after_review(p_id uuid,p_user uuid)
+returns void language plpgsql security definer set search_path=public as $$
+declare sale admission_pos_sales;
+begin
+  perform pg_advisory_xact_lock(hashtext('little-wanderers-admission-pos'));
+  select * into strict sale from admission_pos_sales where id=p_id for update;
+  if sale.created_by_user_id is distinct from p_user then raise exception 'POS sale belongs to another operator'; end if;
+  if sale.status='cancelled' then return; end if;
+  if sale.status<>'open' or sale.launched_at is null or sale.launched_at>now()-interval '60 seconds' then raise exception 'Check Square and wait one minute before resetting this checkout'; end if;
+  if exists(select 1 from checkins where id=any(sale.checkin_ids) and payment_status<>'due') then raise exception 'Admission payment changed; refresh first'; end if;
+  update admission_pos_sales set status='cancelled',cancelled_at=now(),cancelled_by_user_id=p_user where id=p_id;
+end $$;
+revoke all on function public.cancel_admission_pos_after_review(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.cancel_admission_pos_after_review(uuid,uuid) to service_role;
+notify pgrst,'reload schema';
 commit;

@@ -14,7 +14,7 @@ async function saveSquarePaymentReceipt(admin: SupabaseClient,payment: SquarePay
   if (error) throw new Error(error.message);
 }
 
-export type PosSale={id:string;environment:string;location_id:string;created_by_user_id:string;amount_cents:number;status:string;order_id:string|null;created_at:string};
+export type PosSale={id:string;environment:string;location_id:string;created_by_user_id:string;amount_cents:number;status:string;order_id:string|null;created_at:string;launched_at?:string|null};
 export async function startAdmissionPos(admin:SupabaseClient,checkinIds:string[],userId:string){
  const config=requirePaymentFlow('admission_pos');const appId=process.env.SQUARE_APPLICATION_ID;
  if(!appId||(config.environment==='production'&&!appId.startsWith('sq0idp-')))throw new Error('Square POS Application ID is not configured');
@@ -54,4 +54,43 @@ export async function verifyAdmissionPos(admin:SupabaseClient,sale:PosSale,order
  for(const payment of payments)await saveSquarePaymentReceipt(admin,payment);
  const {error}=await admin.rpc('fulfill_admission_pos',{p_id:sale.id,p_order:orderId,p_amount:sale.amount_cents});
  if(error)throw new Error(error.message);return {status:'paid'};
+}
+
+/** Reconcile before releasing a launch that staff explicitly checked on the iPad. */
+export async function recoverAdmissionPos(admin:SupabaseClient,sale:PosSale,userId:string,confirmed:boolean){
+ if(!confirmed||sale.created_by_user_id!==userId)throw new Error('Check Square on this iPad and confirm its checkout is closed with no completed, pending or offline payment.');
+ if(sale.status==='paid')return {status:'paid'};
+ if(sale.status==='cancelled')return {status:'cancelled'};
+ if(sale.status!=='open')throw new Error('This payment requires owner review');
+ const config=squareConfig();
+ if(sale.environment!==config.environment||sale.location_id!==config.locationId)throw new Error('POS environment mismatch');
+ if(!sale.launched_at||Date.now()-Date.parse(sale.launched_at)<60000)throw new Error('Wait one minute after the launch, then check Square before resetting.');
+ const query=new URLSearchParams({location_id:config.locationId,begin_time:new Date(Date.parse(sale.created_at)-60000).toISOString(),end_time:new Date().toISOString(),sort_order:'ASC',limit:'100'});
+ const matching:SquarePayment[]=[];let cursor:string|undefined;
+ const orders=new Map<string,SquareOrder>();
+ for(let page=0;page<10;page++){
+  if(cursor)query.set('cursor',cursor);
+  const result=await squareRequest<{payments?:SquarePayment[];cursor?:string}>(`/v2/payments?${query}`);
+  for(const payment of result.payments??[]){
+   let matches=payment.note===`LW admission ${sale.id}`;
+   if(!matches&&payment.order_id){
+    if(!orders.has(payment.order_id))orders.set(payment.order_id,(await squareRequest<{order:SquareOrder}>(`/v2/orders/${encodeURIComponent(payment.order_id)}`)).order);
+    matches=orders.get(payment.order_id)?.line_items?.some(line=>line.note===`LW admission ${sale.id}`)??false;
+   }
+   if(matches)matching.push(payment);
+  }
+  cursor=result.cursor;if(!cursor)break;
+ }
+ if(cursor)throw new Error('Too many transactions to verify safely. Contact the owner before retrying.');
+ if(matching.some(payment=>!['COMPLETED','FAILED','CANCELED'].includes(payment.status??'')))throw new Error('Square still has a pending payment. Finish or cancel it in Square first.');
+ const completed=matching.filter(payment=>payment.status==='COMPLETED');
+ if(completed.length){
+  const orderIds=[...new Set(completed.map(payment=>payment.order_id))];
+  if(orderIds.length!==1||!orderIds[0])throw new Error('Multiple or unclear Square payments require owner review. Do not charge again.');
+  await verifyAdmissionPos(admin,sale,orderIds[0]);
+  return {status:'paid'};
+ }
+ const {error}=await admin.rpc('cancel_admission_pos_after_review',{p_id:sale.id,p_user:userId});
+ if(error)throw new Error(error.message);
+ return {status:'cancelled'};
 }

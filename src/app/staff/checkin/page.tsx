@@ -20,6 +20,8 @@ export default function StaffCheckinPage() {
   const [scanning, setScanning] = useState(false);
   const [launchUrl, setLaunchUrl] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [pendingSales,setPendingSales]=useState<Array<{id:string;checkin_ids:string[]}>>([]);
+  const [recoveryConfirmed,setRecoveryConfirmed]=useState(false);
   const started = useRef(false);
   const scanInFlight = useRef(false);
   const lastScan = useRef({ id: '', time: 0 });
@@ -27,6 +29,7 @@ export default function StaffCheckinPage() {
   const paymentPending = useRef(false);
   const groups = admissionGroups(visits);
   const selected = groups.find(group => group.id === activeFamily);
+  const pendingSale=selected&&pendingSales.find(sale=>sale.checkin_ids.some(id=>selected.visits.some(visit=>visit.id===id)));
 
   async function refreshPayments(personId?: string) {
     setLoading(true);
@@ -35,6 +38,7 @@ export default function StaffCheckinPage() {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to refresh admission payments.');
       setVisits(result.visits ?? []);
+      setPendingSales(result.pending_sales??[]);
       setEnabled(result.enabled === true);
       if (personId) {
         const visit = (result.visits as AdmissionVisit[]).find(visit => visit.person_id === personId);
@@ -127,12 +131,28 @@ export default function StaffCheckinPage() {
       const response = await fetch('/api/admin/admission/pos', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ checkin_ids: selected.visits.map(visit => visit.id) }) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to open Square.');
-      if (!result.url) throw new Error('A Square payment is already in progress. Check the existing transaction before charging again.');
+      if (!result.url) {await refreshPayments();throw new Error('A Square payment is already in progress. Check Square, then use the recovery section below.');}
+      setPendingSales(previous=>[...previous.filter(sale=>sale.id!==result.id),{id:result.id,checkin_ids:selected.visits.map(visit=>visit.id)}]);
       setLaunchUrl(result.url);
       setMessage('Opening Square with this family’s total. If it does not open, use the Open Square link below.');
       window.location.assign(result.url);
-    } catch (error) { paymentPending.current = false; setMessage(error instanceof Error ? error.message : 'Unable to open Square.'); }
+    } catch (error) { paymentPending.current = false; setMessage(error instanceof Error ? error.message : 'Unable to open Square.'); await refreshPayments().catch(()=>{}); }
     finally { setBusy(false); }
+  }
+
+
+  async function recoverPayment(){
+    if(!pendingSale||!recoveryConfirmed)return;
+    setBusy(true);
+    try{
+      const response=await fetch('/api/admin/admission/pos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'recover',state:pendingSale.id,confirm_no_payment:true})});
+      const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Unable to reconcile Square.');
+      await refreshPayments();
+      window.history.replaceState({},'',window.location.pathname);
+      setNeedsVerification(false);setLaunchUrl('');setRecoveryConfirmed(false);paymentPending.current=false;
+      setMessage(result.status==='paid'?'Square payment found and verified — admission is paid. Do not charge again.':'No active or successful payment found after your Square review. You can now prepare a fresh payment.');
+    }catch(error){setMessage(error instanceof Error?error.message:'Unable to reconcile Square. Do not charge again.');}
+    finally{setBusy(false);}
   }
 
   return <main style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
@@ -147,15 +167,16 @@ export default function StaffCheckinPage() {
     <section style={panel} aria-label="Family payment">
       <h2>Family admission</h2>
       {!enabled && !loading && <p>Square handoff is currently closed. Collect admission at the counter in the Square app.</p>}
-      <label>Visiting family <select value={activeFamily} disabled={busy || scanning || !!launchUrl || needsVerification} onChange={event => setActiveFamily(event.target.value)} style={{ padding: 10, maxWidth: '100%' }}>
+      <label>Visiting family <select value={activeFamily} disabled={busy || scanning || !!launchUrl || needsVerification} onChange={event => {setActiveFamily(event.target.value);setRecoveryConfirmed(false);}} style={{ padding: 10, maxWidth: '100%' }}>
         <option value="">Scan a family QR or choose a family</option>
         {groups.map(group => <option key={group.id} value={group.id}>{group.name} — {money(group.total)}</option>)}
       </select></label>
       {selected ? <><ul>{selected.visits.map(visit => <li key={visit.id}>{visit.name} — {money(visit.price_cents)}</li>)}</ul>
         <p style={{ fontSize: 24 }}><strong>Total due: {money(selected.total)}</strong></p>
         <p>Finish scanning everyone in this family before taking payment. Membership and included-adult rates are already applied.</p>
-        <button style={button} disabled={!enabled || busy || scanning || loading || !!launchUrl || needsVerification} onClick={() => void takePayment()}>{busy ? 'Checking with Square…' : `Pay ${money(selected.total)} in Square`}</button>
+        <button style={button} disabled={!enabled || busy || scanning || loading || !!launchUrl || needsVerification || !!pendingSale} onClick={() => void takePayment()}>{busy ? 'Checking with Square…' : `Pay ${money(selected.total)} in Square`}</button>
       </> : !loading && <p>No unpaid admission selected. Members and prepaid visitors do not need another admission payment.</p>}
+      {pendingSale&&<aside style={{marginTop:20,padding:16,background:'#fff1d8',borderRadius:12}}><h3>Square checkout needs review</h3><p>If Square was cancelled, did not open, or did not return a receipt, check Transactions on this iPad first. Wait at least one minute after the launch. Never reset while a payment is pending or saved offline.</p><label><input type="checkbox" checked={recoveryConfirmed} disabled={busy} onChange={event=>setRecoveryConfirmed(event.target.checked)}/> I checked Square: this checkout is closed, with no completed, pending or offline payment.</label><p><button disabled={busy||!recoveryConfirmed} onClick={()=>void recoverPayment()}>Reconcile Square and reset unpaid checkout</button></p><p>The server checks Square too. If it finds a completed matching payment, it records payment instead of starting another charge.</p></aside>}
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
       <p><button disabled={busy || scanning} onClick={() => void refreshPayments().catch(error => setMessage(error.message))}>Refresh payment status</button></p>
     </section>

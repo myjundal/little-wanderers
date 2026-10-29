@@ -86,3 +86,37 @@ test('POS API requires staff and verification looks up the signed-in operator’
  const response=await api.POST({json:async()=>({mode:'verify',state:checkin,transaction_id:'order',created_by_user_id:'forged'})});
  assert.equal(response.status,409);assert.equal(expected.created_by_user_id,'operator');assert.equal(expected.environment,'production');
 });
+
+test('staff-reviewed cancellation reconciles Square before releasing a frozen unpaid checkout',async t=>{
+ const {db,admin}=await database(t);const sale=(await prepare(admin)).data;
+ await db.query("update admission_pos_sales set launched_at=now()-interval '2 minutes' where id=$1",[sale.id]);
+ sale.launched_at=new Date(Date.now()-120000).toISOString();
+ let payments=[];
+ const pos=modules(async()=>Response.json({payments})).load('src/lib/square-admission-pos.ts');
+ await assert.rejects(pos.recoverAdmissionPos(admin,sale,ids.user,false),/confirm/);
+ await assert.rejects(pos.recoverAdmissionPos(admin,{...sale,launched_at:new Date().toISOString()},ids.user,true),/one minute/);
+ payments=[{id:'pending',note:`LW admission ${sale.id}`,status:'APPROVED'}];
+ await assert.rejects(pos.recoverAdmissionPos(admin,sale,ids.user,true),/pending payment/);
+ assert.equal((await db.query('select status from admission_pos_sales where id=$1',[sale.id])).rows[0].status,'open');
+ payments=[];
+ assert.equal((await pos.recoverAdmissionPos(admin,sale,ids.user,true)).status,'cancelled');
+ const stored=(await db.query('select * from admission_pos_sales where id=$1',[sale.id])).rows[0];
+ assert.equal(stored.cancelled_by_user_id,ids.user);assert.ok(stored.cancelled_at);
+ const retry=await pos.startAdmissionPos(admin,[checkin,sibling],ids.user);assert.notEqual(retry.id,sale.id);assert.ok(retry.url);
+});
+
+test('recovery finds completed Square payment and verifies it without permitting a second sale',async t=>{
+ const {db,admin}=await database(t);const sale=(await prepare(admin)).data;sale.launched_at=new Date(Date.now()-120000).toISOString();
+ const payment={id:'recovered-payment',source_type:'CARD',order_id:'recovered-order',location_id:'test-location',status:'COMPLETED',amount_money:{amount:2600,currency:'USD'},note:`LW admission ${sale.id}`,created_at:date,updated_at:date};
+ const order={id:'recovered-order',location_id:'test-location',state:'COMPLETED',total_money:{amount:2600,currency:'USD'},tenders:[{payment_id:payment.id}]};
+ const calls=[];const pos=modules(async(url,o)=>{calls.push(o.method);const u=new URL(url);return Response.json(u.pathname==='/v2/payments'?{payments:[payment]}:u.pathname.includes('/orders/')?{order}:{payment});}).load('src/lib/square-admission-pos.ts');
+ assert.equal((await pos.recoverAdmissionPos(admin,sale,ids.user,true)).status,'paid');
+ assert.equal((await db.query("select count(*)::integer n from checkins where payment_status='paid'")).rows[0].n,2);
+ assert.ok(calls.every(method=>method==='GET'));
+});
+
+test('recovery refuses to release when Square history cannot be completely checked',async t=>{
+ const {admin}=await database(t);const sale=(await prepare(admin)).data;sale.launched_at=new Date(Date.now()-120000).toISOString();
+ const pos=modules(async()=>Response.json({payments:[],cursor:'another-page'})).load('src/lib/square-admission-pos.ts');
+ await assert.rejects(pos.recoverAdmissionPos(admin,sale,ids.user,true),/Too many transactions/);
+});
