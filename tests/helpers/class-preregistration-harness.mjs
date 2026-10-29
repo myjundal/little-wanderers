@@ -33,7 +33,7 @@ export const fixtureChild = { id: 'child', first_name: 'Sam', last_name: 'Family
 export async function classPageHarness({
   guardian = { first_name: 'Parent', last_name: 'Family' },
   children = [fixtureChild],
-  register = async () => Response.json({ ok: true, id: 'registration', status: 'waitlist', email: { ok: true } }),
+  register = async () => Response.json({ ok: true, id: 'registration', status: 'preregistered', email: { ok: true } }),
   saveChild = async () => Response.json({ ok: true, child: fixtureChild }),
   failRefresh = false,
 } = {}) {

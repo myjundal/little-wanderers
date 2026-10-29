@@ -4,8 +4,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
 import {
   countConfirmedClassRegistrations,
-  countWaitlistRegistrations,
-  hasActiveWaitlistOffer,
   sendClassRegistrationEmail,
 } from '@/lib/class-waitlist';
 import { sendClassRegistrationNotification } from '@/lib/admin-notifications';
@@ -23,7 +21,7 @@ function getSquareBaseUrl() {
 async function notifyManualClassRegistration(input: {
   admin: SupabaseClient;
   registrationId?: string | null;
-  status: 'scheduled' | 'waitlist';
+  status: 'preregistered';
   householdId: string;
   fallbackEmail?: string | null;
   userId: string;
@@ -157,15 +155,8 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
       return Response.json({ ok: false, error: 'already registered' }, { status: 409 });
     }
 
-    const [booked, offerPendingResult, waitlistCount, { data: household }] = await Promise.all([
-      countConfirmedClassRegistrations(admin, classId),
-      hasActiveWaitlistOffer(admin, classId),
-      countWaitlistRegistrations(admin, classId),
-      admin.from('households').select('email').eq('id', householdId).maybeSingle(),
-    ]);
-    const isFull = klass.capacity != null && booked >= klass.capacity;
-    const shouldWaitlist = isFull || (!isFull && offerPendingResult) || (!isFull && waitlistCount > 0);
-    const nextStatus: 'scheduled' | 'waitlist' = shouldWaitlist ? 'waitlist' : 'scheduled';
+    const { data: household } = await admin.from('households').select('email').eq('id', householdId).maybeSingle();
+    const nextStatus = 'preregistered' as const;
 
     if (already && already.status === 'cancelled') {
       const { error } = await admin
@@ -230,32 +221,48 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
       const klass = classById.get(item.class_id);
       if (!klass || klass.status !== 'scheduled') return Response.json({ ok: false, error: 'class not available' }, { status: 409 });
 
-      const { count } = await admin
-        .from('class_registrations')
-        .select('id', { count: 'exact', head: true })
-        .eq('class_id', item.class_id)
-        .neq('status', 'cancelled');
+      const eligiblePeople = [
+        ...peopleRows.filter(person => person.id === personId),
+        ...peopleRows.filter(person => person.id !== personId),
+      ].slice(0, item.quantity);
+      if (eligiblePeople.length < item.quantity) return Response.json({ ok: false, error: 'Not enough participants in household' }, { status: 409 });
 
-      if (klass.capacity != null && (count ?? 0) + item.quantity > klass.capacity) {
+      const { data: existingRows, error: existingError } = await admin.from('class_registrations')
+        .select('id,person_id,status').eq('class_id', item.class_id).in('person_id', eligiblePeople.map(person => person.id));
+      if (existingError) return Response.json({ ok: false, error: existingError.message }, { status: 500 });
+      const byPerson = new Map((existingRows ?? []).map(row => [row.person_id, row]));
+      if ((existingRows ?? []).some(row => row.status === 'waitlist')) return Response.json({ ok: false, error: 'Resolve the existing waitlist registration first' }, { status: 409 });
+      const needsSeat = eligiblePeople.filter(person => !['scheduled', 'attended'].includes(byPerson.get(person.id)?.status ?? ''));
+      const count = await countConfirmedClassRegistrations(admin, item.class_id);
+
+      if (klass.capacity != null && count + needsSeat.length > klass.capacity) {
         return Response.json({ ok: false, error: `${klass.title} does not have enough seats` }, { status: 409 });
       }
 
-      const eligiblePeople = peopleRows.slice(0, item.quantity);
       for (const person of eligiblePeople) {
-        const { data, error } = await admin
-          .from('class_registrations')
-          .insert({
-            class_id: item.class_id,
-            person_id: person.id,
-            status: 'scheduled',
-            household_id: householdId,
-            child_id: person.role === 'child' ? person.id : null,
-            created_by_user_id: context.user.id,
-            created_by_role: context.role,
-          })
-          .select('id')
-          .maybeSingle();
+        const existing = byPerson.get(person.id);
+        if (existing && ['scheduled', 'attended'].includes(existing.status)) {
+          registrationIds.push(existing.id);
+          continue;
+        }
+        const payload = {
+          class_id: item.class_id,
+          person_id: person.id,
+          status: 'scheduled',
+          household_id: householdId,
+          child_id: person.role === 'child' ? person.id : null,
+          created_by_user_id: context.user.id,
+          created_by_role: context.role,
+          waitlist_offer_token: null,
+          waitlist_offer_expires_at: null,
+          waitlist_offered_at: null,
+        };
+        const query = existing
+          ? admin.from('class_registrations').update(payload).eq('id', existing.id).eq('status', existing.status)
+          : admin.from('class_registrations').insert(payload);
+        const { data, error } = await query.select('id').maybeSingle();
         if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+        if (!data) return Response.json({ ok: false, error: 'Registration changed during checkout. Refresh and try again.' }, { status: 409 });
         if (data?.id) registrationIds.push(data.id);
       }
     }

@@ -286,7 +286,7 @@ export async function sendClassCancellationEmail(admin: SupabaseClient, registra
       <table style="width:100%;border-collapse:collapse;border:1px solid #efe3ff;border-radius:12px;overflow:hidden;margin:18px 0;">
         <tbody>${details}</tbody>
       </table>
-      <p style="color:#6d6480;font-size:13px;">If this was a mistake, you can register again from your class schedule. If the class is full, you will join the waitlist.</p>
+      <p style="color:#6d6480;font-size:13px;">If this was a mistake, you can pre-register again from your class schedule. ${escapeHtml(CLASS_PRE_REGISTRATION_NOTE)}</p>
     </main>
   </body>
 </html>`;

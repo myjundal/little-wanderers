@@ -44,7 +44,7 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
       .from('class_registrations')
       .select('id', { count: 'exact', head: true })
       .eq('class_id', class_id)
-      .neq('status', 'cancelled');
+      .in('status', ['scheduled', 'attended']);
 
     if ((count ?? 0) >= klass.capacity) {
       return Response.json({ ok: false, error: 'class is full' }, { status: 409 });

@@ -74,7 +74,7 @@ async function buildAssignments(context: LoadedContext) {
   const regByClassPerson = new Map<string, ExistingRegistration>();
 
   context.registrations.forEach((reg) => {
-    if (reg.status !== 'cancelled') {
+    if (reg.status === 'scheduled' || reg.status === 'attended') {
       activeByClass.set(reg.class_id, (activeByClass.get(reg.class_id) ?? 0) + 1);
     }
     regByClassPerson.set(`${reg.class_id}:${reg.person_id}`, reg);
@@ -102,7 +102,7 @@ async function buildAssignments(context: LoadedContext) {
     const availablePeople = prioritizedPeople
       .map((personId) => {
         const existing = regByClassPerson.get(`${item.class_id}:${personId}`) ?? null;
-        if (existing && existing.status !== 'cancelled') return null;
+        if (existing && existing.status !== 'cancelled' && existing.status !== 'preregistered') return null;
         return { person_id: personId, existing };
       })
       .filter((entry): entry is { person_id: string; existing: ExistingRegistration | null } => Boolean(entry));
@@ -191,7 +191,7 @@ async function finalizeCheckout(context: LoadedContext, createdByUserId: string,
     const assignedPeople = assignments.get(item.class_id) ?? [];
 
     for (const assignment of assignedPeople) {
-      if (assignment.existing?.status === 'cancelled') {
+      if (assignment.existing?.status === 'cancelled' || assignment.existing?.status === 'preregistered') {
         const { error } = await supa
           .from('class_registrations')
           .update({

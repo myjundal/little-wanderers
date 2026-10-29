@@ -74,6 +74,7 @@ function queueClassCancellationSideEffects(input: {
   householdId: string;
   email?: string | null;
   origin: string;
+  releaseSeat: boolean;
 }) {
   void (async () => {
     const [cancellationEmail] = await Promise.all([
@@ -98,6 +99,7 @@ function queueClassCancellationSideEffects(input: {
       });
     }
 
+    if (!input.releaseSeat) return;
     const waitlistOffer = await offerNextWaitlistSpot(input.admin, input.classId, input.origin, {
       email: input.email,
       householdId: input.householdId,
@@ -146,7 +148,7 @@ export async function POST(req: Request) {
     const supa = admin();
     const { data: reg } = await supa
       .from('class_registrations')
-      .select('id,class_id,person_id,status,household_id')
+      .select('id,class_id,person_id,status,household_id,waitlist_offer_token,waitlist_offer_expires_at')
       .eq('id', registrationId)
       .maybeSingle();
 
@@ -161,6 +163,11 @@ export async function POST(req: Request) {
     if (reg.status === 'cancelled') {
       return Response.json({ ok: true, already_cancelled: true });
     }
+
+    const releaseSeat = reg.status === 'scheduled' || reg.status === 'attended' || (
+      reg.status === 'waitlist' && Boolean(reg.waitlist_offer_token) &&
+      new Date(reg.waitlist_offer_expires_at ?? '').getTime() > Date.now()
+    );
 
     const { error } = await supa
       .from('class_registrations')
@@ -182,9 +189,10 @@ export async function POST(req: Request) {
       householdId,
       email: user.email,
       origin: new URL(req.url).origin,
+      releaseSeat,
     });
 
-    return Response.json({ ok: true, cancellation_email_pending: true, waitlist_offer_pending: true });
+    return Response.json({ ok: true, cancellation_email_pending: true, waitlist_offer_pending: releaseSeat });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
