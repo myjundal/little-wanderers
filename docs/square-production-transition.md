@@ -17,7 +17,7 @@
 - 클래스 Hosted Checkout Sandbox 테스트 패널의 결제 후, 실제 Order/Payment 재조회와 로컬 등록 반영을 확인했다.
 - 추가 Sandbox 프로그램 결제로 **$150 한 번 → 5회 전체 등록**, 기존 사전등록 ID 보존, 중복 확인의 멱등성을 확인했다.
 - 실제 Sandbox 미결제 링크 삭제 후 Square 주문 `CANCELED`와 로컬 checkout `cancelled`를 확인했다. 청구 금액은 $0이다.
-- 무료 사전 예약 호환성 검증을 포함한 자동 테스트 112개가 통과했다. 직전 릴리스 검증에서 ESLint와 Next.js production build도 통과했다.
+- 무료 사전 예약과 입장료 6개월 경계 호환성 검증을 포함한 자동 테스트 113개, ESLint, Next.js production build가 통과했다.
 - 서명 위조, 금액·통화·매장·고객 불일치, URL만으로 확정 시도, DB 장애 후 웹훅 재시도, 중복 이벤트,
   오래된 Invoice 버전, 미납 멤버십, 기존 클래스 사전등록 ID 보존은 자동 테스트로 검증한다.
 - 임시 Sandbox 콜백으로 **Square가 실제 발송한 `invoice.payment_made`**의 서명 검증 → HTTP 200 →
@@ -153,6 +153,51 @@ Square POS → More → Invoices → **기존 해당 Invoice 선택** → Add pa
 카드/현금 등 실제 수납 수단으로 완료하면 같은 Invoice의 잔금에 반영된다.
 새 $150 판매나 별도 Payment Link를 만들지 않는다.
 단순 Mark as paid는 실제 카드 청구와 다르므로 실제 수납 내역을 확인하고 사용한다.
+
+## 현장 입장권 수납 — 2026-10-29 준비
+
+오픈 전 사이트 결제와 파티 청구서 발송은 닫아 두고, 매장 Square POS에서 입장권을 직접 선택하는 방식으로 준비한다.
+QR 자동 POS 인계 코드는 PR #68에 있으나 아직 운영 배포·기기 검증 전이다. 현재 운영 사이트는 가족 QR 체크인과 금액 계산까지만 제공한다.
+우리 가족 QR은 웹사이트 `/staff/checkin`에서 스캔한다. Square 상품 바코드 스캐너로 가족 QR을 결제할 수 있는 것은 아니다.
+Square에서 별도로 수납한 입장료는 웹사이트 체크인에 자동으로 납부 완료 표시되지 않는다. 실제 결제 완료 여부는 Square 영수증으로 확인한다.
+
+Square `Play Admission` 카테고리의 현장 요금:
+
+| 상품 | 금액 | 사용 |
+|---|---:|---|
+| General Admission (over 6mo) | $16 | 6개월 초과 첫 아이 |
+| Admission - Infant (0–6mo) | $10 | 첫 아이가 0–6개월인 가족 |
+| Admission - Additional Sibling | $10 | 같은 방문 가족의 추가 아이마다 |
+| Admission - Additional Adult | $5 | 가족당 포함된 성인 2명을 넘는 인원마다 |
+
+새 추가 요금 상품은 Points of sale 채널만 사용한다. 기존 $16 상품 ID를 보존한다.
+예: 일반 아이 2명+성인 2명=$26, 영아 1명+성인 2명=$10, 일반 아이 1명+성인 3명=$21.
+유효한 멤버십으로 포함되는 아이는 입장료를 다시 받지 않는다.
+
+음식용 `CT Meals Tax` 7.35%는 카페 음료 6개에만 추가 적용하도록 수정했다. 직접 입력한 금액에 자동 적용하지 않는다.
+일반 입장권에는 음식 세금을 적용하지 않는다. 기존 파티·클래스·멤버십의 상품별 non-taxable 설정은 변경하지 않았다.
+신규 음식 상품은 해당 음식 세금에 직접 추가해야 한다.
+DRS의 [2021년 개정 안내](https://portal.ct.gov/DRS/Legislative-Summaries/2021-Legislative-Changes/Legislative-Updates)는
+2021-07-01부터 일반 오락·놀이시설의 admissions tax를 폐지했다고 명시한다.
+2020년 admissions tax 안내를 현행 근거로 사용하지 않는다.
+[현재 sales tax 안내](https://portal.ct.gov/drs/sales-tax/tax-information)는 음식·일부 음료 7.35%를 명시한다.
+이 근거로 모든 종류의 클래스나 음식이 포함된 파티 패키지를 일괄 면세라고 판단하지 않는다.
+특히 [DRS 과세 서비스 목록](https://portal.ct.gov/DRS/Sales-Tax/Services-Subject-to-Sales-and-Use-Taxes)의 요가/건강클럽 분류는 클래스 결제 개시 전에 확인한다.
+
+`20261029_admission_infant_boundary.sql`을 운영 DB에 적용했다. 공개 요금표대로 정확히 6개월인 날은 $10을 유지하고,
+그 다음 날부터 첫 아이 $16을 계산한다. 멤버십 갱신 연령은 별도 정책이므로 바꾸지 않는다.
+운영 함수의 경계값, 가족 합산, 서버 전용 권한과 무료 파티 예약 보존을 읽기 전용으로 확인했다.
+
+매장 기기에서 남은 단계:
+
+1. iPad의 **Square Point of Sale** 앱에서 기존 계정으로 로그인하고 Little Wanderers 매장을 선택한다.
+2. Stand 전원/인터넷 연결과 앱의 카드 리더 연결 상태를 확인한다.
+3. Items에서 Play Admission을 열어 금액 버튼들을 확인하고 자주 쓰는 상품을 Favorites에 배치한다.
+4. 기존 가족은 직원 웹사이트 QR 체크인으로 유효한 waiver와 가족 요금을 확인한 뒤, Square에서 해당 입장권을 골라 Charge를 누른다.
+5. 고객이 탭/칩 결제하고 Square가 완료를 표시했는지 확인한다. 기기 연결·실제 카드 결제는 원격으로 확인하지 않았다.
+
+공식 기기 안내: [Stand 설정](https://squareup.com/help/us/en/article/8352-set-up-square-stand-2nd-generation),
+[Stand 결제](https://squareup.com/help/us/en/article/5175-accept-payments-with-square-stand).
 
 ## 로컬 및 Sandbox 재검증
 

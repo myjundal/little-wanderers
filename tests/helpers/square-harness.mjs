@@ -65,6 +65,7 @@ export async function squareTestDatabase() {
   await db.exec(fs.readFileSync('db/migrations/20261029_square_membership_admission.sql','utf8'));
   await db.exec(fs.readFileSync('db/migrations/20261029_square_checkout_recovery.sql','utf8'));
   await db.exec(fs.readFileSync('db/migrations/20261029_preopening_party_reservations.sql','utf8'));
+  await db.exec(fs.readFileSync('db/migrations/20261029_admission_infant_boundary.sql','utf8'));
   await db.exec(`
     insert into auth.users values('${ids.user}');
     insert into households values('${ids.household}','Test Family','test@example.invalid','${ids.user}'),('${ids.other}','Other Family','other@example.invalid',null);
