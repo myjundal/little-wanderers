@@ -45,7 +45,7 @@ test('instructor PIN session does not gain staff tools; removed role cannot sign
 test('family metrics skip walk-in members and count across multiple database pages', async()=>{
  const visited=[];
  const admin={from(table){let range=null,excludeWalkIn=false;const q={select(){return q},order(){return q},limit(){return q},range(from,to){range=[from,to];visited.push([table,from]);return q},not(key,op,value){assert.deepEqual([key,op,value],['user_id','is',null]);excludeWalkIn=true;return q},eq(){return q},then(resolve){let data=[];if(range){data=table==='household_members'?[...Array.from({length:501},(_,i)=>({household_id:`f${i}`,user_id:`u${i}`})),{household_id:'walk-in',user_id:null}]:Array.from({length:501},(_,i)=>({household_id:`c${Math.floor(i/2)}`}));if(excludeWalkIn)data=data.filter(r=>r.user_id);data=data.slice(range[0],range[1]+1);}resolve({data,error:null,count:502});}};return q;}};
- const api=load('src/app/api/admin/families/route.ts',{'@/lib/authz':{requireStaffContext:async()=>({ok:true,admin})},'@/lib/us-cities':{US_CITIES_BY_STATE:{}},'@/lib/waivers':{getWaiverStatus:()=>({status:'required'})}});
+ const api=load('src/app/api/admin/families/route.ts',{'@/lib/staff-family-search':{getStaffFamilySearchAliases:async()=>new Map()},'@/lib/authz':{requireStaffContext:async()=>({ok:true,admin})},'@/lib/us-cities':{US_CITIES_BY_STATE:{}},'@/lib/waivers':{getWaiverStatus:()=>({status:'required'})}});
  const result=await (await api.GET(new Request('https://example.com/api/admin/families'))).json();
  assert.equal(result.linked_families,501);assert.equal(result.families_with_children,251);
  assert.ok(visited.some(([table,offset])=>table==='household_members'&&offset===500));

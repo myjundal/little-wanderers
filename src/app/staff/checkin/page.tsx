@@ -137,6 +137,7 @@ export default function StaffCheckinPage() {
       if (!response.ok || !result.ok || !result.items?.[0]) throw new Error(result.error || 'Family not found.');
       if (request !== familyRequest.current) return;
       setFamily(result.items[0]);
+      setActiveFamily(result.items[0].id);
       if (!new URLSearchParams(window.location.search).has('data')) setMessage('Select only the children and adults who are here today.');
       await refreshPayments();
     } catch (error) { if (request === familyRequest.current) setDeskError(error instanceof Error ? error.message : 'Unable to open family.'); }
