@@ -72,7 +72,7 @@ test('desk rejects invalid family ids, strips filter operators, and reports fail
   assert.equal((await apiHarness({ failTable: 'waivers' }).get(`?family=${family.id}`)).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false } = {}) {
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '' } = {}) {
   const hooks = [], effects = [], requests = [];
   let cursor = 0, tree, visits = [], timers = [], refreshes = 0;
   const memo = (factory, deps) => {
@@ -90,6 +90,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     requests.push({ url, body });
     if (url.includes('/desk')) return Response.json({ ok: true, items: [{ ...deskFamily, waiver_status: waiver }] });
     if (url === '/api/checkin') {
+      if (checkinCode) return Response.json({ ok: false, code: checkinCode, error: 'The family waiver must be renewed.' }, { status: 409 });
       if (body.person_id === failPerson) return Response.json({ ok: false, error: 'Birthday required' }, { status: 409 });
       visits.push({ id: `visit-${body.person_id}`, person_id: body.person_id, household_id: family.id, household_name: family.name, name: body.person_id, price_cents: body.person_id === 'child' ? 1600 : 0, payment_status: body.person_id === 'child' ? 'due' : 'covered' });
       return Response.json({ ok: true });
@@ -97,7 +98,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     if (body) return Response.json({ ok: true, id: 'sale', url: 'square-commerce-v1://payment/create?fixture' });
     refreshes++;
     if (failRefresh && refreshes > 2) return Response.json({ ok: false, error: 'Connection lost' }, { status: 503 });
-    return Response.json({ ok: true, visits, enabled: true, pending_sales: pending && visits.length ? [{ id: 'sale', checkin_ids: visits.map(visit => visit.id) }] : [] });
+    return Response.json({ ok: true, visits, enabled: squareEnabled, pending_sales: pending && visits.length ? [{ id: 'sale', checkin_ids: visits.map(visit => visit.id) }] : [] });
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
   const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/StaffToolNav': 'nav', '@/lib/admission-pos-ui': logic }, {
@@ -118,7 +119,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const nodes = () => { const all = []; const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; all.push(node); walk(node.props?.children); }; walk(tree); return all; };
   const label = node => { if (Array.isArray(node)) return node.map(label).join(''); if (node == null || typeof node === 'boolean') return ''; if (typeof node !== 'object') return String(node); return label(node.props?.children); };
   const button = text => nodes().find(node => node.type === 'button' && label(node).includes(text));
-  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits };
+  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, setWaiver: value => { waiver = value; } };
 }
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
@@ -139,7 +140,12 @@ test('name-based UI checks in selected visitors manually, skips covered charges 
 test('waiver blocks entry and partial check-in failure keeps successful records visible for retry', async () => {
   const unsigned = uiHarness({ waiver: 'required' }); await choose(unsigned);
   unsigned.button('Select everyone remaining').props.onClick(); await unsigned.flush();
-  assert.equal(unsigned.button('Check in 2').props.disabled, true);
+  const blocked = unsigned.button('Waiver required before check-in');
+  assert.equal(blocked.props.disabled, true);
+  assert.equal(blocked.props.style.cursor, 'not-allowed');
+  assert.equal(blocked.props['aria-describedby'], 'checkin-block-reason');
+  assert.ok(unsigned.text().includes('Check-in blocked — family waiver needed'));
+  assert.equal(unsigned.requests.filter(request => request.url === '/api/checkin').length, 0);
   const h = uiHarness({ failPerson: 'parent' }); await choose(h);
   h.button('Select everyone remaining').props.onClick(); await h.flush();
   await h.button('Check in 2').props.onClick(); await h.flush();
@@ -199,4 +205,38 @@ test('directory link configuration is service-only and preserves both source hou
   await assert.rejects(db.query('insert into staff_family_search_aliases(alias_household_id,canonical_household_id,reason) values($1,$1,$2)', [family.id, 'Self']), /check constraint/);
   await db.exec('reset role');
   assert.equal((await db.query('select * from households')).rows.length, 2);
+});
+
+
+test('waiver recheck retains selected visitors and enables entry only after a completed waiver is returned', async () => {
+  const h = uiHarness({ waiver: 'required' }); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Recheck waiver').props.onClick(); await h.flush();
+  assert.equal(h.button('Waiver required before check-in').props.disabled, true);
+  assert.equal(h.nodes().filter(node => node.type === 'input' && node.props.type === 'checkbox' && node.props.checked).length, 2);
+  h.setWaiver('completed');
+  await h.button('Recheck waiver').props.onClick(); await h.flush();
+  assert.equal(h.button('Check in 2').props.disabled, false);
+  assert.ok(h.text().includes('Your visitor selection is saved'));
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  assert.equal(h.visits().length, 2);
+});
+
+test('check-in records visitors independently of Square handoff being enabled', async () => {
+  const h = uiHarness({ squareEnabled: false }); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  assert.equal(h.button('Check in 2').props.disabled, false);
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  assert.equal(h.visits().length, 2);
+  assert.equal(h.button('Pay $16.00').props.disabled, true);
+});
+
+test('a waiver rejected by the server updates the local block and keeps feedback beside the check-in controls', async () => {
+  const h = uiHarness({ checkinCode: 'waiver_required' }); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  assert.equal(h.button('Waiver required before check-in').props.disabled, true);
+  const feedback = h.nodes().find(node => node.props?.role === 'status' && node.type === 'p' && node.props.children.includes('waiver must be renewed'));
+  assert.ok(feedback);
+  assert.equal(h.visits().length, 0);
 });
