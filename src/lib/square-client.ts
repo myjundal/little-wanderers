@@ -1,5 +1,5 @@
 export type SquareEnvironment = 'sandbox' | 'production';
-export type PaymentFlow = 'party' | 'membership' | 'class';
+export type PaymentFlow = 'party' | 'membership' | 'class' | 'admission';
 
 export function squareEnvironment(): SquareEnvironment {
   const value = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').trim().toLowerCase();
@@ -68,6 +68,8 @@ export type SquareOrder = {
   total_money?: SquareMoney;
   net_amount_due_money?: SquareMoney;
   tenders?: Array<{ payment_id?: string; customer_id?: string }>;
+  created_at?: string;
+  line_items?: Array<{note?:string}>;
   fulfillments?: Array<{ digital_details?: { recipient?: { customer_id?: string; email_address?: string; phone_number?: string } }; pickup_details?: { recipient?: { customer_id?: string; email_address?: string; phone_number?: string } } }>;
 };
 export type SquareInvoice = {

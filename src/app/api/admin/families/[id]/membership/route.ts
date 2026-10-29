@@ -7,11 +7,10 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(req: Request, { params }: Params) {
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
-  const unavailable = onlinePaymentsUnavailable('membership');
-  if (unavailable) return unavailable;
   try {
     const householdId = (await params).id;
     const body = await req.json();
+    if(['create_payment_link','resume'].includes(body.action)){const unavailable=onlinePaymentsUnavailable('membership');if(unavailable)return unavailable;}
     if (body.action === 'create_payment_link') {
       const { data: household, error } = await context.admin.from('households').select('email').eq('id',householdId).single();
       if (error) throw new Error(error.message);

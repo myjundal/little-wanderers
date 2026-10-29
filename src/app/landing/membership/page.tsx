@@ -3,6 +3,7 @@ export const revalidate = 0;
 
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import MembershipControls from '@/components/membership/MembershipControls';
 import StartSubscriptionButton from '@/components/membership/StartSubscriptionButton';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { logger } from '@/lib/logger';
@@ -14,6 +15,7 @@ export const metadata = { title: 'Membership — Little Wanderers' };
 
 type Membership = {
   id: string;
+  square_status:string|null; square_subscription_id:string|null;
   renews_at: string | null;
   household_id: string | null;
 };
@@ -67,7 +69,7 @@ export default async function MembershipPage({ searchParams }: { searchParams?: 
 
     const { data: membershipRow, error: membershipError } = await supabase
       .from('memberships')
-      .select('id,renews_at,household_id')
+      .select('id,renews_at,household_id,square_status,square_subscription_id')
       .eq('household_id', householdId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -112,7 +114,7 @@ export default async function MembershipPage({ searchParams }: { searchParams?: 
             {(isActive ? 'ACTIVE' : 'NONE')}
           </span>{' '}
 
-          {!isActive && (
+          {!isActive && !membershipRow.square_subscription_id && (
             <section style={{ marginTop: 16, overflow: 'visible' }}>
               <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
               <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
@@ -121,10 +123,11 @@ export default async function MembershipPage({ searchParams }: { searchParams?: 
             </section>
           )}
 
-          {isActive && <span>Renews on {formatDate(membershipRow.renews_at)}</span>}
+          {isActive && <span>Paid access through {formatDate(membershipRow.renews_at)}</span>}
           {!isActive && membershipRow.renews_at && <span>Ends on {formatDate(membershipRow.renews_at)}</span>}
         </div>
 
+        {membershipRow.square_subscription_id && <MembershipControls status={membershipRow.square_status} />}
         <section style={{ marginTop: 24 }}>
           <Link href="/landing" style={{ display: 'inline-flex', border: '1px solid #d9c8f7', borderRadius: 12, padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
             ← Back to my dashboard

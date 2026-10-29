@@ -142,7 +142,7 @@ test('paid class fulfillment preserves pre-registration IDs and is atomic and id
 
 test('membership access requires a paid invoice, never grants from subscription status or a return URL alone',async t=>{
   const db=await squareTestDatabase();t.after(()=>db.close());const admin=localSquareAdmin(db);
-  const prepared=await admin.rpc('prepare_square_checkout',{p_household:ids.household,p_kind:'membership',p_environment:'sandbox',p_location:'test-location',p_user:ids.user,p_role:'customer',p_request:{plan_variation_id:'plan-1'}});
+  const prepared=await admin.rpc('prepare_square_checkout',{p_household:ids.household,p_kind:'membership',p_environment:'sandbox',p_location:'test-location',p_user:ids.user,p_role:'customer',p_request:{plan_variation_id:'plan-1',quoted_amount_cents:6000}});
   assert.equal(prepared.error,null);let attempt=prepared.data;
   await admin.from('square_checkout_attempts').update({square_subscription_id:'sub-1'}).eq('id',attempt.id);
   attempt={...attempt,square_subscription_id:'sub-1'};
@@ -159,7 +159,7 @@ test('membership access requires a paid invoice, never grants from subscription 
   // Even if the old paid invoice is briefly still listed first, the newer invoiced date cannot extend access.
   invoice.status='PAID';invoice.payment_requests[0].total_completed_amount_money.amount=6000;
   await checkout.reconcileMembership(admin,attempt,sub);rows=await db.query('select * from memberships');assert.equal(rows.rows[0].renews_at.toISOString(),paidThrough);
-  const duplicate=await admin.rpc('prepare_square_checkout',{p_household:ids.household,p_kind:'membership',p_environment:'sandbox',p_location:'test-location',p_user:ids.user,p_role:'customer',p_request:{plan_variation_id:'plan-1'}});
+  const duplicate=await admin.rpc('prepare_square_checkout',{p_household:ids.household,p_kind:'membership',p_environment:'sandbox',p_location:'test-location',p_user:ids.user,p_role:'customer',p_request:{plan_variation_id:'plan-1',quoted_amount_cents:6000}});
   assert.match(duplicate.error.message,/membership already exists/);
 });
 
@@ -177,7 +177,7 @@ test('a fully paid OPEN checkout order is fulfilled, while failed, refunded or u
 
 test('membership pause/resume/cancel call Square; resuming a scheduled pause deletes the pending action',async t=>{
   const db=await squareTestDatabase();t.after(()=>db.close());const admin=localSquareAdmin(db);
-  const prepared=await admin.rpc('prepare_square_checkout',{p_household:ids.household,p_kind:'membership',p_environment:'sandbox',p_location:'test-location',p_user:ids.user,p_role:'customer',p_request:{plan_variation_id:'plan-1'}});
+  const prepared=await admin.rpc('prepare_square_checkout',{p_household:ids.household,p_kind:'membership',p_environment:'sandbox',p_location:'test-location',p_user:ids.user,p_role:'customer',p_request:{plan_variation_id:'plan-1',quoted_amount_cents:6000}});
   await admin.from('square_checkout_attempts').update({square_subscription_id:'sub-lifecycle'}).eq('id',prepared.data.id);
   const sub={id:'sub-lifecycle',location_id:'test-location',customer_id:'customer-lifecycle',plan_variation_id:'plan-1',version:1,status:'ACTIVE',invoice_ids:[],actions:[]};
   const calls=[];

@@ -17,7 +17,7 @@ if(process.argv.includes('--verify-existing')){
   for(const kind of ['class','membership']){
     const url=kind==='class'?saved.class_url:saved.membership_url;
     const link=links.find(l=>l.url===url);if(!link)throw new Error('Saved Sandbox link not found');
-    const request=kind==='class'?{person_id:ids.person,items:[{class_id:ids.klass,quantity:1}]}:{plan_variation_id:saved.plan_variation_id};
+    const request=kind==='class'?{person_id:ids.person,items:[{class_id:ids.klass,quantity:1}]}:{plan_variation_id:saved.plan_variation_id,quoted_amount_cents:6000};
     const prepared=await admin.rpc('prepare_square_checkout',{p_household:ids.household,p_kind:kind,p_environment:'sandbox',p_location:process.env.SQUARE_LOCATION_ID,p_user:ids.user,p_role:'customer',p_request:request});
     if(prepared.error)throw new Error(prepared.error.message);
     const id=kind==='class'?saved.class_checkout_id:saved.membership_checkout_id;
@@ -36,7 +36,7 @@ if(process.argv.includes('--verify-existing')){
       phases:[{ordinal:0,cadence:'MONTHLY',pricing:{type:'STATIC',price_money:{amount:6000,currency:'USD'}}}]}},
   ]}]});
   runtime.env.SQUARE_PLAN_VARIATION_ID=catalog.id_mappings.find(m=>m.client_object_id==='#lw-test-monthly').object_id;
-  membership=await checkout.startSquareCheckout(admin,{householdId:ids.household,userId:ids.user,role:'customer',kind:'membership',returnPath:'/landing/membership?success=1'});
+  membership=await checkout.startSquareCheckout(admin,{householdId:ids.household,userId:ids.user,role:'customer',kind:'membership',quotedAmount:6000,returnPath:'/landing/membership?success=1'});
 }
 const report={environment:'sandbox',database:'isolated in-memory PostgreSQL',class_checkout_id:classCheckout.id,class_url:classCheckout.url,
   membership_checkout_id:membership.id,membership_url:membership.url,plan_variation_id:runtime.env.SQUARE_PLAN_VARIATION_ID,checks:[]};

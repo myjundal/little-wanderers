@@ -2,28 +2,29 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { assertSquarePaymentUrl, assertUsd, requirePaymentFlow, squareConfig, squareRequest, squareSiteUrl,
   type SquareOrder, type SquareMoney, type SquareInvoice } from '@/lib/square-client';
 import { buildPrePopulatedData } from '@/lib/square';
-import { toPartyDateTimeIso } from '@/lib/party-config';
+import { membershipPrice,type EnrolledChild } from '@/lib/payment-pricing';
+import { toPartyDateTimeIso,getPartyDateKey } from '@/lib/party-config';
 
 export type CheckoutAttempt = {
-  id: string; household_id: string; kind: 'membership' | 'class'; environment: string; location_id: string;
+  id: string; household_id: string; kind: 'membership' | 'class' | 'admission'; environment: string; location_id: string;
   expected_amount_cents: number; status: string; order_id: string | null; payment_url: string | null;
   payment_link_id: string | null; square_subscription_id: string | null; created_at: string;
-  payload: { request: { person_id?: string; items?: Array<{ class_id: string; quantity: number }>; plan_variation_id?: string }; summary?: unknown; line_items?: Array<Record<string, unknown>>; provider_request?: Record<string, unknown> };
+  payload: { request: { person_id?: string; items?: Array<{ class_id: string; quantity: number }>; plan_variation_id?: string; quoted_amount_cents?:number; visit_date?:string; person_ids?:string[] }; assignments?:EnrolledChild[]; summary?: unknown; line_items?: Array<Record<string, unknown>>; provider_request?: Record<string, unknown> };
 };
 export type SquarePayment = {
   id: string; order_id?: string; location_id?: string; customer_id?: string; status?: string;
   amount_money?: SquareMoney; refunded_money?: SquareMoney;
-  updated_at?: string;
+  updated_at?: string; note?:string; created_at?:string;
 };
 export type SquareSubscription = {
   id: string; customer_id: string; location_id: string; plan_variation_id: string; status: string;
   version: number; invoice_ids?: string[]; charged_through_date?: string; created_at?: string;
-  canceled_date?: string; actions?: Array<{ id: string; type: string; effective_date?: string }>;
+  price_override_money?:SquareMoney; canceled_date?: string; actions?: Array<{ id: string; type: string; effective_date?: string }>;
 };
 
 export async function startSquareCheckout(admin: SupabaseClient, input: {
-  householdId: string; userId: string; role: string; kind: 'membership' | 'class'; email?: string | null;
-  personId?: string; items?: Array<{ class_id: string; quantity?: number }>; returnPath: string;
+  householdId: string; userId: string; role: string; kind: 'membership' | 'class' | 'admission'; email?: string | null;
+  quotedAmount?:number; visitDate?:string; personIds?:string[]; personId?: string; items?: Array<{ class_id: string; quantity?: number }>; returnPath: string;
 }) {
   const config = requirePaymentFlow(input.kind);
   let request: CheckoutAttempt['payload']['request'];
@@ -34,11 +35,20 @@ export async function startSquareCheckout(admin: SupabaseClient, input: {
       phases?: Array<{ cadence?: string; recurring_price_money?: SquareMoney; pricing?: { type?: string; price_money?: SquareMoney } }>
     } } }>(`/v2/catalog/object/${encodeURIComponent(plan)}`);
     const phases = object.subscription_plan_variation_data?.phases ?? [];
-    if (object.type !== 'SUBSCRIPTION_PLAN_VARIATION' || object.is_deleted || phases.length !== 1 || phases[0].cadence !== 'MONTHLY') {
+    if (object.type !== 'SUBSCRIPTION_PLAN_VARIATION' || object.is_deleted || phases.length !== 1 || phases[0].cadence !== 'MONTHLY' || phases[0].pricing?.type !== 'STATIC') {
       throw new Error('Configure a single-phase monthly subscription plan variation');
     }
     assertUsd(phases[0].pricing?.price_money ?? phases[0].recurring_price_money, 6000);
-    request = { plan_variation_id: plan };
+    let quote=input.quotedAmount;
+    if(quote===undefined&&['owner','admin','staff'].includes(input.role)){
+      const {data:children,error}=await admin.from('people').select('id,birthdate').eq('household_id',input.householdId).eq('role','child');
+      if(error)throw new Error(error.message);quote=membershipPrice(children??[],getPartyDateKey(new Date()));
+    }
+    request = { plan_variation_id: plan,quoted_amount_cents:quote };
+  } else if(input.kind==='admission'){
+    const ids=[...new Set(input.personIds??[])].sort();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(input.visitDate??'')||!ids.length)throw new Error('Choose a visit date and family members');
+    request={visit_date:input.visitDate,person_ids:ids,quoted_amount_cents:input.quotedAmount};
   } else {
     const items = new Map<string, number>();
     for (const item of input.items ?? []) {
@@ -109,7 +119,7 @@ export async function verifyCheckoutOrder(attempt: CheckoutAttempt) {
 }
 
 export async function cancelUnpaidClassCheckout(admin: SupabaseClient, attempt: CheckoutAttempt) {
-  if (attempt.kind !== 'class') throw new Error('Only unpaid class checkouts can be cancelled here');
+  if (attempt.square_subscription_id) throw new Error('Use membership cancellation to stop a linked subscription');
   if (attempt.status === 'cancelled') return {status:'cancelled'};
   if (!['creating','open'].includes(attempt.status)) throw new Error('This payment requires staff review');
   const verified = await verifyCheckoutOrder(attempt);
@@ -145,6 +155,11 @@ export async function reconcileCheckout(admin: SupabaseClient, attempt: Checkout
   }
   for (const payment of verified.payments) {
     await saveSquarePaymentReceipt(admin,payment);
+  }
+  if (attempt.kind === 'admission') {
+    const {data,error}=await admin.rpc('fulfill_square_admission_checkout',{p_id:attempt.id});
+    if(error)throw new Error(error.message);
+    return {status:'completed',checkout_summary:data};
   }
   if (attempt.kind === 'class') {
     const { data, error } = await admin.rpc('fulfill_square_class_checkout', { p_id: attempt.id });
@@ -212,7 +227,7 @@ export async function reconcileMembership(admin: SupabaseClient, attempt: Checko
     if (!latest || (invoice.payment_requests?.[0]?.due_date ?? '') >= (latest.payment_requests?.[0]?.due_date ?? '')) latest = invoice;
   }
   const requests = latest?.payment_requests ?? [];
-  const paid = latest?.status === 'PAID' && requests.reduce((sum,r) => sum + (r.total_completed_amount_money?.amount ?? 0), 0) === attempt.expected_amount_cents
+  const paid = latest?.status === 'PAID' && requests.reduce((sum,r) => sum + (r.total_completed_amount_money?.amount ?? 0), 0) === (attempt.payload.assignments?.length && requests[0]?.due_date ? membershipPrice(attempt.payload.assignments,requests[0].due_date) : attempt.expected_amount_cents)
     && requests.every(r => r.total_completed_amount_money?.currency === 'USD');
   const review = [latest,triggerInvoice].some(invoice => invoice && ['REFUNDED','PARTIALLY_REFUNDED'].includes(invoice.status ?? ''));
   const throughDate = sub.charged_through_date;
@@ -234,17 +249,27 @@ export async function reconcileMembership(admin: SupabaseClient, attempt: Checko
     p_version: sub.version, p_paid_through: paidThrough, p_review: review,
   });
   if (error) throw new Error(error.message);
+  // Price changes apply to the next invoice. Compute that date now so a baby turning six months
+  // during this cycle is charged the disclosed sibling rate only on the following renewal.
+  if(sub.status==='ACTIVE' && throughDate && attempt.payload.assignments?.length){
+    const next=new Date(`${throughDate}T12:00:00Z`);next.setUTCDate(next.getUTCDate()+1);
+    const nextAmount=membershipPrice(attempt.payload.assignments,next.toISOString().slice(0,10));
+    const current=sub.price_override_money?.amount??6000;
+    if(current!==nextAmount)await squareRequest(`/v2/subscriptions/${encodeURIComponent(sub.id)}`,'PUT',{
+      subscription:{version:sub.version,price_override_money:{amount:nextAmount,currency:'USD'}}});
+  }
 }
 
 export async function changeSquareMembership(admin: SupabaseClient, householdId: string, action: 'pause' | 'resume' | 'cancel') {
-  const config = requirePaymentFlow('membership');
+  const config = action === 'resume' ? requirePaymentFlow('membership') : squareConfig();
   const { data: attempt, error } = await admin.from('square_checkout_attempts').select('*').eq('household_id', householdId)
     .eq('kind','membership').eq('environment', config.environment).not('square_subscription_id','is',null)
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error(error.message);
   if (!attempt) throw new Error('No linked Square subscription; manual review is required');
   const path = `/v2/subscriptions/${encodeURIComponent(attempt.square_subscription_id)}`;
-  let { subscription } = await squareRequest<{ subscription: SquareSubscription }>(`${path}?include=actions`);
+  const response = await squareRequest<{ subscription: SquareSubscription; actions?:SquareSubscription['actions'] }>(`${path}?include=actions`);
+  let subscription:SquareSubscription={...response.subscription,actions:response.actions??response.subscription.actions};
   const pendingPause = subscription.actions?.find(a => a.type === 'PAUSE');
   if (action === 'resume' && subscription.status === 'ACTIVE' && pendingPause) {
     ({ subscription } = await squareRequest<{ subscription: SquareSubscription }>(`${path}/actions/${encodeURIComponent(pendingPause.id)}`, 'DELETE'));

@@ -10,7 +10,7 @@ test('payment preflight rejects non-owners before reading configuration or calli
 });
 
 test('payment preflight validates provider catalog and signing key without exposing credentials or creating payments',async()=>{
- const calls=[];const admin={from(table){const q={select(){return q},eq(){return q},gt(){return q},then(resolve){resolve({data:table==='classes'?[]:[],error:null})}};return q;}};
+ const calls=[];const admin={from(table){const q={select(){return q},eq(){return q},gt(){return q},limit(){return q},then(resolve){resolve({data:table==='classes'?[]:[],error:null})}};return q;}};
  const route=loadSquareModules({env:{SQUARE_PARTY_ITEM_VARIATION_ID:'party',SQUARE_PLAN_VARIATION_ID:'plan',SQUARE_WEBHOOK_SIGNATURE_KEY:'private-signing-key',
    SQUARE_WEBHOOK_URL:'http://localhost:3000/api/webhooks/square'},mocks:{'@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin})}},
    fetch:async(url,options)=>{const path=new URL(url).pathname;calls.push({path,method:options.method});

@@ -73,11 +73,12 @@ test('check-in only uses authenticated staff identity and never trusts QR-suppli
   const api = loadModule('src/app/api/checkin/route.ts', {
     '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: 'staff' }, role: 'staff', admin: { rpc: async (_name, values) => { args = values; return { data: { ok: false, code: 'waiver_required' } }; } } }) },
     '@/lib/waiver-content': content,
+    '@/lib/square-client':{squareEnvironment:()=> 'sandbox'},
     '@/lib/open-play-reservations': { isUuid: value => /^[a-f0-9-]{36}$/.test(value) },
   });
   const response = await api.POST({ json: async () => ({ person_id: 'a'.repeat(36), created_by_user_id: 'forged', created_by_role: 'owner', price_cents: 0, group_size: 99 }) });
   assert.equal(response.status, 409);
   assert.equal(args.p_staff_user_id, 'staff');
   assert.equal(args.p_staff_role, 'staff');
-  assert.equal(Object.keys(args).length, 5);
+  assert.equal(Object.keys(args).length, 6);
 });

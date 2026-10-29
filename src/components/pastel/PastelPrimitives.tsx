@@ -45,6 +45,7 @@ export function PastelHeader({ isAuthenticated = false, waitlistCount, dashboard
       </Link>
 
       <nav className={styles.navOnlyFaq}>
+        <Link href="/admission">Admission</Link>
         <Link href="/party">Party Booking</Link>
         <Link href="/membership">Membership</Link>
         <Link href="/classes">Classes</Link>

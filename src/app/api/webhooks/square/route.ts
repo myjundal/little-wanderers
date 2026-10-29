@@ -1,3 +1,4 @@
+import {verifyAdmissionPos,type PosSale} from '@/lib/square-admission-pos';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -102,6 +103,12 @@ export async function POST(req: Request) {
             if (type.startsWith('refund.')) {
               const saved = await admin.from('square_checkout_attempts').update({ status: 'needs_review' }).eq('id', attempt.id);
               if (saved.error) throw new Error(saved.error.message);
+              if(attempt.kind==='admission'){
+                const tickets=await admin.from('admission_passes').update({status:'needs_review'}).eq('attempt_id',attempt.id);
+                if(tickets.error)throw new Error(tickets.error.message);
+                const visits=await admin.from('checkins').update({payment_status:'needs_review'}).eq('admission_attempt_id',attempt.id);
+                if(visits.error)throw new Error(visits.error.message);
+              }
               if (attempt.kind === 'membership' && attempt.square_subscription_id) {
                 const membership = await admin.from('memberships').update({payment_review_required:true,renews_at:new Date().toISOString()})
                   .eq('square_environment',environment).eq('square_subscription_id',attempt.square_subscription_id).eq('household_id',attempt.household_id);
@@ -109,6 +116,17 @@ export async function POST(req: Request) {
               }
             } else throw error;
           }
+        }
+        const noteId=paymentSnapshot?.note?.match(/^LW admission ([0-9a-f-]{36})$/i)?.[1];
+        const posQuery=admin.from('admission_pos_sales').select('*').eq('environment',environment);
+        const pos=noteId?await posQuery.eq('id',noteId).maybeSingle():await posQuery.eq('order_id',orderId).maybeSingle();
+        if(pos.error)throw new Error(pos.error.message);
+        if(pos.data&&paymentSnapshot?.status==='COMPLETED'){
+          if((paymentSnapshot.refunded_money?.amount??0)>0){
+            const sale=await admin.from('admission_pos_sales').update({status:'needs_review'}).eq('id',pos.data.id);
+            const visits=await admin.from('checkins').update({payment_status:'needs_review'}).eq('square_environment',environment).eq('square_order_id',orderId);
+            if(sale.error||visits.error)throw new Error('Unable to flag refunded admission');
+          }else await verifyAdmissionPos(admin,pos.data as PosSale,orderId);
         }
         const { data: booking, error: bookingError } = await admin.from('party_bookings').select('*')
           .eq('square_environment', environment).eq('square_order_id', orderId).maybeSingle();

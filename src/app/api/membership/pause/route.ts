@@ -1,4 +1,3 @@
-import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -6,8 +5,6 @@ import { changeSquareMembership } from '@/lib/square-checkout';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export async function POST() {
-  const unavailable = onlinePaymentsUnavailable('membership');
-  if (unavailable) return unavailable;
   try {
     const server = await createServerSupabaseClient();
     const { data: { user } } = await server.auth.getUser();

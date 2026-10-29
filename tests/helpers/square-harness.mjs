@@ -39,7 +39,9 @@ export async function squareTestDatabase() {
     create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth; create table auth.users(id uuid primary key);
     create table households(id uuid primary key, name text, email text, user_id uuid);
-    create table people(id uuid primary key,household_id uuid,role text,first_name text,created_at timestamptz default now());
+    create table people(id uuid primary key,household_id uuid,role text,first_name text,birthdate date default '2023-01-01',created_at timestamptz default now());
+    create table checkins(id uuid primary key default gen_random_uuid(),person_id uuid,household_id uuid,child_id uuid,
+      created_by_user_id uuid,created_by_role text,source text,price_cents integer default 0,membership_applied boolean default false,checked_in_at timestamptz default now());
     create table classes(id uuid primary key,title text,status text,price_cents integer,capacity integer,
       start_time timestamptz not null default now()+interval '30 days');
     create table class_registrations(id uuid primary key default gen_random_uuid(),class_id uuid,person_id uuid,
@@ -59,6 +61,8 @@ export async function squareTestDatabase() {
   `);
   await db.exec(fs.readFileSync('db/migrations/20261029_square_payment_fulfillment.sql','utf8'));
   await db.exec(fs.readFileSync('db/migrations/20261029_square_class_program_checkout.sql','utf8'));
+  await db.exec(`create function public.checkin_person(uuid,uuid,text,text,text) returns jsonb language sql as 'select null::jsonb';`);
+  await db.exec(fs.readFileSync('db/migrations/20261029_square_membership_admission.sql','utf8'));
   await db.exec(`
     insert into auth.users values('${ids.user}');
     insert into households values('${ids.household}','Test Family','test@example.invalid','${ids.user}'),('${ids.other}','Other Family','other@example.invalid',null);
@@ -76,7 +80,7 @@ export function localSquareAdmin(db) {
   const normalize = value => value && typeof value==='object' ? JSON.stringify(value) : value;
   return {
     async rpc(name,args) {
-      const values = Object.values(args).map(normalize);
+      const values = Object.entries(args).map(([key,value]) => name==='prepare_admission_pos'&&key==='p_ids'?value:normalize(value));
       try {
         const { rows } = await db.query(`select to_jsonb(${ident(name)}(${Object.keys(args).map((key,i)=>`${ident(key)} := $${i+1}`).join(',')})) as result`,values);
         return { data:json(rows[0].result),error:null };
