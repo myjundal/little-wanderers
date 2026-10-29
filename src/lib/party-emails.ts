@@ -1,12 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendResendEmail } from '@/lib/email-campaigns';
 import { logger } from '@/lib/logger';
-import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
+import { reconcilePartyInvoice, type InvoiceBooking } from '@/lib/square-party';
+import { squareEnvironment } from '@/lib/square-client';
+import { sendPartyBookingNotification } from '@/lib/admin-notifications';
 import {
-  PARTY_DEPOSIT_CENTS,
   PARTY_FINAL_DETAILS,
-  PARTY_INCLUDED_GUESTS,
-  PARTY_TOTAL_FEE_CENTS,
   PARTY_WHAT_TO_BRING,
   PARTY_WHAT_WE_PROVIDE,
 } from '@/lib/party-info';
@@ -34,6 +33,12 @@ type PartyBookingRow = {
   final_details_email_sent_at?: string | null;
   remaining_balance_cents?: number | null;
   remaining_balance_payment_url?: string | null;
+  square_environment?: string | null;
+  square_invoice_id?: string | null;
+  square_invoice_url?: string | null;
+  deposit_paid_cents?: number;
+  balance_paid_cents?: number;
+  payment_review_required?: boolean;
 };
 
 function escapeHtml(input: string) {
@@ -122,23 +127,6 @@ function renderShell(title: string, body: string) {
 </html>`;
 }
 
-function getSquareBaseUrl() {
-  const env = (process.env.SQUARE_ENVIRONMENT ?? process.env.SQUARE_ENV ?? 'sandbox').toLowerCase();
-  return env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
-}
-
-function getExtraGuestCents() {
-  const value = Number(process.env.PARTY_EXTRA_GUEST_CENTS ?? '0');
-  return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
-}
-
-function calculateRemainingBalanceCents(booking: Pick<PartyBookingRow, 'price_quote_cents' | 'final_total_count' | 'headcount_expected'>) {
-  const packageTotal = booking.price_quote_cents ?? PARTY_TOTAL_FEE_CENTS;
-  const finalTotal = booking.final_total_count ?? booking.headcount_expected ?? PARTY_INCLUDED_GUESTS;
-  const extraGuestCount = Math.max(0, finalTotal - PARTY_INCLUDED_GUESTS);
-  return Math.max(0, packageTotal - PARTY_DEPOSIT_CENTS + extraGuestCount * getExtraGuestCents());
-}
-
 async function getAuthUserEmail(admin: SupabaseClient, userId: string | null | undefined) {
   if (!userId) return '';
   const { data, error } = await admin.auth.admin.getUserById(userId);
@@ -185,7 +173,7 @@ async function getPartyRecipientEmail(admin: SupabaseClient, booking: Pick<Party
 async function loadBooking(admin: SupabaseClient, bookingId: string) {
   const { data, error } = await admin
     .from('party_bookings')
-    .select('id,household_id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,created_by_user_id,birthday_child_name,birthday_age,occasion_details,final_child_count,final_adult_count,final_total_count,confirmation_email_sent_at,two_week_reminder_sent_at,final_details_email_sent_at,remaining_balance_cents,remaining_balance_payment_url')
+    .select('id,household_id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,created_by_user_id,birthday_child_name,birthday_age,occasion_details,final_child_count,final_adult_count,final_total_count,confirmation_email_sent_at,two_week_reminder_sent_at,final_details_email_sent_at,remaining_balance_cents,remaining_balance_payment_url,square_environment,square_invoice_id,square_invoice_url,deposit_paid_cents,balance_paid_cents,payment_review_required')
     .eq('id', bookingId)
     .maybeSingle();
 
@@ -206,51 +194,6 @@ async function loadBooking(admin: SupabaseClient, bookingId: string) {
   return data as PartyBookingRow | null;
 }
 
-async function createPartyBalancePaymentLink(booking: PartyBookingRow, to: string, amountCents: number) {
-  if (amountCents <= 0) return null;
-  if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) return null;
-
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
-  const payload = {
-    idempotency_key: `party-balance-${booking.id}-${amountCents}`,
-    quick_pay: {
-      name: 'Little Wanderers Party Remaining Balance',
-      price_money: {
-        amount: amountCents,
-        currency: 'USD',
-      },
-      location_id: process.env.SQUARE_LOCATION_ID,
-    },
-    checkout_options: {
-      redirect_url: `${siteUrl}/landing/party?party_balance=success`,
-      ask_for_shipping_address: false,
-    },
-    ...(buildPrePopulatedData(to) ? { pre_populated_data: buildPrePopulatedData(to) } : {}),
-    reference_id: `party_balance_${booking.id.slice(0, 20)}`,
-    note: JSON.stringify({ party_booking_id: booking.id, type: 'party_remaining_balance' }),
-  };
-
-  logSquarePayload('party balance checkout payload', payload as Record<string, unknown>);
-
-  const response = await fetch(`${getSquareBaseUrl()}/v2/online-checkout/payment-links`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json',
-      'Square-Version': '2025-10-16',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`square_error: ${text}`);
-  }
-
-  const data = await response.json();
-  return (data?.payment_link?.url as string | undefined) ?? null;
-}
-
 function partyRows(booking: PartyBookingRow) {
   return [
     ['Date and time', formatPartyRange(booking.start_time, booking.end_time)],
@@ -266,7 +209,14 @@ export async function sendPartyConfirmationEmail(admin: SupabaseClient, bookingI
   const booking = await loadBooking(admin, bookingId);
   if (!booking) return { ok: false as const, error: 'booking not found' };
 
-  const to = await getPartyRecipientEmail(admin, booking, fallbackEmail);
+  if (booking.status !== 'confirmed' || booking.payment_review_required || (booking.square_invoice_id && (booking.deposit_paid_cents ?? 0) < 15000)) {
+    return { ok: true as const, skipped: true, reason: 'deposit_not_verified' };
+  }
+  if (booking.confirmation_email_sent_at) return { ok: true as const, skipped: true, reason: 'already_sent' };
+  if (booking.square_environment === 'sandbox' && !process.env.SQUARE_SANDBOX_EMAIL_TO) {
+    return { ok: true as const, skipped: true, reason: 'sandbox_email_disabled' };
+  }
+  const to = booking.square_environment === 'sandbox' ? process.env.SQUARE_SANDBOX_EMAIL_TO! : await getPartyRecipientEmail(admin, booking, fallbackEmail);
   if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
 
   const html = renderShell(
@@ -286,17 +236,25 @@ export async function sendPartyConfirmationEmail(admin: SupabaseClient, bookingI
   const email = await sendResendEmail({
     to,
     subject: 'Party booking confirmation',
+    idempotencyKey: `party-confirmed-${booking.id}`,
     html,
   });
 
   if (email.ok) {
-    await admin.from('party_bookings').update({ confirmation_email_sent_at: new Date().toISOString() }).eq('id', booking.id);
+    const notification = await sendPartyBookingNotification({ bookingId:booking.id,startTime:booking.start_time,endTime:booking.end_time,
+      status:'confirmed',familyEmail:to,birthdayChildName:booking.birthday_child_name,birthdayAge:booking.birthday_age,
+      headcountExpected:booking.headcount_expected,occasionDetails:booking.occasion_details,notes:booking.notes,
+      ...(booking.square_environment === 'sandbox' ? { recipientOverride:process.env.SQUARE_SANDBOX_EMAIL_TO } : {}) });
+    if (!notification.ok) return notification;
+    const { error } = await admin.from('party_bookings').update({ confirmation_email_sent_at: new Date().toISOString() }).eq('id', booking.id);
+    if (error) throw new Error(error.message);
   }
   return email;
 }
 
 export async function sendPartyTwoWeekReminderEmail(admin: SupabaseClient, booking: PartyBookingRow) {
-  const to = await getPartyRecipientEmail(admin, booking);
+  if (booking.square_environment === 'sandbox' && !process.env.SQUARE_SANDBOX_EMAIL_TO) return { ok: true as const, skipped: true, reason: 'sandbox_email_disabled' };
+  const to = booking.square_environment === 'sandbox' ? process.env.SQUARE_SANDBOX_EMAIL_TO! : await getPartyRecipientEmail(admin, booking);
   if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
 
   const html = renderShell(
@@ -314,6 +272,7 @@ export async function sendPartyTwoWeekReminderEmail(admin: SupabaseClient, booki
   const email = await sendResendEmail({
     to,
     subject: 'Your party is coming up!',
+    idempotencyKey: `party-two-week-${booking.id}`,
     html,
   });
 
@@ -324,11 +283,22 @@ export async function sendPartyTwoWeekReminderEmail(admin: SupabaseClient, booki
 }
 
 export async function sendPartyFinalDetailsEmail(admin: SupabaseClient, booking: PartyBookingRow) {
-  const to = await getPartyRecipientEmail(admin, booking);
+  if (booking.square_environment === 'sandbox' && !process.env.SQUARE_SANDBOX_EMAIL_TO) return { ok: true as const, skipped: true, reason: 'sandbox_email_disabled' };
+  const to = booking.square_environment === 'sandbox' ? process.env.SQUARE_SANDBOX_EMAIL_TO! : await getPartyRecipientEmail(admin, booking);
   if (!to) return { ok: true as const, skipped: true, reason: 'missing_email' };
 
-  const remainingBalanceCents = calculateRemainingBalanceCents(booking);
-  const paymentUrl = booking.remaining_balance_payment_url || await createPartyBalancePaymentLink(booking, to, remainingBalanceCents);
+  // Legacy reservations stay manual. Never manufacture a new $150 charge from an assumed deposit.
+  if (!booking.square_invoice_id || booking.square_environment !== squareEnvironment()) {
+    return { ok: true as const, skipped: true, reason: 'no_linked_invoice' };
+  }
+  const { data: full, error } = await admin.from('party_bookings').select('*').eq('id', booking.id).single();
+  if (error) throw new Error(error.message);
+  const verified = await reconcilePartyInvoice(admin, full as InvoiceBooking);
+  if (verified.status !== 'confirmed' || verified.deposit_paid_cents < 15000 || verified.payment_review_required) {
+    return { ok: true as const, skipped: true, reason: 'deposit_not_verified' };
+  }
+  const remainingBalanceCents = Math.max(0, 30000 - verified.deposit_paid_cents - verified.balance_paid_cents);
+  const paymentUrl = remainingBalanceCents > 0 ? verified.square_invoice_url : null;
   const finalHeadcount = booking.final_total_count == null
     ? 'Please reply with total guests, adults, and children.'
     : `${booking.final_total_count} total (${booking.final_adult_count ?? 0} adults, ${booking.final_child_count ?? 0} children)`;
@@ -343,7 +313,7 @@ export async function sendPartyFinalDetailsEmail(admin: SupabaseClient, booking:
         ['Remaining balance', formatMoney(remainingBalanceCents)],
         ['Setup arrival', formatSetupArrival(booking.start_time)],
       ])}
-      ${paymentUrl ? `<p style="margin:20px 0;"><a href="${escapeHtml(paymentUrl)}" style="display:inline-block;background:#5f3da4;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px;">Pay remaining balance</a></p>` : '<p>Please reply to this email and we will send your remaining balance payment link.</p>'}
+      ${remainingBalanceCents === 0 ? '<p>Your invoice is paid in full. Thank you!</p>' : paymentUrl ? `<p style="margin:20px 0;"><a href="${escapeHtml(paymentUrl)}" style="display:inline-block;background:#5f3da4;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px;">Pay remaining balance</a></p>` : '<p>Please reply to this email and we will send your remaining balance payment link.</p>'}
       <h2 style="font-size:17px;color:#4f3f82;margin:18px 0 6px;">Food and decor reminder</h2>
       ${listItems(PARTY_WHAT_TO_BRING)}
     `
@@ -352,6 +322,7 @@ export async function sendPartyFinalDetailsEmail(admin: SupabaseClient, booking:
   const email = await sendResendEmail({
     to,
     subject: 'Final party details needed',
+    idempotencyKey: `party-final-details-${booking.id}`,
     html,
   });
 
@@ -372,10 +343,23 @@ export async function sendDuePartyReminderEmails(admin: SupabaseClient, now = ne
   const windowStart = now.toISOString();
   const twoWeekEnd = new Date(now.getTime() + 14 * DAY_MS).toISOString();
 
+  // Reconcile/notify confirmed invoice bookings even if a webhook email attempt exhausted its retries.
+  const pendingConfirmations = await admin.from('party_bookings').select('*').eq('status','confirmed')
+    .eq('square_environment',squareEnvironment()).not('square_invoice_id','is',null)
+    .is('confirmation_email_sent_at',null).gte('start_time',windowStart).limit(50);
+  if (pendingConfirmations.error) throw new Error(pendingConfirmations.error.message);
+  for (const booking of pendingConfirmations.data ?? []) {
+    const verified = await reconcilePartyInvoice(admin,booking as InvoiceBooking);
+    if (verified.status === 'confirmed' && !verified.payment_review_required && verified.deposit_paid_cents >= 15000) {
+      const result = await sendPartyConfirmationEmail(admin,verified.id);
+      if (!result.ok) logger.error({action:'party.confirmation_retry_failed',bookingId:verified.id},new Error(result.error));
+    }
+  }
+
   const { data: rows, error } = await admin
     .from('party_bookings')
-    .select('id,household_id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,created_by_user_id,birthday_child_name,birthday_age,occasion_details,final_child_count,final_adult_count,final_total_count,confirmation_email_sent_at,two_week_reminder_sent_at,final_details_email_sent_at,remaining_balance_cents,remaining_balance_payment_url')
-    .neq('status', 'cancelled')
+    .select('id,household_id,start_time,end_time,headcount_expected,price_quote_cents,notes,status,created_by_user_id,birthday_child_name,birthday_age,occasion_details,final_child_count,final_adult_count,final_total_count,confirmation_email_sent_at,two_week_reminder_sent_at,final_details_email_sent_at,remaining_balance_cents,remaining_balance_payment_url,square_environment,square_invoice_id,square_invoice_url,deposit_paid_cents,balance_paid_cents,payment_review_required')
+    .eq('status', 'confirmed')
     .gte('start_time', windowStart)
     .lte('start_time', twoWeekEnd)
     .order('start_time', { ascending: true })
@@ -392,14 +376,16 @@ export async function sendDuePartyReminderEmails(admin: SupabaseClient, now = ne
     const msUntil = startsAt - now.getTime();
 
     try {
+      if (booking.square_environment === 'sandbox' && !process.env.SQUARE_SANDBOX_EMAIL_TO) continue;
+      if (booking.square_invoice_id && ((booking.deposit_paid_cents ?? 0) < 15000 || booking.payment_review_required || booking.square_environment !== squareEnvironment())) continue;
       if (msUntil <= 14 * DAY_MS && msUntil > 3 * DAY_MS && !booking.two_week_reminder_sent_at) {
         const result = await sendPartyTwoWeekReminderEmail(admin, booking);
-        if (result.ok) twoWeekSent += 1;
+        if (result.ok && !('skipped' in result)) twoWeekSent += 1;
       }
 
       if (msUntil <= 3 * DAY_MS && !booking.final_details_email_sent_at) {
         const result = await sendPartyFinalDetailsEmail(admin, booking);
-        if (result.ok) finalSent += 1;
+        if (result.ok && !('skipped' in result)) finalSent += 1;
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

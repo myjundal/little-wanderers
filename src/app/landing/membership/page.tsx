@@ -6,6 +6,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import StartSubscriptionButton from '@/components/membership/StartSubscriptionButton';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { logger } from '@/lib/logger';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { paymentFlowEnabled,squareConfig } from '@/lib/square-client';
+import { reconcileCheckout,type CheckoutAttempt } from '@/lib/square-checkout';
 
 export const metadata = { title: 'Membership — Little Wanderers' };
 
@@ -15,7 +18,8 @@ type Membership = {
   household_id: string | null;
 };
 
-export default async function MembershipPage() {
+export default async function MembershipPage({ searchParams }: { searchParams?: Promise<{ checkout_id?: string }> }) {
+  let checkoutMessage: string | null = null;
   const supabase = await createServerSupabaseClient();
 
   try {
@@ -33,6 +37,7 @@ export default async function MembershipPage() {
       return (
         <main style={{ padding: 24 }}>
           <h1>Membership</h1>
+          {checkoutMessage && <p role="status">{checkoutMessage}</p>}
           <p>Please <Link href="/login">log in</Link>.</p>
         </main>
       );
@@ -42,6 +47,22 @@ export default async function MembershipPage() {
     if (!householdId) {
       logger.warn({ action: 'membership.household_missing', userId: user.id });
       return renderError();
+    }
+
+    const checkoutId = (await searchParams)?.checkout_id;
+    if (checkoutId && paymentFlowEnabled('membership')) {
+      try {
+        const admin = createAdminSupabaseClient();
+        const { data: attempt,error } = await admin.from('square_checkout_attempts').select('*').eq('id',checkoutId)
+          .eq('household_id',householdId).eq('kind','membership').eq('environment',squareConfig().environment).maybeSingle();
+        if (error) throw new Error(error.message);
+        if (attempt) {
+          const result = await reconcileCheckout(admin,attempt as CheckoutAttempt);
+          checkoutMessage = result.status === 'completed' ? 'Your subscription is linked. Access is based on verified invoice payments.' : 'Your payment is still being verified.';
+        }
+      } catch {
+        checkoutMessage = 'We are still verifying your subscription with Square. Please refresh shortly or contact us.';
+      }
     }
 
     const { data: membershipRow, error: membershipError } = await supabase
@@ -62,6 +83,7 @@ export default async function MembershipPage() {
       return (
         <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 640, margin: '0 auto', boxSizing: 'border-box' }}>
           <h1>Membership</h1>
+          {checkoutMessage && <p role="status">{checkoutMessage}</p>}
           <section style={{ marginTop: 16, overflow: 'visible' }}>
             <p style={{ margin: 0 }}>You don&apos;t have an active membership right now.</p>
             <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
@@ -83,6 +105,7 @@ export default async function MembershipPage() {
     return (
       <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 640, margin: '0 auto', boxSizing: 'border-box' }}>
         <h1>Membership</h1>
+          {checkoutMessage && <p role="status">{checkoutMessage}</p>}
 
         <div style={{ marginTop: 8 }}>
           <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 12, border: '1px solid #ddd' }}>

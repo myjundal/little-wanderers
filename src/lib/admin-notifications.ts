@@ -127,6 +127,7 @@ export async function sendNewSignupNotification(input: {
 }
 
 export async function sendPartyBookingNotification(input: {
+  recipientOverride?: string;
   bookingId?: string | null;
   startTime: string;
   endTime: string;
@@ -141,7 +142,7 @@ export async function sendPartyBookingNotification(input: {
   occasionDetails?: string | null;
   notes?: string | null;
 }) {
-  const to = getOwnerNotificationEmail();
+  const to = input.recipientOverride || getOwnerNotificationEmail();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
   const partyTime = formatEasternRange(input.startTime, input.endTime);
   const html = renderOperationalNotification({
@@ -167,6 +168,7 @@ export async function sendPartyBookingNotification(input: {
   return sendResendEmail({
     to,
     subject: `New party booking: ${partyTime}`,
+    idempotencyKey: input.bookingId ? `party-owner-${input.bookingId}-${input.status}` : undefined,
     html,
   });
 }

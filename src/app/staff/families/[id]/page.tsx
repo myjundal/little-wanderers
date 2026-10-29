@@ -305,9 +305,10 @@ export default function StaffFamilyDetailPage() {
     });
 
     const json = await res.json();
-    setMessage(json.ok ? 'Party booking created.' : json.error ?? 'Party booking failed.');
+    setMessage(json.ok ? 'Invoice created. The reservation is pending until the $150 deposit is verified.' : json.error ?? 'Party booking failed.');
     if (json.ok) {
       setPartyForm(emptyPartyForm());
+      if (json.payment_url) window.location.assign(json.payment_url);
     }
     await load();
   };

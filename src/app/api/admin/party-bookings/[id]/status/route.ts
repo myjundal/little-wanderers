@@ -1,4 +1,5 @@
 import { requireOwnerContext } from '@/lib/authz';
+import { cancelPartyInvoice, reconcilePartyInvoice, type InvoiceBooking } from '@/lib/square-party';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
 
     const { data: booking, error: bookingErr } = await context.admin
       .from('party_bookings')
-      .select('id,status')
+      .select('*')
       .eq('id', params.id)
       .maybeSingle();
 
@@ -29,6 +30,20 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
 
     if (!booking) {
       return Response.json({ ok: false, error: 'booking not found' }, { status: 404 });
+    }
+
+    if (booking.square_environment) {
+      try {
+        if (nextStatus === 'cancelled') {
+          await cancelPartyInvoice(context.admin, booking as InvoiceBooking);
+          return Response.json({ ok:true });
+        }
+        const verified = await reconcilePartyInvoice(context.admin, booking as InvoiceBooking);
+        if (nextStatus !== verified.status) return Response.json({ ok:false,error:'Reservation status follows verified Square invoice payments' }, { status:409 });
+        return Response.json({ ok:true });
+      } catch (error) {
+        return Response.json({ ok:false,error:error instanceof Error ? error.message : 'Invoice needs review' }, { status:409 });
+      }
     }
 
     const currentStatus = booking.status ?? 'pending';

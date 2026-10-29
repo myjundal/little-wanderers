@@ -5,39 +5,27 @@ import { fixtureClass, fixtureChild, loadModule } from './helpers/class-preregis
 const serverMock = { createServerSupabaseClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'parent', email: 'parent@example.com' } } }) } }) };
 const householdsMock = { getLatestHouseholdIdForUser: async () => 'family' };
 
-test('staff checkout promotes existing interest without inserting a duplicate or changing its ID', async () => {
-  for (const status of ['preregistered', 'cancelled', 'scheduled']) {
-    const writes = [];
-    const admin = { from(table) {
-      const query = {
-        select() { return query; }, eq() { return query; }, in() { return query; }, order() { return query; },
-        insert(row) { throw new Error(`Unexpected duplicate insert: ${row.person_id}`); },
-        update(row) { writes.push(row); return query; },
-        maybeSingle: async () => ({ data: { id: 'existing' }, error: null }),
-        then(resolve) { resolve({ data: {
-          people: [{ id: 'guardian', role: 'adult' }, { id: 'child', role: 'child' }],
-          classes: [{ ...fixtureClass, capacity: 1 }],
-          class_registrations: [{ id: 'existing', person_id: 'child', status }],
-        }[table], error: null }); },
-      };
-      return query;
-    } };
-    const api = loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts', {
-      '@/lib/authz': { requireStaffContext: async () => ({ ok: true, admin, role: 'owner', user: { id: 'employee' } }) },
-      crypto: {}, '@/lib/square': {},
-      '@/lib/class-waitlist': { countConfirmedClassRegistrations: async () => status === 'scheduled' ? 1 : 0 },
-      '@/lib/admin-notifications': {}, '@/lib/family-profile': {}, '@/lib/logger': {},
-    });
-    const response = await api.POST({ json: async () => ({ mode: 'finalize', person_id: 'child', items: [{ class_id: 'painting' }] }) }, { params: { id: 'family' } });
-    assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).checkout_summary.registration_ids, ['existing']);
-    assert.equal(writes.length, status === 'scheduled' ? 0 : 1);
-    if (writes.length) {
-      assert.equal(writes[0].status, 'scheduled');
-      assert.equal(writes[0].person_id, 'child');
-      assert.equal(writes[0].waitlist_offer_token, null);
-    }
-  }
+test('staff checkout requires a persisted checkout and cannot promote interest from a browser return alone', async () => {
+  const attempt = { id: 'checkout', household_id: 'family', kind: 'class' };
+  const admin = { from(table) {
+    const q = { select(){return q}, eq(){return q}, in(){return q}, order(){return q},
+      maybeSingle:async()=>({data:attempt,error:null}),
+      then(resolve){resolve({data:{people:[],classes:[]}[table]??[],error:null})},
+      insert(){throw new Error('Route must not grant registration')},update(){throw new Error('Route must not grant registration')},
+    };return q;
+  }};
+  let verified=0;
+  const api = loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts', {
+    '@/lib/authz':{requireStaffContext:async()=>({ok:true,admin,role:'owner',user:{id:'employee'}})},
+    '@/lib/online-payment-access':{onlinePaymentsUnavailable:()=>null},
+    '@/lib/square-client':{squareConfig:()=>({environment:'sandbox'})},
+    '@/lib/square-checkout':{reconcileCheckout:async(_admin,saved)=>{assert.equal(saved,attempt);verified++;return {status:'pending',checkout_summary:null}}},
+    '@/lib/class-waitlist':{},'@/lib/admin-notifications':{},'@/lib/family-profile':{},'@/lib/logger':{},
+  });
+  const forged = await api.POST({json:async()=>({mode:'finalize'})},{params:{id:'family'}});
+  assert.equal(forged.status,400);assert.equal(verified,0);
+  const pending = await api.POST({json:async()=>({mode:'finalize',checkout_id:'checkout'})},{params:{id:'family'}});
+  assert.equal(pending.status,200);assert.equal((await pending.json()).status,'pending');assert.equal(verified,1);
 });
 
 test('manual pre-registration also ignores capacity and waitlist priority', async () => {
@@ -57,7 +45,8 @@ test('manual pre-registration also ignores capacity and waitlist priority', asyn
     } };
     const api = loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts', {
       '@/lib/authz': { requireStaffContext: async () => ({ ok: true, admin, role: 'staff', user: { id: 'employee' } }) },
-      crypto: {}, '@/lib/square': {},
+      '@/lib/online-payment-access': { onlinePaymentsUnavailable: () => { throw new Error('Manual interest must not require payment'); } },
+      '@/lib/square-client': {}, '@/lib/square-checkout': {},
       '@/lib/class-waitlist': {
         countConfirmedClassRegistrations: async () => { throw new Error('Do not count seats for interest'); },
         hasActiveWaitlistOffer: async () => { throw new Error('Do not check offers for interest'); },

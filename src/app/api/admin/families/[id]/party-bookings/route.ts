@@ -1,4 +1,6 @@
 import { requireStaffContext } from '@/lib/authz';
+import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
+import { startPartyInvoice } from '@/lib/square-party';
 import { isBookablePartySlot, isOnOrAfterPartyBookingStart, PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 
 type Params = { params: Promise<{ id: string }> };
@@ -8,6 +10,8 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
 
+  const unavailable = onlinePaymentsUnavailable('party');
+  if (unavailable) return unavailable;
   const { id: householdId } = params;
   const body = await req.json();
   const start = new Date(body.start_time);
@@ -28,36 +32,15 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
     return Response.json({ ok: false, error: 'Party bookings are only available on Friday afternoons, Saturdays, or Sundays.' }, { status: 400 });
   }
 
-  const admin = context.admin;
-  const { data: conflicts } = await admin
-    .from('party_bookings')
-    .select('id')
-    .lt('start_time', end.toISOString())
-    .gt('end_time', start.toISOString())
-    .neq('status', 'cancelled');
-
-  if ((conflicts ?? []).length > 0) {
-    return Response.json({ ok: false, error: 'That party slot is already booked.' }, { status: 409 });
+  try {
+    const admin = context.admin;
+    const { data: household, error } = await admin.from('households').select('email').eq('id',householdId).single();
+    if (error) throw new Error(error.message);
+    const result = await startPartyInvoice(admin, { householdId,userId:context.user.id,role:context.role,email:household.email,
+      booking: { start_time:start.toISOString(),end_time:end.toISOString(),headcount_expected:body.headcount_expected ?? null,
+        birthday_child_name:birthdayChildName,birthday_age:birthdayAge,notes:body.notes ?? null } });
+    return Response.json({ ok:true,id:result.booking.id,status:result.booking.status,payment_url:result.url });
+  } catch (error) {
+    return Response.json({ ok:false,error:error instanceof Error ? error.message : 'Unable to start party invoice' }, { status:409 });
   }
-
-  const { data, error } = await admin
-    .from('party_bookings')
-    .insert({
-      household_id: householdId,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      headcount_expected: body.headcount_expected ? Number(body.headcount_expected) : null,
-      birthday_child_name: birthdayChildName,
-      birthday_age: birthdayAge,
-      notes: body.notes ?? null,
-      status: 'confirmed',
-      status_updated_at: new Date().toISOString(),
-      created_by_user_id: context.user.id,
-      created_by_role: context.role,
-    })
-    .select('id')
-    .maybeSingle();
-
-  if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-  return Response.json({ ok: true, id: data?.id ?? null });
 }
