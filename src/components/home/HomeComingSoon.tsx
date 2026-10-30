@@ -77,15 +77,14 @@ export default async function HomeComingSoon() {
             <br />
             <span className={styles.heroLocationLine}>in West Hartford</span>
           </h1>
-          <p className={styles.comingSoon}>Soft opening end of October 2026 · Grand opening November 2026</p>
+          <p className={styles.comingSoon}>Opening Soon in November</p>
           <p>
             We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
-            in West Hartford, CT. Soft opening invitations will go to Wanderlist families first, so if you&apos;d like to
-            join us for soft opening,{' '}
+            in West Hartford, CT. For opening updates and priority reservation access,{' '}
             <a href={ACCOUNT_URL} className={styles.inlineLink}>
               join our Little Wanderers
             </a>{' '}
-            and we&apos;ll send opening updates and priority reservation access before we open to the public!
+            and we&apos;ll share our opening date as soon as it&apos;s confirmed!
           </p>
           <p>
             We&apos;re opening in Bishop&apos;s Corner plaza on the Target side, tucked between The Paper Store and Float
