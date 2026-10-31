@@ -45,6 +45,8 @@ export function getWaiverStatus(rows: WaiverRow[], now = new Date(), requiredPer
     })
     .filter(item => item.signedAt && item.signedAt.getTime() <= now.getTime())
     .sort((a, b) => {
+      const permanent = Number(b.row.waiver_expires_at === 'infinity') - Number(a.row.waiver_expires_at === 'infinity');
+      if (permanent) return permanent;
       const left = a.signedAt?.getTime() ?? a.createdAt?.getTime() ?? 0;
       const right = b.signedAt?.getTime() ?? b.createdAt?.getTime() ?? 0;
       return right - left;
@@ -53,6 +55,11 @@ export function getWaiverStatus(rows: WaiverRow[], now = new Date(), requiredPer
   const signedAt = latest?.signedAt ?? null;
   if (!signedAt) {
     return { status: 'required', signedAt: null, expiresAt: null, daysUntilExpiration: null };
+  }
+
+  // PostgreSQL's explicit non-expiring timestamp must not fall back to 90 days.
+  if (latest?.row.waiver_expires_at === 'infinity') {
+    return { status: 'completed', signedAt: signedAt.toISOString(), expiresAt: null, daysUntilExpiration: null };
   }
 
   const expiresAt = toDate(latest?.row.waiver_expires_at) ?? addDays(signedAt, WAIVER_VALIDITY_DAYS);
