@@ -8,4 +8,10 @@
 .name { display: block; width: 100%; box-sizing: border-box; margin: 8px 0 20px; padding: 12px; font: inherit; border: 1px solid #b8a2ce; border-radius: 10px; }
 .submit { padding: 14px 22px; border: 0; border-radius: 14px; background: #65469c; color: white; font: inherit; font-weight: 700; }
 .error { color: #8c2330; background: #fff0f1; padding: 12px; border-radius: 10px; }
+.eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.15em; color: #7a63a5; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 0 16px; }
+.fields label { min-width: 0; }
+.child { border: 1px solid #dfd1ee; border-radius: 12px; padding: 16px; margin: 20px 0; min-width: 0; }
+.main button { cursor: pointer; }
+.main button:disabled { cursor: wait; opacity: 0.6; }
 @media (max-width: 500px) { .main { padding: 18px; } .card { padding: 18px; } }

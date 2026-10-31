@@ -14,6 +14,7 @@ export default function AddToHomeScreenPrompt() {
   const [hidden, setHidden] = useState(true);
 
   useEffect(() => {
+    if (['/party-waiver', '/waiver'].includes(window.location.pathname)) return;
     if (window.matchMedia('(display-mode: standalone)').matches) return;
     if (localStorage.getItem(DISMISS_KEY) === '1') return;
 

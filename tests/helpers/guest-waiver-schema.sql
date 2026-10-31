@@ -1,0 +1,13 @@
+create role anon;
+create role authenticated;
+create role service_role;
+create schema auth;
+create table auth.users(id uuid primary key default gen_random_uuid(), email text, email_confirmed_at timestamptz);
+create table households(id uuid primary key default gen_random_uuid(),role text not null default 'owner',name text,email text,phone text,created_at timestamptz default now());
+create table household_members(id uuid default gen_random_uuid(),household_id uuid references households(id),user_id uuid references auth.users(id),role text,created_at timestamptz default now(),unique(household_id,user_id));
+create table people(id uuid primary key default gen_random_uuid(),household_id uuid references households(id),role text,first_name text not null,last_name text,birthdate date,created_at timestamptz default now());
+create table party_bookings(id uuid primary key default gen_random_uuid(),household_id uuid references households(id),status text default 'confirmed',start_time timestamptz default now());
+create table waivers(id uuid primary key default gen_random_uuid(),household_id uuid references households(id),signed_by_user_id uuid references auth.users(id),signed_at timestamptz,signed_date timestamptz,waiver_expires_at timestamptz,parent_name text,electronic_signature text,email text,phone text,photo_consent boolean,source text,waiver_version text,covered_person_ids uuid[],agreement_snapshot jsonb);
+create table memberships(household_id uuid references households(id));
+create table checkins(person_id uuid references people(id));
+create table staff_family_search_aliases(alias_household_id uuid primary key references households(id),canonical_household_id uuid references households(id),reason text);

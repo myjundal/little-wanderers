@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+import GuestWaiverForm from '@/components/waivers/GuestWaiverForm';
+
+export const metadata = { title: 'Family waiver | Little Wanderers', robots: { index: false, follow: false } };
 
 export default function WaiverEntryPage() {
-  redirect('/login?next=/landing/waiver');
+  return <GuestWaiverForm />;
 }
