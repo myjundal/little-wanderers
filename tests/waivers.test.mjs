@@ -18,6 +18,19 @@ test('waivers require the current text and every participating child, and expire
   assert.equal(waivers.getWaiverStatus([signed], new Date('2026-10-27')).status, 'required');
 });
 
+test('explicit non-expiring records stay completed without renewal dates and still require valid coverage', () => {
+  const permanent = { ...signed, waiver_expires_at: 'infinity' };
+  const later = new Date('2036-10-28T12:00:00Z');
+  assert.deepEqual({ ...waivers.getWaiverStatus([permanent], later, ['child']) }, {
+    status: 'completed', signedAt: '2026-10-28T12:00:00.000Z', expiresAt: null, daysUntilExpiration: null,
+  });
+  assert.equal(waivers.getWaiverStatus([permanent, { ...signed, signed_at: '2026-10-29T12:00:00Z' }], later, ['child']).status, 'completed');
+  assert.equal(waivers.getWaiverStatus([permanent], later, ['new-child']).status, 'required');
+  assert.equal(waivers.getWaiverStatus([{ ...permanent, waiver_version: 'old' }], later).status, 'required');
+  assert.equal(waivers.getWaiverStatus([permanent], new Date('2026-10-27')).status, 'required');
+  assert.equal(waivers.getWaiverStatus([{ ...signed, waiver_expires_at: null }], later).status, 'expired');
+});
+
 function harness({ user = { id: 'guardian', email: 'parent@example.test' }, role = 'primary_caregiver', saveError = null, readError = null } = {}) {
   const writes = [];
   const children = [{ id: 'child', first_name: 'Child', last_name: 'Family', role: 'child', birthdate: '2023-01-01' }];
