@@ -11,6 +11,7 @@ const SHOW_INSTALL_PROMPT = true;
 const SHOW_PUSH_PROMPT = false;
 
 export const metadata = {
+  manifest: '/manifest.webmanifest',
   title: {
     default: 'Little Wanderers',
     template: '%s — Little Wanderers',
