@@ -1,5 +1,16 @@
 # Launch audit — October 28, 2026
 
+## Guest party waivers — October 31, 2026
+
+- `/party-waiver?party=<booking ID>` and `/waiver` provide an account-free family waiver. A short email-code check proves contact ownership without creating a Supabase Auth user, marketing contact or subscription. Retain the existing waiver text, required agreements, photo choice and 90-day validity.
+- Apply `db/migrations/20261031_guest_party_waivers.sql` before deploying this change. It adds private verification sessions, verified-contact mappings and party-to-waiver associations in the existing database. Families, children, signatures and later visits use the existing `households`, `people` and `waivers` records. No second Supabase project is needed. Existing account-only `/landing/waiver` remains available.
+- Verification codes expire after 15 minutes and five failed attempts; sessions expire after two hours and can be cleared with **Done · clear this screen** on shared devices. Send limits apply by verified-contact candidate and hashed network address. Raw codes/tokens are never stored in the database or returned in JSON. Browser database roles cannot read guest sessions/contacts or execute identity RPCs.
+- Verified caregivers of existing accounts use their existing family IDs. Returning guests can reuse an unexpired waiver that covers the current children. Guest submissions lock and save the family, children, signed evidence and party association in one transaction. Retries retain the same signature. Different birthdays, changed family details or ambiguous families require review rather than an automatic merge.
+- A subsequent email-confirmed account login links the same guest family to its caregiver account. Preserve person and waiver IDs and signatures. Empty signup placeholders remain stored and are hidden in staff search through explicit directory aliases. A conflicting populated account requires a front-desk record check; different email addresses, names or phone numbers alone never grant access or combine households.
+- Party Management shows a party-specific guest link/QR and signed-family roster. Guests sign for their own children. Saving/reusing a waiver does not record arrival, alter party attendance totals, create an Open Play visit or collect payment. Staff continue to record actual party attendance separately.
+- The migration creates schema/functions only. Do not submit a real person's legal signature or create a customer account during verification. Exercise signatures and account linking against the isolated PGlite fixture, and use the real public page only for unsigned layout/read-only checks.
+- Validation: 115 tests, ESLint and production compilation pass. The existing optional build-time class-catalog request cannot reach Supabase inside the filesystem sandbox; production compilation and page generation still complete. Mobile layout checks include the unsigned form and returning-guest view. Production schema metadata was inspected read-only; production guest schema and web deployment require release of this change.
+
 ## Shipped corrections
 
 - Enable the family waiver independently of the other pre-opening dashboard flags.

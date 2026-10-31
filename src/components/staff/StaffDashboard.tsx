@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import PartyGuestWaivers from '@/components/waivers/PartyGuestWaivers';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 import Link from 'next/link';
 import ClassPreRegistrationRosters, { ClassViewSwitcher } from '@/components/classes/ClassPreRegistrationRosters';
@@ -1259,6 +1260,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                   <p key={`detail-${line}`} style={{ color: '#6d6480' }}><strong>{line.split(':')[0]}:</strong> {line.split(':').slice(1).join(':').trim()}</p>
                 ))}
                 <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {prettyNote(selectedBooking.notes)}</p>
+                <PartyGuestWaivers partyId={selectedBooking.id} />
                 <div style={{ marginTop: 10, border: '1px solid #eadfff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
                   <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Party attendance tracker</p>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

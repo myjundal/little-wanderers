@@ -83,6 +83,7 @@ async function dashboardHarness(canManageClasses) {
     react,
     'next/link': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,
+    '@/components/waivers/PartyGuestWaivers': () => null,
     '@/components/classes/ClassPreRegistrationRosters': { __esModule: true, default: Roster, ClassViewSwitcher: Switcher },
   }, {
     React: react,

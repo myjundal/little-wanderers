@@ -70,8 +70,11 @@ export default function AppHome() {
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [waiverLoaded, setWaiverLoaded] = useState(false);
   const [waiverError, setWaiverError] = useState(false);
+  const [guestWaiverReview, setGuestWaiverReview] = useState(false);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
+
+  useEffect(() => { setGuestWaiverReview(new URLSearchParams(window.location.search).get('guest_waiver_review') === '1'); }, []);
 
   useEffect(() => {
     const run = async () => {
@@ -236,6 +239,7 @@ export default function AppHome() {
 
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto 88px' }}>
+      {guestWaiverReview && <p role="status" style={{ padding: 16, background: '#fff6e8', borderRadius: 12 }}>We could not safely connect earlier guest waiver records. Please ask the front desk for a family record check before signing another waiver. Your existing records are saved.</p>}
       {!canUseOwnerDashboard && SHOW_CUSTOMER_WAIVER_PROMPTS && (waiverError || (waiverLoaded && (waiver.status === 'required' || waiver.status === 'expired' || (waiver.status === 'completed' && (waiver.days_until_expiration ?? 999) <= 14)))) && (
         <section style={{ marginBottom: 14, padding: 14, borderRadius: 12, border: '1px solid #f1cf8a', background: '#fff6e8' }}>
           <p style={{ margin: 0, fontWeight: 700, color: '#7f4a04' }}>

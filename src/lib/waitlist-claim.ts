@@ -4,6 +4,7 @@ import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
 import { sendNewSignupNotification } from '@/lib/admin-notifications';
 import { logger } from '@/lib/logger';
+import { claimGuestWaiverFamily } from '@/lib/guest-waivers';
 
 type WaitlistUser = { id: string; email?: string | null };
 
@@ -295,6 +296,11 @@ export async function getPostAuthRedirectForUser(
 
   if (user.email) {
     await claimWaitlistForUser(user).catch(() => null);
+    const guest = await claimGuestWaiverFamily(user.id).catch(() => {
+      logger.warn({ action: 'guest_waiver.claim_failed', userId: user.id });
+      return { claimed: false, review_required: true };
+    });
+    if (guest?.review_required) return '/landing?guest_waiver_review=1';
   }
 
   return next;
