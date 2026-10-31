@@ -1,0 +1,18 @@
+{
+  "id": "/staff-login",
+  "name": "Little Wanderers Staff",
+  "short_name": "LW Staff",
+  "description": "Little Wanderers staff iPad login and timeclock.",
+  "start_url": "/staff-login",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6d4bb7",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
