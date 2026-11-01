@@ -54,7 +54,7 @@ export default function StaffFamiliesPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <StaffToolNav active="families" />
-          <Link href="/staff#manual-family-registration" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
+          <Link href="/staff/families/new" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
             + New family
           </Link>
         </div>

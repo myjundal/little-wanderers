@@ -47,7 +47,9 @@ test('today list uses Eastern midnight boundaries, excludes cancelled bookings a
   const start = query.filters.find(([op]) => op === 'gte')[2];
   const end = query.filters.find(([op]) => op === 'lt')[2];
   assert.equal(new Date(start).toLocaleTimeString('en-US', { timeZone: 'America/New_York' }), '12:00:00 AM');
-  assert.equal(Date.parse(end) - Date.parse(start), 86400000);
+  assert.equal(new Date(end).toLocaleTimeString('en-US', { timeZone: 'America/New_York' }), '12:00:00 AM');
+  const tomorrow = new Date(Date.parse(`${data.date}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  assert.equal(new Date(end).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), tomorrow);
   assert.equal(data.items[0].reservations[0].slot.label, 'Open Play');
   assert.equal(data.items[0].people.length, 2);
 });

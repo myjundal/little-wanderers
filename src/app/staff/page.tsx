@@ -1,5 +1,4 @@
 import { getCurrentUserRole } from '@/lib/authz';
-import StaffDashboard from '@/components/staff/StaffDashboard';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 
 export default async function StaffPage() {
@@ -18,7 +17,6 @@ export default async function StaffPage() {
         </div>
       </div>
 
-      <StaffDashboard view="overview" />
     </main>
   );
 }

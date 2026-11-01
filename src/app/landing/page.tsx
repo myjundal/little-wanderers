@@ -2,6 +2,7 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import StaffToolNav from '@/components/staff/StaffToolNav';
 import TeachingPage from '@/app/teaching/page';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
@@ -326,16 +327,7 @@ export default function AppHome() {
 
       {canUseOwnerDashboard && (
         <section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <Link href="/staff" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
-            <Link href="/staff/classes" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Class pre-registration rosters</Link>
-            <Link href="/staff/checkin" style={{ display: 'block', color: '#5f3da4', fontWeight: 700 }}>Check-in &amp; payment</Link>
-            <Link href="/staff/families">Family management</Link>
-            <Link href="/employee">My PIN & Timecards</Link>
-            {!isStaff && <Link href="/staff/team">Staff & Timecards</Link>}
-            {!isInstructor && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}
-            <Link href="/staff/occupancy">Occupancy management</Link>
-          </div>
+          <StaffToolNav />
         </section>
       )}
 
@@ -381,7 +373,7 @@ export default function AppHome() {
       <nav className={['mobileBottom', canUseOwnerDashboard && !isInstructor ? 'mobileBottomStaff' : isInstructor && canUseOwnerDashboard ? 'mobileBottomInstructorStaff' : ''].filter(Boolean).join(' ')}>
         <Link href="/">Main</Link>
         <Link href="/landing">{canUseOwnerDashboard ? (isStaff ? 'Staff Dash' : 'Owner Dash') : 'My Dash'}</Link>
-        {canUseOwnerDashboard && <Link href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>}
+        {canUseOwnerDashboard && <Link href="/staff/dashboard">Staff Dashboard</Link>}
         {canUseOwnerDashboard ? (
           <Link href="/staff/checkin">Check-in</Link>
         ) : (

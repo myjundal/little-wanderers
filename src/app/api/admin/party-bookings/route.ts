@@ -1,4 +1,5 @@
 import { requireStaffContext } from '@/lib/authz';
+import { getTodayPartyRange } from '@/lib/party-management';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,12 +10,18 @@ function isMissingColumnError(message: string) {
   return /column .* does not exist|Could not find the '.*' column/i.test(message);
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
 
   try {
-    const primary = await context.admin.from('party_bookings').select(PARTY_SELECT).order('start_time', { ascending: true });
+    const today = new URL(req.url).searchParams.get('today') === '1' ? getTodayPartyRange() : null;
+    const query = <T extends string>(columns: T) => {
+      let result = context.admin.from('party_bookings').select(columns).order('start_time', { ascending: true });
+      if (today) result = result.gte('start_time', today.start).lt('start_time', today.end).in('status', ['confirmed', 'early_access_hold']);
+      return result;
+    };
+    const primary = await query(PARTY_SELECT);
 
     let data = primary.data ?? [];
     if (primary.error) {
@@ -22,7 +29,7 @@ export async function GET() {
         return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
       }
 
-      const fallback = await context.admin.from('party_bookings').select(PARTY_SELECT_FALLBACK).order('start_time', { ascending: true });
+      const fallback = await query(PARTY_SELECT_FALLBACK);
       if (fallback.error) {
         return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
       }
@@ -58,7 +65,7 @@ export async function GET() {
       household_name: householdNames.get(item.household_id) ?? 'Household',
     }));
 
-    return Response.json({ ok: true, items });
+    return Response.json({ ok: true, items, date: today?.date, attendance_available: !primary.error }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
