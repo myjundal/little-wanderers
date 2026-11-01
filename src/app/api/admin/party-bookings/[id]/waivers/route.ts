@@ -27,6 +27,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       children: (snapshot?.children ?? []).map(child => [child.first_name, child.last_name].filter(Boolean).join(' ')),
       signed_at: waiver.signed_at, expires_at: waiver.waiver_expires_at, status: getWaiverStatus([waiver]).status }];
   });
-  return Response.json({ ok: true, guest_url: guestUrl, qr_data_url: await QRCode.toDataURL(guestUrl, { width: 220, margin: 2 }), items,
+  return Response.json({ ok: true, guest_url: guestUrl, qr_data_url: await QRCode.toDataURL(guestUrl, { width: 440, margin: 2 }), items,
     truncated: records.data?.length === 500 }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

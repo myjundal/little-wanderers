@@ -8,8 +8,15 @@ export default function PartyGuestWaivers({ partyId }: { partyId: string }) {
   const [refresh, setRefresh] = useState(0);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
+    setData(null); setCopied(false);
+  }, [partyId]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setRefresh(value => value + 1), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
     const controller = new AbortController();
-    setData(null); setError(''); setCopied(false);
+    setError('');
     void fetch(`/api/admin/party-bookings/${partyId}/waivers`, { cache: 'no-store', signal: controller.signal }).then(async response => {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to load guest waivers.');
@@ -21,13 +28,14 @@ export default function PartyGuestWaivers({ partyId }: { partyId: string }) {
     <h4 style={{ marginTop: 0 }}>Party guest waivers</h4>
     <p>Share this link or QR with guests. Each parent signs for their own children. No account is required.</p>
     {error && <p role="alert">{error}</p>}
+    {!data && !error && <p role="status">Loading this party’s waiver QR and guest list…</p>}
     {data && <>
       <Image src={data.qr_data_url} unoptimized alt="Scan to open this party’s guest waiver" width={220} height={220} />
       <p><a href={data.guest_url} target="_blank" rel="noreferrer">Open guest waiver</a></p>
       <p style={{ overflowWrap: 'anywhere' }}>{data.guest_url}</p>
       <button type="button" onClick={() => void navigator.clipboard.writeText(data.guest_url).then(() => setCopied(true)).catch(() => setError('Copy the link shown above.'))}>{copied ? 'Link copied' : 'Copy guest waiver link'}</button>
       <p><strong>{data.items.length} families with a waiver on file for this party</strong></p>
-      <p>A saved waiver does not mark a guest as present or create an Open Play charge. Keep using the party attendance tracker for arrivals.</p>
+      <p>Use the attendance counters to record arrivals. The waiver list refreshes every 30 seconds.</p>
       {!data.items.length ? <p>No guest waivers yet.</p> : <ul>{data.items.map(item => <li key={item.household_id} style={{ margin: '12px 0' }}>
         <strong>{item.guardian_name}</strong> · {item.email}<br />{item.children.join(', ')}<br />
         {item.status === 'completed' ? 'Waiver valid' : 'Waiver renewal required'} · <a href={`/staff/families/${item.household_id}`}>Family record</a>

@@ -5,10 +5,11 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import { SHOW_CUSTOMER_MEMBERSHIP } from '@/lib/feature-flags';
+import StaffToolNav from '@/components/staff/StaffToolNav';
 
 export default function LandingMoreMenu() {
   const [open, setOpen] = useState(false);
-  const { isLoading, canUseOwnerDashboard, isStaff, isInstructor, isKiosk } = useOperatorAccess();
+  const { isLoading, canUseOwnerDashboard, isInstructor, isKiosk } = useOperatorAccess();
 
   return (
     <div style={{ marginBottom: 12, position: 'sticky', top: 8, zIndex: 40 }}>
@@ -23,26 +24,15 @@ export default function LandingMoreMenu() {
       </header>
       {open && !isLoading && (
         <section style={{ display: 'grid', gap: 10, border: '1px solid #e3d0fb', borderRadius: 14, background: '#fffdf9', padding: 12 }}>
+          {canUseOwnerDashboard ? <div onClick={() => setOpen(false)}><StaffToolNav /></div> : <>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href="/">Main Homepage</Link>
-          <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href={isKiosk && canUseOwnerDashboard ? '/staff/dashboard' : isInstructor && !canUseOwnerDashboard ? '/teaching' : '/landing'}>
-            {canUseOwnerDashboard ? (isStaff ? 'Staff Dashboard' : 'Owner Dashboard') : isInstructor ? 'Teaching Classes' : 'My Dashboard'}
+          <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href={isInstructor ? '/teaching' : '/landing'}>
+            {isInstructor ? 'Teaching Classes' : 'My Dashboard'}
           </Link>
-          {canUseOwnerDashboard && (
-            <>
-              <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>
-              <Link style={{ color: '#5f3da4', fontWeight: 800 }} onClick={() => setOpen(false)} href="/staff/checkin">Check-in &amp; payment</Link>
-              <Link onClick={() => setOpen(false)} href="/staff/families">Family management</Link>
-              <Link onClick={() => setOpen(false)} href="/staff/classes">Class pre-registrations</Link>
-              <Link onClick={() => setOpen(false)} href="/staff/occupancy">Occupancy management</Link>
-              <Link onClick={() => setOpen(false)} href="/employee">{isKiosk ? 'My Timecards' : 'My PIN & Timecards'}</Link>
-              {!isStaff && <Link onClick={() => setOpen(false)} href="/staff/team">Staff & Timecards</Link>}
-              {!isInstructor && !isKiosk && <><Link onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link><Link onClick={() => setOpen(false)} href="/landing/party">My Parties</Link></>}
-            </>
-          )}
+          </>}
           {isKiosk && <Link onClick={() => setOpen(false)} href="/staff-login">Log out &amp; clock out</Link>}
-          {isInstructor && <>
-            {!canUseOwnerDashboard && <Link onClick={() => setOpen(false)} href="/employee">{isKiosk ? 'My Timecards' : 'My PIN & Timecards'}</Link>}
-            {canUseOwnerDashboard && <Link onClick={() => setOpen(false)} href="/teaching">Teaching Classes</Link>}
+          {isInstructor && !canUseOwnerDashboard && <>
+            <Link onClick={() => setOpen(false)} href="/employee">{isKiosk ? 'My Timecards' : 'My PIN & Timecards'}</Link>
             {!isKiosk && <><Link onClick={() => setOpen(false)} href="/landing/classschedule">My Classes</Link>
             <Link onClick={() => setOpen(false)} href="/landing/party">My Parties</Link></>}
           </>}

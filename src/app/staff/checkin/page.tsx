@@ -265,7 +265,7 @@ export default function StaffCheckinPage() {
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <h2>{query.trim() ? 'Search results' : 'Today’s Open Play reservations'}</h2>
         <button disabled={locked} onClick={() => { setQuery(''); setDeskRefresh(value => value + 1); void refreshPayments().catch(error => setMessage(error.message)); }}>Show / refresh today</button>
-        <Link href="/staff#manual-family-registration">+ New family</Link>
+        <Link href="/staff/families/new">+ New family</Link>
       </div>
       {deskError && <p role="alert">{deskError}</p>}
       {deskLoading ? <p role="status">Loading families…</p> : <>

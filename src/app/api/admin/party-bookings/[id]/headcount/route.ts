@@ -1,4 +1,6 @@
-import { requireOwnerContext } from '@/lib/authz';
+import { requireStaffContext } from '@/lib/authz';
+import { isUuid } from '@/lib/open-play-reservations';
+import { PARTY_ATTENDANCE_SELECT } from '@/lib/party-management';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +15,9 @@ type Action =
 
 export async function PATCH(req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
   const params = await pendingParams;
-  const context = await requireOwnerContext();
+  const context = await requireStaffContext();
   if (!context.ok) return context.response;
+  if (!isUuid(params.id)) return Response.json({ ok: false, error: 'Invalid party.' }, { status: 400 });
 
   try {
     const body = (await req.json().catch(() => ({}))) as {
@@ -24,7 +27,7 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
       adult_count?: number;
       total_count?: number;
     };
-    const action = body.action ?? 'increment_child';
+    const action = body.action;
 
     const { data: booking, error: bookingErr } = await context.admin
       .from('party_bookings')
@@ -71,7 +74,7 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
           final_total_count: finalChild + finalAdult,
           attendance_finalized_at: new Date().toISOString(),
           attendance_recorded_by: context.user.id,
-          attendance_notes: typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 2000) : null,
+          ...(body.notes !== undefined ? { attendance_notes: typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 2000) : null } : {}),
         };
         break;
       }
@@ -111,10 +114,17 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
         return Response.json({ ok: false, error: 'invalid action' }, { status: 400 });
     }
 
-    const { error: updateErr } = await context.admin.from('party_bookings').update(payload).eq('id', params.id);
+    // Compare the snapshot so two iPads cannot silently overwrite each other's counts.
+    let update = context.admin.from('party_bookings').update(payload).eq('id', params.id)
+      .eq('current_child_count', child).eq('current_adult_count', adult);
+    update = booking.attendance_finalized_at
+      ? update.eq('attendance_finalized_at', booking.attendance_finalized_at)
+      : update.is('attendance_finalized_at', null);
+    const { data: updated, error: updateErr } = await update.select(PARTY_ATTENDANCE_SELECT).maybeSingle();
     if (updateErr) return Response.json({ ok: false, error: updateErr.message }, { status: 500 });
+    if (!updated) return Response.json({ ok: false, error: 'Attendance changed on another device. Refresh and try again.' }, { status: 409 });
 
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, item: updated });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

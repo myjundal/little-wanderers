@@ -1,6 +1,7 @@
 import { getCurrentUserRole } from '@/lib/authz';
 import StaffDashboard from '@/components/staff/StaffDashboard';
 import StaffToolNav from '@/components/staff/StaffToolNav';
+import PartyManagement from '@/components/staff/PartyManagement';
 
 export const metadata = { title: 'Party Management - Little Wanderers' };
 
@@ -18,7 +19,11 @@ export default async function StaffPartiesPage() {
         <StaffToolNav active="parties" />
       </div>
 
-      <StaffDashboard view="parties" />
+      <PartyManagement />
+      {(role === 'owner' || role === 'admin') && <details style={{ marginTop: 32 }}>
+        <summary style={{ padding: 16, cursor: 'pointer', color: '#5f3da4', fontWeight: 700 }}>All bookings &amp; requests</summary>
+        <StaffDashboard view="parties" />
+      </details>}
     </main>
   );
 }
