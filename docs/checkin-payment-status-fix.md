@@ -1,0 +1,3 @@
+A staff parent/child check-in failed because the live checkin_person function inserts covered or due, while checkins_payment_status_check still allowed only the older membership, prepaid, walkin_paid, terminal_paid and included states. Square POS fulfillment also writes paid. The database rejects these inserts atomically, including occupancy updates.
+
+The focused migration retains every legacy state and additionally permits covered, due and paid. It does not change pricing, waive charges, create signatures, alter authentication or record real visits. A PGlite regression reproduces the rejection, checks that the migration preserves existing records, permits current states and due-to-paid settlement, rejects unknown values and can be reapplied.
