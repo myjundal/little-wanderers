@@ -1,51 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
+import { operatorLinks, personalBookingLinks } from '@/lib/operator-navigation';
+import styles from './operator-navigation.module.css';
 
 type StaffToolNavProps = {
-  active?: 'checkin' | 'home' | 'families' | 'classes' | 'parties' | 'campaigns';
+  active?: string;
+  includePersonal?: boolean;
+  variant?: 'tools' | 'dashboard' | 'menu' | 'quick';
+  onNavigate?: () => void;
 };
 
-const linkStyle: CSSProperties = {
-  borderRadius: 12,
-  border: '1px solid #d9c8f7',
-  padding: '14px 16px',
-  color: '#5f3da4',
-  textDecoration: 'none',
-  fontWeight: 700,
-  background: '#fff',
-};
+export default function StaffToolNav({ active, includePersonal = false, variant = 'tools', onNavigate }: StaffToolNavProps) {
+  const links = (items: ReadonlyArray<{ id: string; href: string; label: string }>) => items.map(item => (
+    <Link key={item.id} href={item.href} onClick={onNavigate} aria-current={active === item.id ? 'page' : undefined} className={styles.link}>
+      {item.label}
+    </Link>
+  ));
 
-function styleFor(active: boolean): CSSProperties {
-  return {
-    ...linkStyle,
-    background: active ? '#f3ebff' : linkStyle.background,
-    borderColor: active ? '#b995ef' : linkStyle.borderColor,
-  };
-}
-
-export default function StaffToolNav({ active }: StaffToolNavProps) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      <Link href="/" style={linkStyle}>
-        Main Homepage
-      </Link>
-      <Link href="/staff/dashboard" style={linkStyle}>
-        Staff Dashboard
-      </Link>
-      <Link href="/staff/checkin" style={styleFor(active === 'checkin')}>
-        Check-in &amp; Payment
-      </Link>
-      <Link href="/staff/parties" style={styleFor(active === 'parties')}>
-        Party Management
-      </Link>
-      <Link href="/staff/families" style={styleFor(active === 'families')}>
-        Family Management
-      </Link>
-      <Link href="/staff/classes" style={styleFor(active === 'classes')}>
-        Class Management
-      </Link>
-    </div>
-  );
+  return <nav aria-label={variant === 'quick' ? 'Quick menu' : 'Staff and owner menu'} className={`${styles.navigation} ${styles[variant]}`}>
+    <div className={styles.primary}>{links(operatorLinks)}</div>
+    {includePersonal && <div className={styles.personal} aria-label="My bookings">{links(personalBookingLinks)}</div>}
+  </nav>;
 }

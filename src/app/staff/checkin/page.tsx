@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import OpenPlayReservationsAdmin from '@/components/staff/OpenPlayReservationsAdmin';
+import StaffDashboard from '@/components/staff/StaffDashboard';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import { admissionGroups, squarePosCallback, type AdmissionVisit } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
@@ -18,7 +19,7 @@ const button: React.CSSProperties = { padding: '14px 20px', borderRadius: 12, bo
 
 export default function StaffCheckinPage() {
   const { role } = useOperatorAccess();
-  const [view, setView] = useState<'desk' | 'reservations'>('desk');
+  const [view, setView] = useState<'desk' | 'reservations' | 'occupancy'>('desk');
   const [completion, setCompletion] = useState<{ familyName: string; visitors: string[] } | null>(null);
   const completionDialog = useRef<HTMLDialogElement | null>(null);
   const [visits, setVisits] = useState<AdmissionVisit[]>([]);
@@ -124,7 +125,8 @@ export default function StaffCheckinPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'reservations' && !params.has('data')) setView('reservations');
+    const requestedView = params.get('view');
+    if ((requestedView === 'reservations' || requestedView === 'occupancy') && !params.has('data')) setView(requestedView);
     let id = params.get('family');
     if (!id && params.has('data')) {
       try { id = window.sessionStorage.getItem('admission-family'); } catch { /* Storage is optional. */ }
@@ -139,10 +141,10 @@ export default function StaffCheckinPage() {
     if (completion && dialog && !dialog.open) dialog.showModal();
   }, [completion]);
 
-  function changeView(next: 'desk' | 'reservations') {
+  function changeView(next: 'desk' | 'reservations' | 'occupancy') {
     setView(next);
     const url = new URL(window.location.href);
-    if (next === 'reservations') url.searchParams.set('view', next);
+    if (next !== 'desk') url.searchParams.set('view', next);
     else url.searchParams.delete('view');
     window.history.replaceState({}, '', url.pathname + url.search);
   }
@@ -248,12 +250,13 @@ export default function StaffCheckinPage() {
 
   return <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
     <StaffToolNav active="checkin" />
-    <h1 style={{ color: '#4f3f82', marginBottom: 8 }}>Check-in &amp; payment</h1>
+    <h1 style={{ color: '#4f3f82', marginBottom: 8 }}>Check-in &amp; occupancy management</h1>
     <nav aria-label="Check-in workspace" style={{ display: 'flex', gap: 10, margin: '16px 0', flexWrap: 'wrap' }}>
       <button type="button" aria-pressed={view === 'desk'} disabled={locked} onClick={() => changeView('desk')} className={styles.viewButton}>Check-in &amp; payment</button>
+      <button type="button" aria-pressed={view === 'occupancy'} disabled={locked} onClick={() => changeView('occupancy')} className={styles.viewButton}>Occupancy management</button>
       <button type="button" aria-pressed={view === 'reservations'} disabled={locked} onClick={() => changeView('reservations')} className={styles.viewButton}>Open Play reservations</button>
     </nav>
-    {view === 'reservations' ? <section aria-label="Open Play reservation management">
+    {view === 'occupancy' ? <StaffDashboard view="occupancy" /> : view === 'reservations' ? <section aria-label="Open Play reservation management">
       <h2>Open Play reservations</h2>
       <p>Review bookings and select a family to check in and take payment.</p>
       <OpenPlayReservationsAdmin canManage={role === 'owner' || role === 'admin'} checkedInFamilyIds={[...new Set(visits.map(visit => visit.household_id))]} onCheckIn={id => { changeView('desk'); void openFamily(id); }} onReservationsChange={() => setDeskRefresh(value => value + 1)} />

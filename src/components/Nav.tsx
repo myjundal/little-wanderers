@@ -1,5 +1,5 @@
 import { PastelHeader } from '@/components/pastel/PastelPrimitives';
-import { getCurrentUserRole } from '@/lib/authz';
+import { getCurrentUserRole, isStaffRole } from '@/lib/authz';
 import { getWaitlistCount } from '@/lib/waitlist-count';
 
 export default async function Nav() {
@@ -11,8 +11,8 @@ export default async function Nav() {
   return (
     <PastelHeader
       isAuthenticated={Boolean(identity.user)}
-      dashboardHref={identity.isKiosk ? '/staff-login' : undefined}
-      accessLabel={identity.isKiosk ? 'Staff Dashboard / Clock out' : undefined}
+      dashboardHref={isStaffRole(identity.role) ? '/staff/dashboard' : identity.roles.includes('instructor') ? '/teaching' : undefined}
+      accessLabel={isStaffRole(identity.role) ? 'Dashboard' : identity.roles.includes('instructor') ? 'Teaching Classes' : undefined}
       waitlistCount={{ displayCount: waitlistCount.displayCount }}
     />
   );

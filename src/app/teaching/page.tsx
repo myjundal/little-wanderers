@@ -7,6 +7,7 @@ import { PARTY_TIME_ZONE } from '@/lib/party-config';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import styles from './teaching.module.css';
 import ClassPreRegistrationRosters, { ClassViewSwitcher } from '@/components/classes/ClassPreRegistrationRosters';
+import StaffToolNav from '@/components/staff/StaffToolNav';
 import type { RosterSession } from '@/lib/class-rosters';
 
 type Registrant = { id: string; person_id: string; name: string; age: number | null; status: string; attendance_status: string };
@@ -16,7 +17,7 @@ const dateLabel = (date: string) => new Date(date).toLocaleString('en-US', { tim
 const activeRegistration = (reg: Registrant) => reg.status === 'scheduled' || reg.status === 'attended';
 
 export default function TeachingPage() {
-  const { canUseOwnerDashboard, isStaff, isKiosk } = useOperatorAccess();
+  const { canUseOwnerDashboard, isKiosk } = useOperatorAccess();
   const [items, setItems] = useState<TeachingClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,7 +63,7 @@ export default function TeachingPage() {
   }
   return <main className={styles.main}>
     <div className={styles.heading}><div><p>Little Wanderers</p><h1>Teaching Classes</h1><p>Your assigned class rosters across dates, with session attendance when needed.</p></div>
-      <nav className={styles.links}><Link href="/">Main Homepage</Link>{!isKiosk && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}{canUseOwnerDashboard && <Link href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>}</nav>
+      {canUseOwnerDashboard ? <StaffToolNav includePersonal={!isKiosk} /> : <nav className={styles.links}><Link href="/">Main Homepage</Link>{!isKiosk && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}</nav>}
     </div>
     {error && <p role="alert" className={styles.error}>{error} <button onClick={() => void load()}>Retry</button></p>}
     {loading ? <p>Loading your classes…</p> : !items.length ? <section className={styles.card}><h2>No classes assigned yet</h2><p>Your classes will appear here when the owner assigns your account.</p></section> : <>
@@ -88,6 +89,6 @@ export default function TeachingPage() {
       </section>}
       </>}
     </>}
-    <nav className={styles.bottom}><Link href="/">Main</Link><Link href="/teaching">Teaching</Link>{!isKiosk && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}{canUseOwnerDashboard && <Link href="/staff">{isStaff ? 'Staff Tool' : 'Owner Tool'}</Link>}</nav>
+    {!canUseOwnerDashboard && <nav className={styles.bottom}><Link href="/">Main</Link><Link href="/teaching">Teaching</Link>{!isKiosk && <><Link href="/landing/classschedule">My Classes</Link><Link href="/landing/party">My Parties</Link></>}</nav>}
   </main>;
 }

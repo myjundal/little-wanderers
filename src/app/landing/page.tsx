@@ -2,7 +2,7 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import StaffToolNav from '@/components/staff/StaffToolNav';
+import OperatorDashboard from '@/components/staff/OperatorDashboard';
 import TeachingPage from '@/app/teaching/page';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
@@ -67,7 +67,7 @@ export default function AppHome() {
 
   // widgets
   const [membership, setMembership] = useState<{ status: MembershipStatus; renews_at: string | null }>({ status: 'none', renews_at: null });
-  const { isLoading: loadingAccess, canUseOwnerDashboard, isStaff, isInstructor } = useOperatorAccess();
+  const { isLoading: loadingAccess, canUseOwnerDashboard, isInstructor, role, roles, isKiosk } = useOperatorAccess();
   const [waiver, setWaiver] = useState<WaiverWidget>({ status: 'required', expires_at: null, days_until_expiration: null });
   const [waiverLoaded, setWaiverLoaded] = useState(false);
   const [waiverError, setWaiverError] = useState(false);
@@ -225,6 +225,8 @@ export default function AppHome() {
 
 
 
+  if (!loadingAccess && canUseOwnerDashboard) return <OperatorDashboard role={role} roles={roles} isKiosk={isKiosk} displayName={displayName} />;
+
   if (!ready || loadingAccess) return <main style={{ padding: 24 }}>Loading…</main>;
 
   if (!isAuthenticated) {
@@ -262,7 +264,7 @@ export default function AppHome() {
         <div style={{ padding: 16, borderRadius: 20, border: '1px solid #e3d0fb', background: 'linear-gradient(180deg,#fff,#f7efff)', boxShadow: '0 10px 20px rgba(120,87,177,0.08)', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
           <h1 style={{ margin: '10px 0 6px', color: '#4f3f82' }}>
-            {canUseOwnerDashboard ? (isStaff ? 'Staff Dashboard' : 'Owner Dashboard') : `Hello, ${displayName ?? 'there'} 👋`}
+            {`Hello, ${displayName ?? 'there'} 👋`}
           </h1>
           {canUseOwnerDashboard && (
             <p style={{ margin: 0, color: '#6d6480' }}>Hello, {displayName ?? 'there'}</p>
@@ -325,12 +327,6 @@ export default function AppHome() {
       </section>
       )}
 
-      {canUseOwnerDashboard && (
-        <section style={{ marginTop: 24, marginBottom: 32, padding: 16, border: '1px solid #e8dfef', borderRadius: 20, background: '#fffdf9' }}>
-          <StaffToolNav />
-        </section>
-      )}
-
       {isInstructor && <section style={{ padding: 20, marginBottom: 20, border: '1px solid #e3d0fb', borderRadius: 18, background: '#fffdf9' }}><h2>Teaching Classes</h2><p>Your class schedule, children and attendance.</p><Link href="/teaching">Open Teaching Classes →</Link><p><Link href="/landing/classschedule">My Classes</Link> · <Link href="/landing/party">My Parties</Link></p></section>}
 
       {!canUseOwnerDashboard && (
@@ -370,18 +366,11 @@ export default function AppHome() {
       </section>
       )}
 
-      <nav className={['mobileBottom', canUseOwnerDashboard && !isInstructor ? 'mobileBottomStaff' : isInstructor && canUseOwnerDashboard ? 'mobileBottomInstructorStaff' : ''].filter(Boolean).join(' ')}>
+      <nav className="mobileBottom">
         <Link href="/">Main</Link>
-        <Link href="/landing">{canUseOwnerDashboard ? (isStaff ? 'Staff Dash' : 'Owner Dash') : 'My Dash'}</Link>
-        {canUseOwnerDashboard && <Link href="/staff/dashboard">Staff Dashboard</Link>}
-        {canUseOwnerDashboard ? (
-          <Link href="/staff/checkin">Check-in</Link>
-        ) : (
-          <>
-            <Link href="/landing/people">Info</Link>
-          </>
-        )}
-        {canUseOwnerDashboard ? <Link href="/staff/families">Families</Link> : <><Link href="/landing/classschedule">Classes</Link><Link href="/landing/party">Party</Link></>}
+        <Link href="/landing">My Dash</Link>
+        <Link href="/landing/people">Info</Link>
+        <Link href="/landing/classschedule">Classes</Link><Link href="/landing/party">Party</Link>
         {isInstructor && <Link href="/teaching">Teaching</Link>}
       </nav>
 
@@ -396,8 +385,6 @@ export default function AppHome() {
           .desktopOnly { display:none; }
           .heroGrid { grid-template-columns: minmax(0, 1fr) !important; }
           .mobileBottom { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:640px; margin:0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:4px; padding:8px 8px max(8px, env(safe-area-inset-bottom)); background:rgba(255,250,244,0.97); border-top:1px solid #e3d0fb; }
-          .mobileBottomStaff { grid-template-columns:repeat(5,1fr); }
-          .mobileBottomInstructorStaff { grid-template-columns:repeat(6,1fr); }
           .mobileBottom :global(a), .mobileBottom button { text-align:center; font-size:12px;
           min-height:44px;
  border:0; background:none; color:#5f3da4; font-weight:700; text-decoration:none; padding:8px 4px; }

@@ -14,7 +14,7 @@ export default function LandingMoreMenu() {
   return (
     <div style={{ marginBottom: 12, position: 'sticky', top: 8, zIndex: 40 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, background: '#f7f4ef', border: '1px solid #e8dfef', borderRadius: 12, padding: '8px 10px' }}>
-        <Link href={isKiosk ? (canUseOwnerDashboard ? '/staff/dashboard' : '/teaching') : '/landing'} style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+        <Link href={canUseOwnerDashboard ? '/staff/dashboard' : isInstructor ? '/teaching' : '/landing'} style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
           <Image src="/logo.png" alt="Little Wanderers logo" width={34} height={34} />
           Little Wanderers
         </Link>
@@ -24,7 +24,7 @@ export default function LandingMoreMenu() {
       </header>
       {open && !isLoading && (
         <section style={{ display: 'grid', gap: 10, border: '1px solid #e3d0fb', borderRadius: 14, background: '#fffdf9', padding: 12 }}>
-          {canUseOwnerDashboard ? <div onClick={() => setOpen(false)}><StaffToolNav /></div> : <>
+          {canUseOwnerDashboard ? <StaffToolNav variant="menu" includePersonal={!isKiosk} onNavigate={() => setOpen(false)} /> : <>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href="/">Main Homepage</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href={isInstructor ? '/teaching' : '/landing'}>
             {isInstructor ? 'Teaching Classes' : 'My Dashboard'}
