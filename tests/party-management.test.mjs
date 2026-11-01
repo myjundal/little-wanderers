@@ -16,12 +16,16 @@ test('today uses Eastern midnight boundaries, including both daylight saving tra
   ]) assert.deepEqual({ ...management.getTodayPartyRange(new Date(now)) }, { date, start, end });
 });
 
-test('staff and owner tool navigation contains exactly the six requested destinations', () => {
-  const Nav = loadModule('src/components/staff/StaffToolNav.tsx', { 'next/link': 'a' }, { React }).default;
+test('staff and owner tool navigation contains the five updated operational destinations', () => {
+  const Nav = loadModule('src/components/staff/StaffToolNav.tsx', {
+    'next/link': 'a',
+    '@/lib/operator-navigation': loadModule('src/lib/operator-navigation.ts'),
+    './operator-navigation.module.css': {},
+  }, { React }).default;
   const html = renderToStaticMarkup(React.createElement(Nav));
   assert.deepEqual([...html.matchAll(/href="([^"]+)"[^>]*>([^<]+)</g)].map(match => [match[1], match[2]]), [
-    ['/', 'Main Homepage'], ['/staff/dashboard', 'Staff Dashboard'], ['/staff/checkin', 'Check-in &amp; Payment'],
-    ['/staff/parties', 'Party Management'], ['/staff/families', 'Family Management'], ['/staff/classes', 'Class Management'],
+    ['/', 'Main homepage'], ['/staff/checkin', 'Check-in &amp; occupancy management'],
+    ['/staff/parties', 'Party management'], ['/staff/families', 'Family management'], ['/staff/classes', 'Class management'],
   ]);
 });
 

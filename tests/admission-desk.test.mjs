@@ -103,7 +103,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     return Response.json({ ok: true, visits, enabled: squareEnabled, pending_sales: pending && visits.length ? [{ id: 'sale', checkin_ids: visits.map(visit => visit.id) }] : [] });
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
-  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-pos-ui': logic }, {
+  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-pos-ui': logic }, {
     React, fetch, AbortController,
     navigator: { userAgent: 'iPad' },
     window: { location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, sessionStorage: { setItem() {} } },
@@ -125,6 +125,23 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
 }
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
+
+test('occupancy opens inside check-in and switching back preserves selected arriving visitors', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  h.button('Occupancy management').props.onClick(); await h.flush();
+  assert.equal(h.nodes().find(node => node.type === 'occupancy-controls').props.view, 'occupancy');
+  assert.equal(h.button('Occupancy management').props['aria-pressed'], true);
+  assert.equal(h.requests.filter(request => request.url === '/api/checkin').length, 0);
+  h.button('Check-in & payment').props.onClick(); await h.flush();
+  assert.equal(h.button('Check in 2').props.disabled, false);
+  assert.ok(!h.nodes().some(node => node.type === 'occupancy-controls'));
+});
+
+test('occupancy links open the integrated workspace directly', async () => {
+  const h = uiHarness({ initialSearch: '?view=occupancy' }); await h.flush();
+  assert.equal(h.nodes().find(node => node.type === 'occupancy-controls').props.view, 'occupancy');
+});
 
 test('name-based UI checks in selected visitors manually, skips covered charges and sends one server-total family payment', async () => {
   const h = uiHarness(); await choose(h);

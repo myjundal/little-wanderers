@@ -1,4 +1,5 @@
 import StaffSessionBar from '@/components/staff/StaffSessionBar';
+import StaffQuickNav from '@/components/staff/StaffQuickNav';
 import { ReactNode } from 'react';
 import { supabaseServer } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -10,5 +11,5 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) redirect('/login');
-  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}</PastelDashboardShell>;
+  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}<StaffQuickNav /></PastelDashboardShell>;
 }

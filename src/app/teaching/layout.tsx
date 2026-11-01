@@ -1,4 +1,5 @@
 import StaffSessionBar from '@/components/staff/StaffSessionBar';
+import StaffQuickNav from '@/components/staff/StaffQuickNav';
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { getCurrentUserRole } from '@/lib/authz';
@@ -9,5 +10,5 @@ export default async function TeachingLayout({ children }: { children: ReactNode
   const { user, roles, role } = await getCurrentUserRole();
   if (!user) redirect('/login');
   if (!roles.includes('instructor') && role !== 'owner' && role !== 'admin') redirect('/landing');
-  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}</PastelDashboardShell>;
+  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}<StaffQuickNav /></PastelDashboardShell>;
 }

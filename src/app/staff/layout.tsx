@@ -1,5 +1,6 @@
 import LandingMoreMenu from '@/components/landing/LandingMoreMenu';
 import StaffSessionBar from '@/components/staff/StaffSessionBar';
+import StaffQuickNav from '@/components/staff/StaffQuickNav';
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { getCurrentUserRole, isStaffRole } from '@/lib/authz';
@@ -16,5 +17,5 @@ export default async function StaffLayout({ children }: { children: ReactNode })
     redirect('/landing');
   }
 
-  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}</PastelDashboardShell>;
+  return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}<StaffQuickNav /></PastelDashboardShell>;
 }

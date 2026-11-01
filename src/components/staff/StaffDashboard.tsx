@@ -780,7 +780,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
           <Link href="/staff/checkin" style={ownerToolLinkStyle}>Check-in &amp; payment</Link>
           <a href="#manual-family-registration" style={ownerToolLinkStyle}>Manual family registration</a>
-          <Link href="/staff/occupancy" style={ownerToolLinkStyle}>Occupancy management</Link>
+          <Link href="/staff/checkin?view=occupancy" style={ownerToolLinkStyle}>Occupancy management</Link>
         </div>
       </section>
 
