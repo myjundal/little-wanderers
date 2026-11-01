@@ -31,7 +31,42 @@ export async function POST(req: Request) {
     let body;
     try { body = JSON.parse(text); } catch { return json({ ok: false, error: 'Invalid request.' }, 400); }
     if (!body || typeof body !== 'object') return json({ ok: false, error: 'Invalid request.' }, 400);
+    if (body.mode === 'submit' || body.mode === 'submission_status') {
+      if (!isUuid(body.submission_id) || (body.party_id && !isUuid(body.party_id))) return json({ ok: false, error: 'Reload the waiver using a valid party link.' }, 400);
+      const admin = createAdminSupabaseClient();
+      const tokenHash = guestTokenHash(body.submission_id);
+      if (body.mode === 'submission_status') {
+        const { data, error } = await admin.from('guest_waiver_submissions')
+          .select('party_booking_id,waiver:waivers(id,signed_at,waiver_expires_at)').eq('token_hash', tokenHash).gt('receipt_expires_at', new Date().toISOString()).maybeSingle();
+        if (error) throw error;
+        if (!data || (data.party_booking_id || null) !== (body.party_id || null)) return json({ ok: true, completed: false });
+        const waiver = Array.isArray(data.waiver) ? data.waiver[0] : data.waiver;
+        return json({ ok: true, completed: Boolean(waiver), waiver_id: waiver?.id, signed_at: waiver?.signed_at, expires_at: waiver?.waiver_expires_at });
+      }
+      if (body.version !== WAIVER_VERSION) return json({ ok: false, error: 'The waiver changed. Reload before signing.' }, 409);
+      const email = guestEmailSchema.safeParse(body.email);
+      const profile = guestProfileSchema.safeParse(body);
+      if (!email.success || !profile.success || !profile.data.children.length || !WAIVER_AGREEMENTS.every(item => profile.data.agreements[item.id] === true)) {
+        return json({ ok: false, error: 'Complete your email, guardian details, child names and birthdays, required agreements, photo preference and signature.' }, 400);
+      }
+      const ip = req.headers.get('x-vercel-forwarded-for') || req.headers.get('x-forwarded-for') || 'unknown';
+      const { data, error } = await admin.rpc('submit_guest_waiver', {
+        p_token_hash: tokenHash,
+        p_request_hash: guestTokenHash(JSON.stringify({ email: email.data, party: body.party_id || null, profile: profile.data, version: WAIVER_VERSION })),
+        p_email: email.data, p_ip_hash: guestSecretHash(ip.split(',')[0].trim()), p_party: body.party_id || null,
+        p_profile: profile.data, p_version: WAIVER_VERSION,
+        p_snapshot: { title: WAIVER_TITLE, paragraphs: WAIVER_PARAGRAPHS, agreements: WAIVER_AGREEMENTS,
+          signature_text: WAIVER_SIGNATURE_TEXT, is_guardian: true, electronic_consent: true },
+      });
+      if (error) return json({ ok: false, error: 'Unable to save your waiver. Please check the details and try again, or ask the front desk.' }, 409);
+      if (!data?.ok) return json({ ok: false, error: data?.code === 'party_unavailable' ? 'This party link is no longer available. Please ask the front desk.' : data?.code === 'rate_limited' ? 'Too many submissions. Please wait or ask the front desk.' : 'This waiver was already submitted. Clear this screen to start a new waiver.' }, data?.code === 'rate_limited' ? 429 : 409);
+      return json({ ...data, completed: true });
+    }
     if (body.mode === 'end_session') {
+      if (body.submission_id && isUuid(body.submission_id)) {
+        const { error } = await createAdminSupabaseClient().from('guest_waiver_submissions').update({ receipt_expires_at: new Date().toISOString() }).eq('token_hash', guestTokenHash(body.submission_id));
+        if (error) throw error;
+      }
       const token = await sessionToken();
       if (/^[a-f0-9]{64}$/.test(token)) {
         const { error } = await createAdminSupabaseClient().from('guest_waiver_sessions').update({ expires_at: new Date().toISOString() }).eq('token_hash', guestTokenHash(token));
