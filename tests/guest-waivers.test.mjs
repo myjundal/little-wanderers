@@ -17,6 +17,7 @@ async function fixture(t){
  const db=new PGlite();t.after(()=>db.close());
  await db.exec(fs.readFileSync('tests/helpers/guest-waiver-schema.sql','utf8'));
  await db.exec(fs.readFileSync('db/migrations/20261031_guest_party_waivers.sql','utf8'));
+ await db.exec(fs.readFileSync('db/migrations/20261101_guest_waiver_without_email_code.sql','utf8'));
  return db;
 }
 async function session(db,address=email,party=null){
@@ -144,6 +145,8 @@ test('guest tables and identity RPCs are inaccessible to anonymous and authentic
  for(const role of ['anon','authenticated']){
   await db.exec(`set role ${role}`);
   await assert.rejects(db.query('select * from guest_waiver_sessions'),/permission denied/);
+  await assert.rejects(db.query('select * from guest_waiver_submissions'),/permission denied/);
+  await assert.rejects(db.query('select submit_guest_waiver($1,$2,$3,$4,null,$5,$6,$7)',[hash('token'),hash('request'),email,hash('ip'),JSON.stringify(profile),version,JSON.stringify(snapshot)]),/permission denied/);
   await assert.rejects(db.query('select guest_waiver_household($1)',[email]),/permission denied/);
   await assert.rejects(db.query('select claim_guest_waiver_family($1)',[crypto.randomUUID()]),/permission denied/);
   await db.exec('reset role');
@@ -161,7 +164,7 @@ test('guest form validation accepts international contacts, preserves photo refu
  assert.equal(helper.guestProfileSchema.safeParse({...body,children:[{...profile.children[0],birthdate:'2099-01-01'}]}).success,false);
 });
 
-function apiFixture({verified=true,mailOk=true,beginOk=true}={}){
+function apiFixture({verified=true,mailOk=true,beginOk=true,submitResult={ok:true,waiver_id:'saved',signed_at:'2026-11-01T12:00:00Z',expires_at:'2027-01-30T12:00:00Z'}}={}){
  const calls=[],mails=[],cookieWrites=[];let token='a'.repeat(64);
  const ctx={verified,email,children:[{id:'child',first_name:'Sam',last_name:'Example',birthdate:'2023-01-01'}]};
  const admin={rpc:async(fn,args)=>{
@@ -170,6 +173,7 @@ function apiFixture({verified=true,mailOk=true,beginOk=true}={}){
   if(fn==='guest_waiver_context')return {data:ctx};
   if(fn==='verify_guest_waiver')return {data:{ok:verified}};
   if(fn==='sign_guest_waiver')return {data:{waiver_id:'saved',expires_at:'2027-01-29T12:00:00Z'}};
+  if(fn==='submit_guest_waiver')return {data:submitResult};
   throw Error(fn);
  }};
  const jsonResponse={json:(body,options)=>{const response=Response.json(body,options);response.cookies={set:(...args)=>cookieWrites.push(args)};return response;}};
@@ -211,4 +215,76 @@ test('public signature API ignores forged ownership and timestamps, and supplies
  assert.equal(call.args.p_profile.household_id,undefined);assert.equal(call.args.p_profile.signed_at,undefined);
  assert.equal(call.args.p_profile.photo_consent,false);assert.equal(call.args.p_version,version);
  assert.deepEqual(call.args.p_expected_children,h.ctx.children);assert.equal(call.args.p_snapshot.paragraphs,content.WAIVER_PARAGRAPHS);
+});
+
+async function directSign(db,{token=hash(crypto.randomUUID()),address=email,party=null,p=profile,request=hash('request')}={}) {
+ return (await one(db,'select submit_guest_waiver($1,$2,$3,$4,$5,$6,$7,$8) result',
+  [token,request,address,hash('direct-ip'),party,JSON.stringify(p),version,JSON.stringify(snapshot)])).result;
+}
+
+test('code-free submission atomically saves family, signed evidence and party roster without claiming an email identity',async t=>{
+ const db=await fixture(t);
+ const party=(await one(db,'insert into party_bookings default values returning id')).id;
+ const token=hash('direct-token');const result=await directSign(db,{token,party});
+ assert.equal(result.ok,true);
+ const waiver=await one(db,'select * from waivers where id=$1',[result.waiver_id]);
+ assert.equal(waiver.email,email);assert.equal(waiver.electronic_signature,name);assert.equal(waiver.photo_consent,false);
+ assert.equal(waiver.agreement_snapshot.email_verified,false);assert.equal(waiver.agreement_snapshot.submitted_email,email);
+ assert.equal(waiver.agreement_snapshot.verified_email,undefined);assert.equal(waiver.agreement_snapshot.email_verified_at,undefined);
+ assert.deepEqual(waiver.agreement_snapshot.paragraphs,Array.from(content.WAIVER_PARAGRAPHS));
+ assert.equal(new Date(waiver.waiver_expires_at)-new Date(waiver.signed_at),90*86400000);
+ assert.equal((await one(db,'select count(*)::int n from guest_waiver_identities')).n,0);
+ assert.equal((await one(db,'select count(*)::int n from auth.users')).n,0);
+ assert.equal((await one(db,'select count(*)::int n from checkins')).n,0);
+ assert.equal((await one(db,'select household_id from party_guest_waivers')).household_id,waiver.household_id);
+ assert.deepEqual(await directSign(db,{token,party}),result);
+ assert.equal((await one(db,'select count(*)::int n from households')).n,1);
+ assert.equal((await one(db,'select count(*)::int n from waivers')).n,1);
+ assert.equal((await directSign(db,{token,party,request:hash('different-profile')})).code,'start_new_waiver');
+});
+
+test('typing an existing family email cannot read, modify or claim its people or waiver',async t=>{
+ const db=await fixture(t);const verifiedToken=await session(db);await sign(db,verifiedToken);
+ const original=await one(db,'select id,household_id,covered_person_ids from waivers');
+ const result=await directSign(db,{p:{...profile,first_name:'Another',children:[{first_name:'New',last_name:'Guest',birthdate:'2024-02-02'}]}});
+ const unverified=await one(db,'select household_id from waivers where id=$1',[result.waiver_id]);
+ assert.notEqual(unverified.household_id,original.household_id);
+ assert.deepEqual(await one(db,'select id,household_id,covered_person_ids from waivers where id=$1',[original.id]),original);
+ assert.equal((await context(db,verifiedToken)).children.length,1);
+ assert.equal((await one(db,'select household_id from guest_waiver_identities')).household_id,original.household_id);
+ const user=(await one(db,'insert into auth.users(email,email_confirmed_at) values($1,now()) returning id',[email])).id;
+ assert.equal((await one(db,'select claim_guest_waiver_family($1) result',[user])).result.household_id,original.household_id);
+});
+
+test('code-free writes roll back incomplete children, reject cancelled parties, expire receipts and enforce submission limits',async t=>{
+ const db=await fixture(t);
+ await assert.rejects(directSign(db,{p:{...profile,children:[profile.children[0],{first_name:'Bad',last_name:'Date',birthdate:'2099-01-01'}]}}),/valid child/);
+ assert.equal((await one(db,'select count(*)::int n from households')).n,0);
+ const party=(await one(db,"insert into party_bookings(status) values('cancelled') returning id")).id;
+ assert.equal((await directSign(db,{party})).code,'party_unavailable');
+ const token=hash('expired-receipt');await directSign(db,{token});
+ await db.exec("update guest_waiver_submissions set receipt_expires_at=now()-interval '1 second'");
+ assert.equal((await directSign(db,{token})).code,'start_new_waiver');
+ for(let i=0;i<9;i++)assert.equal((await directSign(db)).ok,true);
+ assert.equal((await directSign(db)).code,'rate_limited');
+});
+
+test('public submit accepts contact details without an email code and sends no email',async()=>{
+ const h=apiFixture({verified:false});h.setToken('');
+ const response=await h.post({...h.body,mode:'submit',submission_id:crypto.randomUUID(),email:' PARENT@EXAMPLE.TEST ',party_id:null,household_id:'victim',signed_at:'2099-01-01'});
+ assert.equal(response.status,200);assert.equal((await response.json()).completed,true);
+ assert.equal(h.mails.length,0);assert.equal(h.calls.length,1);
+ const call=h.calls[0];assert.equal(call.fn,'submit_guest_waiver');assert.equal(call.args.p_email,email);
+ assert.equal(call.args.p_profile.household_id,undefined);assert.equal(call.args.p_profile.signed_at,undefined);
+ assert.equal(call.args.p_profile.photo_consent,false);assert.equal(call.args.p_snapshot.paragraphs,content.WAIVER_PARAGRAPHS);
+});
+
+test('code-free API still requires valid contact data, explicit photo choice, all agreements and current legal text',async()=>{
+ const h=apiFixture({verified:false});const body={...h.body,mode:'submit',submission_id:crypto.randomUUID(),email,party_id:null};
+ for(const patch of [{email:'bad'},{children:[]},{photo_consent:null},{is_guardian:false},{electronic_consent:false},{agreements:{}},{submission_id:'bad'}])assert.equal((await h.post({...body,...patch})).status,400);
+ assert.equal((await h.post({...body,version:'old'})).status,409);
+ assert.equal((await h.post(body,'https://foreign.test')).status,403);assert.equal(h.calls.length,0);
+ const limited=apiFixture({submitResult:{ok:false,code:'rate_limited'}});
+ assert.equal((await limited.post(body)).status,429);
+ assert.equal(h.mails.length,0);
 });
