@@ -81,6 +81,7 @@ async function dashboardHarness(canManageClasses) {
   const requests = [];
   const { default: Dashboard } = loadModule('src/components/staff/StaffDashboard.tsx', {
     react,
+    '@/lib/party-booking-groups': loadModule('src/lib/party-booking-groups.ts'),
     'next/link': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,
     '@/components/waivers/PartyGuestWaivers': () => null,

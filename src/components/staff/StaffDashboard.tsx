@@ -6,6 +6,7 @@ import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration'
 import Link from 'next/link';
 import ClassPreRegistrationRosters, { ClassViewSwitcher } from '@/components/classes/ClassPreRegistrationRosters';
 import type { RosterSession } from '@/lib/class-rosters';
+import { groupPartyBookings, hasPartyCancellationRequest as hasCancellationRequest, isCompletedParty } from '@/lib/party-booking-groups';
 
 type OccupancyEvent = {
   id: string;
@@ -98,9 +99,10 @@ function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | '
   return lines;
 }
 
-function partyStatusLabel(status: PartyBookingItem['status']) {
-  if (status === 'early_access_hold') return 'Confirmed';
-  return status;
+function partyStatusLabel(item: PartyBookingItem, now: number) {
+  if (isCompletedParty(item, now)) return 'Completed';
+  if (item.status === 'early_access_hold') return 'Confirmed';
+  return item.status;
 }
 
 const sectionStyle: React.CSSProperties = {
@@ -406,14 +408,11 @@ function prettyNote(note: string | null) {
   );
 }
 
-function hasCancellationRequest(item: Pick<PartyBookingItem, 'notes' | 'status'>) {
-  return item.status !== 'cancelled' && (item.notes ?? '').includes('[Cancellation requested');
-}
-
 export default function StaffDashboard({ view = 'overview', canManageClasses = false }: { view?: StaffDashboardView; canManageClasses?: boolean }) {
   const [occupancy, setOccupancy] = useState<OccupancyState | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [partyBookings, setPartyBookings] = useState<PartyBookingItem[]>([]);
+  const [partyNow, setPartyNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [customAdjustment, setCustomAdjustment] = useState('1');
@@ -451,10 +450,10 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
     setClassView('sessions');
   };
 
-  const selectedBooking = useMemo(
-    () => partyBookings.find((item) => item.id === selectedBookingId) ?? partyBookings[0] ?? null,
-    [partyBookings, selectedBookingId]
-  );
+  const partyGroups = useMemo(() => groupPartyBookings(partyBookings, partyNow), [partyBookings, partyNow]);
+  const defaultPartyBooking = partyGroups.requests[0] ?? partyGroups.confirmed[0] ?? partyGroups.cancellationRequests[0]
+    ?? partyGroups.completed[0] ?? partyGroups.cancelled[0] ?? null;
+  const selectedBooking = partyBookings.find((item) => item.id === selectedBookingId) ?? defaultPartyBooking;
 
   const scheduledClasses = useMemo(() => classes.filter((item) => item.status !== 'cancelled'), [classes]);
   const cancelledClasses = useMemo(() => classes.filter((item) => item.status === 'cancelled'), [classes]);
@@ -477,22 +476,17 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
     () => buildRepeatDates(classForm.date, repeatMode, Math.max(Number(repeatCount) || 1, 1)),
     [classForm.date, repeatCount, repeatMode]
   );
-  const partyCancellationRequests = useMemo(() => partyBookings.filter(hasCancellationRequest), [partyBookings]);
-  const partyRequests = useMemo(
-    () => partyBookings.filter((item) => !hasCancellationRequest(item) && item.status === 'pending'),
-    [partyBookings]
-  );
-  const confirmedPartyBookings = useMemo(
-    () => partyBookings.filter((item) => !hasCancellationRequest(item) && (item.status === 'confirmed' || item.status === 'early_access_hold')),
-    [partyBookings]
-  );
-  const cancelledPartyBookings = useMemo(() => partyBookings.filter((item) => item.status === 'cancelled'), [partyBookings]);
-
   useEffect(() => {
-    if (!selectedBookingId && partyBookings[0]?.id) {
-      setSelectedBookingId(partyBookings[0].id);
-    }
-  }, [partyBookings, selectedBookingId]);
+    if (view !== 'parties') return;
+    const refreshTime = () => setPartyNow(Date.now());
+    refreshTime();
+    const timer = window.setInterval(refreshTime, 30000);
+    window.addEventListener('focus', refreshTime);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshTime);
+    };
+  }, [view]);
 
   useEffect(() => {
     setPartyCountDrafts(() => {
@@ -1195,15 +1189,16 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
       <section id="party-management" style={sectionStyle}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Party booking management</p>
         <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Review and manage scheduled party bookings</h2>
-        <p style={{ margin: 0, color: '#6d6480' }}>Status changes are written back immediately so the customer view stays in sync.</p>
+        <p style={{ margin: 0, color: '#6d6480' }}>Parties move to Completed parties after their scheduled end time. Booking details and attendance stay available.</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
           <div style={{ display: 'grid', gap: 14 }}>
             {[
-              { title: 'Party requests', items: partyRequests, empty: 'No new party requests.', defaultOpen: true, tone: 'active' as const },
-              { title: 'Confirmed parties', items: confirmedPartyBookings, empty: 'No confirmed parties yet.', defaultOpen: true, tone: 'active' as const },
-              { title: 'Cancellation requests', items: partyCancellationRequests, empty: 'No cancellation requests.', defaultOpen: true, tone: 'attention' as const },
-              { title: 'Cancelled parties', items: cancelledPartyBookings, empty: 'No cancelled parties.', defaultOpen: false, tone: 'archive' as const },
+              { title: 'Party requests', items: partyGroups.requests, empty: 'No new party requests.', defaultOpen: true, tone: 'active' as const },
+              { title: 'Confirmed parties', items: partyGroups.confirmed, empty: 'No confirmed parties yet.', defaultOpen: true, tone: 'active' as const },
+              { title: 'Cancellation requests', items: partyGroups.cancellationRequests, empty: 'No cancellation requests.', defaultOpen: true, tone: 'attention' as const },
+              { title: 'Completed parties', items: partyGroups.completed, empty: 'No completed parties yet.', defaultOpen: false, tone: 'archive' as const },
+              { title: 'Cancelled parties', items: partyGroups.cancelled, empty: 'No cancelled parties.', defaultOpen: false, tone: 'archive' as const },
             ].map((group) => (
               <StaffRecordGroup
                 key={group.title}
@@ -1229,7 +1224,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <strong style={{ color: '#4f3f82' }}>{item.household_name}</strong>
-                  <span style={{ color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 700, textTransform: 'capitalize' }}>{partyStatusLabel(item.status)}</span>
+                  <span style={{ color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 700, textTransform: 'capitalize' }}>{partyStatusLabel(item, partyNow)}</span>
                 </div>
                 {hasCancellationRequest(item) && <div style={{ marginTop: 6, color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested</div>}
                 <div style={{ marginTop: 6, color: '#6d6480' }}>{new Date(item.start_time).toLocaleString()} → {new Date(item.end_time).toLocaleString()}</div>
@@ -1250,7 +1245,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
               <>
                 <h3 style={{ marginTop: 0, color: '#4f3f82' }}>{selectedBooking.household_name}</h3>
                 <p style={{ color: '#6d6480' }}><strong>When:</strong> {new Date(selectedBooking.start_time).toLocaleString()} → {new Date(selectedBooking.end_time).toLocaleString()}</p>
-                <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{partyStatusLabel(selectedBooking.status)}</span></p>
+                <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{partyStatusLabel(selectedBooking, partyNow)}</span></p>
                 {hasCancellationRequest(selectedBooking) && (
                   <p style={{ color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested by family</p>
                 )}
@@ -1347,7 +1342,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                   {selectedBooking.status === 'pending' && (
                     <button style={{ ...buttonStyle, background: '#2f7a47', color: '#fff', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'confirmed')}>Confirm booking</button>
                   )}
-                  {selectedBooking.status !== 'cancelled' && (
+                  {selectedBooking.status !== 'cancelled' && !isCompletedParty(selectedBooking, partyNow) && (
                     <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
                   )}
                 </div>
