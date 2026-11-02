@@ -5,6 +5,9 @@ import { offerNextWaitlistSpot, sendClassCancellationEmail } from '@/lib/class-w
 import { sendClassCancellationNotification } from '@/lib/admin-notifications';
 import { getPrimaryGuardianProfile } from '@/lib/family-profile';
 import { logger } from '@/lib/logger';
+import { waitUntil } from '@vercel/functions';
+
+export const maxDuration = 60;
 
 const admin = () =>
   createClient(
@@ -19,26 +22,23 @@ async function getHouseholdIdForUser(userId: string) {
 async function sendOwnerClassCancellationNotification(input: {
   admin: ReturnType<typeof admin>;
   registrationId: string;
+  classId: string;
+  personId: string;
+  cancelledAt: string;
   householdId: string;
   fallbackEmail?: string | null;
 }) {
   try {
-    const { data: reg } = await input.admin
-      .from('class_registrations')
-      .select('id,class_id,person_id')
-      .eq('id', input.registrationId)
-      .maybeSingle();
-    if (!reg) return;
-
     const [{ data: household }, guardian, { data: person }, { data: klass }] = await Promise.all([
       input.admin.from('households').select('name,email').eq('id', input.householdId).maybeSingle(),
       getPrimaryGuardianProfile(input.admin, input.householdId).catch(() => null),
-      input.admin.from('people').select('first_name,last_name,birthdate').eq('id', reg.person_id).maybeSingle(),
-      input.admin.from('classes').select('title,category,start_time,end_time,schedule_label,instructor_name,price_cents').eq('id', reg.class_id).maybeSingle(),
+      input.admin.from('people').select('first_name,last_name,birthdate').eq('id', input.personId).maybeSingle(),
+      input.admin.from('classes').select('title,category,start_time,end_time,schedule_label,instructor_name,price_cents').eq('id', input.classId).maybeSingle(),
     ]);
 
     const notification = await sendClassCancellationNotification({
       registrationId: input.registrationId,
+      cancelledAt: input.cancelledAt,
       familyName: household?.name ?? null,
       familyEmail: household?.email ?? input.fallbackEmail ?? null,
       guardianFirstName: guardian?.first_name ?? null,
@@ -70,13 +70,15 @@ function queueClassCancellationSideEffects(input: {
   admin: ReturnType<typeof admin>;
   registrationId: string;
   classId: string;
+  personId: string;
+  cancelledAt: string;
   userId: string;
   householdId: string;
   email?: string | null;
   origin: string;
   releaseSeat: boolean;
 }) {
-  void (async () => {
+  waitUntil((async () => {
     const [cancellationEmail] = await Promise.all([
       sendClassCancellationEmail(input.admin, input.registrationId, input.email).catch((emailError) => ({
         ok: false as const,
@@ -85,6 +87,9 @@ function queueClassCancellationSideEffects(input: {
       sendOwnerClassCancellationNotification({
         admin: input.admin,
         registrationId: input.registrationId,
+        classId: input.classId,
+        personId: input.personId,
+        cancelledAt: input.cancelledAt,
         householdId: input.householdId,
         fallbackEmail: input.email,
       }),
@@ -119,7 +124,7 @@ function queueClassCancellationSideEffects(input: {
     }
   })().catch((error) => {
     logger.error({ action: 'class.cancellation_side_effects_failed', registrationId: input.registrationId }, error);
-  });
+  }));
 }
 
 export async function POST(req: Request) {
@@ -169,7 +174,8 @@ export async function POST(req: Request) {
       new Date(reg.waitlist_offer_expires_at ?? '').getTime() > Date.now()
     );
 
-    const { error } = await supa
+    const cancelledAt = new Date().toISOString();
+    const { data: saved, error } = await supa
       .from('class_registrations')
       .update({
         status: 'cancelled',
@@ -178,13 +184,19 @@ export async function POST(req: Request) {
         waitlist_offered_at: null,
       })
       .eq('id', registrationId)
-      .eq('household_id', householdId);
+      .eq('household_id', householdId)
+      .eq('status', reg.status)
+      .select('id')
+      .maybeSingle();
 
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+    if (!saved) return Response.json({ ok: true, already_cancelled: true });
     queueClassCancellationSideEffects({
       admin: supa,
       registrationId,
       classId: reg.class_id,
+      personId: reg.person_id,
+      cancelledAt,
       userId: user.id,
       householdId,
       email: user.email,

@@ -226,6 +226,7 @@ export async function sendClassRegistrationNotification(input: {
 
 export async function sendClassCancellationNotification(input: {
   registrationId?: string | null;
+  cancelledAt?: string;
   familyName?: string | null;
   familyEmail?: string | null;
   guardianFirstName?: string | null;
@@ -272,5 +273,40 @@ export async function sendClassCancellationNotification(input: {
     to,
     subject: `Class cancellation: ${input.classTitle ?? 'Class'}`,
     html,
+    ...(input.registrationId && input.cancelledAt ? { idempotencyKey: `class-cancel-owner/${input.registrationId}/${input.cancelledAt}` } : {}),
+  });
+}
+
+export async function sendPartyCancellationNotification(input: {
+  bookingId: string;
+  requestedAt: string;
+  startTime: string;
+  endTime: string;
+  familyName?: string | null;
+  familyEmail?: string | null;
+  headcountExpected?: number | null;
+  notes?: string | null;
+}) {
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').replace(/\/$/, '');
+  const partyTime = formatEasternRange(input.startTime, input.endTime);
+  return sendResendEmail({
+    to: getOwnerNotificationEmail(),
+    subject: `Party cancellation request: ${input.familyName || input.familyEmail || 'Family'} — ${partyTime}`,
+    html: renderOperationalNotification({
+      title: 'Party cancellation requested — review required',
+      rows: [
+        ['Event', 'Family requested party cancellation'],
+        ['Family', input.familyName],
+        ['Email', input.familyEmail],
+        ['Party time (Eastern)', partyTime],
+        ['Expected guests', input.headcountExpected],
+        ['Notes', input.notes],
+        ['Status', 'Cancellation requested; booking remains reserved until owner review'],
+        ['Booking ID', input.bookingId],
+      ],
+      ctaHref: `${siteUrl}/staff/parties`,
+      ctaLabel: 'Review cancellation in party management',
+    }),
+    idempotencyKey: `party-cancel-owner/${input.bookingId}/${input.requestedAt}`,
   });
 }
