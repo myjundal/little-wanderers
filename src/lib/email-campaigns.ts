@@ -31,6 +31,7 @@ type SendEmailInput = {
   to: string;
   subject: string;
   html: string;
+  idempotencyKey?: string;
 };
 
 export function normalizeContactEmail(input: string) {
@@ -233,11 +234,12 @@ export async function sendResendEmail(input: SendEmailInput) {
   if (!resendKey) return { ok: false as const, error: 'RESEND_API_KEY is not configured.' };
 
   const from = process.env.RESEND_FROM_EMAIL ?? 'Little Wanderers <onboarding@resend.dev>';
-  const res = await fetch('https://api.resend.com/emails', {
+  const request = {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${resendKey}`,
       'content-type': 'application/json',
+      ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
     },
     body: JSON.stringify({
       from,
@@ -245,23 +247,34 @@ export async function sendResendEmail(input: SendEmailInput) {
       subject: input.subject,
       html: input.html,
     }),
-  });
-
-  const text = await res.text();
-  let parsed: { id?: string; message?: string; error?: string } = {};
-  if (text) {
+  };
+  // Only retry keyed requests: an uncertain response must not send duplicate emails.
+  const attempts = input.idempotencyKey ? 3 : 1;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    let retryable = false;
+    let error = 'Failed to send email.';
     try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = { message: text };
+      const res = await fetch('https://api.resend.com/emails', {
+        ...request,
+        ...(input.idempotencyKey ? { signal: AbortSignal.timeout(8000) } : {}),
+      });
+      const text = await res.text();
+      let parsed: { id?: string; message?: string; error?: string; name?: string } = {};
+      if (text) {
+        try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
+      }
+      if (res.ok) return { ok: true as const, id: parsed.id ?? null };
+      error = parsed.message || parsed.error || text || error;
+      retryable = res.status === 429 || res.status >= 500 || (res.status === 409 && parsed.name === 'concurrent_idempotent_requests');
+    } catch (cause) {
+      if (!input.idempotencyKey) throw cause;
+      error = cause instanceof Error ? cause.message : error;
+      retryable = true;
     }
+    if (!retryable || attempt === attempts - 1) return { ok: false as const, error };
+    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
   }
-
-  if (!res.ok) {
-    return { ok: false as const, error: parsed.message || parsed.error || text || 'Failed to send email.' };
-  }
-
-  return { ok: true as const, id: parsed.id ?? null };
+  return { ok: false as const, error: 'Failed to send email.' };
 }
 
 async function getContactIdsForTag(admin: SupabaseClient, tag: string) {

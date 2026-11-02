@@ -100,6 +100,7 @@ test('cancellation advances confirmed seats and active waitlist offers, without 
       return query;
     } };
     const api = loadModule('src/app/api/classes/cancel/route.ts', {
+      '@vercel/functions': { waitUntil: task => task },
       '@supabase/supabase-js': { createClient: () => admin },
       '@/lib/supabase/server': serverMock, '@/lib/households': householdsMock,
       '@/lib/class-waitlist': {

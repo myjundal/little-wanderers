@@ -1,63 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import { sendPartyCancellationNotification } from '@/lib/admin-notifications';
+import { logger } from '@/lib/logger';
+
+export const maxDuration = 60;
 
 const admin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 async function getHouseholdIdForUser(userId: string) {
   return getLatestHouseholdIdForUser(admin(), userId);
-}
-
-async function sendCancellationEmail(input: {
-  bookingId: string;
-  householdId: string;
-  startTime: string;
-  endTime: string;
-  headcountExpected: number | null;
-  notes: string | null;
-}) {
-  const resendKey = process.env.RESEND_API_KEY;
-  if (!resendKey) {
-    return { ok: false, reason: 'RESEND_API_KEY is not configured' };
-  }
-
-  const from = process.env.RESEND_FROM_EMAIL ?? 'Little Wanderers <onboarding@resend.dev>';
-  const to = process.env.OWNER_EMAIL;
-  if (!to) {
-    return { ok: false, reason: 'OWNER_EMAIL is not configured' };
-  }
-
-  const html = `
-    <h2>Party Booking Cancellation Requested</h2>
-    <p><b>Booking ID:</b> ${input.bookingId}</p>
-    <p><b>Household ID:</b> ${input.householdId}</p>
-    <p><b>Start:</b> ${new Date(input.startTime).toLocaleString()}</p>
-    <p><b>End:</b> ${new Date(input.endTime).toLocaleString()}</p>
-    <p><b>Expected guests:</b> ${input.headcountExpected ?? '-'}</p>
-    <p><b>Notes:</b> ${input.notes ?? '-'}</p>
-  `;
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject: '[Little Wanderers] Party cancellation request',
-      html,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    return { ok: false, reason: text || 'Failed to send email' };
-  }
-
-  return { ok: true as const };
 }
 
 export async function POST(req: Request) {
@@ -86,13 +39,14 @@ export async function POST(req: Request) {
     const supa = admin();
     const { data: booking, error: bookingErr } = await supa
       .from('party_bookings')
-      .select('id,household_id,start_time,end_time,headcount_expected,notes')
+      .select('id,household_id,start_time,end_time,headcount_expected,notes,status')
       .eq('id', bookingId)
       .eq('household_id', householdId)
       .maybeSingle();
 
     if (bookingErr) return Response.json({ ok: false, error: bookingErr.message }, { status: 500 });
     if (!booking) return Response.json({ ok: false, error: 'booking not found' }, { status: 404 });
+    if (booking.status === 'cancelled') return Response.json({ ok: true, already_cancelled: true });
 
     const now = Date.now();
     const startMs = new Date(booking.start_time).getTime();
@@ -104,27 +58,37 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, already_requested: true });
     }
 
-    const marker = `[Cancellation requested at ${new Date().toISOString()}]`;
+    const requestedAt = new Date().toISOString();
+    const marker = `[Cancellation requested at ${requestedAt}]`;
     const mergedNotes = booking.notes ? `${booking.notes}\n\n${marker}` : marker;
 
-    const { error: updateErr } = await supa
+    let update = supa
       .from('party_bookings')
       .update({ notes: mergedNotes })
       .eq('id', booking.id)
-      .eq('household_id', householdId);
+      .eq('household_id', householdId)
+      .eq('status', booking.status);
+    update = booking.notes == null ? update.is('notes', null) : update.eq('notes', booking.notes);
+    const { data: saved, error: updateErr } = await update.select('id').maybeSingle();
 
     if (updateErr) return Response.json({ ok: false, error: updateErr.message }, { status: 500 });
+    if (!saved) return Response.json({ ok: false, error: 'Booking changed. Please refresh and try again.' }, { status: 409 });
 
-    const emailResult = await sendCancellationEmail({
+    const { data: household } = await supa.from('households').select('name,email').eq('id', householdId).maybeSingle();
+    const emailResult = await sendPartyCancellationNotification({
       bookingId: booking.id,
-      householdId,
+      requestedAt,
+      familyName: household?.name,
+      familyEmail: household?.email || user.email,
       startTime: booking.start_time,
       endTime: booking.end_time,
       headcountExpected: booking.headcount_expected,
       notes: booking.notes,
-    });
+    }).catch(error => ({ ok: false as const, error: error instanceof Error ? error.message : 'Unable to send cancellation notification.' }));
 
-    return Response.json({ ok: true, email_sent: emailResult.ok, email_error: emailResult.ok ? null : emailResult.reason });
+    if (!emailResult.ok) logger.error({ action: 'party.cancellation_notification_failed', bookingId: booking.id, householdId }, new Error(emailResult.error));
+
+    return Response.json({ ok: true, email_sent: emailResult.ok });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

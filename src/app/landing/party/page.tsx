@@ -345,7 +345,7 @@ export default function PartyPage() {
     }
 
     if (json.email_sent === false) {
-      setMessage('Cancellation requested. Booking updated, but email sending is not configured yet.');
+      setMessage('Cancellation requested. Your request is saved, but we could not email the team yet. Please contact us if you need urgent help.');
       setToast({ message: 'Cancellation requested.', tone: 'warning' });
     } else {
       setMessage('Cancellation requested. We sent a cancellation request email to the admin.');
