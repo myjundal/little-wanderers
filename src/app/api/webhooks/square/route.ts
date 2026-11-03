@@ -6,6 +6,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySquareWebhook } from '@/lib/square-webhook';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import { syncFoundingSubscription } from '@/lib/founding-square';
 
 const SUPA = () =>
   createClient(
@@ -25,6 +26,15 @@ export async function POST(req: NextRequest) {
   try { payload = JSON.parse(raw); } catch { return new Response('invalid JSON', { status: 400 }); }
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return new Response('invalid event', { status: 400 });
   const supa = SUPA();
+
+  // Reconcile founding subscriptions before the legacy receipt log. A database failure
+  // must remain retryable, and provider state makes duplicate/out-of-order events safe.
+  const foundingSubscriptionId = payload?.data?.object?.subscription?.id ?? payload?.data?.object?.invoice?.subscription_id;
+  if (typeof foundingSubscriptionId === 'string') {
+    try {
+      if (await syncFoundingSubscription(supa, foundingSubscriptionId)) return new Response('ok', { status: 200 });
+    } catch { return new Response('membership reconciliation pending', { status: 503 }); }
+  }
 
   // -------- idempotency guard --------
   const eventId: string | null =

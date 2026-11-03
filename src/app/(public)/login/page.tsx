@@ -128,6 +128,8 @@ export default function LoginPage() {
     if (mode === 'new') {
       setJourneyMode('new');
       setAuthMethod('email');
+    } else if (mode === 'existing') {
+      setJourneyMode('existing');
     }
 
     const redirectIfSignedIn = async () => {

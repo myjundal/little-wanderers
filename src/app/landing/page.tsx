@@ -7,6 +7,7 @@ import TeachingPage from '@/app/teaching/page';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 import BookingNextSteps from '@/components/landing/BookingNextSteps';
+import FoundingMembershipSummary from '@/components/membership/FoundingMembershipSummary';
 import {
   SHOW_CUSTOMER_CROWD_STATUS,
   SHOW_CUSTOMER_MEMBERSHIP,
@@ -277,6 +278,7 @@ export default function AppHome() {
 
 
       {!canUseOwnerDashboard && userId && <BookingNextSteps userId={userId} />}
+      {!canUseOwnerDashboard && userId && <FoundingMembershipSummary />}
 
 
       {!canUseOwnerDashboard && (

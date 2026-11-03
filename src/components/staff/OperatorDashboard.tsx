@@ -18,7 +18,7 @@ export default function OperatorDashboard({ role, roles, isKiosk, displayName }:
       <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '8px 0' }}>My shift{isOwner ? ' & administration' : ''}</summary>
       <div className={styles.links} style={{ marginTop: 16 }}>
         <Link href="/employee">{isKiosk ? 'My Timecards' : 'My PIN & Timecards'}</Link>
-        {isOwner && <><Link href="/staff/team">Staff & Timecards</Link><Link href="/staff/campaigns">Email campaigns</Link></>}
+        {isOwner && <><Link href="/staff/team">Staff & Timecards</Link><Link href="/staff/campaigns">Email campaigns</Link><Link href="/staff/founding-memberships">Founding memberships</Link></>}
         {roles.includes('instructor') && <Link href="/teaching">Teaching Classes</Link>}
       </div>
     </details>
