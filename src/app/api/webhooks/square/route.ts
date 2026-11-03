@@ -7,6 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 import { verifySquareWebhook } from '@/lib/square-webhook';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { syncFoundingSubscription } from '@/lib/founding-square';
+import { waitUntil } from '@vercel/functions';
+import { sendDueMembershipNotifications } from '@/lib/membership-notifications';
 
 const SUPA = () =>
   createClient(
@@ -118,6 +120,7 @@ export async function POST(req: NextRequest) {
       },
       { onConflict: 'household_id' }
     );
+    waitUntil(sendDueMembershipNotifications(supa).catch(() => null));
   }
 
   // ---- one-time payment completed → passes issue (stub) ----

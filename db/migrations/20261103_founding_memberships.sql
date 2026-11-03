@@ -44,7 +44,8 @@ grant all on public.founding_memberships to service_role;
 -- Changing the phase never starts billing or reprices a saved membership.
 create table public.founding_membership_settings (
   environment text primary key check(environment in ('sandbox','production')),
-  phase text not null default 'waitlist' check(phase in ('waitlist','public','regular'))
+  phase text not null default 'waitlist' check(phase in ('waitlist','public','regular')),
+  card_enrollment_enabled boolean not null default false
 );
 insert into public.founding_membership_settings(environment) values('sandbox'),('production');
 alter table public.founding_membership_settings enable row level security;
@@ -53,14 +54,14 @@ grant all on public.founding_membership_settings to service_role;
 
 create function public.founding_membership_offer(p_user uuid,p_household uuid,p_environment text)
 returns jsonb language plpgsql stable security definer set search_path=public as $$
-declare phase text; tier text; eligible boolean:=false; email text; local_part text; domain_part text; lapsed boolean; saved public.founding_memberships;
+declare phase text; cards_enabled boolean; tier text; eligible boolean:=false; email text; local_part text; domain_part text; lapsed boolean; saved public.founding_memberships;
 begin
-  select s.phase into strict phase from founding_membership_settings s where environment=p_environment;
+  select s.phase,s.card_enrollment_enabled into strict phase,cards_enabled from founding_membership_settings s where environment=p_environment;
   select * into saved from founding_memberships f where f.household_id=p_household and f.environment=p_environment and f.status not in ('draft','canceled');
   if found then
-    return jsonb_build_object('phase',phase,'tier',saved.pricing_tier,'can_enroll',saved.status<>'canceling','base_cents',saved.base_cents,'sibling_cents',saved.sibling_cents);
+    return jsonb_build_object('phase',phase,'tier',saved.pricing_tier,'can_enroll',saved.status<>'canceling','card_enrollment_enabled',cards_enabled,'base_cents',saved.base_cents,'sibling_cents',saved.sibling_cents);
   end if;
-  select lower(regexp_replace(u.email,'\s','','g')) into email from auth.users u where u.id=p_user;
+  select lower(regexp_replace(u.email,'[[:space:]]','','g')) into email from auth.users u where u.id=p_user;
   local_part:=split_part(email,'@',1);domain_part:=split_part(email,'@',2);
   if domain_part in ('gmail.com','googlemail.com') then
     email:=replace(split_part(local_part,'+',1),'.','')||'@gmail.com';
@@ -69,7 +70,7 @@ begin
     and (w.claimed_user_id=p_user or w.normalized_email=email)) into eligible;
   select exists(select 1 from founding_memberships f where (f.household_id=p_household or f.user_id=p_user) and f.environment=p_environment and f.status='canceled') into lapsed;
   tier:=case when lapsed or phase='regular' then 'regular' when eligible or phase='waitlist' then 'waitlist' else 'public' end;
-  return jsonb_build_object('phase',phase,'tier',tier,'can_enroll',lapsed or phase<>'waitlist' or eligible,
+  return jsonb_build_object('phase',phase,'tier',tier,'can_enroll',lapsed or phase<>'waitlist' or eligible,'card_enrollment_enabled',cards_enabled,
     'base_cents',case when tier='regular' then 6000 else 5000 end,'sibling_cents',case when tier='waitlist' then 1000 else 2000 end);
 end;
 $$;

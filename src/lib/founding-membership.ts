@@ -8,7 +8,7 @@ export const MEMBERSHIP_PRICES = {
   public: { base_cents: 5000, sibling_cents: 2000, label: 'Public founding', two_child_discount: 12.5 },
   regular: { base_cents: 6000, sibling_cents: 2000, label: 'Regular membership', two_child_discount: 0 },
 } as const;
-export type MembershipOffer = { phase: MembershipPhase; tier: MembershipTier; can_enroll: boolean; base_cents: number; sibling_cents: number };
+export type MembershipOffer = { phase: MembershipPhase; tier: MembershipTier; can_enroll: boolean; card_enrollment_enabled?: boolean; base_cents: number; sibling_cents: number };
 export function membershipTerms(tier: MembershipTier) {
   const price = MEMBERSHIP_PRICES[tier];
   return `No payment today. I authorize Little Wanderers to securely save my card with Square and charge $${price.base_cents / 100}/month for the first child, plus $${price.sibling_cents / 100}/month for each sibling age 6 months or older, beginning on the announced soft opening date. Baby siblings under 6 months are free until the billing cycle following their six-month birthday. My membership renews monthly until I cancel. I can cancel anytime with no commitment. ${tier === 'regular' ? 'Regular membership pricing applies.' : 'My founding first-child and sibling rates are locked in for the lifetime of my continuously active membership.'} Cancellation ends founding pricing permanently. If I rejoin, regular pricing applies: $60/month for the first child and $20/month for each eligible sibling. A soft opening visit is included, subject to reservations, capacity, and a signed waiver. The opening date is not yet set.`;

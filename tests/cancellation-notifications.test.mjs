@@ -54,6 +54,23 @@ test('class owner alerts identify the family, child and cancelled class', async 
   assert.equal(transport.calls[0].headers['Idempotency-Key'], 'class-cancel-owner/class-reg/2026-11-02T18:00:00Z');
 });
 
+test('all membership tiers notify the owner with family contact and every child’s age, safely and idempotently', async () => {
+  for (const tier of ['waitlist', 'public', 'regular']) {
+    const transport = emailHarness();
+    const api = loadModule('src/lib/admin-notifications.ts', { '@/lib/email-campaigns': transport.email }, { process: { env: { OWNER_EMAIL: 'owner@example.com', NEXT_PUBLIC_SITE_URL: 'https://example.com' } } });
+    await api.sendMembershipSignupNotification({ tier, event: 'Card saved; no payment taken', occurredAt: '2026-11-03T16:00:00Z',
+      familyName: '<Family>', guardianName: 'Parent Family', email: 'parent@example.com', phone: '+18605550123',
+      baseCents: 5000, siblingCents: tier === 'waitlist' ? 1000 : 2000, amountCents: 5000,
+      children: [{ firstName: '<Sam>', lastName: 'Family', birthdate: '2023-01-01' }, { firstName: 'Baby', birthdate: '2026-07-03' }],
+    }, `event-${tier}`);
+    const sent = transport.calls[0];
+    assert.equal(sent.body.to[0], 'owner@example.com');
+    for (const value of ['&lt;Family&gt;', 'parent@example.com', '+18605550123', '&lt;Sam&gt;', 'Baby', '3 years 10 months', '4 months', 'Card saved; no payment taken']) assert.ok(sent.body.html.includes(value), value);
+    assert.equal(sent.headers['Idempotency-Key'], `membership-owner/event-${tier}`);
+    assert.doesNotMatch(sent.body.html, /<Sam>|square_card_id|source_id/);
+  }
+});
+
 test('temporary send failures retry with identical content and key; permanent failures do not retry', async () => {
   for (const first of [new Error('network interrupted'), { status: 429, message: 'rate limited' }, { status: 503, message: 'unavailable' }, { status: 409, name: 'concurrent_idempotent_requests' }]) {
     const h = emailHarness([first, { id: 'success' }]);

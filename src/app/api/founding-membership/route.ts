@@ -11,6 +11,8 @@ import { getMembershipOffer } from '@/lib/founding-offer';
 import { cancelFounding, foundingCardConfig, storeFoundingCard } from '@/lib/founding-square';
 import { squareEnvironment } from '@/lib/square-client';
 import { US_CITIES_BY_STATE } from '@/lib/us-cities';
+import { waitUntil } from '@vercel/functions';
+import { sendDueMembershipNotifications } from '@/lib/membership-notifications';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -65,7 +67,7 @@ export async function GET() {
     const offer = await getMembershipOffer(admin, user.id, householdId);
     let config = null;
     try {
-      const cardConfig = foundingCardConfig();
+      const cardConfig = foundingCardConfig(offer.card_enrollment_enabled);
       if (offer.can_enroll) config = { applicationId: cardConfig.applicationId, locationId: cardConfig.locationId, environment: cardConfig.environment };
     } catch { /* The page stays readable while card registration is disabled. */ }
     const phone = user.phone ? `+${user.phone.replace(/\D/g, '')}` : household.data.phone;
@@ -79,7 +81,6 @@ export async function POST(req: Request) {
   try {
     const ctx = await context();
     if (ctx.response) return ctx.response;
-    foundingCardConfig();
     const input = schema.safeParse(await req.json().catch(() => null));
     if (!input.success) return NextResponse.json({ ok: false, error: 'Complete your contact details, each child’s name, gender and real birthday, and both confirmations before saving your card.' }, { status: 400, headers });
     const profile = input.data;
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
     const offer = await getMembershipOffer(ctx.admin, ctx.user.id, ctx.householdId);
     if (!offer.can_enroll) return NextResponse.json({ ok: false, error: 'Wanderlist families have first access. Public founding membership will open next.' }, { status: 403, headers });
     if (profile.pricingTier !== offer.tier) return NextResponse.json({ ok: false, error: 'Your membership offer changed. Refresh to review the correct price before saving your card.' }, { status: 409, headers });
+    foundingCardConfig(offer.card_enrollment_enabled);
     const amount = foundingMonthlyCents(profile.children.map(child => child.birthdate), easternDate(), offer.tier);
     const familyProfile = {
       adultFirstName: profile.adultFirstName, adultLastName: profile.adultLastName, adultGender: profile.adultGender,
@@ -99,7 +101,8 @@ export async function POST(req: Request) {
     });
     if (prepared.error || !prepared.data?.id) throw new Error('Unable to save your family profile.');
     if (['draft', 'saving_card'].includes(prepared.data.status) && !isDeepStrictEqual(prepared.data.profile_snapshot, familyProfile)) return NextResponse.json({ ok: false, error: 'Card setup already began with your saved family details. Refresh before retrying.' }, { status: 409, headers });
-    const enrollment = await storeFoundingCard(ctx.admin, prepared.data, profile.sourceId, { email: profile.email, firstName: profile.adultFirstName, lastName: profile.adultLastName, phone: profile.phone });
+    const enrollment = await storeFoundingCard(ctx.admin, prepared.data, profile.sourceId, { email: profile.email, firstName: profile.adultFirstName, lastName: profile.adultLastName, phone: profile.phone }, offer.card_enrollment_enabled);
+    waitUntil(sendDueMembershipNotifications(ctx.admin).catch(() => null));
     return NextResponse.json({ ok: true, enrollment: publicEnrollment(enrollment as FoundingEnrollment) }, { headers });
   } catch {
     return NextResponse.json({ ok: false, error: 'We could not finish saving your card. No payment was taken. Your family details are saved if registration began; please retry or contact us for help.' }, { status: 503, headers });

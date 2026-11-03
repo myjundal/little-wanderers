@@ -37,7 +37,8 @@ async function entry(audience, { signedIn = false, offer = waitlistOffer, enroll
 
 test('each unlisted entry route selects its own audience and forbids indexing', () => {
   for (const audience of ['waitlist', 'public']) {
-    const route = loadModule(`src/app/(public)/founding-membership/${audience}/page.tsx`, {
+    const slug = audience === 'waitlist' ? 'wanderlist-founding' : 'general-founding';
+    const route = loadModule(`src/app/(public)/${slug}/page.tsx`, {
       '@/components/membership/FoundingMembership': () => null,
     }, { React });
     assert.equal(route.default().props.audience, audience);
@@ -51,7 +52,7 @@ test('guest pages advertise separate prices and use a single authentication cont
     const view = await entry(audience);
     assert.match(view.html, new RegExp(`\\+\\$${sibling}/mo`));
     assert.match(view.html, /Pay \$0 today/);
-    const expected = `/login?mode=continue&next=${encodeURIComponent(`/founding-membership/${audience}`)}`;
+    const expected = `/login?mode=continue&next=${encodeURIComponent(audience === 'waitlist' ? '/wanderlist-founding' : '/general-founding')}`;
     assert.equal(view.nodes.filter(node => node.props.href?.startsWith('/login')).length, 1);
     assert.ok(view.nodes.some(node => node.props.href === expected));
     assert.doesNotMatch(view.html, /Create a family account|Sign in to my account/);

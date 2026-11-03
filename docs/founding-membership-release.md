@@ -1,14 +1,14 @@
 # Founding membership: card registration before opening
 
-The unlisted customer entry pages are `/founding-membership/waitlist` ($50 + $10)
-and `/founding-membership/public` ($50 + $20). Both have `noindex, nofollow`
+The unlisted customer entry pages are `/wanderlist-founding` ($50 + $10)
+and `/general-founding` ($50 + $20). Both have `noindex, nofollow`
 metadata and are absent from the homepage, public navigation, and sitemap.
 Anyone given a URL can read the offer; eligibility is verified from the account,
 never granted by the URL. Public registration stays gated during the waitlist
 phase. An eligible original Wanderlist account gets its $10 sibling rate even
 if it enters through the public URL. After the regular phase begins, both entry
 pages show regular pricing. `/founding-membership` remains the shared management
-URL and supports existing links.
+URL and supports existing links. The earlier nested entry URLs redirect to the short URLs. Neither entry is linked from the homepage; adding the general link later is an explicit content change, with no scheduled publication.
 
 Existing accounts reuse their authenticated user, household, and child IDs;
 saved contact and child details are prefilled for confirmation. One
@@ -55,10 +55,9 @@ stale price authorizations.
 
 1. Apply `20261103_founding_memberships.sql`, then
    `20261103_founding_checkin.sql`. The second migration retains the existing
-   check-in function's waiver, audit, pricing, and occupancy checks and adds
-   founding membership coverage.
-2. Configure `SQUARE_APPLICATION_ID` to match the existing environment, access
-   token and location. Set `FOUNDING_CARD_ENROLLMENT_ENABLED=true` only after
+   check-in function's exact current signature, waiver, paid-pass, environment, audit, pricing, and occupancy checks; it patches only the membership coverage result and refuses an unrecognized function. Apply `20261103_membership_notifications.sql` after the founding table migration.
+2. Configure `SQUARE_APPLICATION_ID` (or the existing `NEXT_PUBLIC_SQUARE_APPLICATION_ID`) to match the existing environment, access
+   token and location. Card storage can be enabled by the private, per-environment `founding_membership_settings.card_enrollment_enabled` setting or `FOUNDING_CARD_ENROLLMENT_ENABLED=true`, only after
    verifying the matching Square Web Payments SDK form. HTTPS is required in
    production. Never use a production card in the sandbox.
 3. Keep `FOUNDING_BILLING_ENABLED=false`. No opening date exists by default.
@@ -117,8 +116,8 @@ child list or Square price schedule.
    its network allowlist permits only customer/card endpoints, and its family
   database is in-memory. It creates a sandbox customer/card but no payment or
   subscription. It refuses production credentials/environments.
-- Check desktop and mobile `/founding-membership/waitlist` and
-  `/founding-membership/public`, email and phone continuation,
+- Check desktop and mobile `/wanderlist-founding` and
+  `/general-founding`, email and phone continuation,
   required real birthdays/contact fields, authorization, saved-card confirmation,
   cancellation, and owner-only billing controls. The mobile page has no horizontal
   overflow at 390px.
@@ -127,3 +126,25 @@ Square references: [store a card without a charge](https://developer.squareup.co
 [monthly phases](https://developer.squareup.com/docs/subscriptions-api/plans-and-variations),
 [subscription creation](https://developer.squareup.com/reference/square/subscriptions-api/create-subscription),
 [cancellation](https://developer.squareup.com/reference/square/subscriptions-api/cancel-subscription).
+
+## Owner membership alerts
+
+A private transactional outbox captures every production founding card reservation
+(including waitlist, public, and regular-price rejoining) and new/reactivated
+regular memberships. Drafts, failed card setups, sandbox records, ordinary
+renewals, and duplicate retries do not send new signup alerts. Each notification
+contains the family/parent names, email, phone, and every child's name, birthday,
+and age at enrollment, with tier and pricing where available. Recipients use the
+existing OWNER_EMAIL fallback configuration.
+
+Enrollment/start routes and the regular Square webhook send queued alerts using
+Vercel waitUntil. An exclusive ten-minute delivery lease, stable Resend
+idempotency key, and persisted sent marker protect retries. The existing secured
+daily reminder job also retries pending membership alerts; its party reminders
+continue independently. Notification failures do not undo an enrollment. No raw
+card token or provider credentials enter the queue or email.
+
+Owner-only `/api/admin/founding-memberships?verifySquare=1` verifies the configured
+Square location with a read-only provider call and reports card configuration,
+environment, email configuration, and the closed monthly-billing flag without
+exposing credentials. It creates no payment or subscription.

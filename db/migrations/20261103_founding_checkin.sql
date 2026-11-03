@@ -20,55 +20,25 @@ $$;
 revoke all on function public.founding_covers_person(uuid,uuid,date) from public,anon,authenticated;
 grant execute on function public.founding_covers_person(uuid,uuid,date) to service_role;
 
--- Preserve the existing waiver, pricing, audit and occupancy checks.
-create or replace function public.checkin_person(p_person_id uuid, p_staff_user_id uuid, p_staff_role text, p_source text, p_waiver_version text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  person public.people%rowtype;
-  visit_date date := (now() at time zone 'America/New_York')::date;
-  prior_birthdates date[];
-  next_birthdates date[];
-  prior_adults integer;
-  amount integer;
-  member boolean;
-  checkin_id uuid;
+-- Patch the installed function in place, including its current signature and
+-- paid-pass, environment, waiver and occupancy checks. Do not add an overload.
+do $patch$
+declare installed record; definition text; date_variable text; environment_guard text; patched integer:=0;
 begin
-  if not exists (select 1 from public.roles where id=p_staff_user_id and role in ('staff','owner','admin'))
-    and not exists (select 1 from public.user_roles where user_id=p_staff_user_id and role in ('staff','owner','admin')) then
-    return jsonb_build_object('ok',false,'error','Staff access required.','code','forbidden');
-  end if;
-  select * into person from public.people where id=p_person_id;
-  if not found then return jsonb_build_object('ok',false,'error','Person not found.','code','not_found'); end if;
-  perform 1 from public.households where id=person.household_id for update;
-  if exists (select 1 from public.checkins where person_id=p_person_id and (checked_in_at at time zone 'America/New_York')::date=visit_date) then
-    return jsonb_build_object('ok',false,'error','Already checked in today.','code','already_checked_in');
-  end if;
-  if not exists (
-    select 1 from public.waivers w where w.household_id=person.household_id
-    and w.waiver_version=p_waiver_version and w.signed_at <= now() and w.waiver_expires_at > now()
-    and length(trim(w.electronic_signature)) >= 2
-    and not exists (select 1 from public.people child where child.household_id=person.household_id and child.role='child' and not (child.id=any(coalesce(w.covered_person_ids,'{}'::uuid[]))))
-  ) then return jsonb_build_object('ok',false,'error','A parent or legal guardian must complete the family waiver before check-in.','code','waiver_required'); end if;
-  if person.role='child' and (person.birthdate is null or person.birthdate > visit_date) then
-    return jsonb_build_object('ok',false,'error','Add a valid birthday in My Info/People before check-in.','code','birthday_required');
-  end if;
-  select coalesce(array_agg(p.birthdate) filter(where p.role='child'),'{}'::date[]), count(*) filter(where p.role='adult')
-    into prior_birthdates,prior_adults from public.checkins c join public.people p on p.id=c.person_id
-    where p.household_id=person.household_id and (c.checked_in_at at time zone 'America/New_York')::date=visit_date;
-  select exists(select 1 from public.memberships m where (m.household_id=person.household_id or m.person_id=person.id) and (m.renews_at is null or m.renews_at > now())) or public.founding_covers_person(person.id,person.household_id,visit_date) into member;
-  next_birthdates := case when person.role='child' then array_append(prior_birthdates,person.birthdate) else prior_birthdates end;
-  amount := public.open_play_total_cents(next_birthdates,prior_adults + case when person.role='adult' then 1 else 0 end,visit_date)
-    - public.open_play_total_cents(prior_birthdates,prior_adults,visit_date);
-  if member and person.role='child' then amount:=0; end if;
-  insert into public.checkins(person_id,household_id,child_id,created_by_user_id,created_by_role,source,price_cents,membership_applied)
-    values(person.id,person.household_id,case when person.role='child' then person.id end,p_staff_user_id,p_staff_role,p_source,amount,member)
-    returning id into checkin_id;
-  insert into public.occupancy_events(event_type,delta,created_by) values('checkin_increment',1,p_staff_user_id);
-  return jsonb_build_object('ok',true,'checkin_id',checkin_id,'membership_applied',member,'price_cents',amount,'first_name',person.first_name,'last_name',person.last_name,'birthdate',person.birthdate,'birthday',person.birthdate);
+  for installed in select p.oid,p.proargnames from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='checkin_person' loop
+    definition:=pg_get_functiondef(installed.oid);
+    if position('founding_covers_person' in definition)>0 then patched:=patched+1;continue;end if;
+    if array_length(string_to_array(definition,'into member;'),1)<>2 then raise exception 'Unrecognized check-in membership check; no changes applied.';end if;
+    date_variable:=case when definition ~ 'today_date[[:space:]]+date' then 'today_date' when definition ~ 'visit_date[[:space:]]+date' then 'visit_date' end;
+    if date_variable is null then raise exception 'Unrecognized check-in visit date; no changes applied.';end if;
+    environment_guard:=case when 'p_environment'=any(installed.proargnames) then 'p_environment=''production'' and ' else '' end;
+    definition:=replace(definition,'into member;',format('into member; member:=member or (%spublic.founding_covers_person(person.id,person.household_id,%s));',environment_guard,date_variable));
+    execute definition;
+    patched:=patched+1;
+  end loop;
+  if patched<>1 then raise exception 'Expected exactly one installed check-in function; no changes applied.';end if;
 end;
-$$;
-revoke all on function public.checkin_person(uuid, uuid, text, text, text) from public, anon, authenticated;
-grant execute on function public.checkin_person(uuid, uuid, text, text, text) to service_role;
+$patch$;
 
 notify pgrst, 'reload schema';
 commit;

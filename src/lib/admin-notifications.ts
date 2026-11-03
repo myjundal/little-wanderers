@@ -39,12 +39,12 @@ function formatEasternRange(startIso: string, endIso: string) {
   return `${date}, ${startTime}-${endTime}`;
 }
 
-function formatAgeFromBirthdate(birthdate: string | null | undefined) {
+function formatAgeFromBirthdate(birthdate: string | null | undefined, asOf = new Date()) {
   if (!birthdate) return null;
   const born = new Date(`${birthdate}T00:00:00Z`);
   if (Number.isNaN(born.getTime())) return null;
 
-  const now = new Date();
+  const now = asOf;
   let months = (now.getUTCFullYear() - born.getUTCFullYear()) * 12 + now.getUTCMonth() - born.getUTCMonth();
   if (now.getUTCDate() < born.getUTCDate()) months -= 1;
   if (months < 0) return null;
@@ -123,6 +123,34 @@ export async function sendNewSignupNotification(input: {
     to,
     subject: `New My Little Wanderers signup${input.email ? `: ${input.email}` : ''}`,
     html,
+  });
+}
+
+export type MembershipNotification = {
+  tier: 'waitlist' | 'public' | 'regular'; event: string; occurredAt: string;
+  familyName?: string; guardianName?: string; email?: string; phone?: string;
+  baseCents?: number; siblingCents?: number; amountCents?: number;
+  children: Array<{ firstName: string; lastName?: string; birthdate?: string }>;
+};
+
+export async function sendMembershipSignupNotification(input: MembershipNotification, eventKey: string) {
+  const label = input.tier === 'waitlist' ? 'Wanderlist founding' : input.tier === 'public' ? 'General founding' : 'Regular membership';
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').replace(/\/$/, '');
+  return sendResendEmail({
+    to: getOwnerNotificationEmail(),
+    subject: `New ${label}: ${input.familyName || input.email || 'Family'}`,
+    html: renderOperationalNotification({
+      title: 'New Little Wanderers membership',
+      rows: [
+        ['Membership', label], ['Event', input.event], ['Family', input.familyName],
+        ['Parent/caregiver', input.guardianName], ['Email', input.email], ['Phone', input.phone],
+        ...input.children.map((child, i): [string, string] => [`Child ${i + 1}`, `${formatPersonName(child) || '-'} · ${formatAgeFromBirthdate(child.birthdate, new Date(input.occurredAt)) || 'Age not provided'} · Birthday: ${child.birthdate || '-'}`]),
+        ['First child/month', formatPrice(input.baseCents)], ['Sibling 6mo+/month', formatPrice(input.siblingCents)],
+        ['Monthly total at signup', formatPrice(input.amountCents)], ['When (Eastern)', new Date(input.occurredAt).toLocaleString('en-US', { timeZone: 'America/New_York' })],
+      ],
+      ctaHref: `${siteUrl}${input.event === 'Membership started' ? '/staff/families' : '/staff/founding-memberships'}`, ctaLabel: 'Open membership management',
+    }),
+    idempotencyKey: `membership-owner/${eventKey}`,
   });
 }
 

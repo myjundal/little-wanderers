@@ -1,19 +1,30 @@
 import { requireOwnerContext } from '@/lib/authz';
-import { activateFounding } from '@/lib/founding-square';
-import { squareEnvironment } from '@/lib/square-client';
+import { activateFounding, foundingCardConfig } from '@/lib/founding-square';
+import { squareEnvironment, squareRequest } from '@/lib/square-client';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'no-store' };
 
-export async function GET() {
+export async function GET(req: Request) {
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
   const result = await context.admin.from('founding_memberships').select('id,status,pricing_tier,base_cents,sibling_cents,amount_cents,start_date,card_last4,created_at,household:households(name,email,phone)').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
   if (result.error) return Response.json({ ok: false, error: 'Unable to load founding memberships. Apply the founding membership migration first.' }, { status: 503, headers });
-  const settings = await context.admin.from('founding_membership_settings').select('phase').eq('environment', squareEnvironment()).single();
+  const settings = await context.admin.from('founding_membership_settings').select('phase,card_enrollment_enabled').eq('environment', squareEnvironment()).single();
   if (settings.error) return Response.json({ ok: false, error: 'Unable to load enrollment phase.' }, { status: 503, headers });
-  return Response.json({ ok: true, items: result.data, phase: settings.data.phase, billing_enabled: process.env.FOUNDING_BILLING_ENABLED === 'true' }, { headers });
+  let cardConfigured = false; let locationVerified: boolean | null = null;
+  try {
+    const config = foundingCardConfig(settings.data.card_enrollment_enabled);
+    cardConfigured = true;
+    if (req && new URL(req.url).searchParams.get('verifySquare') === '1') {
+      const result = await squareRequest<{ location: { id: string; status: string } }>(`/v2/locations/${encodeURIComponent(config.locationId)}`);
+      locationVerified = result.location?.id === config.locationId && result.location.status === 'ACTIVE';
+    }
+  } catch { if (req && new URL(req.url).searchParams.get('verifySquare') === '1') locationVerified = false; }
+  return Response.json({ ok: true, items: result.data, phase: settings.data.phase, billing_enabled: process.env.FOUNDING_BILLING_ENABLED === 'true',
+    integration: { environment: squareEnvironment(), card_configured: cardConfigured, square_location_verified: locationVerified, owner_email_configured: Boolean(process.env.RESEND_API_KEY) },
+  }, { headers });
 }
 
 export async function PATCH(req: Request) {

@@ -24,7 +24,7 @@ function GenderSelect({ id, value, onChange }: { id: string; value: Gender; onCh
 }
 
 export default function FoundingMembership({ audience }: { audience?: 'waitlist' | 'public' } = {}) {
-  const entryPath = audience ? `/founding-membership/${audience}` : '/founding-membership';
+  const entryPath = audience === 'waitlist' ? '/wanderlist-founding' : audience === 'public' ? '/general-founding' : '/founding-membership';
   const signInHref = `/login?mode=continue&next=${encodeURIComponent(entryPath)}`;
   const [auth, setAuth] = useState<'loading' | 'guest' | 'signedIn' | 'error'>('loading');
   const [profile, setProfile] = useState<Profile>(emptyProfile);

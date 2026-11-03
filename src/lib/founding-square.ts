@@ -6,10 +6,10 @@ import { easternDate, foundingMonthlyCents, foundingPhases, isDate, MEMBERSHIP_P
 type Card = { id: string; customer_id?: string; enabled?: boolean; reference_id?: string; card_brand?: string; last_4?: string };
 type Subscription = { id: string; customer_id?: string; location_id?: string; card_id?: string; start_date?: string; status?: string; canceled_date?: string; charged_through_date?: string; invoice_ids?: string[] };
 
-export function foundingCardConfig() {
+export function foundingCardConfig(databaseEnabled = false) {
   const config = squareConfig();
-  const applicationId = process.env.SQUARE_APPLICATION_ID;
-  if (process.env.FOUNDING_CARD_ENROLLMENT_ENABLED !== 'true' || !applicationId) throw new Error('Card registration will be available soon. No payment is due today.');
+  const applicationId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID;
+  if (!(databaseEnabled || process.env.FOUNDING_CARD_ENROLLMENT_ENABLED === 'true') || !applicationId) throw new Error('Card registration will be available soon. No payment is due today.');
   return { ...config, applicationId };
 }
 
@@ -25,8 +25,8 @@ async function claim(admin: SupabaseClient, enrollment: FoundingEnrollment, next
 }
 
 /** This function only creates a customer and a card. It cannot charge or subscribe. */
-export async function storeFoundingCard(admin: SupabaseClient, enrollment: FoundingEnrollment, sourceId: string, contact: { email: string; firstName: string; lastName: string; phone: string }) {
-  const config = foundingCardConfig();
+export async function storeFoundingCard(admin: SupabaseClient, enrollment: FoundingEnrollment, sourceId: string, contact: { email: string; firstName: string; lastName: string; phone: string }, databaseEnabled = false) {
+  const config = foundingCardConfig(databaseEnabled);
   if (enrollment.environment !== config.environment) throw new Error('Square environment mismatch.');
   if (enrollment.status === 'pending') return enrollment;
   if (!['draft', 'saving_card'].includes(enrollment.status)) throw new Error('This membership cannot be enrolled again.');

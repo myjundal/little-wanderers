@@ -17,7 +17,7 @@ create table people(id uuid primary key default gen_random_uuid(),household_id u
 create table open_play_reservation_slots(id uuid primary key,starts_at timestamptz,is_soft_opening boolean);
 create table open_play_reservations(slot_id uuid,household_id uuid,status text);
 create table roles(id uuid,role text);create table user_roles(user_id uuid,role text);
-create table memberships(household_id uuid,person_id uuid,renews_at timestamptz);
+create table memberships(id uuid primary key default gen_random_uuid(),household_id uuid,person_id uuid,renews_at timestamptz,square_environment text);
 create table waivers(household_id uuid,waiver_version text,signed_at timestamptz,waiver_expires_at timestamptz,electronic_signature text,covered_person_ids uuid[]);
 create table checkins(id uuid primary key default gen_random_uuid(),person_id uuid,household_id uuid,child_id uuid,created_by_user_id uuid,created_by_role text,source text,price_cents integer,membership_applied boolean,checked_in_at timestamptz default now());
 create table occupancy_events(event_type text,delta integer,created_by uuid);
@@ -27,9 +27,9 @@ async function database(t) {
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(fixture);
   await db.exec(fs.readFileSync('db/migrations/20261103_founding_memberships.sql', 'utf8'));
-  const pricing = fs.readFileSync('db/migrations/20261028_launch_checkin.sql','utf8').split('-- Serialize')[0];
-  await db.exec(`${pricing}commit;`);
+  await db.exec(fs.readFileSync('db/migrations/20261028_launch_checkin.sql','utf8'));
   await db.exec(fs.readFileSync('db/migrations/20261103_founding_checkin.sql', 'utf8'));
+  await db.exec(fs.readFileSync('db/migrations/20261103_membership_notifications.sql', 'utf8'));
   await db.query('insert into auth.users values($1,$2)', [ids.user,contact.email]);
   await db.exec("update founding_membership_settings set phase='public' where environment='sandbox'");
   await db.query('insert into households(id,name) values($1,$2),($3,$4)', [ids.household, 'Family', ids.other, 'Other Family']);
@@ -385,4 +385,61 @@ test('actual check-in enforces a current waiver before applying the reserved fou
   assert.equal(result.ok,true); assert.equal(result.membership_applied,true); assert.equal(result.price_cents,0);
   assert.equal((await checkin()).rows[0].result.code,'already_checked_in');
   assert.equal((await db.query('select sum(delta)::integer n from occupancy_events')).rows[0].n,1);
+});
+
+test('owner notifications queue only completed production enrollments, snapshot family data, and survive failed delivery', async t => {
+  const { db, admin } = await database(t);
+  const row = await prepare(admin);
+  assert.equal((await db.query('select count(*)::int n from membership_notification_outbox')).rows[0].n, 0);
+  await db.query("update founding_memberships set status='pending',square_customer_id='customer',square_card_id='card'");
+  assert.equal((await db.query('select count(*)::int n from membership_notification_outbox')).rows[0].n, 0);
+  await db.query("update founding_memberships set status='saving_card',environment='production'");
+  await db.query("update founding_memberships set status='pending'");
+  await db.query("update founding_memberships set updated_at=now()");
+  let events = (await db.query('select * from membership_notification_outbox')).rows;
+  assert.equal(events.length, 1);
+  assert.equal(events[0].payload.familyName, 'Family Family');
+  assert.equal(events[0].payload.email, contact.email);
+  assert.equal(events[0].payload.children[0].firstName, 'Sam');
+  assert.equal(events[0].payload.children[0].birthdate, '2023-01-01');
+  assert.equal(JSON.stringify(events[0]).includes('square_card_id'), false);
+  assert.equal(events[0].event_key, `founding/${row.id}`);
+  let fail = true; const calls = [];
+  const sender = loadSquareModules({ mocks: { '@/lib/admin-notifications': { sendMembershipSignupNotification: async (payload, key) => { calls.push({ payload, key }); return { ok: !fail }; } } } }).load('src/lib/membership-notifications.ts');
+  await sender.sendDueMembershipNotifications(admin);
+  events = (await db.query('select * from membership_notification_outbox')).rows;
+  assert.equal(events[0].sent_at, null);
+  await sender.sendDueMembershipNotifications(admin); assert.equal(calls.length, 1);
+  await db.exec("update membership_notification_outbox set next_attempt_at=now()-interval '1 minute'"); fail = false;
+  await sender.sendDueMembershipNotifications(admin);
+  await sender.sendDueMembershipNotifications(admin); assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0], calls[1]);
+  assert.ok((await db.query('select sent_at from membership_notification_outbox')).rows[0].sent_at);
+  await db.query("insert into memberships(household_id,renews_at) values($1,now()+interval '30 days')", [ids.household]);
+  await db.exec("update memberships set renews_at=now()+interval '60 days'");
+  await db.query("insert into memberships(household_id,renews_at,square_environment) values($1,now()+interval '30 days','sandbox')", [ids.household]);
+  assert.equal((await db.query('select count(*)::int n from membership_notification_outbox')).rows[0].n, 2);
+  await db.exec('set role authenticated');
+  await assert.rejects(db.query('select * from membership_notification_outbox'), /permission denied/);
+  await db.exec('reset role');
+});
+
+test('check-in patch preserves the production environment argument, paid admission logic and existing signature', async t => {
+  const { db, admin } = await database(t); await prepare(admin);
+  await db.query("update founding_memberships set environment='production',status='pending',square_card_id='card'");
+  const today = (await db.query("select (now() at time zone 'America/New_York')::date::text as day")).rows[0].day;
+  await db.query('insert into open_play_reservation_slots values($1,$2,true)', [ids.klass, `${today}T15:00:00Z`]);
+  await db.query("insert into open_play_reservations values($1,$2,'reserved')", [ids.klass, ids.household]);
+  await db.exec(`drop function checkin_person(uuid,uuid,text,text,text);
+    create function checkin_person(p_person_id uuid,p_staff_user_id uuid,p_staff_role text,p_source text,p_waiver_version text,p_environment text default 'production') returns jsonb language plpgsql as $$
+    declare person public.people%rowtype; today_date date:=(now() at time zone 'America/New_York')::date; member boolean;
+    begin select * into person from people where id=p_person_id; select false into member;
+    return jsonb_build_object('member',member,'paid_admission_preserved',true,'environment',p_environment);end;$$;`);
+  await db.exec(fs.readFileSync('db/migrations/20261103_founding_checkin.sql', 'utf8'));
+  await db.exec(fs.readFileSync('db/migrations/20261103_founding_checkin.sql', 'utf8'));
+  const result = async env => (await db.query('select checkin_person($1,$2,$3,$4,$5,$6) r', [childId,ids.user,'staff','qr','waiver',env])).rows[0].r;
+  assert.equal((await result('production')).member, true);
+  assert.equal((await result('sandbox')).member, false);
+  assert.equal((await result('production')).paid_admission_preserved, true);
+  assert.equal((await db.query("select count(*)::int n from pg_proc where proname='checkin_person'")).rows[0].n, 1);
 });

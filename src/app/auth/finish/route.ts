@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   if (!user) {
     const login = getRedirectUrl(request, '/login');
     login.searchParams.set('next', next);
-    if (/^\/founding-membership(?:\/(?:public|waitlist))?$/.test(next)) login.searchParams.set('mode', 'continue');
+    if (/^\/(?:wanderlist-founding|general-founding|founding-membership(?:\/(?:public|waitlist))?)$/.test(next)) login.searchParams.set('mode', 'continue');
     return NextResponse.redirect(login);
   }
   const redirectPath = await getPostAuthRedirectForUser(user, next);

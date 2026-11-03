@@ -6,7 +6,7 @@ import { loadModule } from './helpers/class-preregistration-harness.mjs';
 import { loadSquareModules } from './helpers/admission-pos-harness.mjs';
 
 const redirect = loadModule('src/lib/auth-redirect.ts');
-async function login({ next = '/founding-membership/waitlist', existing = false } = {}) {
+async function login({ next = '/wanderlist-founding', existing = false } = {}) {
   const hooks = []; const effects = []; let cursor = 0; let tree; let verified = false;
   const authCalls = []; const navigations = []; const requests = [];
   const store = new Map(); const session = { getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) };
@@ -47,7 +47,7 @@ test('one email continuation handles both existing and first-time users without 
     assert.equal(view.authCalls[0].options.shouldCreateUser, true);
     const url = new URL(view.authCalls[0].options.emailRedirectTo);
     assert.equal(url.origin, 'https://preview.example.test');
-    assert.equal(url.searchParams.get('next'), '/founding-membership/waitlist');
+    assert.equal(url.searchParams.get('next'), '/wanderlist-founding');
     assert.equal(url.searchParams.get('mode'), 'continue');
     assert.equal(view.requests.length, 0);
     assert.match(view.html(), /return directly to your membership/);
@@ -56,7 +56,7 @@ test('one email continuation handles both existing and first-time users without 
 
 test('first-time and existing phone users verify SMS and return through the authenticated membership continuation', async () => {
   for (const existing of [false, true]) {
-    const view = await login({ existing, next: '/founding-membership/public' });
+    const view = await login({ existing, next: '/general-founding' });
     await view.click('Continue with phone');
     view.input('phone', '(860) 555-0123');
     await view.click('Text me a code');
@@ -69,7 +69,7 @@ test('first-time and existing phone users verify SMS and return through the auth
     }
     assert.equal(view.authCalls[1].type, 'sms');
     assert.equal(view.authCalls[1].token, '1234');
-    assert.deepEqual(view.navigations, ['/auth/finish?next=%2Ffounding-membership%2Fpublic']);
+    assert.deepEqual(view.navigations, ['/auth/finish?next=%2Fgeneral-founding']);
     assert.equal(view.requests.length, 0);
   }
 });
@@ -81,15 +81,15 @@ test('email callbacks return to membership and retain its continuation when the 
     } }) },
     '@/lib/waitlist-claim': { getPostAuthRedirectForUser: async (_user, next) => next },
   } }).load('src/app/auth/callback/route.ts');
-  const request = suffix => ({ url: `https://preview.example.test/auth/callback?mode=continue&next=%2Ffounding-membership%2Fwaitlist${suffix}`, cookies: { get() {} } });
+  const request = suffix => ({ url: `https://preview.example.test/auth/callback?mode=continue&next=%2Fwanderlist-founding${suffix}`, cookies: { get() {} } });
   const success = await api(null).GET(request('&code=valid'));
-  assert.equal(success.headers.get('location'), 'https://preview.example.test/founding-membership/waitlist');
+  assert.equal(success.headers.get('location'), 'https://preview.example.test/wanderlist-founding');
   for (const suffix of ['', '&code=expired']) {
     const response = await api({ message: 'Expired code' }).GET(request(suffix));
     const destination = new URL(response.headers.get('location'));
     assert.equal(destination.pathname, '/login');
     assert.equal(destination.searchParams.get('mode'), 'continue');
-    assert.equal(destination.searchParams.get('next'), '/founding-membership/waitlist');
+    assert.equal(destination.searchParams.get('next'), '/wanderlist-founding');
   }
 });
 
@@ -99,10 +99,10 @@ test('SMS finishing uses the verified account and preserves membership destinati
       '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }) },
       '@/lib/waitlist-claim': { getPostAuthRedirectForUser: async (actual, next) => { assert.equal(actual.id, user.id); return next; } },
     } }).load('src/app/auth/finish/route.ts');
-    const url = new URL('https://preview.example.test/auth/finish?next=%2Ffounding-membership%2Fpublic');
+    const url = new URL('https://preview.example.test/auth/finish?next=%2Fgeneral-founding');
     const response = await api.GET({ url: url.toString(), nextUrl: url });
     const destination = new URL(response.headers.get('location'));
-    assert.equal(destination.pathname, user ? '/founding-membership/public' : '/login');
-    if (!user) { assert.equal(destination.searchParams.get('mode'), 'continue'); assert.equal(destination.searchParams.get('next'), '/founding-membership/public'); }
+    assert.equal(destination.pathname, user ? '/general-founding' : '/login');
+    if (!user) { assert.equal(destination.searchParams.get('mode'), 'continue'); assert.equal(destination.searchParams.get('next'), '/general-founding'); }
   }
 });

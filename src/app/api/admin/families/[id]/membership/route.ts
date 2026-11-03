@@ -1,6 +1,8 @@
 import { requireOwnerContext } from '@/lib/authz';
 import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
+import { waitUntil } from '@vercel/functions';
+import { sendDueMembershipNotifications } from '@/lib/membership-notifications';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -118,6 +120,7 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
     }
 
     await insertEvent(membershipId, 'start', body.notes);
+    waitUntil(sendDueMembershipNotifications(admin).catch(() => null));
     return Response.json({ ok: true });
   }
 

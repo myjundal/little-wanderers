@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { sendDuePartyReminderEmails } from '@/lib/party-emails';
+import { sendDueMembershipNotifications } from '@/lib/membership-notifications';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +20,10 @@ async function handle(req: Request) {
   }
 
   try {
-    const result = await sendDuePartyReminderEmails(createAdminSupabaseClient());
+    const admin = createAdminSupabaseClient();
+    // Retry pending membership alerts independently of party-email delivery.
+    await sendDueMembershipNotifications(admin).catch(() => logger.error({ action: 'membership.notification_retry_failed' }));
+    const result = await sendDuePartyReminderEmails(admin);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown error';
