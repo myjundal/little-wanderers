@@ -1,10 +1,20 @@
 # Founding membership: card registration before opening
 
-The unlisted customer page is `/founding-membership`. It has `noindex, nofollow`
-metadata and is absent from the homepage, public navigation, and sitemap. This is
-an unlisted offer, not an access-controlled secret: anyone given its URL can read it.
-Existing accounts use their existing family; new accounts use the same email
-authentication flow and return to this page to complete the full family profile.
+The unlisted customer entry pages are `/founding-membership/waitlist` ($50 + $10)
+and `/founding-membership/public` ($50 + $20). Both have `noindex, nofollow`
+metadata and are absent from the homepage, public navigation, and sitemap.
+Anyone given a URL can read the offer; eligibility is verified from the account,
+never granted by the URL. Public registration stays gated during the waitlist
+phase. An eligible original Wanderlist account gets its $10 sibling rate even
+if it enters through the public URL. After the regular phase begins, both entry
+pages show regular pricing. `/founding-membership` remains the shared management
+URL and supports existing links.
+
+Existing accounts reuse their authenticated user, household, and child IDs;
+saved contact and child details are prefilled for confirmation. New users must
+create and verify an account using the existing email authentication flow.
+Both login modes return to the exact entry URL before family details and card
+authorization are completed. The membership API rejects unauthenticated saves.
 
 ## Prices and release order
 
@@ -99,7 +109,8 @@ child list or Square price schedule.
    its network allowlist permits only customer/card endpoints, and its family
   database is in-memory. It creates a sandbox customer/card but no payment or
   subscription. It refuses production credentials/environments.
-- Check desktop and mobile `/founding-membership`, both account entry links,
+- Check desktop and mobile `/founding-membership/waitlist` and
+  `/founding-membership/public`, both account entry links,
   required real birthdays/contact fields, authorization, saved-card confirmation,
   cancellation, and owner-only billing controls. The mobile page has no horizontal
   overflow at 390px.

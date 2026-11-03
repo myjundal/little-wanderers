@@ -23,7 +23,10 @@ function GenderSelect({ id, value, onChange }: { id: string; value: Gender; onCh
   return <select id={id} required value={value} onChange={event => onChange(event.target.value as Gender)}><option value="">Select</option><option value="female">Female</option><option value="male">Male</option><option value="non_binary">Non-binary</option><option value="prefer_not_to_say">Prefer not to say</option></select>;
 }
 
-export default function FoundingMembership() {
+export default function FoundingMembership({ audience }: { audience?: 'waitlist' | 'public' } = {}) {
+  const entryPath = audience ? `/founding-membership/${audience}` : '/founding-membership';
+  const signInHref = `/login?mode=existing&next=${encodeURIComponent(entryPath)}`;
+  const signUpHref = `/login?mode=new&next=${encodeURIComponent(entryPath)}`;
   const [auth, setAuth] = useState<'loading' | 'guest' | 'signedIn' | 'error'>('loading');
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
@@ -75,7 +78,11 @@ export default function FoundingMembership() {
 
   const patch = (key: keyof Omit<Profile, 'children'>, value: string) => setProfile(current => ({ ...current, [key]: value }));
   const patchChild = (id: string, next: Partial<Child>) => { setProfile(current => ({ ...current, children: current.children.map(child => child.id === id ? { ...child, ...next } : child) })); setBirthdaysConfirmed(false); };
-  const tier = enrollment && enrollment.status !== 'canceled' ? enrollment.pricing_tier : offer.tier;
+  // Advertise each entry page's offer, then use the server-verified account rate.
+  // A URL never grants eligibility or overrides a saved membership's rates.
+  const tier = enrollment && enrollment.status !== 'canceled' ? enrollment.pricing_tier
+    : auth === 'signedIn' && offer.can_enroll ? offer.tier
+    : offer.phase === 'regular' ? 'regular' : audience || offer.tier;
   const price = MEMBERSHIP_PRICES[tier];
   const founding = tier !== 'regular';
   const terms = membershipTerms(tier);
@@ -148,7 +155,7 @@ export default function FoundingMembership() {
       <div className={styles.joinIntro}><span className={styles.eyebrow}>Let’s get your family ready</span><h2>Your place in<br />{' '}<em>the beginning.</em></h2><p>{founding ? `Your ${money(price.base_cents)} first-child and ${money(price.sibling_cents)} sibling rates are locked in for the lifetime of your active membership.` : 'Regular membership is $60/month for the first child and $20/month per eligible sibling.'} Cancel anytime, with no commitment. If you cancel and rejoin, regular $60 + $20 pricing applies.</p><p>When a baby sibling turns 6 months, {money(price.sibling_cents)} sibling pricing begins with the following billing cycle.</p><p className={styles.small}>Questions? <a href="/contact">We’re here to help.</a></p></div>
       <div className={styles.formCard}>
         {auth === 'loading' && <p role="status">Loading your family account…</p>}
-        {auth === 'guest' && <div className={styles.guest}><h3>{offer.phase === 'waitlist' ? 'Wanderlist families go first.' : founding ? 'Welcome, founding family.' : 'Welcome to Little Wanderers.'}</h3><p>Use your existing Little Wanderers account, or create one to get started. We confirm your offer from your account; Wanderlist pricing is reserved for original Wanderlist families. We’ll ask for your children’s details before you save your card.</p><Link className={styles.primary} href="/login?mode=existing&next=%2Ffounding-membership">Sign in to my account</Link><Link className={styles.secondary} href="/login?mode=new&next=%2Ffounding-membership">Create a family account</Link><p className={styles.small}>No payment today. Opening date to be announced.</p></div>}
+        {auth === 'guest' && <div className={styles.guest}><h3>{!founding ? 'Welcome to Little Wanderers.' : audience === 'public' ? 'Welcome, founding family.' : offer.phase === 'waitlist' ? 'Wanderlist families go first.' : 'Welcome, founding family.'}</h3><p>Use your existing Little Wanderers account, or create one to get started. We confirm your offer from your account; Wanderlist pricing is reserved for original Wanderlist families. We’ll ask for your children’s details before you save your card.</p>{audience === 'public' && offer.phase === 'waitlist' && <p>Public founding registration opens after Wanderlist families have had first access.</p>}<Link className={styles.primary} href={signInHref}>Sign in to my account</Link><Link className={styles.secondary} href={signUpHref}>Create a family account</Link><p className={styles.small}>No payment today. Opening date to be announced.</p></div>}
         {auth === 'signedIn' && locked && <div id="founding-status" tabIndex={-1} className={styles.status}>
           <span className={styles.eyebrow}>{enrollment.status === 'canceled' ? 'Membership canceled' : price.label}</span>
           <h3>{enrollment.status === 'canceled' ? 'Your cancellation is confirmed.' : enrollment.status === 'pending' ? 'You’re in. We can’t wait to meet you.' : 'Your founding membership'}</h3>
@@ -159,7 +166,8 @@ export default function FoundingMembership() {
           {enrollment.status !== 'canceled' && <>{!cancelConfirm ? <button type="button" className={styles.textButton} onClick={() => setCancelConfirm(true)}>Cancel my membership</button> : <div className={styles.cancelBox}><p>Cancel anytime. Canceling ends your founding rates. Rejoining is $60/month + $20/month per eligible sibling. Future renewals stop.</p><button type="button" className={styles.secondary} disabled={busy} onClick={cancel}>{busy ? 'Canceling…' : 'Confirm cancellation'}</button><button className={styles.textButton} type="button" disabled={busy} onClick={() => setCancelConfirm(false)}>Keep my membership</button></div>}</>}
         </div>}
         {auth === 'signedIn' && !locked && <form onSubmit={submit}>
-          <h3>Confirm your family details</h3><p className={styles.small}>All fields are required unless marked optional. Your existing family details are filled in below.</p>
+          <h3>Confirm your family details</h3><p className={styles.small}>All fields are required unless marked optional. Your existing family details are filled in below. This membership will be saved to the account shown below.</p>
+          {audience && audience !== tier && offer.can_enroll && <p className={styles.notice}>{tier === 'waitlist' ? 'Your account qualifies for original Wanderlist pricing: $50/month + $10/month per eligible sibling.' : tier === 'regular' ? 'Your account is eligible for regular membership: $60/month + $20/month per eligible sibling.' : 'Your account qualifies for public founding pricing: $50/month + $20/month per eligible sibling. The $10 sibling rate is reserved for original Wanderlist families.'}</p>}
           <fieldset disabled={busy}><legend>Parent or caregiver</legend><div className={styles.grid}>
             <label htmlFor="founding-first">First name<input id="founding-first" autoComplete="given-name" maxLength={80} required value={profile.adultFirstName} onChange={e => patch('adultFirstName', e.target.value)} /></label>
             <label htmlFor="founding-last">Last name<input id="founding-last" autoComplete="family-name" maxLength={80} required value={profile.adultLastName} onChange={e => patch('adultLastName', e.target.value)} /></label>

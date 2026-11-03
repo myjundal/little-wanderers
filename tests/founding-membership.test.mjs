@@ -141,6 +141,30 @@ test('family profile and consent commit together, reuse existing IDs, and are in
   await assert.rejects(prepare(admin, profile(), { p_user: ids.other }), /caregiver/);
 });
 
+test('new authenticated users receive their own family and enrollment stays linked to that account', async t => {
+  const { db, admin } = await database(t);
+  await db.exec(`alter table households add column role text;
+    alter table households alter column id set default gen_random_uuid();
+    alter table household_members add unique(household_id,user_id);
+    alter table roles add primary key(id);`);
+  const migration = fs.readFileSync('db/migrations/20260703_family_caregiver_roles.sql', 'utf8');
+  const trigger = migration.slice(migration.indexOf('create or replace function public.handle_new_user()')).split('$$;')[0] + '$$;';
+  await db.exec(`${trigger}
+    create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();`);
+  await db.query('insert into auth.users values($1,$2)', [ids.other, 'new@example.test']);
+  const family = (await db.query('select * from household_members where user_id=$1', [ids.other])).rows[0];
+  assert.equal(family.role, 'primary_caregiver');
+  assert.notEqual(family.household_id, ids.household);
+  const input = { ...profile([{ ...profile().children[0], id: ids.otherPerson }]), email: 'new@example.test' };
+  const saved = await prepare(admin, input, { p_user: ids.other, p_household: family.household_id });
+  assert.equal(saved.user_id, ids.other);
+  assert.equal(saved.household_id, family.household_id);
+  assert.equal(saved.start_date, null);
+  const child = (await db.query('select household_id from people where id=$1', [ids.otherPerson])).rows[0];
+  assert.equal(child.household_id, family.household_id);
+  assert.equal((await db.query('select count(*)::integer n from household_members where user_id=$1', [ids.other])).rows[0].n, 1);
+});
+
 test('forged child IDs, missing existing children, and repeated IDs roll back the whole family save', async t => {
   const { db, admin } = await database(t);
   await db.query("insert into people(id,household_id,role,first_name) values($1,$2,'child','Other')", [ids.otherPerson, ids.other]);
@@ -269,11 +293,12 @@ test('provider reconciliation does not grant access for an unpaid invoice and is
 
 test('enrollment routes authenticate, validate every family field and consent, and never expose provider identifiers or store card tokens', async t => {
   const { db, admin } = await database(t); let cardCalls = 0;
+  await db.exec('alter table household_members add column created_at timestamptz default now()');
   const route = user => loadSquareModules({ env: { FOUNDING_CARD_ENROLLMENT_ENABLED: 'true', SQUARE_APPLICATION_ID: 'test-app' }, mocks: {
     'node:util': { isDeepStrictEqual: (a, b) => isDeepStrictEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b))) },
     '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }) },
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
-    '@/lib/households': { getLatestHouseholdIdForUser: async () => ids.household },
+    '@/lib/logger': { logger: { debug() {}, info() {}, error() {} } },
     '@/lib/founding-square': { foundingCardConfig: () => ({applicationId:'test-app',locationId:'test-location',environment:'sandbox'}), storeFoundingCard: async (_admin, enrollment) => { cardCalls++; return enrollment; } },
   } }).load('src/app/api/founding-membership/route.ts');
   const anonymous = route(null);
@@ -292,6 +317,8 @@ test('enrollment routes authenticate, validate every family field and consent, a
   assert.equal(JSON.stringify(row).includes('cnon:'), false);
   assert.equal(row.profile_snapshot.children[0].birthdate,'2023-01-01');
   const data = await (await api.GET()).json();
+  assert.equal(data.household.email, contact.email);
+  assert.equal(data.people.find(person => person.role === 'child').id, childId);
   assert.equal(data.enrollment.square_card_id,undefined); assert.equal(data.enrollment.square_customer_id,undefined); assert.equal(data.enrollment.id,undefined);
   await db.query("update household_members set role='member'");
   assert.equal((await api.GET()).status,403); assert.equal((await post({})).status,403); assert.equal((await api.DELETE()).status,403);
