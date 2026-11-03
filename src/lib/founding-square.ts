@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareEnvironment, squareRequest } from '@/lib/square-client';
-import { easternDate, foundingMonthlyCents, foundingPhases, isDate, type FoundingEnrollment } from '@/lib/founding-membership';
+import { easternDate, foundingMonthlyCents, foundingPhases, isDate, MEMBERSHIP_PRICES, type FoundingEnrollment } from '@/lib/founding-membership';
 
 type Card = { id: string; customer_id?: string; enabled?: boolean; reference_id?: string; card_brand?: string; last_4?: string };
 type Subscription = { id: string; customer_id?: string; location_id?: string; card_id?: string; start_date?: string; status?: string; canceled_date?: string; charged_through_date?: string; invoice_ids?: string[] };
@@ -79,12 +79,12 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
     enrollment = await claim(admin, enrollment, 'activating', startDate);
   }
   if (!enrollment.start_date || enrollment.start_date !== startDate) throw new Error('Retry using the originally selected opening date.');
-  const phases = foundingPhases(enrollment.birthdates, startDate).map((phase, ordinal) => ({ ...phase, ordinal }));
+  const phases = foundingPhases(enrollment.birthdates, startDate, enrollment.pricing_tier).map((phase, ordinal) => ({ ...phase, ordinal }));
   const plan = await squareRequest<{ catalog_object: { id: string } }>('/v2/catalog/object', 'POST', {
-    idempotency_key: `fp-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN', id: '#founding-plan', present_at_all_locations: true, subscription_plan_data: { name: 'Little Wanderers Founding Membership', all_items: true } },
+    idempotency_key: `fp-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN', id: '#founding-plan', present_at_all_locations: true, subscription_plan_data: { name: enrollment.pricing_tier === 'regular' ? 'Little Wanderers Monthly Membership' : 'Little Wanderers Founding Membership', all_items: true } },
   });
   const variation = await squareRequest<{ catalog_object: { id: string } }>('/v2/catalog/object', 'POST', {
-    idempotency_key: `fv-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN_VARIATION', id: '#founding-monthly', present_at_all_locations: true, subscription_plan_variation_data: { name: 'Founding monthly', subscription_plan_id: plan.catalog_object.id, can_prorate: false, phases } },
+    idempotency_key: `fv-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN_VARIATION', id: '#founding-monthly', present_at_all_locations: true, subscription_plan_variation_data: { name: MEMBERSHIP_PRICES[enrollment.pricing_tier].label, subscription_plan_id: plan.catalog_object.id, can_prorate: false, phases } },
   });
   const result = await squareRequest<{ subscription: Subscription }>('/v2/subscriptions', 'POST', {
     idempotency_key: `fs-${enrollment.id}`, location_id: config.locationId,
@@ -93,7 +93,7 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
     monthly_billing_anchor_date: Number(startDate.slice(8)),
   });
   if (!result.subscription?.id || result.subscription.start_date !== startDate || result.subscription.customer_id !== enrollment.square_customer_id) throw new Error('Unable to verify the Square subscription. Retry with the same opening date.');
-  const patch = { square_subscription_id: result.subscription.id, status: 'active', amount_cents: foundingMonthlyCents(enrollment.birthdates, startDate) };
+  const patch = { square_subscription_id: result.subscription.id, status: 'active', amount_cents: foundingMonthlyCents(enrollment.birthdates, startDate, enrollment.pricing_tier) };
   await updateFounding(admin, enrollment.id, patch);
   return { ...enrollment, ...patch };
 }

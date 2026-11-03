@@ -6,6 +6,33 @@ an unlisted offer, not an access-controlled secret: anyone given its URL can rea
 Existing accounts use their existing family; new accounts use the same email
 authentication flow and return to this page to complete the full family profile.
 
+## Prices and release order
+
+| Offer | First child/month | Each sibling 6mo+/month | Two eligible children | Savings vs $80 |
+| --- | --- | --- | --- | --- |
+| Original Wanderlist | $50 | $10 | $60 | 25% |
+| Public founding | $50 | $20 | $70 | 12.5% |
+| Regular / rejoining after cancellation | $60 | $20 | $80 | — |
+
+Both founding first-child and sibling rates last for the lifetime of the
+continuously active membership. There is no commitment and cancellation is
+available anytime. Cancellation permanently ends founding eligibility for that
+family/account. Rejoining creates a new regular-price reservation; the canceled
+record, its authorization, and its paid coverage remain in history.
+
+The owner tool has an explicit enrollment-phase selector: `waitlist` (the
+default), then `public`, then `regular` after opening. Original Wanderlist
+eligibility uses the existing October 28 cutoff and authenticated account/email
+matching. Later website signups cannot claim the $10 sibling rate. During the
+public founding phase, original Wanderlist families still qualify for their
+earlier offer. After switching to regular, new enrollments use $60 + $20.
+
+Phase changes do not change an existing reserved member's stored tier or rates,
+including recovery of a card registration already in progress. They set no
+opening date, create no subscription, and never enable billing. Clients cannot
+choose their own discount; the server/database resolve eligibility and reject
+stale price authorizations.
+
 ## Before accepting cards
 
 1. Apply `20261103_founding_memberships.sql`, then
@@ -37,7 +64,7 @@ Enrolled families can manage/cancel at the same URL and see a link in their own
 dashboard. A pending reservation cancels locally without any financial API call.
 When billing is active, cancellation is confirmed only after Square cancellation
 succeeds; paid access lasts through the already-paid term. Cancellation ends the
-founding rate, and the same reservation cannot be re-enrolled as a founder.
+founding rates. Rejoining uses a new reservation at regular $60 + $20 pricing.
 
 ## On the actual opening day, after the owner decides to start billing
 
@@ -54,10 +81,11 @@ and subscription creation. Retrying an uncertain activation must use that same
 date; never manually create a second subscription. A saved-card registration
 has no route to this operation.
 
-The recurring price is $50 for the oldest child plus $20 per sibling age six
-months or older. Baby siblings transition through explicit monthly static
+The recurring price uses the enrollment's stored tier: Wanderlist $50 + $10,
+public founding $50 + $20, or regular $60 + $20. Baby siblings transition through explicit monthly static
 Square phases; the final phase repeats without an end date. All phases keep the
-$50 base. No temporary discount or $60 fallback phase is used. The first monthly
+stored first-child and sibling prices. No temporary discount or later price
+increase is used for an uninterrupted founding membership. The first monthly
 total depends on the children's ages at activation and is covered by the stored
 authorization. Adding/removing children after enrollment is an owner-assisted
 change; changing My Info/People alone does not change the enrollment's frozen
@@ -68,7 +96,7 @@ child list or Square price schedule.
 - `npm run build`
 - `node --test tests/*.test.mjs`
 - `node scripts/test-founding-card-sandbox.mjs` with sandbox credentials only:
-  its network allowlist permits only customer/card endpoints, and its family
+   its network allowlist permits only customer/card endpoints, and its family
   database is in-memory. It creates a sandbox customer/card but no payment or
   subscription. It refuses production credentials/environments.
 - Check desktop and mobile `/founding-membership`, both account entry links,

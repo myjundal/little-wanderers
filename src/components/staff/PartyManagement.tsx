@@ -10,6 +10,7 @@ type Party = {
   id: string;
   household_id: string;
   household_name: string;
+  household_email: string | null;
   start_time: string;
   end_time: string;
   room: string | null;
@@ -111,6 +112,7 @@ export default function PartyManagement() {
           <p className={styles.time}>{time(selected.start_time)} – {time(selected.end_time)}</p>
           <dl className={styles.details}>
             <div><dt>Host family</dt><dd><Link href={`/staff/families/${selected.household_id}`}>{selected.household_name}</Link></dd></div>
+            <div><dt>Parent email</dt><dd>{selected.household_email ? <a href={`mailto:${selected.household_email}`}>{selected.household_email}</a> : 'Not provided'}</dd></div>
             <div><dt>Room</dt><dd>{selected.room || 'Party room'}</dd></div>
             <div><dt>Expected guests</dt><dd>{selected.headcount_expected ?? 'Not provided'}</dd></div>
             {selected.birthday_age != null && <div><dt>Birthday age</dt><dd>{selected.birthday_age}</dd></div>}

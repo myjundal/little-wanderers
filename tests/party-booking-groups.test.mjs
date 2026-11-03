@@ -6,7 +6,7 @@ import { loadModule } from './helpers/class-preregistration-harness.mjs';
 const grouping = loadModule('src/lib/party-booking-groups.ts');
 const now = Date.parse('2026-11-02T15:00:00Z');
 const party = (id, patch = {}) => ({
-  id, household_name: `${id} Family`, household_id: id,
+  id, household_name: `${id} Family`, household_email: `${id}@example.test`, household_id: id,
   status: 'confirmed', notes: null,
   start_time: '2026-11-01T15:00:00-05:00', end_time: '2026-11-01T18:00:00-05:00',
   current_child_count: 5, current_adult_count: 12, attendance_finalized_at: null,
@@ -96,11 +96,20 @@ test('dashboard moves parties while open, labels completed details and keeps att
   assert.equal(group('Confirmed parties').count, 1);
   assert.equal(group('Completed parties').count, 1);
   assert.equal(group('Completed parties').defaultOpen, false);
-  const completedButton = group('Completed parties').children[0];
-  completedButton.props.onClick(); render();
+  const completedCard = group('Completed parties').children[0];
+  completedCard.props.children[0].props.onClick(); render();
   assert.ok(all(node => node.type === 'span' && node.props.children === 'Completed').length >= 2);
   assert.equal(all(node => node.type === 'button' && node.props.children === 'Cancel booking').length, 0);
   assert.equal(all(node => node.type === 'button' && node.props.children === 'Finalize attendance').length, 1);
+  const expanded = group('Completed parties').children[0];
+  assert.equal(expanded.props.children[0].props['aria-expanded'],true);
+  assert.equal(expanded.props.children[1].props.role,'region');
+  assert.equal(expanded.props.children[1].props.id,'party-details-today');
+  assert.equal(all(node => node.type === 'a' && node.props.href === 'mailto:today@example.test').length,1);
+  group('Confirmed parties').children[0].props.children[0].props.onClick(); render();
+  assert.equal(group('Completed parties').children[0].props.children[1],false);
+  assert.equal(group('Confirmed parties').children[0].props.children[1].props.id,'party-details-future');
+  assert.equal(all(node => node.props.role === 'region' && node.props['aria-label'] === 'Selected party details').length,1);
 });
 
 test('public party calendar excludes cancelled bookings and uses no-store', async () => {

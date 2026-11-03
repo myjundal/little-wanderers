@@ -112,3 +112,25 @@ test('today API filters by local day and confirmed status before returning booki
   await GET(new Request('https://example.test/api'));
   assert.deepEqual(calls, []);
 });
+
+test('party management includes the host parent email only after staff authorization', async () => {
+  const lookups = [];
+  let allowed = false;
+  const admin = { from(table) {
+    const query = { select(columns) { lookups.push([table,columns]); return query; }, order() { return query; },
+      in(column,values) { lookups.push([column,...values]); return query; },
+      then(resolve) { resolve({data:table==='party_bookings'?[{id,household_id:'host-family',status:'confirmed'}]:[{id:'host-family',name:'Host Family',email:'parent@example.test'}],error:null}); },
+    }; return query;
+  } };
+  const api = loadModule('src/app/api/admin/party-bookings/route.ts',{
+    '@/lib/authz':{requireStaffContext:async()=>allowed?{ok:true,admin}:{ok:false,response:Response.json({ok:false},{status:403})}},
+    '@/lib/party-management':management,
+  });
+  assert.equal((await api.GET(new Request('https://example.test/api'))).status,403);
+  assert.equal(lookups.length,0);
+  allowed=true;
+  const result=await (await api.GET(new Request('https://example.test/api'))).json();
+  assert.equal(result.items[0].household_email,'parent@example.test');
+  assert.equal(result.items[0].household_name,'Host Family');
+  assert.ok(lookups.some(([column,value])=>column==='id'&&value==='host-family'));
+});

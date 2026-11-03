@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import Script from 'next/script';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { FOUNDING_TERMS, FOUNDING_TERMS_VERSION, easternDate, foundingMonthlyCents } from '@/lib/founding-membership';
+import { membershipTerms, MEMBERSHIP_PRICES, FOUNDING_TERMS_VERSION, easternDate, foundingMonthlyCents, type MembershipOffer, type MembershipTier } from '@/lib/founding-membership';
 import { formatBirthdateInput, parseBirthdate } from '@/lib/birthdate';
 import styles from './founding.module.css';
 
 type Gender = '' | 'female' | 'male' | 'non_binary' | 'prefer_not_to_say';
 type Child = { id: string; firstName: string; lastName: string; gender: Gender; birthdate: string; existing?: boolean };
 type Profile = { adultFirstName: string; adultLastName: string; adultGender: Gender; email: string; phone: string; city: string; state: string; children: Child[] };
-type Enrollment = { status: string; card_brand: string | null; card_last4: string | null; amount_cents: number; start_date: string | null; paid_through: string | null };
+type Enrollment = { status: string; pricing_tier: MembershipTier; base_cents: number; sibling_cents: number; card_brand: string | null; card_last4: string | null; amount_cents: number; start_date: string | null; paid_through: string | null };
 type Config = { applicationId: string; locationId: string; environment: string };
 type Card = { attach(selector: string): Promise<void>; destroy(): Promise<void>; tokenize(details: Record<string, unknown>): Promise<{ status: string; token?: string }> };
 type SquareWindow = Window & { Square?: { payments(applicationId: string, locationId: string): { card(): Promise<Card> } } };
@@ -27,6 +27,7 @@ export default function FoundingMembership() {
   const [auth, setAuth] = useState<'loading' | 'guest' | 'signedIn' | 'error'>('loading');
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [offer, setOffer] = useState<MembershipOffer>({ phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 });
   const [config, setConfig] = useState<Config | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [cardReady, setCardReady] = useState(false);
@@ -43,8 +44,9 @@ export default function FoundingMembership() {
     let active = true;
     void fetch('/api/founding-membership', { cache: 'no-store' }).then(async response => {
       if (!active) return;
-      if (response.status === 401) { setAuth('guest'); return; }
       const data = await response.json();
+      if (data.offer) setOffer(data.offer);
+      if (response.status === 401) { setAuth('guest'); return; }
       if (!response.ok) throw new Error(data.error);
       if (!active) return;
       const adult = (data.people as Person[]).find(person => person.role === 'adult');
@@ -73,12 +75,16 @@ export default function FoundingMembership() {
 
   const patch = (key: keyof Omit<Profile, 'children'>, value: string) => setProfile(current => ({ ...current, [key]: value }));
   const patchChild = (id: string, next: Partial<Child>) => { setProfile(current => ({ ...current, children: current.children.map(child => child.id === id ? { ...child, ...next } : child) })); setBirthdaysConfirmed(false); };
+  const tier = enrollment && enrollment.status !== 'canceled' ? enrollment.pricing_tier : offer.tier;
+  const price = MEMBERSHIP_PRICES[tier];
+  const founding = tier !== 'regular';
+  const terms = membershipTerms(tier);
   let estimate: number | null = null;
-  try { estimate = foundingMonthlyCents(profile.children.map(child => parseBirthdate(child.birthdate) || ''), easternDate()); } catch { /* Show a total once the dates are complete. */ }
+  try { estimate = foundingMonthlyCents(profile.children.map(child => parseBirthdate(child.birthdate) || ''), easternDate(), tier); } catch { /* Show a total once the dates are complete. */ }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting.current || !cardRef.current || !consent || !birthdaysConfirmed) return;
+    if (submitting.current || !cardRef.current || !consent || !birthdaysConfirmed || !offer.can_enroll) return;
     const dates = profile.children.map(child => parseBirthdate(child.birthdate));
     if (dates.some(date => !date)) { setError('Enter a real birthday for each child as MM/DD/YYYY.'); return; }
     const digits = profile.phone.replace(/\D/g, '');
@@ -88,7 +94,7 @@ export default function FoundingMembership() {
     try {
       const token = await cardRef.current.tokenize({ intent: 'STORE', customerInitiated: true, sellerKeyedIn: false, billingContact: { givenName: profile.adultFirstName, familyName: profile.adultLastName, email: profile.email, phone, city: profile.city, state: profile.state, countryCode: 'US' } });
       if (token.status !== 'OK' || !token.token) throw new Error('Please check your card information and try again.');
-      const response = await fetch('/api/founding-membership', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...profile, phone, children: profile.children.map((child, i) => ({ ...child, birthdate: dates[i] })), sourceId: token.token, consent, birthdaysConfirmed, termsVersion: FOUNDING_TERMS_VERSION }) });
+      const response = await fetch('/api/founding-membership', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...profile, phone, children: profile.children.map((child, i) => ({ ...child, birthdate: dates[i] })), sourceId: token.token, consent, birthdaysConfirmed, termsVersion: FOUNDING_TERMS_VERSION, pricingTier: offer.tier }) });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || 'Unable to save your card. No payment was taken.');
       setEnrollment(data.enrollment);
@@ -104,7 +110,7 @@ export default function FoundingMembership() {
       const response = await fetch('/api/founding-membership', { method: 'DELETE' });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error);
-      setEnrollment(current => current ? { ...current, status: 'canceled' } : current); setCancelConfirm(false);
+      setEnrollment(current => current ? { ...current, status: 'canceled' } : current); setOffer(current => ({ ...current, tier: 'regular', base_cents: 6000, sibling_cents: 2000, can_enroll: true })); setConsent(false); setCancelConfirm(false);
     } catch (err) { setError(err instanceof Error ? err.message : 'Please retry cancellation.'); }
     finally { submitting.current = false; setBusy(false); }
   }
@@ -112,21 +118,21 @@ export default function FoundingMembership() {
   return <main className={styles.page}>
     <section className={styles.hero}>
       <div className={styles.heroCopy}>
-        <span className={styles.eyebrow}>A place in our beginning</span>
-        <h1>Little moments.<br /><em>Founding families.</em></h1>
-        <p>A familiar place to play, grow, and come back to. Join our founding families and make Little Wanderers part of your everyday.</p>
-        <a className={styles.primary} href="#join">Become a founding member <span aria-hidden="true">↗</span></a>
+        <span className={styles.eyebrow}>{founding ? price.label : 'Monthly membership'}</span>
+        <h1>Little moments.<br /><em>{founding ? 'Founding families.' : 'More days to play.'}</em></h1>
+        <p>A familiar place to play, grow, and come back to. Make Little Wanderers part of your everyday.</p>
+        <a className={styles.primary} href="#join">{founding ? 'Become a founding member' : 'Join our membership'} <span aria-hidden="true">↗</span></a>
         <span className={styles.small}>Save your card today. Pay $0 today.</span>
       </div>
       <div className={styles.priceCard}>
-        <span className={styles.eyebrow}>Your founding rate</span>
-        <div className={styles.price}>$50<span>/mo</span></div>
-        <p className={styles.regular}>Regularly <s>$60/month</s></p>
-        <p className={styles.rateNote}>Yours for as long as<br />your membership stays active.</p>
+        <span className={styles.eyebrow}>{price.label}</span>
+        <div className={styles.price}>{money(price.base_cents)}<span>/mo</span></div>
+        {founding && <p className={styles.regular}>Regularly <s>$60/month</s></p>}
+        <p className={styles.rateNote}>{founding ? <>Both rates locked in for life,<br />while your membership stays active.</> : 'Regular monthly pricing.'}</p>
         <div className={styles.priceDivider} />
-        <p><strong>+$20/mo</strong> for each sibling 6 months or older</p>
+        <p><strong>+{money(price.sibling_cents)}/mo</strong> for each sibling 6 months or older</p>
         <p className={styles.small}>Baby siblings under 6 months: no additional charge.</p>
-        <div className={styles.badge}>Cancel anytime · No commitment</div>
+        {founding && <p className={styles.small}>Two children (sibling 6mo+): {money(price.base_cents + price.sibling_cents)}/mo · {price.two_child_discount}% off the regular $80/mo.</p>}<div className={styles.badge}>Cancel anytime · No commitment</div>
       </div>
     </section>
 
@@ -139,17 +145,18 @@ export default function FoundingMembership() {
     <section className={styles.timing}><div><span className={styles.eyebrow}>Here’s how it works</span><h2>Join now. Your first payment can wait.</h2></div><ol><li><strong>Set up your family.</strong> Sign in or create an account, then confirm your contact and child information.</li><li><strong>Save your card with Square.</strong> There is no membership charge today.</li><li><strong>Start with us.</strong> Monthly billing begins on our announced soft opening date. The date is still to be determined.</li></ol></section>
 
     <section id="join" className={styles.join}>
-      <div className={styles.joinIntro}><span className={styles.eyebrow}>Let’s get your family ready</span><h2>Your place in<br />{' '}<em>the beginning.</em></h2><p>Your $50 first-child rate stays with you while your membership remains active. Cancel anytime; cancellation ends the founding rate.</p><p>When a baby sibling turns 6 months, the $20 sibling rate begins with the following billing cycle.</p><p className={styles.small}>Questions? <a href="/contact">We’re here to help.</a></p></div>
+      <div className={styles.joinIntro}><span className={styles.eyebrow}>Let’s get your family ready</span><h2>Your place in<br />{' '}<em>the beginning.</em></h2><p>{founding ? `Your ${money(price.base_cents)} first-child and ${money(price.sibling_cents)} sibling rates are locked in for the lifetime of your active membership.` : 'Regular membership is $60/month for the first child and $20/month per eligible sibling.'} Cancel anytime, with no commitment. If you cancel and rejoin, regular $60 + $20 pricing applies.</p><p>When a baby sibling turns 6 months, {money(price.sibling_cents)} sibling pricing begins with the following billing cycle.</p><p className={styles.small}>Questions? <a href="/contact">We’re here to help.</a></p></div>
       <div className={styles.formCard}>
         {auth === 'loading' && <p role="status">Loading your family account…</p>}
-        {auth === 'guest' && <div className={styles.guest}><h3>Welcome, founding family.</h3><p>Use your existing Little Wanderers account, or create one to get started. We’ll ask for your children’s details before you save your card.</p><Link className={styles.primary} href="/login?mode=existing&next=%2Ffounding-membership">Sign in to my account</Link><Link className={styles.secondary} href="/login?mode=new&next=%2Ffounding-membership">Create a family account</Link><p className={styles.small}>No payment today. Opening date to be announced.</p></div>}
+        {auth === 'guest' && <div className={styles.guest}><h3>{offer.phase === 'waitlist' ? 'Wanderlist families go first.' : founding ? 'Welcome, founding family.' : 'Welcome to Little Wanderers.'}</h3><p>Use your existing Little Wanderers account, or create one to get started. We confirm your offer from your account; Wanderlist pricing is reserved for original Wanderlist families. We’ll ask for your children’s details before you save your card.</p><Link className={styles.primary} href="/login?mode=existing&next=%2Ffounding-membership">Sign in to my account</Link><Link className={styles.secondary} href="/login?mode=new&next=%2Ffounding-membership">Create a family account</Link><p className={styles.small}>No payment today. Opening date to be announced.</p></div>}
         {auth === 'signedIn' && locked && <div id="founding-status" tabIndex={-1} className={styles.status}>
-          <span className={styles.eyebrow}>{enrollment.status === 'canceled' ? 'Membership canceled' : 'Founding family'}</span>
+          <span className={styles.eyebrow}>{enrollment.status === 'canceled' ? 'Membership canceled' : price.label}</span>
           <h3>{enrollment.status === 'canceled' ? 'Your cancellation is confirmed.' : enrollment.status === 'pending' ? 'You’re in. We can’t wait to meet you.' : 'Your founding membership'}</h3>
-          {enrollment.status !== 'canceled' && <><p>Card saved: {enrollment.card_brand} ending in {enrollment.card_last4}.</p><p>{enrollment.start_date ? `Monthly billing starts ${enrollment.start_date}.` : 'No payment has been taken for your reservation. Your first monthly payment begins on our announced soft opening date, which is not set yet.'}</p><p><strong>$50/month</strong> for the first child + $20/month per sibling age 6 months or older.</p><p>Your free soft opening visit is included. <Link href="/landing/soft-opening">Reserve a visit</Link> when times become available.</p></>}
-          {enrollment.status === 'canceled' && <p>Your founding rate has ended.{enrollment.paid_through ? ` Any paid access continues through ${enrollment.paid_through}.` : ' No further monthly billing is scheduled.'}</p>}
+          {enrollment.status !== 'canceled' && <><p>Card saved: {enrollment.card_brand} ending in {enrollment.card_last4}.</p><p>{enrollment.start_date ? `Monthly billing starts ${enrollment.start_date}.` : 'No payment has been taken for your reservation. Your first monthly payment begins on our announced soft opening date, which is not set yet.'}</p><p><strong>{money(enrollment.base_cents)}/month</strong> for the first child + {money(enrollment.sibling_cents)}/month per sibling age 6 months or older.{enrollment.pricing_tier !== 'regular' && ' Both rates stay locked in while your membership stays active.'}</p><p>Your free soft opening visit is included. <Link href="/landing/soft-opening">Reserve a visit</Link> when times become available.</p></>}
+          {enrollment.status === 'canceled' && <p>Your founding rates have ended. Rejoining is $60/month for the first child + $20/month per eligible sibling.{enrollment.paid_through ? ` Any paid access continues through ${enrollment.paid_through}.` : ' No further monthly billing is scheduled.'}</p>}
+          {enrollment.status === 'canceled' && <button type="button" className={styles.primary} onClick={() => { setEnrollment(null); setConsent(false); setBirthdaysConfirmed(false); }}>Rejoin at regular $60 + $20 pricing</button>}
           <Link className={styles.secondary} href="/landing">Go to my family dashboard</Link>
-          {enrollment.status !== 'canceled' && <>{!cancelConfirm ? <button type="button" className={styles.textButton} onClick={() => setCancelConfirm(true)}>Cancel my membership</button> : <div className={styles.cancelBox}><p>Cancel anytime. Canceling ends your founding rate and stops future renewal.</p><button type="button" className={styles.secondary} disabled={busy} onClick={cancel}>{busy ? 'Canceling…' : 'Confirm cancellation'}</button><button className={styles.textButton} type="button" disabled={busy} onClick={() => setCancelConfirm(false)}>Keep my membership</button></div>}</>}
+          {enrollment.status !== 'canceled' && <>{!cancelConfirm ? <button type="button" className={styles.textButton} onClick={() => setCancelConfirm(true)}>Cancel my membership</button> : <div className={styles.cancelBox}><p>Cancel anytime. Canceling ends your founding rates. Rejoining is $60/month + $20/month per eligible sibling. Future renewals stop.</p><button type="button" className={styles.secondary} disabled={busy} onClick={cancel}>{busy ? 'Canceling…' : 'Confirm cancellation'}</button><button className={styles.textButton} type="button" disabled={busy} onClick={() => setCancelConfirm(false)}>Keep my membership</button></div>}</>}
         </div>}
         {auth === 'signedIn' && !locked && <form onSubmit={submit}>
           <h3>Confirm your family details</h3><p className={styles.small}>All fields are required unless marked optional. Your existing family details are filled in below.</p>
@@ -173,12 +180,12 @@ export default function FoundingMembership() {
             <label className={styles.checkbox}><input type="checkbox" required checked={birthdaysConfirmed} onChange={e => setBirthdaysConfirmed(e.target.checked)} /><span>I confirm every child’s name and actual birthday are correct.</span></label>
           </fieldset>
           <div className={styles.total}><span>Due today</span><strong>$0</strong><span>Monthly total at today’s ages</span><strong>{estimate === null ? 'Add birthdays' : `${money(estimate)}/mo`}</strong></div>
-          <p className={styles.small}>Your first monthly total is based on your children’s ages when billing begins. $50 base rate + $20 for each eligible sibling.</p>
+          <p className={styles.small}>Your first monthly total is based on your children’s ages when billing begins. {money(price.base_cents)} base rate + {money(price.sibling_cents)} for each eligible sibling.</p>
           <fieldset disabled={busy}><legend>Save your card securely</legend>
-            {config ? <><div id="founding-card" className={styles.cardMount} />{!cardReady && <p className={styles.small}>Loading secure card form…</p>}</> : <p className={styles.notice}>Card registration will be available soon. No payment is due today.</p>}
-            <details className={styles.terms}><summary>Monthly membership & card authorization</summary><p>{FOUNDING_TERMS}</p></details>
+            {config ? <><div id="founding-card" className={styles.cardMount} />{!cardReady && <p className={styles.small}>Loading secure card form…</p>}</> : <p className={styles.notice}>{offer.can_enroll ? 'Card registration will be available soon. No payment is due today.' : 'Wanderlist families have first access. Public founding membership will open next.'}</p>}
+            <details className={styles.terms}><summary>Monthly membership & card authorization</summary><p>{terms}</p></details>
             <label className={styles.checkbox}><input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>I authorize Square to save my card and monthly billing to begin on the announced soft opening date. I agree to the membership terms above, including sibling pricing and cancellation.</span></label>
-            <button className={styles.primary} type="submit" disabled={busy || !cardReady || !consent || !birthdaysConfirmed}>{busy ? 'Saving your card…' : 'Save my card · $0 today'}</button>
+            <button className={styles.primary} type="submit" disabled={busy || !cardReady || !consent || !birthdaysConfirmed || !offer.can_enroll}>{busy ? 'Saving your card…' : 'Save my card · $0 today'}</button>
             <p className={styles.small}>Card details go directly to Square. Your opening date is not yet set.</p>
           </fieldset>
         </form>}
