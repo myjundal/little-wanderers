@@ -10,6 +10,15 @@ if it enters through the public URL. After the regular phase begins, both entry
 pages show regular pricing. `/founding-membership` remains the shared management
 URL and supports existing links. The earlier nested entry URLs redirect to the short URLs. Neither entry is linked from the homepage; adding the general link later is an explicit content change, with no scheduled publication.
 
+While founding enrollment is open, each entry keeps its own advertised heading
+and price after authentication. A non-Wanderlist account on
+`/wanderlist-founding` sees an eligibility/account-switch notice, with no card
+form or automatic move to public pricing. The family explicitly chooses whether
+to sign in with its original Wanderlist identity or visit `/general-founding`.
+General-page checkout still honors an eligible account's better Wanderlist rate
+and explains it in the form. Existing enrollment details always show the saved
+rates; visiting another entry cannot change them.
+
 Existing accounts reuse their authenticated user, household, and child IDs;
 saved contact and child details are prefilled for confirmation. One
 `/login?mode=continue&next=...` entry handles both returning and first-time users:
