@@ -163,6 +163,14 @@ test('new authenticated users receive their own family and enrollment stays link
   const child = (await db.query('select household_id from people where id=$1', [ids.otherPerson])).rows[0];
   assert.equal(child.household_id, family.household_id);
   assert.equal((await db.query('select count(*)::integer n from household_members where user_id=$1', [ids.other])).rows[0].n, 1);
+  const phoneUser = '20000000-0000-4000-8000-000000000003';
+  await db.query('insert into auth.users values($1,null)', [phoneUser]);
+  const phoneFamily = (await db.query('select household_id from household_members where user_id=$1', [phoneUser])).rows[0];
+  const phoneProfile = { ...profile([{ ...profile().children[0], id: '30000000-0000-4000-8000-000000000003' }]), email: 'phone-contact@example.test' };
+  const phoneSaved = await prepare(admin, phoneProfile, { p_user: phoneUser, p_household: phoneFamily.household_id });
+  assert.equal(phoneSaved.user_id, phoneUser);
+  assert.equal(phoneSaved.household_id, phoneFamily.household_id);
+  assert.equal(phoneSaved.profile_snapshot.email, 'phone-contact@example.test');
 });
 
 test('forged child IDs, missing existing children, and repeated IDs roll back the whole family save', async t => {
@@ -333,6 +341,34 @@ test('only owners can change rollout; a phase change sets no billing date and a 
   assert.equal((await patch(api(true),{phase:'waitlist',previousPhase:'public'})).status,409);
   assert.equal((await patch(api(true),{phase:'invalid',previousPhase:'regular'})).status,400);
   assert.equal((await db.query('select count(*)::integer n from founding_memberships')).rows[0].n,0);
+});
+
+test('phone-only authentication enrolls the same user and family with contact email, without treating it as a verified discount identity', async t => {
+  const { db, admin } = await database(t);
+  await db.exec('alter table household_members add column created_at timestamptz default now(); update auth.users set email=null');
+  await db.query("insert into waitlist_entries values($1,null,'2026-10-28T12:00:00Z')", [contact.email]);
+  const api = loadSquareModules({ mocks: {
+    'node:util': { isDeepStrictEqual: (a, b) => isDeepStrictEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b))) },
+    '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: ids.user, phone: '18605550123' } } }) } }) },
+    '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
+    '@/lib/logger': { logger: { debug() {}, info() {}, error() {} } },
+    '@/lib/founding-square': { foundingCardConfig: () => ({ applicationId: 'test-app', locationId: 'test-location', environment: 'sandbox' }), storeFoundingCard: async (_admin, row) => row },
+  } }).load('src/app/api/founding-membership/route.ts');
+  const data = await (await api.GET()).json();
+  assert.equal(data.account.email, null);
+  assert.equal(data.account.phone, '+18605550123');
+  assert.equal(data.household.phone, '+18605550123');
+  const post = tier => api.POST({ json: async () => ({ ...profile(), sourceId: 'cnon:test', consent: true, birthdaysConfirmed: true, termsVersion: '2026-11-03-tiers', pricingTier: tier }) });
+  await db.exec("update founding_membership_settings set phase='waitlist' where environment='sandbox'");
+  assert.equal((await post('waitlist')).status, 403);
+  await db.exec("update founding_membership_settings set phase='public' where environment='sandbox'");
+  assert.equal((await post('public')).status, 200);
+  const saved = (await db.query('select * from founding_memberships')).rows[0];
+  assert.equal(saved.user_id, ids.user);
+  assert.equal(saved.household_id, ids.household);
+  assert.equal(saved.profile_snapshot.email, contact.email);
+  assert.equal(saved.pricing_tier, 'public');
+  assert.equal(saved.start_date, null);
 });
 
 test('actual check-in enforces a current waiver before applying the reserved founding visit and increments occupancy once', async t => {

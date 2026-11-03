@@ -11,6 +11,10 @@ export default function AuthLinkPage() {
 function AuthLinkContent() {
   const searchParams = useSearchParams();
   const hasAuthToken = searchParams.has('code') || searchParams.has('token_hash');
+  const continuingMembership = searchParams.get('mode') === 'continue';
+  const loginParams = new URLSearchParams({ next: searchParams.get('next') || '/landing' });
+  if (continuingMembership) loginParams.set('mode', 'continue');
+  const loginHref = `/login?${loginParams}`;
   const [opening, setOpening] = useState(false);
 
   useEffect(() => {
@@ -41,7 +45,7 @@ function AuthLinkContent() {
     if (opening) return;
     setOpening(true);
     const params = searchParams.toString();
-    window.location.assign(params ? `/auth/callback?${params}` : '/login?error=missing-code');
+    window.location.assign(params ? `/auth/callback?${params}` : `${loginHref}&error=missing-code`);
   }
 
   return (
@@ -50,7 +54,7 @@ function AuthLinkContent() {
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
         <h1 style={{ margin: '10px 0 8px', color: '#4f3f82', fontSize: 26 }}>Almost there</h1>
         <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>
-          Tap once to open My Little Wanderers.
+          {continuingMembership ? 'Tap once to continue your membership.' : 'Tap once to open My Little Wanderers.'}
         </p>
         {hasAuthToken ? (
           <button
@@ -59,11 +63,11 @@ function AuthLinkContent() {
             disabled={opening}
             style={{ display: 'inline-flex', justifyContent: 'center', width: '100%', boxSizing: 'border-box', marginTop: 12, padding: '12px 16px', borderRadius: 12, background: opening ? '#b8acd1' : '#5f3da4', color: '#fff', fontWeight: 800, textDecoration: 'none', border: 'none' }}
           >
-            {opening ? 'Opening...' : 'Join/Login to My Little Wanderers'}
+            {opening ? 'Opening...' : continuingMembership ? 'Continue to membership' : 'Join/Login to My Little Wanderers'}
           </button>
         ) : (
           <a
-            href="/login"
+            href={loginHref}
             style={{ display: 'inline-flex', justifyContent: 'center', width: '100%', boxSizing: 'border-box', marginTop: 12, padding: '12px 16px', borderRadius: 12, background: '#5f3da4', color: '#fff', fontWeight: 800, textDecoration: 'none' }}
           >
             Request a fresh login link

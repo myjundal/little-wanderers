@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { safeAuthNextPath } from '@/lib/auth-redirect';
 
 type AuthMethod = 'phone' | 'email';
-type JourneyMode = 'new' | 'existing';
+type JourneyMode = 'new' | 'existing' | 'continue';
 type Step = 'collect' | 'verify' | 'emailLinkSent';
 
 const OTP_LENGTH = 4;
@@ -46,16 +47,16 @@ function formatAuthError(message: string, method: AuthMethod) {
 }
 
 function getSafeNextPath() {
-  const next = sessionStorage.getItem('post_login_redirect') || '/landing';
-  if (!next.startsWith('/') || next.startsWith('//')) return '/landing';
-  return next;
+  return safeAuthNextPath(sessionStorage.getItem('post_login_redirect'), window.location.origin);
 }
 
 function getEmailRedirectTo(mode: JourneyMode) {
   const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
   const configuredIsLocal = configuredSiteUrl?.includes('localhost') || configuredSiteUrl?.includes('127.0.0.1');
   const currentIsLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const origin = configuredSiteUrl && !configuredIsLocal
+  const origin = mode === 'continue' && !currentIsLocal
+    ? window.location.origin
+    : configuredSiteUrl && !configuredIsLocal
     ? configuredSiteUrl
     : currentIsLocal
       ? PRODUCTION_SITE_URL
@@ -93,6 +94,7 @@ function rememberEmailLinkSent(email: string, mode: JourneyMode) {
 }
 
 export default function LoginPage() {
+  const [ready, setReady] = useState(false);
   const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
   const [journeyMode, setJourneyMode] = useState<JourneyMode>('new');
   const [phoneInput, setPhoneInput] = useState('');
@@ -130,7 +132,10 @@ export default function LoginPage() {
       setAuthMethod('email');
     } else if (mode === 'existing') {
       setJourneyMode('existing');
+    } else if (mode === 'continue') {
+      setJourneyMode('continue');
     }
+    setReady(true);
 
     const redirectIfSignedIn = async () => {
       const supabase = createBrowserSupabaseClient();
@@ -184,7 +189,7 @@ export default function LoginPage() {
     clearFeedback();
 
     const supabase = createBrowserSupabaseClient();
-    const shouldCreateUser = journeyMode === 'new';
+    const shouldCreateUser = journeyMode !== 'existing';
 
     if (authMethod === 'email') {
       const remaining = getRecentEmailLinkRemaining(normalizedEmail, journeyMode);
@@ -197,7 +202,7 @@ export default function LoginPage() {
       }
     }
 
-    if (shouldCreateUser && authMethod === 'phone') {
+    if (journeyMode === 'new' && authMethod === 'phone') {
       setShowWaitlistInvite(true);
       setError('Please create your account with email. Existing accounts can also sign in with a verified phone number.');
       return;
@@ -206,7 +211,7 @@ export default function LoginPage() {
     requestInFlightRef.current = true;
     setPending(true);
 
-    if (shouldCreateUser && authMethod === 'email') {
+    if (journeyMode === 'new' && authMethod === 'email') {
       try {
         const checkRes = await fetch('/api/waitlist/check', {
           method: 'POST',
@@ -281,7 +286,7 @@ export default function LoginPage() {
       sessionStorage.setItem('post_login_journey', journeyMode);
       setMessage(
         reason === 'send'
-          ? 'Please head to your email for the login link. After sign-up, add your phone number in My Info/People so you can use phone login next time.'
+          ? journeyMode === 'continue' ? 'Open the login link in your email to continue your membership.' : 'Please head to your email for the login link. After sign-up, add your phone number in My Info/People so you can use phone login next time.'
           : 'We sent a fresh login link. Please head to your email and open the newest link.'
       );
       setStep('emailLinkSent');
@@ -329,8 +334,13 @@ export default function LoginPage() {
       return;
     }
 
-    const next = sessionStorage.getItem('post_login_redirect') || '/landing';
+    const next = getSafeNextPath();
     sessionStorage.removeItem('post_login_redirect');
+
+    if (journeyMode === 'continue') {
+      window.location.replace(`/auth/finish?next=${encodeURIComponent(next)}`);
+      return;
+    }
 
     if (journeyMode === 'new') {
       await fetch('/api/waitlist/claim', { method: 'POST' }).catch(() => null);
@@ -374,27 +384,29 @@ export default function LoginPage() {
     clearFeedback();
   };
 
+  if (!ready) return <main style={{ padding: 16, maxWidth: 480, margin: '0 auto' }}><p role="status">Preparing sign-in…</p></main>;
+
   return (
     <main style={{ padding: 16, maxWidth: 480, margin: '0 auto' }}>
       <section style={{ borderRadius: 24, border: '1px solid #e3d0fb', background: '#fff', boxShadow: '0 16px 28px rgba(120,87,177,0.12)', padding: 20 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
         <h1 style={{ margin: '10px 0 8px', color: '#4f3f82', fontSize: 26 }}>Sign in</h1>
-        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>Create or continue your Little Wanderers account with email.</p>
+        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>{journeyMode === 'continue' ? 'Verify your email or phone to continue your membership. If you have been here before, use the same email or verified phone number.' : 'Create or continue your Little Wanderers account with email.'}</p>
 
-        <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
+        {journeyMode !== 'continue' && <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
           <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access now starts here.</p>
           <p style={{ margin: '6px 0 0', color: '#6d6480', lineHeight: 1.45 }}>
             Choose <strong style={{ color: '#4f3f82' }}>I am new</strong>, then <strong style={{ color: '#4f3f82' }}>Continue with email</strong>. We will send your magic link. Signups through October 28, 2026 join the Wanderlist; new signups from October 29 are regular accounts.
           </p>
-        </div>
+        </div>}
 
-        <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+        {journeyMode !== 'continue' && <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
           <label style={{ color: '#4f3f82', fontWeight: 600 }}>Account status</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <button type="button" onClick={() => setJourneyMode('existing')} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'existing' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I already have an account</button>
             <button type="button" onClick={() => { setJourneyMode('new'); setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: journeyMode === 'new' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 600 }}>I am new</button>
           </div>
-        </div>
+        </div>}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 14 }}>
           <button type="button" onClick={() => { setAuthMethod('phone'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'phone' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with phone</button>
@@ -446,7 +458,7 @@ export default function LoginPage() {
               <p style={{ margin: 0, color: '#2f7a47', fontWeight: 800 }}>Check your email</p>
               <p style={{ margin: '6px 0 0', color: '#4f3f82', lineHeight: 1.5 }}>
                 Please head to your email for the login link we sent to <strong>{pendingEmail}</strong>.
-                After sign-up, add your phone number in My Info/People so you can use phone login next time.
+                {journeyMode === 'continue' ? ' Open it to return directly to your membership.' : ' After sign-up, add your phone number in My Info/People so you can use phone login next time.'}
               </p>
               <p style={{ margin: '8px 0 0', color: '#6b4d12', lineHeight: 1.5, fontWeight: 700 }}>
                 If you requested more than one email, only the newest Little Wanderers link will work.

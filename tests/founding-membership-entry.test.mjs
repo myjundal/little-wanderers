@@ -7,7 +7,7 @@ import { loadModule } from './helpers/class-preregistration-harness.mjs';
 const birthdate = loadModule('src/lib/birthdate.ts');
 const membership = loadModule('src/lib/founding-membership.ts', { '@/lib/birthdate': birthdate });
 const waitlistOffer = { phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 };
-async function entry(audience, { signedIn = false, offer = waitlistOffer, enrollment = null } = {}) {
+async function entry(audience, { signedIn = false, offer = waitlistOffer, enrollment = null, phoneOnly = false } = {}) {
   const hooks = []; let cursor = 0; const effects = [];
   const react = { ...React,
     useState(initial) { const i = cursor++; if (!(i in hooks)) hooks[i] = initial; return [hooks[i], value => { hooks[i] = typeof value === 'function' ? value(hooks[i]) : value; }]; },
@@ -20,7 +20,8 @@ async function entry(audience, { signedIn = false, offer = waitlistOffer, enroll
     './founding.module.css': {},
   }, { React: react, crypto: { randomUUID: () => 'new-child-id' }, fetch: async () => Response.json({
     offer, enrollment, config: null,
-    household: { email: 'existing@example.test', phone: '+18605550123', city: 'West Hartford', state: 'CT' },
+    account: { email: phoneOnly ? null : 'existing@example.test', phone: '+18605550123' },
+    household: { email: phoneOnly ? '' : 'existing@example.test', phone: '+18605550123', city: 'West Hartford', state: 'CT' },
     people: [{ id: 'saved-adult', role: 'adult', first_name: 'Parent', last_name: 'Family', gender: 'female' },
       { id: 'saved-child', role: 'child', first_name: 'Sam', last_name: 'Family', gender: 'male', birthdate: '2023-01-01' }],
   }, { status: signedIn ? 200 : 401 }) }).default;
@@ -45,17 +46,27 @@ test('each unlisted entry route selects its own audience and forbids indexing', 
   }
 });
 
-test('guest pages advertise separate prices and return both sign-in and signup to the exact entry URL', async () => {
+test('guest pages advertise separate prices and use a single authentication continuation to the exact entry URL', async () => {
   for (const [audience, sibling] of [['waitlist', 10], ['public', 20]]) {
     const view = await entry(audience);
     assert.match(view.html, new RegExp(`\\+\\$${sibling}/mo`));
     assert.match(view.html, /Pay \$0 today/);
-    for (const mode of ['existing', 'new']) {
-      const expected = `/login?mode=${mode}&next=${encodeURIComponent(`/founding-membership/${audience}`)}`;
-      assert.ok(view.nodes.some(node => node.props.href === expected));
-    }
+    const expected = `/login?mode=continue&next=${encodeURIComponent(`/founding-membership/${audience}`)}`;
+    assert.equal(view.nodes.filter(node => node.props.href?.startsWith('/login')).length, 1);
+    assert.ok(view.nodes.some(node => node.props.href === expected));
+    assert.doesNotMatch(view.html, /Create a family account|Sign in to my account/);
     assert.equal(view.nodes.some(node => node.type === 'form'), false);
   }
+});
+
+test('phone-only sessions can enter the required contact email and show their authenticated phone', async () => {
+  const view = await entry('public', { signedIn: true, phoneOnly: true });
+  const email = view.nodes.find(node => node.props.id === 'founding-email');
+  assert.equal(email.props.readOnly, false);
+  assert.equal(email.props.required, true);
+  assert.equal(email.props.value, '');
+  assert.match(view.html, /Contact email/);
+  assert.match(view.html, /Signed in as <strong>\+18605550123/);
 });
 
 test('signed-in families keep saved profile and child identities; account eligibility overrides either entry URL', async () => {

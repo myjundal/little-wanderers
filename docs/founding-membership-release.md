@@ -11,10 +11,18 @@ pages show regular pricing. `/founding-membership` remains the shared management
 URL and supports existing links.
 
 Existing accounts reuse their authenticated user, household, and child IDs;
-saved contact and child details are prefilled for confirmation. New users must
-create and verify an account using the existing email authentication flow.
-Both login modes return to the exact entry URL before family details and card
-authorization are completed. The membership API rejects unauthenticated saves.
+saved contact and child details are prefilled for confirmation. One
+`/login?mode=continue&next=...` entry handles both returning and first-time users:
+email magic link or SMS verification signs into an existing identity or
+automatically provisions a new one, with no account-status/signup selection.
+Both methods return to the exact entry URL before family details and card
+authorization are completed. Existing families must use their existing email
+or a phone already verified on that auth identity. An unverified profile/contact
+phone does not grant access to someone else's account. Phone-only users enter a
+required contact email in the membership form; this does not change their auth
+identity or grant Wanderlist eligibility. The membership API rejects
+unauthenticated saves. Email callbacks stay on the entry site's origin, and
+failed/expired links retain the membership destination for the next attempt.
 
 ## Prices and release order
 
@@ -110,7 +118,7 @@ child list or Square price schedule.
   database is in-memory. It creates a sandbox customer/card but no payment or
   subscription. It refuses production credentials/environments.
 - Check desktop and mobile `/founding-membership/waitlist` and
-  `/founding-membership/public`, both account entry links,
+  `/founding-membership/public`, email and phone continuation,
   required real birthdays/contact fields, authorization, saved-card confirmation,
   cancellation, and owner-only billing controls. The mobile page has no horizontal
   overflow at 390px.

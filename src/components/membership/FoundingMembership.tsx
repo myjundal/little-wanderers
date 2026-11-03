@@ -25,10 +25,11 @@ function GenderSelect({ id, value, onChange }: { id: string; value: Gender; onCh
 
 export default function FoundingMembership({ audience }: { audience?: 'waitlist' | 'public' } = {}) {
   const entryPath = audience ? `/founding-membership/${audience}` : '/founding-membership';
-  const signInHref = `/login?mode=existing&next=${encodeURIComponent(entryPath)}`;
-  const signUpHref = `/login?mode=new&next=${encodeURIComponent(entryPath)}`;
+  const signInHref = `/login?mode=continue&next=${encodeURIComponent(entryPath)}`;
   const [auth, setAuth] = useState<'loading' | 'guest' | 'signedIn' | 'error'>('loading');
   const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [emailLocked, setEmailLocked] = useState(true);
+  const [signedInAs, setSignedInAs] = useState('');
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [offer, setOffer] = useState<MembershipOffer>({ phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 });
   const [config, setConfig] = useState<Config | null>(null);
@@ -55,6 +56,8 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
       const adult = (data.people as Person[]).find(person => person.role === 'adult');
       const children = (data.people as Person[]).filter(person => person.role === 'child').map((person): Child => ({ id: person.id, firstName: person.first_name || '', lastName: person.last_name || '', gender: person.gender || '', birthdate: formatBirthdateInput(person.birthdate || ''), existing: true }));
       setProfile({ adultFirstName: adult?.first_name || '', adultLastName: adult?.last_name || '', adultGender: adult?.gender || '', email: data.household.email || '', phone: data.household.phone || '', city: data.household.city || '', state: data.household.state || 'CT', children: children.length ? children : [blankChild()] });
+      setEmailLocked(Boolean(data.account?.email));
+      setSignedInAs(data.account?.email || data.account?.phone || '');
       setEnrollment(data.enrollment); setConfig(data.config); setAuth('signedIn');
     }).catch(() => { if (active) { setAuth('error'); setError('We could not load your family account. Please refresh to try again.'); } });
     return () => { active = false; };
@@ -149,13 +152,13 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
       <article><span aria-hidden="true">↗</span><h2>A little head start</h2><p>Priority registration for select classes and special events.</p></article>
     </section>
 
-    <section className={styles.timing}><div><span className={styles.eyebrow}>Here’s how it works</span><h2>Join now. Your first payment can wait.</h2></div><ol><li><strong>Set up your family.</strong> Sign in or create an account, then confirm your contact and child information.</li><li><strong>Save your card with Square.</strong> There is no membership charge today.</li><li><strong>Start with us.</strong> Monthly billing begins on our announced soft opening date. The date is still to be determined.</li></ol></section>
+    <section className={styles.timing}><div><span className={styles.eyebrow}>Here’s how it works</span><h2>Join now. Your first payment can wait.</h2></div><ol><li><strong>Confirm your family.</strong> Verify your email or phone, then confirm your contact and child information.</li><li><strong>Save your card with Square.</strong> There is no membership charge today.</li><li><strong>Start with us.</strong> Monthly billing begins on our announced soft opening date. The date is still to be determined.</li></ol></section>
 
     <section id="join" className={styles.join}>
       <div className={styles.joinIntro}><span className={styles.eyebrow}>Let’s get your family ready</span><h2>Your place in<br />{' '}<em>the beginning.</em></h2><p>{founding ? `Your ${money(price.base_cents)} first-child and ${money(price.sibling_cents)} sibling rates are locked in for the lifetime of your active membership.` : 'Regular membership is $60/month for the first child and $20/month per eligible sibling.'} Cancel anytime, with no commitment. If you cancel and rejoin, regular $60 + $20 pricing applies.</p><p>When a baby sibling turns 6 months, {money(price.sibling_cents)} sibling pricing begins with the following billing cycle.</p><p className={styles.small}>Questions? <a href="/contact">We’re here to help.</a></p></div>
       <div className={styles.formCard}>
         {auth === 'loading' && <p role="status">Loading your family account…</p>}
-        {auth === 'guest' && <div className={styles.guest}><h3>{!founding ? 'Welcome to Little Wanderers.' : audience === 'public' ? 'Welcome, founding family.' : offer.phase === 'waitlist' ? 'Wanderlist families go first.' : 'Welcome, founding family.'}</h3><p>Use your existing Little Wanderers account, or create one to get started. We confirm your offer from your account; Wanderlist pricing is reserved for original Wanderlist families. We’ll ask for your children’s details before you save your card.</p>{audience === 'public' && offer.phase === 'waitlist' && <p>Public founding registration opens after Wanderlist families have had first access.</p>}<Link className={styles.primary} href={signInHref}>Sign in to my account</Link><Link className={styles.secondary} href={signUpHref}>Create a family account</Link><p className={styles.small}>No payment today. Opening date to be announced.</p></div>}
+        {auth === 'guest' && <div className={styles.guest}><h3>{!founding ? 'Welcome to Little Wanderers.' : audience === 'public' ? 'Welcome, founding family.' : offer.phase === 'waitlist' ? 'Wanderlist families go first.' : 'Welcome, founding family.'}</h3><p>Verify your email or phone to continue. If you’ve visited before, use the same email or verified phone number to bring back your saved family details. No separate signup is needed.</p><p>For original Wanderlist pricing, use your Wanderlist email or a verified phone already linked to that account. We’ll confirm your children’s details before you save your card.</p>{audience === 'public' && offer.phase === 'waitlist' && <p>Public founding registration opens after Wanderlist families have had first access.</p>}<Link className={styles.primary} href={signInHref}>Continue with email or phone</Link><p className={styles.small}>No payment today. Opening date to be announced.</p></div>}
         {auth === 'signedIn' && locked && <div id="founding-status" tabIndex={-1} className={styles.status}>
           <span className={styles.eyebrow}>{enrollment.status === 'canceled' ? 'Membership canceled' : price.label}</span>
           <h3>{enrollment.status === 'canceled' ? 'Your cancellation is confirmed.' : enrollment.status === 'pending' ? 'You’re in. We can’t wait to meet you.' : 'Your founding membership'}</h3>
@@ -166,13 +169,14 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
           {enrollment.status !== 'canceled' && <>{!cancelConfirm ? <button type="button" className={styles.textButton} onClick={() => setCancelConfirm(true)}>Cancel my membership</button> : <div className={styles.cancelBox}><p>Cancel anytime. Canceling ends your founding rates. Rejoining is $60/month + $20/month per eligible sibling. Future renewals stop.</p><button type="button" className={styles.secondary} disabled={busy} onClick={cancel}>{busy ? 'Canceling…' : 'Confirm cancellation'}</button><button className={styles.textButton} type="button" disabled={busy} onClick={() => setCancelConfirm(false)}>Keep my membership</button></div>}</>}
         </div>}
         {auth === 'signedIn' && !locked && <form onSubmit={submit}>
-          <h3>Confirm your family details</h3><p className={styles.small}>All fields are required unless marked optional. Your existing family details are filled in below. This membership will be saved to the account shown below.</p>
+          <h3>Confirm your family details</h3><p className={styles.small}>All fields are required unless marked optional. Your existing family details are filled in below. This membership will be saved to your signed-in family account.</p>
+          {signedInAs && <p className={styles.small}>Signed in as <strong>{signedInAs}</strong></p>}
           {audience && audience !== tier && offer.can_enroll && <p className={styles.notice}>{tier === 'waitlist' ? 'Your account qualifies for original Wanderlist pricing: $50/month + $10/month per eligible sibling.' : tier === 'regular' ? 'Your account is eligible for regular membership: $60/month + $20/month per eligible sibling.' : 'Your account qualifies for public founding pricing: $50/month + $20/month per eligible sibling. The $10 sibling rate is reserved for original Wanderlist families.'}</p>}
           <fieldset disabled={busy}><legend>Parent or caregiver</legend><div className={styles.grid}>
             <label htmlFor="founding-first">First name<input id="founding-first" autoComplete="given-name" maxLength={80} required value={profile.adultFirstName} onChange={e => patch('adultFirstName', e.target.value)} /></label>
             <label htmlFor="founding-last">Last name<input id="founding-last" autoComplete="family-name" maxLength={80} required value={profile.adultLastName} onChange={e => patch('adultLastName', e.target.value)} /></label>
             <label htmlFor="founding-gender">Gender<GenderSelect id="founding-gender" value={profile.adultGender} onChange={value => patch('adultGender', value)} /></label>
-            <label htmlFor="founding-email">Account email<input id="founding-email" type="email" autoComplete="email" required value={profile.email} readOnly /></label>
+            <label htmlFor="founding-email">{emailLocked ? 'Account email' : 'Contact email'}<input id="founding-email" type="email" autoComplete="email" required value={profile.email} readOnly={emailLocked} onChange={e => patch('email', e.target.value)} /></label>
             <label htmlFor="founding-phone">US phone number<input id="founding-phone" type="tel" autoComplete="tel" placeholder="(860) 555-0123" required value={profile.phone} onChange={e => patch('phone', e.target.value)} /></label>
             <label htmlFor="founding-city">City or town<input id="founding-city" autoComplete="address-level2" required maxLength={100} value={profile.city} onChange={e => patch('city', e.target.value)} /></label>
             <label htmlFor="founding-state">State (two letters)<input id="founding-state" autoComplete="address-level1" required pattern="[A-Z]{2}" maxLength={2} value={profile.state} onChange={e => patch('state', e.target.value.toUpperCase())} /></label>

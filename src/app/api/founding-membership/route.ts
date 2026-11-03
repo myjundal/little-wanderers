@@ -68,7 +68,8 @@ export async function GET() {
       const cardConfig = foundingCardConfig();
       if (offer.can_enroll) config = { applicationId: cardConfig.applicationId, locationId: cardConfig.locationId, environment: cardConfig.environment };
     } catch { /* The page stays readable while card registration is disabled. */ }
-    return NextResponse.json({ ok: true, household: { ...household.data, email: user.email || household.data.email }, people: people.data, enrollment: publicEnrollment(membership.data), offer, config }, { headers });
+    const phone = user.phone ? `+${user.phone.replace(/\D/g, '')}` : household.data.phone;
+    return NextResponse.json({ ok: true, account: { email: user.email || null, phone: user.phone ? phone : null }, household: { ...household.data, email: user.email || household.data.email, phone }, people: people.data, enrollment: publicEnrollment(membership.data), offer, config }, { headers });
   } catch {
     return NextResponse.json({ ok: false, error: 'Unable to load your membership. Please refresh and try again.' }, { status: 503, headers });
   }
