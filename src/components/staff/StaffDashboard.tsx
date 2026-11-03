@@ -67,6 +67,7 @@ type PartyBookingItem = {
   id: string;
   household_id: string;
   household_name: string;
+  household_email: string | null;
   start_time: string;
   end_time: string;
   room: string | null;
@@ -759,6 +760,115 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
     return <div style={{ marginTop: 24 }}>Loading operator dashboard…</div>;
   }
 
+  const selectedPartyDetails = selectedBooking ? (
+    <div id={`party-details-${selectedBooking.id}`} role="region" aria-label="Selected party details" style={{ marginTop: 12, borderRadius: 20, border: '1px solid #eadfff', background: '#fff', padding: 18 }}>
+      <h3 style={{ marginTop: 0, color: '#4f3f82' }}>{selectedBooking.household_name}</h3>
+      <p style={{ color: '#6d6480', overflowWrap: 'anywhere' }}><strong>Parent email:</strong> {selectedBooking.household_email ? <a href={`mailto:${selectedBooking.household_email}`}>{selectedBooking.household_email}</a> : 'Not provided'}</p>
+      <p style={{ color: '#6d6480' }}><strong>When:</strong> {new Date(selectedBooking.start_time).toLocaleString()} → {new Date(selectedBooking.end_time).toLocaleString()}</p>
+      <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{partyStatusLabel(selectedBooking, partyNow)}</span></p>
+      {hasCancellationRequest(selectedBooking) && (
+        <p style={{ color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested by family</p>
+      )}
+      <p style={{ color: '#6d6480' }}><strong>Headcount (requested):</strong> {selectedBooking.headcount_expected ?? '-'}</p>
+      <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
+      {celebrationLines(selectedBooking).map((line) => (
+        <p key={`detail-${line}`} style={{ color: '#6d6480' }}><strong>{line.split(':')[0]}:</strong> {line.split(':').slice(1).join(':').trim()}</p>
+      ))}
+      <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {prettyNote(selectedBooking.notes)}</p>
+      <PartyGuestWaivers key={selectedBooking.id} partyId={selectedBooking.id} />
+      <div style={{ marginTop: 10, border: '1px solid #eadfff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
+        <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Party attendance tracker</p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#7a6d97' }}>Children</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'decrement_child')}>-</button>
+              <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'increment_child')}>+</button>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: '#7a6d97' }}>Adults</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_adult_count}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'decrement_adult')}>-</button>
+              <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'increment_adult')}>+</button>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: '#7a6d97' }}>Current total</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count + selectedBooking.current_adult_count}</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
+          <label style={{ fontSize: 12, color: '#6d6480' }}>
+            Child
+            <input
+              type="number"
+              min={0}
+              value={partyCountDrafts[selectedBooking.id]?.child ?? String(selectedBooking.current_child_count)}
+              onChange={(e) => updatePartyDraft(selectedBooking.id, { child: e.target.value })}
+              disabled={Boolean(selectedBooking.attendance_finalized_at)}
+              style={{ ...inputStyle, marginTop: 4 }}
+            />
+          </label>
+          <label style={{ fontSize: 12, color: '#6d6480' }}>
+            Adult
+            <input
+              type="number"
+              min={0}
+              value={partyCountDrafts[selectedBooking.id]?.adult ?? String(selectedBooking.current_adult_count)}
+              onChange={(e) => updatePartyDraft(selectedBooking.id, { adult: e.target.value })}
+              disabled={Boolean(selectedBooking.attendance_finalized_at)}
+              style={{ ...inputStyle, marginTop: 4 }}
+            />
+          </label>
+          <label style={{ fontSize: 12, color: '#6d6480' }}>
+            Total
+            <input
+              type="number"
+              min={0}
+              value={partyCountDrafts[selectedBooking.id]?.total ?? String(selectedBooking.current_child_count + selectedBooking.current_adult_count)}
+              onChange={(e) => updatePartyDraft(selectedBooking.id, { total: e.target.value })}
+              disabled={Boolean(selectedBooking.attendance_finalized_at)}
+              style={{ ...inputStyle, marginTop: 4 }}
+            />
+          </label>
+        </div>
+        {!selectedBooking.attendance_finalized_at && (
+          <button style={{ ...buttonStyle, marginTop: 8, background: '#f3ebff', color: '#5f3da4', width: '100%' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'set_counts')}>
+            Update counts
+          </button>
+        )}
+        <textarea rows={2} placeholder="Optional final attendance notes" value={partyAttendanceNotes[selectedBooking.id] ?? selectedBooking.attendance_notes ?? ''} onChange={(e) => setPartyAttendanceNotes((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 10 }} />
+        {selectedBooking.attendance_finalized_at ? (
+          <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: '#ebf8ef', border: '1px solid #cae9d2' }}>
+            <p style={{ margin: '0 0 6px', color: '#2f7a47', fontWeight: 700 }}>Attendance finalized at {new Date(selectedBooking.attendance_finalized_at).toLocaleString()}</p>
+            <p style={{ margin: '2px 0' }}>Final children: {selectedBooking.final_child_count ?? 0}</p>
+            <p style={{ margin: '2px 0' }}>Final adults: {selectedBooking.final_adult_count ?? 0}</p>
+            <p style={{ margin: '2px 0', fontWeight: 700 }}>Final total: {selectedBooking.final_total_count ?? 0}</p>
+            <button style={{ ...buttonStyle, marginTop: 8, background: '#fff', color: '#2f7a47', border: '1px solid #8fcea0' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'reopen')}>Reopen attendance (explicit edit)</button>
+          </div>
+        ) : (
+          <button style={{ ...buttonStyle, marginTop: 10, background: '#2f7a47', color: '#fff', width: '100%' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'finalize')}>Finalize attendance</button>
+        )}
+      </div>
+      <p style={{ color: '#6d6480' }}>
+        <strong>{selectedBooking.status === 'cancelled' ? 'Cancelled on:' : 'Last status change:'}</strong>{' '}
+        {selectedBooking.status_updated_at ? new Date(selectedBooking.status_updated_at).toLocaleString() : '-'}
+      </p>
+      <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+        {selectedBooking.status === 'pending' && (
+          <button style={{ ...buttonStyle, background: '#2f7a47', color: '#fff', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'confirmed')}>Confirm booking</button>
+        )}
+        {selectedBooking.status !== 'cancelled' && !isCompletedParty(selectedBooking, partyNow) && (
+          <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       {message && (
@@ -1209,8 +1319,11 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                 tone={group.tone}
               >
             {group.items.map((item) => (
+              <div key={item.id}>
               <button
-                key={item.id}
+                type="button"
+                aria-expanded={selectedBooking?.id === item.id}
+                aria-controls={`party-details-${item.id}`}
                 onClick={() => setSelectedBookingId(item.id)}
                 style={{
                   textAlign: 'left',
@@ -1233,122 +1346,14 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                   <div key={`${item.id}-${line}`} style={{ marginTop: 6, color: '#6d6480' }}>{line}</div>
                 ))}
               </button>
+              {selectedBooking?.id === item.id && selectedPartyDetails}
+              </div>
             ))}
               </StaffRecordGroup>
             ))}
           </div>
 
-          <div style={{ borderRadius: 20, border: '1px solid #eadfff', background: '#fff', padding: 18 }}>
-            {!selectedBooking ? (
-              <p>No party requests yet.</p>
-            ) : (
-              <>
-                <h3 style={{ marginTop: 0, color: '#4f3f82' }}>{selectedBooking.household_name}</h3>
-                <p style={{ color: '#6d6480' }}><strong>When:</strong> {new Date(selectedBooking.start_time).toLocaleString()} → {new Date(selectedBooking.end_time).toLocaleString()}</p>
-                <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{partyStatusLabel(selectedBooking, partyNow)}</span></p>
-                {hasCancellationRequest(selectedBooking) && (
-                  <p style={{ color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested by family</p>
-                )}
-                <p style={{ color: '#6d6480' }}><strong>Headcount (requested):</strong> {selectedBooking.headcount_expected ?? '-'}</p>
-                <p style={{ color: '#6d6480' }}><strong>Quoted price:</strong> {dollars(selectedBooking.price_quote_cents)}</p>
-                {celebrationLines(selectedBooking).map((line) => (
-                  <p key={`detail-${line}`} style={{ color: '#6d6480' }}><strong>{line.split(':')[0]}:</strong> {line.split(':').slice(1).join(':').trim()}</p>
-                ))}
-                <p style={{ color: '#6d6480' }}><strong>Notes:</strong> {prettyNote(selectedBooking.notes)}</p>
-                <PartyGuestWaivers partyId={selectedBooking.id} />
-                <div style={{ marginTop: 10, border: '1px solid #eadfff', borderRadius: 12, padding: 10, background: '#fcf9ff' }}>
-                  <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 700 }}>Party attendance tracker</p>
-                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: '#7a6d97' }}>Children</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count}</div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'decrement_child')}>-</button>
-                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'increment_child')}>+</button>
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: '#7a6d97' }}>Adults</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_adult_count}</div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'decrement_adult')}>-</button>
-                        <button style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4' }} disabled={Boolean(selectedBooking.attendance_finalized_at)} onClick={() => updatePartyAttendance(selectedBooking.id, 'increment_adult')}>+</button>
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: '#7a6d97' }}>Current total</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: '#4f3f82' }}>{selectedBooking.current_child_count + selectedBooking.current_adult_count}</div>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
-                    <label style={{ fontSize: 12, color: '#6d6480' }}>
-                      Child
-                      <input
-                        type="number"
-                        min={0}
-                        value={partyCountDrafts[selectedBooking.id]?.child ?? String(selectedBooking.current_child_count)}
-                        onChange={(e) => updatePartyDraft(selectedBooking.id, { child: e.target.value })}
-                        disabled={Boolean(selectedBooking.attendance_finalized_at)}
-                        style={{ ...inputStyle, marginTop: 4 }}
-                      />
-                    </label>
-                    <label style={{ fontSize: 12, color: '#6d6480' }}>
-                      Adult
-                      <input
-                        type="number"
-                        min={0}
-                        value={partyCountDrafts[selectedBooking.id]?.adult ?? String(selectedBooking.current_adult_count)}
-                        onChange={(e) => updatePartyDraft(selectedBooking.id, { adult: e.target.value })}
-                        disabled={Boolean(selectedBooking.attendance_finalized_at)}
-                        style={{ ...inputStyle, marginTop: 4 }}
-                      />
-                    </label>
-                    <label style={{ fontSize: 12, color: '#6d6480' }}>
-                      Total
-                      <input
-                        type="number"
-                        min={0}
-                        value={partyCountDrafts[selectedBooking.id]?.total ?? String(selectedBooking.current_child_count + selectedBooking.current_adult_count)}
-                        onChange={(e) => updatePartyDraft(selectedBooking.id, { total: e.target.value })}
-                        disabled={Boolean(selectedBooking.attendance_finalized_at)}
-                        style={{ ...inputStyle, marginTop: 4 }}
-                      />
-                    </label>
-                  </div>
-                  {!selectedBooking.attendance_finalized_at && (
-                    <button style={{ ...buttonStyle, marginTop: 8, background: '#f3ebff', color: '#5f3da4', width: '100%' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'set_counts')}>
-                      Update counts
-                    </button>
-                  )}
-                  <textarea rows={2} placeholder="Optional final attendance notes" value={partyAttendanceNotes[selectedBooking.id] ?? selectedBooking.attendance_notes ?? ''} onChange={(e) => setPartyAttendanceNotes((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 10 }} />
-                  {selectedBooking.attendance_finalized_at ? (
-                    <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: '#ebf8ef', border: '1px solid #cae9d2' }}>
-                      <p style={{ margin: '0 0 6px', color: '#2f7a47', fontWeight: 700 }}>Attendance finalized at {new Date(selectedBooking.attendance_finalized_at).toLocaleString()}</p>
-                      <p style={{ margin: '2px 0' }}>Final children: {selectedBooking.final_child_count ?? 0}</p>
-                      <p style={{ margin: '2px 0' }}>Final adults: {selectedBooking.final_adult_count ?? 0}</p>
-                      <p style={{ margin: '2px 0', fontWeight: 700 }}>Final total: {selectedBooking.final_total_count ?? 0}</p>
-                      <button style={{ ...buttonStyle, marginTop: 8, background: '#fff', color: '#2f7a47', border: '1px solid #8fcea0' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'reopen')}>Reopen attendance (explicit edit)</button>
-                    </div>
-                  ) : (
-                    <button style={{ ...buttonStyle, marginTop: 10, background: '#2f7a47', color: '#fff', width: '100%' }} onClick={() => updatePartyAttendance(selectedBooking.id, 'finalize')}>Finalize attendance</button>
-                  )}
-                </div>
-                <p style={{ color: '#6d6480' }}>
-                  <strong>{selectedBooking.status === 'cancelled' ? 'Cancelled on:' : 'Last status change:'}</strong>{' '}
-                  {selectedBooking.status_updated_at ? new Date(selectedBooking.status_updated_at).toLocaleString() : '-'}
-                </p>
-                <textarea rows={3} placeholder="Optional staff note for this status change" value={statusNote[selectedBooking.id] ?? ''} onChange={(e) => setStatusNote((prev) => ({ ...prev, [selectedBooking.id]: e.target.value }))} style={{ ...inputStyle, marginTop: 12 }} />
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
-                  {selectedBooking.status === 'pending' && (
-                    <button style={{ ...buttonStyle, background: '#2f7a47', color: '#fff', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'confirmed')}>Confirm booking</button>
-                  )}
-                  {selectedBooking.status !== 'cancelled' && !isCompletedParty(selectedBooking, partyNow) && (
-                    <button style={{ ...buttonStyle, background: '#fff0fb', color: '#8a3f6b', flex: '1 1 180px' }} onClick={() => updatePartyStatus(selectedBooking.id, 'cancelled')}>Cancel booking</button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+
         </div>
       </section>
       )}

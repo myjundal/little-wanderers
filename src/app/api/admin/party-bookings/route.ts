@@ -53,16 +53,18 @@ export async function GET(req: Request) {
     }
 
     const householdIds = [...new Set(data.map((item) => item.household_id))];
-    let householdNames = new Map<string, string>();
+    let householdContacts = new Map<string, { name: string; email: string | null }>();
 
     if (householdIds.length > 0) {
-      const { data: households } = await context.admin.from('households').select('id,name').in('id', householdIds);
-      householdNames = new Map((households ?? []).map((item) => [item.id, item.name ?? 'Household']));
+      const { data: households, error: householdError } = await context.admin.from('households').select('id,name,email').in('id', householdIds);
+      if (householdError) throw new Error('Unable to load parent contact details.');
+      householdContacts = new Map((households ?? []).map((item) => [item.id, { name: item.name ?? 'Household', email: item.email ?? null }]));
     }
 
     const items = data.map((item) => ({
       ...item,
-      household_name: householdNames.get(item.household_id) ?? 'Household',
+      household_name: householdContacts.get(item.household_id)?.name ?? 'Household',
+      household_email: householdContacts.get(item.household_id)?.email ?? null,
     }));
 
     return Response.json({ ok: true, items, date: today?.date, attendance_available: !primary.error }, { headers: { 'Cache-Control': 'private, no-store' } });

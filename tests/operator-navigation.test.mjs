@@ -48,6 +48,7 @@ test('personal login immediately renders the shared operator dashboard before cu
       react, 'next/link': 'a', '@/components/staff/OperatorDashboard': Dashboard,
       '@/app/teaching/page': () => null, '@/lib/supabase/browser': {}, '@/components/crowd/CrowdLevelCard': () => null,
       '@/components/landing/BookingNextSteps': () => null, '@/lib/feature-flags': {}, '@/lib/households': {},
+      '@/components/membership/FoundingMembershipSummary': () => null,
       '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ isLoading: false, canUseOwnerDashboard: true, role, roles: [role], isKiosk: false }) },
       '@/lib/waivers': {},
     }, { React: react }).default;

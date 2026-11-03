@@ -11,6 +11,7 @@ export type SoftOpeningAccess = {
   on_wanderlist: boolean;
   party_early_access: boolean;
   has_party_booking: boolean;
+  founding_member?: boolean;
 };
 
 async function hasPartyEarlyAccessContact(admin: AdminClient, normalizedEmail: string) {
@@ -79,11 +80,23 @@ export async function getSoftOpeningAccessForUser(admin: AdminClient, user: Pick
 
   const hasPartyBooking = await hasPartyBookingForUser(admin, user.id);
 
+  const householdRows = await admin.from('household_members').select('household_id').eq('user_id', user.id);
+  if (householdRows.error) throw new Error(householdRows.error.message);
+  const householdIds = (householdRows.data ?? []).map(row => row.household_id);
+  let foundingMember = false;
+  if (householdIds.length) {
+    const founding = await admin.from('founding_memberships').select('id').in('household_id', householdIds).eq('environment', 'production').in('status', ['pending', 'activating', 'scheduled', 'active']).limit(1);
+    // Keep existing access working while the additive migration is being deployed.
+    if (founding.error && !['42P01', 'PGRST205'].includes(founding.error.code)) throw new Error(founding.error.message);
+    foundingMember = Boolean(founding.data?.length);
+  }
+
   return {
-    allowed: onWanderlist || partyEarlyAccess || hasPartyBooking,
+    allowed: onWanderlist || partyEarlyAccess || hasPartyBooking || foundingMember,
     email: user.email ?? null,
     on_wanderlist: onWanderlist,
     party_early_access: partyEarlyAccess,
     has_party_booking: hasPartyBooking,
+    founding_member: foundingMember,
   };
 }
