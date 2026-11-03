@@ -55,7 +55,7 @@ stale price authorizations.
 
 1. Apply `20261103_founding_memberships.sql`, then
    `20261103_founding_checkin.sql`. The second migration retains the existing
-   check-in function's exact current signature, waiver, paid-pass, environment, audit, pricing, and occupancy checks; it patches only the membership coverage result and refuses an unrecognized function. Apply `20261103_membership_notifications.sql` after the founding table migration.
+   check-in function's exact current signature, waiver, paid-pass, environment, audit, pricing, and occupancy checks; it patches only the membership coverage result and refuses an unrecognized function. Apply `20261103_membership_notifications.sql` after the founding table migration. Existing installs also apply `20261103_founding_offer_email_identity_fix.sql`; it avoids an ambiguous email reference on the full operating waitlist schema.
 2. Configure `SQUARE_APPLICATION_ID` (or the existing `NEXT_PUBLIC_SQUARE_APPLICATION_ID`) to match the existing environment, access
    token and location. Card storage can be enabled by the private, per-environment `founding_membership_settings.card_enrollment_enabled` setting or `FOUNDING_CARD_ENROLLMENT_ENABLED=true`, only after
    verifying the matching Square Web Payments SDK form. HTTPS is required in
@@ -148,3 +148,16 @@ Owner-only `/api/admin/founding-memberships?verifySquare=1` verifies the configu
 Square location with a read-only provider call and reports card configuration,
 environment, email configuration, and the closed monthly-billing flag without
 exposing credentials. It creates no payment or subscription.
+
+## Production verification — November 3, 2026
+
+- Both short URLs return HTTP 200 with the correct separate advertised prices
+  and noindex metadata. Homepage and sitemap include neither link.
+- Private production settings allow direct-link registration; original Wanderlist
+  eligibility still receives the $10 sibling rate. The public release is
+  controlled by sharing the link, without a scheduled homepage change.
+- The Square production location and existing-account/family retrieval passed
+  authenticated, read-only verification. Card configuration is present; monthly
+  billing is disabled, with zero founding billing dates or subscriptions.
+- The owner received a clearly labeled integration-test email in Gmail. No
+  membership, check-in, payment or subscription was created by that email test.

@@ -10,7 +10,7 @@ const profile = (children = [{ id: childId, firstName: 'Sam', lastName: 'Family'
 const fixture = `
 create role anon; create role authenticated; create role service_role;
 create schema auth; create table auth.users(id uuid primary key,email text);
-create table waitlist_entries(normalized_email text,claimed_user_id uuid,created_at timestamptz);
+create table waitlist_entries(normalized_email text,claimed_user_id uuid,created_at timestamptz,email text);
 create table households(id uuid primary key,name text,email text,phone text,city text,state text);
 create table household_members(household_id uuid,user_id uuid,role text);
 create table people(id uuid primary key default gen_random_uuid(),household_id uuid,role text,first_name text,last_name text,gender text,birthdate date,notes text,created_at timestamptz default now());
@@ -27,6 +27,7 @@ async function database(t) {
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(fixture);
   await db.exec(fs.readFileSync('db/migrations/20261103_founding_memberships.sql', 'utf8'));
+  await db.exec(fs.readFileSync('db/migrations/20261103_founding_offer_email_identity_fix.sql', 'utf8'));
   await db.exec(fs.readFileSync('db/migrations/20261028_launch_checkin.sql','utf8'));
   await db.exec(fs.readFileSync('db/migrations/20261103_founding_checkin.sql', 'utf8'));
   await db.exec(fs.readFileSync('db/migrations/20261103_membership_notifications.sql', 'utf8'));
@@ -81,9 +82,9 @@ test('Wanderlist gets first access; late website signups cannot claim its lifeti
   const offer = async () => (await admin.rpc('founding_membership_offer', { p_user: ids.user, p_household: ids.household, p_environment: 'sandbox' })).data;
   assert.equal((await offer()).can_enroll, false);
   await assert.rejects(prepare(admin), /offer changed/);
-  await db.query("insert into waitlist_entries values($1,$2,'2026-11-01T12:00:00Z')", [contact.email,ids.user]);
+  await db.query("insert into waitlist_entries(normalized_email,claimed_user_id,created_at) values($1,$2,'2026-11-01T12:00:00Z')", [contact.email,ids.user]);
   assert.equal((await offer()).can_enroll, false);
-  await db.query("insert into waitlist_entries values($1,null,'2026-10-28T12:00:00Z')", [contact.email]);
+  await db.query("insert into waitlist_entries(normalized_email,claimed_user_id,created_at) values($1,null,'2026-10-28T12:00:00Z')", [contact.email]);
   assert.equal((await offer()).tier, 'waitlist'); assert.equal((await offer()).can_enroll, true);
   const saved = await prepare(admin, profile(), { p_tier: 'waitlist' });
   assert.equal(saved.sibling_cents,1000); assert.equal(saved.base_cents,5000);
@@ -94,7 +95,7 @@ test('Wanderlist gets first access; late website signups cannot claim its lifeti
 
 test('phase changes preserve enrolled rates; cancellation permanently moves the family and account to regular rejoining prices', async t => {
   const { db, admin } = await database(t);
-  await db.query("insert into waitlist_entries values($1,$2,'2026-10-28T12:00:00Z')", [contact.email,ids.user]);
+  await db.query("insert into waitlist_entries(normalized_email,claimed_user_id,created_at) values($1,$2,'2026-10-28T12:00:00Z')", [contact.email,ids.user]);
   const first = await prepare(admin, profile(), { p_tier:'waitlist' });
   await db.query("update founding_memberships set status='pending',square_customer_id='customer',square_card_id='card'");
   await db.exec("update founding_membership_settings set phase='regular'");
@@ -117,7 +118,7 @@ test('public release gives new families $50 + $20 while original Wanderlist acco
   const { db, admin } = await database(t);
   const offer = () => admin.rpc('founding_membership_offer',{p_user:ids.user,p_household:ids.household,p_environment:'sandbox'});
   assert.equal((await offer()).data.tier,'public');
-  await db.query("insert into waitlist_entries values($1,$2,'2026-10-28T12:00:00Z')", [contact.email,ids.user]);
+  await db.query("insert into waitlist_entries(normalized_email,claimed_user_id,created_at) values($1,$2,'2026-10-28T12:00:00Z')", [contact.email,ids.user]);
   assert.equal((await offer()).data.tier,'waitlist');
   await db.exec("update founding_membership_settings set phase='regular'");
   assert.equal((await offer()).data.tier,'regular');
@@ -235,7 +236,7 @@ test('billing stays closed without the separate flag and refuses missing, future
 
 test('activation freezes the explicit date, uses stable idempotency, and encodes the sibling price schedule', async t => {
   const { db, admin } = await database(t);
-  await db.query("insert into waitlist_entries values($1,$2,'2026-10-28T12:00:00Z')", [contact.email,ids.user]);
+  await db.query("insert into waitlist_entries(normalized_email,claimed_user_id,created_at) values($1,$2,'2026-10-28T12:00:00Z')", [contact.email,ids.user]);
   const children = [profile().children[0],{...profile().children[0],id:ids.otherPerson,firstName:'Sibling',birthdate:'2024-01-01'}];
   const row = await prepare(admin,profile(children),{p_tier:'waitlist',p_amount:6000}); const calls = [];
   const mod = modules(async (url, options) => {
@@ -346,7 +347,7 @@ test('only owners can change rollout; a phase change sets no billing date and a 
 test('phone-only authentication enrolls the same user and family with contact email, without treating it as a verified discount identity', async t => {
   const { db, admin } = await database(t);
   await db.exec('alter table household_members add column created_at timestamptz default now(); update auth.users set email=null');
-  await db.query("insert into waitlist_entries values($1,null,'2026-10-28T12:00:00Z')", [contact.email]);
+  await db.query("insert into waitlist_entries(normalized_email,claimed_user_id,created_at) values($1,null,'2026-10-28T12:00:00Z')", [contact.email]);
   const api = loadSquareModules({ mocks: {
     'node:util': { isDeepStrictEqual: (a, b) => isDeepStrictEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b))) },
     '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: ids.user, phone: '18605550123' } } }) } }) },
