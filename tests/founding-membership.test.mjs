@@ -107,7 +107,8 @@ test('enrollment creates a Square customer and stores a card without payments, i
   assert.equal(JSON.stringify(enrollment).includes('cnon:'), false);
   assert.equal(calls.length, 3); assert.ok(calls.every(call => !call.path.includes('subscription') && !call.path.includes('payment') && !call.path.includes('invoice')));
   await square.storeFoundingCard(admin, enrollment, 'cnon:retry', contact); assert.equal(calls.length, 3);
-  await square.cancelFounding(admin, enrollment);
+  const cancelWithoutCredentials = modules(() => { throw new Error('Cancellation must not contact Square.'); }, { SQUARE_ACCESS_TOKEN: '', SQUARE_LOCATION_ID: '' }).load('src/lib/founding-square.ts');
+  await cancelWithoutCredentials.cancelFounding(admin, enrollment);
   assert.equal((await db.query('select status from founding_memberships')).rows[0].status, 'canceled');
   assert.equal(calls.length, 3);
   await assert.rejects(square.storeFoundingCard(admin, { ...enrollment, status: 'canceled' }, 'cnon:new', contact), /cannot be enrolled/);
@@ -185,7 +186,15 @@ test('provider reconciliation does not grant access for an unpaid invoice and is
     return Response.json({ invoice: { subscription_id: 'sub', location_id: 'test-location', status, primary_recipient: { customer_id: 'customer' }, payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: 5000, currency: 'USD' } }] } });
   }).load('src/lib/founding-square.ts');
   await service.syncFoundingSubscription(admin, 'sub'); assert.equal((await db.query('select paid_through from founding_memberships')).rows[0].paid_through, null);
-  status = 'PAID'; await service.syncFoundingSubscription(admin, 'sub'); await service.syncFoundingSubscription(admin, 'sub');
+  status = 'PAID';
+  const failedAdmin = { from(table) {
+    const query = admin.from(table);
+    query.update = () => { const failed = { eq() { return failed; }, then(resolve) { resolve({ error: { message: 'Database unavailable' } }); } }; return failed; };
+    return query;
+  } };
+  await assert.rejects(service.syncFoundingSubscription(failedAdmin, 'sub'), /Unable to save membership status/);
+  assert.equal((await db.query('select paid_through from founding_memberships')).rows[0].paid_through, null);
+  await service.syncFoundingSubscription(admin, 'sub'); await service.syncFoundingSubscription(admin, 'sub');
   assert.equal((await db.query('select paid_through::text from founding_memberships')).rows[0].paid_through, '2026-12-02');
   await db.query("update founding_memberships set status='canceled'");
   await service.syncFoundingSubscription(admin, 'sub'); assert.equal((await db.query('select status from founding_memberships')).rows[0].status, 'canceled');

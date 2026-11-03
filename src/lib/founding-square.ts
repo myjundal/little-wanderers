@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { squareConfig, squareRequest } from '@/lib/square-client';
+import { squareConfig, squareEnvironment, squareRequest } from '@/lib/square-client';
 import { easternDate, foundingMonthlyCents, foundingPhases, isDate, type FoundingEnrollment } from '@/lib/founding-membership';
 
 type Card = { id: string; customer_id?: string; enabled?: boolean; reference_id?: string; card_brand?: string; last_4?: string };
@@ -99,12 +99,12 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
 }
 
 export async function cancelFounding(admin: SupabaseClient, enrollment: FoundingEnrollment) {
-  const config = squareConfig();
-  if (enrollment.environment !== config.environment) throw new Error('Square environment mismatch.');
+  if (enrollment.environment !== squareEnvironment()) throw new Error('Square environment mismatch.');
   if (enrollment.status === 'canceled') return;
   if (enrollment.status === 'activating') throw new Error('Your membership is being started. Please refresh and retry cancellation.');
   if (enrollment.status !== 'canceling') enrollment = await claim(admin, enrollment, 'canceling');
   if (enrollment.square_subscription_id) {
+    const config = squareConfig();
     const id = encodeURIComponent(enrollment.square_subscription_id);
     const { subscription } = await squareRequest<{ subscription: Subscription }>(`/v2/subscriptions/${id}`);
     if (subscription.customer_id !== enrollment.square_customer_id || subscription.location_id !== config.locationId) throw new Error('Unable to verify this subscription.');

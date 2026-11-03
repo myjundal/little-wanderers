@@ -50,7 +50,7 @@ begin
   -- Never replace a different family's person, or convert adults into children.
   for child in select * from jsonb_array_elements(p_profile->'children') loop
     person := (child->>'id')::uuid;
-    if exists(select 1 from people where id=person and (household_id<>p_household or role<>'child')) then raise exception 'Invalid child.'; end if;
+    if exists(select 1 from people where id=person and (household_id is distinct from p_household or role is distinct from 'child')) then raise exception 'Invalid child.'; end if;
     insert into people(id,household_id,role,first_name,last_name,gender,birthdate)
       values(person,p_household,'child',child->>'firstName',nullif(child->>'lastName',''),child->>'gender',(child->>'birthdate')::date)
       on conflict(id) do update set first_name=excluded.first_name,last_name=excluded.last_name,gender=excluded.gender,birthdate=excluded.birthdate;
