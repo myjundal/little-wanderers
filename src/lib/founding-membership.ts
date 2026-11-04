@@ -1,6 +1,6 @@
 import { parseBirthdate } from '@/lib/birthdate';
 
-export const FOUNDING_TERMS_VERSION = '2026-11-03-tiers';
+export const FOUNDING_TERMS_VERSION = '2026-11-03-first-visit';
 export type MembershipTier = 'waitlist' | 'public' | 'regular';
 export type MembershipPhase = MembershipTier;
 export const MEMBERSHIP_PRICES = {
@@ -11,7 +11,7 @@ export const MEMBERSHIP_PRICES = {
 export type MembershipOffer = { phase: MembershipPhase; tier: MembershipTier; can_enroll: boolean; card_enrollment_enabled?: boolean; base_cents: number; sibling_cents: number };
 export function membershipTerms(tier: MembershipTier) {
   const price = MEMBERSHIP_PRICES[tier];
-  return `No payment today. I authorize Little Wanderers to securely save my card with Square and charge $${price.base_cents / 100}/month for the first child, plus $${price.sibling_cents / 100}/month for each sibling age 6 months or older, beginning on the announced soft opening date. Baby siblings under 6 months are free until the billing cycle following their six-month birthday. My membership renews monthly until I cancel. I can cancel anytime with no commitment. ${tier === 'regular' ? 'Regular membership pricing applies.' : 'My founding first-child and sibling rates are locked in for the lifetime of my continuously active membership.'} Cancellation ends founding pricing permanently. If I rejoin, regular pricing applies: $60/month for the first child and $20/month for each eligible sibling. A soft opening visit is included, subject to reservations, capacity, and a signed waiver. The opening date is not yet set.`;
+  return `No payment today. I authorize Little Wanderers to securely save my card with Square and charge $${price.base_cents / 100}/month for the first child, plus $${price.sibling_cents / 100}/month for each sibling age 6 months or older, beginning on the day of my first membership visit, including a visit during soft opening. Little Wanderers will activate my membership when I arrive; saving my card does not start billing. Baby siblings under 6 months are free until the billing cycle following their six-month birthday. My membership renews monthly until I cancel. I can cancel anytime with no commitment. ${tier === 'regular' ? 'Regular membership pricing applies.' : 'My founding first-child and sibling rates are locked in for the lifetime of my continuously active membership.'} Cancellation ends founding pricing permanently. If I rejoin, regular pricing applies: $60/month for the first child and $20/month for each eligible sibling. Visits throughout the soft opening period are included with my membership, with no separate admission charge, subject to reservations, capacity, and a signed waiver. My billing start date is not set until my first membership visit.`;
 }
 export const FOUNDING_TERMS = membershipTerms('public');
 

@@ -38,7 +38,7 @@ async function database(t) {
   return { db, admin: localSquareAdmin(db) };
 }
 async function prepare(admin, input = profile(), overrides = {}) {
-  const result = await admin.rpc('prepare_founding_membership', { p_user: ids.user, p_household: ids.household, p_environment: 'sandbox', p_profile: input, p_terms: 'test terms', p_version: '2026-11-03-tiers', p_amount: 5000, p_tier: 'public', ...overrides });
+  const result = await admin.rpc('prepare_founding_membership', { p_user: ids.user, p_household: ids.household, p_environment: 'sandbox', p_profile: input, p_terms: 'test terms', p_version: '2026-11-03-first-visit', p_amount: 5000, p_tier: 'public', ...overrides });
   if (result.error) throw new Error(result.error.message);
   return result.data;
 }
@@ -221,7 +221,7 @@ test('card recovery uses a provider-saved card after a lost response and never r
   assert.equal((await db.query('select status from founding_memberships')).rows[0].status, 'canceled');
 });
 
-test('billing stays closed without the separate flag and refuses missing, future, past, or changed opening dates', async t => {
+test('billing stays closed without the separate flag and refuses missing, future, past, or changed first-visit dates', async t => {
   const { db, admin } = await database(t); const row = await prepare(admin);
   await db.query("update founding_memberships set status='pending',square_customer_id='customer',square_card_id='card'");
   const enrollment = { ...row, status: 'pending', square_customer_id: 'customer', square_card_id: 'card' };
@@ -229,7 +229,7 @@ test('billing stays closed without the separate flag and refuses missing, future
   const disabled = modules(() => { calls++; throw new Error('Forbidden'); }).load('src/lib/founding-square.ts');
   await assert.rejects(disabled.activateFounding(admin, enrollment, ''), /Billing is disabled/);
   const enabled = modules(() => { calls++; throw new Error('Forbidden'); }, { FOUNDING_BILLING_ENABLED: 'true' }).load('src/lib/founding-square.ts');
-  for (const date of ['', '2099-01-01', '2000-01-01', '2026-02-30']) await assert.rejects(enabled.activateFounding(admin, enrollment, date), /actual opening day/);
+  for (const date of ['', '2099-01-01', '2000-01-01', '2026-02-30']) await assert.rejects(enabled.activateFounding(admin, enrollment, date), /first membership visit day/);
   assert.equal(calls, 0);
   assert.equal((await db.query('select start_date from founding_memberships')).rows[0].start_date, null);
 });
@@ -255,7 +255,7 @@ test('activation freezes the explicit date, uses stable idempotency, and encodes
   assert.equal(saved.sibling_cents,1000); assert.equal(saved.amount_cents,6000);
   assert.equal(calls[2].body.start_date, today); assert.equal(calls[2].body.card_id, 'card'); assert.equal(calls[1].body.object.subscription_plan_variation_data.can_prorate, false);
   await service.activateFounding(admin, saved, today); assert.equal(calls.length, 3);
-  await assert.rejects(service.activateFounding(admin, { ...saved, status: 'activating' }, '2099-01-01'), /actual opening day/);
+  await assert.rejects(service.activateFounding(admin, { ...saved, status: 'activating' }, '2099-01-01'), /first membership visit day/);
 });
 
 test('pre-opening free visits require a production reservation; paid access requires a paid term and enrolled child', async t => {
@@ -314,7 +314,7 @@ test('enrollment routes authenticate, validate every family field and consent, a
   assert.equal((await anonymous.GET()).status, 401);
   assert.equal((await anonymous.POST({ json: async () => ({}) })).status, 401);
   const api = route({ id: ids.user, email: contact.email });
-  const input = { ...profile(), sourceId:'cnon:test-secret-token',consent:true,birthdaysConfirmed:true,termsVersion:'2026-11-03-tiers',pricingTier:'public' };
+  const input = { ...profile(), sourceId:'cnon:test-secret-token',consent:true,birthdaysConfirmed:true,termsVersion:'2026-11-03-first-visit',pricingTier:'public' };
   const post = patch => api.POST({ json: async () => ({ ...input, ...patch }) });
   assert.equal((await post({pricingTier:'waitlist'})).status,409);
   for (const patch of [{ consent:false }, { birthdaysConfirmed:false }, { phone:'123' }, { adultFirstName:'' }, { city:'' }, { state:'ZZ' }, { children:[] }, { children:[{...profile().children[0],birthdate:'12/40/2023'}] }, { email:'other@example.test' }, { termsVersion:'old' }]) assert.equal((await post(patch)).status, 400);
@@ -359,7 +359,7 @@ test('phone-only authentication enrolls the same user and family with contact em
   assert.equal(data.account.email, null);
   assert.equal(data.account.phone, '+18605550123');
   assert.equal(data.household.phone, '+18605550123');
-  const post = tier => api.POST({ json: async () => ({ ...profile(), sourceId: 'cnon:test', consent: true, birthdaysConfirmed: true, termsVersion: '2026-11-03-tiers', pricingTier: tier }) });
+  const post = tier => api.POST({ json: async () => ({ ...profile(), sourceId: 'cnon:test', consent: true, birthdaysConfirmed: true, termsVersion: '2026-11-03-first-visit', pricingTier: tier }) });
   await db.exec("update founding_membership_settings set phase='waitlist' where environment='sandbox'");
   assert.equal((await post('waitlist')).status, 403);
   await db.exec("update founding_membership_settings set phase='public' where environment='sandbox'");
@@ -443,4 +443,61 @@ test('check-in patch preserves the production environment argument, paid admissi
   assert.equal((await result('sandbox')).member, false);
   assert.equal((await result('production')).paid_admission_preserved, true);
   assert.equal((await db.query("select count(*)::int n from pg_proc where proname='checkin_person'")).rows[0].n, 1);
+});
+
+
+test('all membership authorizations start on first visit including soft opening and include the whole soft opening period', () => {
+  const lib = modules().load('src/lib/founding-membership.ts');
+  assert.equal(lib.FOUNDING_TERMS_VERSION, '2026-11-03-first-visit');
+  for (const tier of ['waitlist', 'public', 'regular']) {
+    const terms = lib.membershipTerms(tier);
+    assert.match(terms, /first membership visit, including a visit during soft opening/);
+    assert.match(terms, /Visits throughout the soft opening period/);
+    assert.match(terms, /saving my card does not start billing/);
+    assert.doesNotMatch(terms, /announced soft opening date|A soft opening visit is included/);
+  }
+});
+
+test('first-visit activation rejects old consent and gives each family an independent billing date and anchor', async t => {
+  const { db, admin } = await database(t);
+  const first = await prepare(admin);
+  await db.query("insert into household_members values($1,$2,'primary_caregiver')", [ids.other, ids.user]);
+  const second = await prepare(admin, profile([{ ...profile().children[0], id: ids.otherPerson }]), { p_household: ids.other });
+  await db.query("update founding_memberships set status='pending',square_card_id='card',square_customer_id=id::text");
+  const enrolled = row => ({ ...row, status: 'pending', square_card_id: 'card', square_customer_id: row.id });
+  const lib = modules().load('src/lib/founding-membership.ts');
+  let visitDate = '2026-11-04'; const subscriptions = [];
+  const service = loadSquareModules({ env: { FOUNDING_BILLING_ENABLED: 'true' },
+    mocks: { '@/lib/founding-membership': { ...lib, easternDate: () => visitDate } },
+    fetch: async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.object) return Response.json({ catalog_object: { id: body.object.type === 'SUBSCRIPTION_PLAN' ? 'plan' : 'variation' } });
+      subscriptions.push(body);
+      return Response.json({ subscription: { id: `sub-${body.customer_id}`, customer_id: body.customer_id, start_date: body.start_date } });
+    },
+  }).load('src/lib/founding-square.ts');
+  await assert.rejects(service.activateFounding(admin, { ...enrolled(first), terms_version: '2026-11-03-tiers' }, visitDate), /accept the current first-visit billing terms/);
+  assert.equal(subscriptions.length, 0);
+  await service.activateFounding(admin, enrolled(first), visitDate);
+  assert.equal((await db.query('select start_date from founding_memberships where id=$1', [second.id])).rows[0].start_date, null);
+  visitDate = '2026-11-06';
+  await service.activateFounding(admin, enrolled(second), visitDate);
+  assert.deepEqual(subscriptions.map(row => [row.start_date, row.monthly_billing_anchor_date]), [['2026-11-04', 4], ['2026-11-06', 6]]);
+  assert.equal((await db.query('select start_date::text from founding_memberships where id=$1', [first.id])).rows[0].start_date, '2026-11-04');
+});
+
+test('owner activation requires an explicit first-visit confirmation before calling the billing service', async t => {
+  const { admin } = await database(t); const enrollment = await prepare(admin); const calls = [];
+  const api = loadSquareModules({ mocks: {
+    '@/lib/authz': { requireOwnerContext: async () => ({ ok: true, admin }) },
+    '@/lib/founding-square': { activateFounding: async (...args) => { calls.push(args); } },
+  } }).load('src/app/api/admin/founding-memberships/route.ts');
+  const input = { id: enrollment.id, startDate: '2026-11-04', confirmation: 'START MONTHLY BILLING' };
+  const post = patch => api.POST({ json: async () => ({ ...input, ...patch }) });
+  assert.equal((await post({})).status, 400);
+  assert.equal((await post({ firstVisitConfirmed: false })).status, 400);
+  assert.equal(calls.length, 0);
+  assert.equal((await post({ firstVisitConfirmed: true })).status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].id, enrollment.id);
 });

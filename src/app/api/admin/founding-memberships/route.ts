@@ -40,15 +40,15 @@ export async function PATCH(req: Request) {
 export async function POST(req: Request) {
   const context = await requireOwnerContext();
   if (!context.ok) return context.response;
-  const input = z.object({ id: z.string().uuid(), startDate: z.string(), confirmation: z.literal('START MONTHLY BILLING') }).safeParse(await req.json().catch(() => null));
-  if (!input.success) return Response.json({ ok: false, error: 'An explicit opening date and billing confirmation are required.' }, { status: 400, headers });
+  const input = z.object({ id: z.string().uuid(), startDate: z.string(), confirmation: z.literal('START MONTHLY BILLING'), firstVisitConfirmed: z.literal(true) }).safeParse(await req.json().catch(() => null));
+  if (!input.success) return Response.json({ ok: false, error: 'Confirm this family’s first membership visit, its date, and monthly billing before activation.' }, { status: 400, headers });
   try {
     const result = await context.admin.from('founding_memberships').select('*').eq('id', input.data.id).eq('environment', squareEnvironment()).single();
     if (result.error || !result.data) throw new Error('Membership not found.');
     await activateFounding(context.admin, result.data, input.data.startDate);
     return Response.json({ ok: true }, { headers });
   } catch (error) {
-    const message = error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Square could not confirm activation. Retry using the same opening date.';
+    const message = error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Square could not confirm activation. Retry using the same first-visit date.';
     return Response.json({ ok: false, error: message }, { status: 503, headers });
   }
 }
