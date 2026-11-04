@@ -56,7 +56,7 @@ earlier offer. After switching to regular, new enrollments use $60 + $20.
 
 Phase changes do not change an existing reserved member's stored tier or rates,
 including recovery of a card registration already in progress. They set no
-opening date, create no subscription, and never enable billing. Clients cannot
+billing start date, create no subscription, and never enable billing. Clients cannot
 choose their own discount; the server/database resolve eligibility and reject
 stale price authorizations.
 
@@ -69,7 +69,7 @@ stale price authorizations.
    token and location. Card storage can be enabled by the private, per-environment `founding_membership_settings.card_enrollment_enabled` setting or `FOUNDING_CARD_ENROLLMENT_ENABLED=true`, only after
    verifying the matching Square Web Payments SDK form. HTTPS is required in
    production. Never use a production card in the sandbox.
-3. Keep `FOUNDING_BILLING_ENABLED=false`. No opening date exists by default.
+3. Keep `FOUNDING_BILLING_ENABLED=false`. No billing start date exists by default.
    Registration stores a customer/card in Square, a complete family profile and
    versioned authorization locally, and the card's brand/last four digits. No
    raw card number, CVV, or token is persisted. It creates no subscription,
@@ -92,15 +92,18 @@ When billing is active, cancellation is confirmed only after Square cancellation
 succeeds; paid access lasts through the already-paid term. Cancellation ends the
 founding rates. Rejoining uses a new reservation at regular $60 + $20 pricing.
 
-## On the actual opening day, after the owner decides to start billing
+## On each family’s first membership visit, after the owner enables billing
 
 There is no cron job, guessed date, or automatic subscription scheduler. Do not
 enable billing or populate a date as part of this release.
 
 The owner-only tool is `/staff/founding-memberships`. A future release/operator
-step may enable `FOUNDING_BILLING_ENABLED=true` once the actual opening day is
-known. The owner must enter that day's date explicitly, choose a family, review
-the action, and type `START MONTHLY BILLING`. The server refuses a future or past
+step may enable `FOUNDING_BILLING_ENABLED=true` when the studio is ready to activate
+visiting families. The owner chooses one family, confirms its arrival for its first
+membership visit (including during soft opening), enters that day’s date explicitly,
+reviews the action, and types `START MONTHLY BILLING`. The first-visit confirmation
+is required by the server. Each family has its own monthly billing anchor. Visiting
+or checking in never triggers billing automatically. The server refuses a future or past
 date, except a retry of a previously frozen activation. It freezes the chosen
 date atomically, then uses stable Square idempotency keys for catalog creation
 and subscription creation. Retrying an uncertain activation must use that same
@@ -170,3 +173,13 @@ exposing credentials. It creates no payment or subscription.
   billing is disabled, with zero founding billing dates or subscriptions.
 - The owner received a clearly labeled integration-test email in Gmail. No
   membership, check-in, payment or subscription was created by that email test.
+
+## First-visit billing policy — November 3, 2026
+
+New authorizations use terms version `2026-11-03-first-visit`. Saving a card takes
+no payment and sets no date. The first monthly payment starts on each family’s
+first membership visit, including during soft opening, after explicit owner
+activation. Visits throughout the soft-opening period are included with the
+membership with no separate admission charge; this is not a one-visit benefit.
+Old authorization versions cannot be activated under the revised policy. No
+production enrollment existed when this policy changed. Billing remains disabled.

@@ -54,6 +54,9 @@ test('guest pages advertise separate prices and use a single authentication cont
     const view = await entry(audience);
     assert.match(view.html, new RegExp(`\\+\\$${sibling}/mo`));
     assert.match(view.html, /Pay \$0 today/);
+    assert.match(view.html, /first membership visit, including during soft opening/);
+    assert.match(view.html, /Visits throughout our soft opening period/);
+    assert.doesNotMatch(view.html, /announced soft opening date|A free visit during/);
     const expected = `/login?mode=continue&next=${encodeURIComponent(audience === 'waitlist' ? '/wanderlist-founding' : '/general-founding')}`;
     assert.equal(view.nodes.filter(node => node.props.href?.startsWith('/login')).length, 1);
     assert.ok(view.nodes.some(node => node.props.href === expected));

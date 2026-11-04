@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareEnvironment, squareRequest } from '@/lib/square-client';
-import { easternDate, foundingMonthlyCents, foundingPhases, isDate, MEMBERSHIP_PRICES, type FoundingEnrollment } from '@/lib/founding-membership';
+import { easternDate, foundingMonthlyCents, foundingPhases, isDate, MEMBERSHIP_PRICES, FOUNDING_TERMS_VERSION, type FoundingEnrollment } from '@/lib/founding-membership';
 
 type Card = { id: string; customer_id?: string; enabled?: boolean; reference_id?: string; card_brand?: string; last_4?: string };
 type Subscription = { id: string; customer_id?: string; location_id?: string; card_id?: string; start_date?: string; status?: string; canceled_date?: string; charged_through_date?: string; invoice_ids?: string[] };
@@ -70,7 +70,8 @@ export async function storeFoundingCard(admin: SupabaseClient, enrollment: Found
 export async function activateFounding(admin: SupabaseClient, enrollment: FoundingEnrollment, startDate: string) {
   const config = squareConfig();
   if (process.env.FOUNDING_BILLING_ENABLED !== 'true') throw new Error('Billing is disabled. No subscriptions or charges have been created.');
-  if (!isDate(startDate) || (startDate !== easternDate() && !(enrollment.status === 'activating' && enrollment.start_date === startDate))) throw new Error('Billing can only be started on the actual opening day. Enter that date explicitly.');
+  if (!isDate(startDate) || (startDate !== easternDate() && !(enrollment.status === 'activating' && enrollment.start_date === startDate))) throw new Error('Billing can only be started on the family’s first membership visit day. Enter today’s date explicitly.');
+  if (enrollment.terms_version !== FOUNDING_TERMS_VERSION) throw new Error('The family must accept the current first-visit billing terms before activation.');
   if (enrollment.environment !== config.environment || !enrollment.square_card_id || !enrollment.square_customer_id) throw new Error('A saved card in the current Square environment is required.');
   if (['scheduled', 'active'].includes(enrollment.status)) return enrollment;
   if (!['pending', 'activating'].includes(enrollment.status)) throw new Error('Only reserved memberships can be started.');
@@ -78,7 +79,7 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
     // Freeze the start date before any external subscription call; retries cannot move it.
     enrollment = await claim(admin, enrollment, 'activating', startDate);
   }
-  if (!enrollment.start_date || enrollment.start_date !== startDate) throw new Error('Retry using the originally selected opening date.');
+  if (!enrollment.start_date || enrollment.start_date !== startDate) throw new Error('Retry using the originally confirmed first-visit date.');
   const phases = foundingPhases(enrollment.birthdates, startDate, enrollment.pricing_tier).map((phase, ordinal) => ({ ...phase, ordinal }));
   const plan = await squareRequest<{ catalog_object: { id: string } }>('/v2/catalog/object', 'POST', {
     idempotency_key: `fp-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN', id: '#founding-plan', present_at_all_locations: true, subscription_plan_data: { name: enrollment.pricing_tier === 'regular' ? 'Little Wanderers Monthly Membership' : 'Little Wanderers Founding Membership', all_items: true } },
@@ -92,7 +93,7 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
     plan_variation_id: variation.catalog_object.id, start_date: startDate, timezone: 'America/New_York',
     monthly_billing_anchor_date: Number(startDate.slice(8)),
   });
-  if (!result.subscription?.id || result.subscription.start_date !== startDate || result.subscription.customer_id !== enrollment.square_customer_id) throw new Error('Unable to verify the Square subscription. Retry with the same opening date.');
+  if (!result.subscription?.id || result.subscription.start_date !== startDate || result.subscription.customer_id !== enrollment.square_customer_id) throw new Error('Unable to verify the Square subscription. Retry with the same first-visit date.');
   const patch = { square_subscription_id: result.subscription.id, status: 'active', amount_cents: foundingMonthlyCents(enrollment.birthdates, startDate, enrollment.pricing_tier) };
   await updateFounding(admin, enrollment.id, patch);
   return { ...enrollment, ...patch };
