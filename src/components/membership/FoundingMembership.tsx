@@ -183,13 +183,11 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
         {auth === 'loading' && <p role="status">Checking your sign-in…</p>}
         {auth === 'error' && <div className={styles.guest}><h2>Let’s try that again.</h2><p>Your family details could not load.</p><button type="button" className={styles.primary} onClick={() => window.location.reload()}>Reload membership</button></div>}
         {auth === 'guest' && <div className={styles.guest}>
-          <span className={styles.eyebrow}>Start here</span><h2>Join in a few simple steps.</h2>
-          <ol className={styles.guestSteps}><li>Sign in</li><li>Add your family</li><li>Save your card</li></ol>
+          <h2>Let’s get started.</h2>
           <p>{audience === 'waitlist' ? 'Use the email you joined the Wanderlist with to unlock your $10 sibling rate.' : 'Use your email to continue. Your family account is created automatically if you’re new.'}</p>
           {audience === 'public' && offer.phase === 'waitlist' && <p className={styles.notice}>Public founding opens after Wanderlist families have had first access.</p>}
           <Link className={styles.primary} href={signInHref}>Continue with email</Link>
           <p className={styles.small}>Already have an account? Use the same email or a phone already linked to it. No separate signup.</p>
-          <p className={styles.reassurance}>$0 today · No commitment</p>
         </div>}
         {auth === 'signedIn' && !locked && waitlistUnavailable && <div className={styles.guest}>
           <h2>Use your Wanderlist email.</h2>

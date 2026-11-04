@@ -28,7 +28,7 @@
 .formCard form > .primary, .guest > .primary { width: 100%; margin-top: 8px; }
 .guest { display: grid; gap: 14px; }
 .guest p, .status p { font-size: 13px; line-height: 1.75; color: #776d80; margin: 0; }
-.guestSteps { display: flex; gap: 8px; justify-content: space-between; list-style-position: inside; margin: 4px 0; padding: 0; color: #79618f; font-size: 11px; }
+
 .progress { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; list-style: none; padding: 0 0 18px; margin: 0 0 16px; border-bottom: 1px solid #ede6ef; }
 .progress li { display: flex; align-items: center; gap: 6px; color: #918598; font-size: 11px; white-space: nowrap; }
 .progress li > span { display: inline-flex; justify-content: center; align-items: center; width: 24px; height: 24px; border-radius: 50%; background: #f1edf4; flex-shrink: 0; }
@@ -70,7 +70,13 @@
 .brand strong { font-family: Fraunces, Georgia, serif; font-size: 19px; font-weight: 500; }
 .checkoutHeader > a:last-child { font-size: 12px; color: #79618f; text-underline-offset: 3px; }
 @media (max-width: 760px) { .page { padding: 16px 18px 48px; } .layout { grid-template-columns: 1fr; gap: 22px; } .offer { position: static; padding: 8px 2px 0; } .offer h1 { font-size: 30px; margin: 10px 0 8px; } .tagline { font-size: 12px; margin-bottom: 10px; } .price { font-size: 54px; margin-top: 12px; } .rateNote { margin: 12px 0; font-size: 12px; } .today { padding: 12px 14px; } .today span { font-size: 11px; } .offerDetails { margin-top: 12px; font-size: 11px; } .formCard { padding: 22px 18px; } .offerCompact h1, .offerCompact .tagline, .offerCompact .firstChild, .offerCompact > .small, .offerCompact .rateNote, .offerCompact .offerDetails { display: none; } .offerCompact .price { font-size: 42px; margin: 8px 0; } .offerCompact .sibling { font-size: 12px; } .offerCompact .today { margin-top: 12px; } .offerCompact + .formCard { scroll-margin-top: 12px; } .checkoutHeader { padding: 12px 18px; } .brand strong { font-size: 17px; } }
-@media (max-width: 370px) { .page { padding-left: 12px; padding-right: 12px; } .formCard { padding: 20px 14px; } .progress { gap: 4px; } .progress li { gap: 4px; font-size: 10px; } .progress li > span { width: 21px; height: 21px; } .guestSteps { font-size: 10px; gap: 4px; } .child { padding: 12px; } }
+@media (max-width: 370px) { .page { padding-left: 12px; padding-right: 12px; } .formCard { padding: 20px 14px; } .progress { gap: 4px; } .progress li { gap: 4px; font-size: 10px; } .progress li > span { width: 21px; height: 21px; }  .child { padding: 12px; } }
 
 @media (max-width: 760px) { .offerCompact h1 { display: block; position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
 @media (max-width: 370px) { .grid { grid-template-columns: 1fr; } }
+
+/* The public shell already supplies page gutters and a generic main surface. */
+.page { background: transparent; border: 0; border-radius: 0; box-shadow: none; margin-top: 0; }
+.offer h1, .formCard h2, .formCard h3, .formCard legend, .price, .brand strong { font-family: var(--font-heading), Georgia, serif; }
+.offer h1, .formCard h2, .formCard h3, .formCard legend { color: #59476b; }
+@media (max-width: 760px) { .page { max-width: none; margin-left: -20px; margin-right: -20px; } }
