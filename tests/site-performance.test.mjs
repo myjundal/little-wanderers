@@ -60,31 +60,13 @@ test('class cards are included in server HTML without a follow-up API request', 
   assert.doesNotMatch(markup, /Waitlist|seats left/);
 });
 
-test('header and home count reads share one request and reuse only the public count cache', async () => {
-  let reads = 0;
-  let release;
-  const cache = cacheFixture();
-  const admin = { from() {
-    const query = { select() { return query; }, lt() { return query; },
-      abortSignal(signal) {
-        assert.ok(signal instanceof AbortSignal);
-        reads++;
-        return new Promise(resolve => { release = resolve; });
-      },
-    };
-    return query;
-  } };
-  const api = loadModule('src/lib/waitlist-count.ts', {
-    'next/cache': cache, '@/lib/signup-policy': { WANDERLIST_CUTOFF: '2099-01-01' },
-    '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
-  }, { process: { env: { NEXT_PUBLIC_SUPABASE_URL: 'test', SUPABASE_SERVICE_ROLE_KEY: 'test' } }, AbortSignal });
-  const header = api.getWaitlistCount();
-  const home = api.getWaitlistCount();
-  assert.equal(header, home);
-  release({ count: 457, error: null });
-  assert.equal((await header).displayCount, 450);
-  assert.equal((await api.getWaitlistCount()).displayCount, 450);
-  assert.equal(reads, 1);
+test('closed Wanderlist count stays at the verified total without external reads', async () => {
+  // No Supabase, legacy endpoint, cache, or environment imports are needed.
+  const api = loadModule('src/lib/waitlist-count.ts');
+  const [header, home] = await Promise.all([api.getWaitlistCount(), api.getWaitlistCount()]);
+  assert.equal(header.displayCount, 460);
+  assert.equal(home.displayCount, 460);
+  assert.deepEqual(Object.keys(header), ['displayCount']);
 });
 
 test('simultaneous menus share permission lookup but subsequent lookups read fresh permissions', async () => {
