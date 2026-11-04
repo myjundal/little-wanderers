@@ -1,84 +1,11 @@
-import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-import { unstable_cache } from 'next/cache';
-
-export const WAITLIST_COUNT_FALLBACK = 370;
-
 export type WaitlistDisplayCount = {
   displayCount: number;
 };
 
-type WaitlistCount = WaitlistDisplayCount & {
-  actualCount: number;
-};
+// Wanderlist closed on October 28, 2026. Verified 466 entries before the
+// cutoff on November 4; keep the public total stable until the card is retired.
+const CLOSED_WANDERLIST_COUNT = 466;
 
-function asNonNegativeInteger(value: unknown) {
-  const count = Number(value);
-  return Number.isInteger(count) && count >= 0 ? count : null;
-}
-
-export function toWaitlistCount(value: unknown): WaitlistCount | null {
-  const actualCount = asNonNegativeInteger(value);
-
-  if (actualCount === null) return null;
-
-  return {
-    actualCount,
-    displayCount: Math.floor(actualCount / 10) * 10,
-  };
-}
-
-function fallbackWaitlistCount() {
-  return (
-    toWaitlistCount(process.env.WAITLIST_COUNT_FALLBACK) ??
-    toWaitlistCount(WAITLIST_COUNT_FALLBACK)!
-  );
-}
-
-async function loadWaitlistCount(): Promise<WaitlistCount> {
-  const fallback = fallbackWaitlistCount();
-
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      const admin = createAdminSupabaseClient();
-      const { count, error } = await admin
-        .from('waitlist_entries')
-        .select('id', { count: 'exact', head: true })
-        .lt('created_at', WANDERLIST_CUTOFF)
-        .abortSignal(AbortSignal.timeout(1500));
-
-      if (!error) return toWaitlistCount(count) ?? fallback;
-    } catch {
-      // Fall through to the legacy count endpoint or fallback below.
-    }
-  }
-
-  const endpoint = process.env.WAITLIST_COUNT_ENDPOINT?.trim();
-
-  if (!endpoint) return fallback;
-
-  try {
-    const response = await fetch(endpoint, {
-      headers: { accept: 'application/json' },
-      next: { revalidate: 60 },
-      signal: AbortSignal.timeout(1500),
-    });
-
-    if (!response.ok) return fallback;
-
-    const payload = (await response.json()) as { count?: unknown };
-    return toWaitlistCount(payload.count) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-const readWaitlistCount = unstable_cache(loadWaitlistCount, ['public-wanderlist-count-v1'], { revalidate: 60 });
-let pendingCount: Promise<WaitlistCount> | null = null;
-
-export function getWaitlistCount(): Promise<WaitlistCount> {
-  if (!pendingCount) {
-    pendingCount = readWaitlistCount().finally(() => { pendingCount = null; });
-  }
-  return pendingCount;
+export async function getWaitlistCount(): Promise<WaitlistDisplayCount> {
+  return { displayCount: Math.floor(CLOSED_WANDERLIST_COUNT / 10) * 10 };
 }

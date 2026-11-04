@@ -1,40 +1,7 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-
 import styles from '@/app/(public)/home.module.css';
 import type { WaitlistDisplayCount } from '@/lib/waitlist-count';
 
-const REFRESH_INTERVAL_MS = 60_000;
-
-export default function WaitlistCountCard({ initialCount, variant = 'default' }: { initialCount: WaitlistDisplayCount; variant?: 'default' | 'compact' }) {
-  const [count, setCount] = useState(initialCount);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const refreshCount = async () => {
-      try {
-        const response = await fetch('/api/waitlist-count', { cache: 'no-store' });
-        if (!response.ok) return;
-
-        const nextCount = (await response.json()) as WaitlistDisplayCount;
-        if (isActive && Number.isInteger(nextCount.displayCount) && nextCount.displayCount >= 0) {
-          setCount(nextCount);
-        }
-      } catch {
-        // Keep the last successful count when the network is unavailable.
-      }
-    };
-
-    const intervalId = window.setInterval(refreshCount, REFRESH_INTERVAL_MS);
-
-    return () => {
-      isActive = false;
-      window.clearInterval(intervalId);
-    };
-  }, []);
-
+export default function WaitlistCountCard({ initialCount: count, variant = 'default' }: { initialCount: WaitlistDisplayCount; variant?: 'default' | 'compact' }) {
   return (
     <aside
       className={`${styles.waitlistCountCard} ${variant === 'compact' ? styles.waitlistCountCardCompact : ''}`}
