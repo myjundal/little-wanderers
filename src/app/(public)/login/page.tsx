@@ -95,6 +95,7 @@ function rememberEmailLinkSent(email: string, mode: JourneyMode) {
 
 export default function LoginPage() {
   const [ready, setReady] = useState(false);
+  const [wanderlistEntry, setWanderlistEntry] = useState(false);
   const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
   const [journeyMode, setJourneyMode] = useState<JourneyMode>('new');
   const [phoneInput, setPhoneInput] = useState('');
@@ -120,6 +121,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const next = params.get('next');
     const mode = params.get('mode');
+    setWanderlistEntry(mode === 'continue' && next === '/wanderlist-founding');
     const authError = params.get('error');
     if (next && next.startsWith('/') && !next.startsWith('//')) {
       sessionStorage.setItem('post_login_redirect', next);
@@ -391,7 +393,7 @@ export default function LoginPage() {
       <section style={{ borderRadius: 24, border: '1px solid #e3d0fb', background: '#fff', boxShadow: '0 16px 28px rgba(120,87,177,0.12)', padding: 20 }}>
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Little Wanderers</p>
         <h1 style={{ margin: '10px 0 8px', color: '#4f3f82', fontSize: 26 }}>Sign in</h1>
-        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>{journeyMode === 'continue' ? 'Verify your email or phone to continue your membership. If you have been here before, use the same email or verified phone number.' : 'Create or continue your Little Wanderers account with email.'}</p>
+        <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>{journeyMode === 'continue' ? wanderlistEntry ? 'Use the email you joined the Wanderlist with. We’ll send a link to continue your $50 + $10 membership.' : 'Use your email to continue your membership. Your existing family details will come with you.' : 'Create or continue your Little Wanderers account with email.'}</p>
 
         {journeyMode !== 'continue' && <div style={{ marginTop: 16, width: '100%', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'break-word', borderRadius: 16, border: '1px solid #f0d89b', background: '#fff8e6', padding: 14 }}>
           <p style={{ margin: 0, color: '#6b4d12', fontWeight: 800 }}>Early access now starts here.</p>
@@ -408,10 +410,12 @@ export default function LoginPage() {
           </div>
         </div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 14 }}>
+        {journeyMode !== 'continue' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 14 }}>
           <button type="button" onClick={() => { setAuthMethod('phone'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'phone' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with phone</button>
           <button type="button" onClick={() => { setAuthMethod('email'); setStep('collect'); clearFeedback(); }} style={{ padding: '11px 12px', borderRadius: 12, border: authMethod === 'email' ? '2px solid #5f3da4' : '1px solid #d8c5f6', background: '#fff', color: '#4f3f82', fontWeight: 700 }}>Continue with email</button>
-        </div>
+        </div>}
+
+        {wanderlistEntry && authMethod === 'phone' && <p style={{ fontSize: 13, lineHeight: 1.6, color: '#6b4d12', background: '#fff8e6', padding: 12, borderRadius: 12 }}>Use phone only if it is already verified on your Wanderlist account. First time here? Choose email to keep your $10 sibling rate.</p>}
 
         {step === 'collect' && authMethod === 'phone' && (
           <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
@@ -451,6 +455,8 @@ export default function LoginPage() {
             </button>
           </div>
         )}
+
+        {journeyMode === 'continue' && step === 'collect' && <button type="button" onClick={() => { setAuthMethod(authMethod === 'email' ? 'phone' : 'email'); clearFeedback(); }} style={{ display: 'block', width: '100%', marginTop: 12, padding: 10, background: 'transparent', border: 'none', color: '#79618f', textDecoration: 'underline', fontSize: 12, cursor: 'pointer' }}>{authMethod === 'email' ? 'Use a linked phone number instead' : 'Use email instead'}</button>}
 
         {step === 'emailLinkSent' && (
           <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>

@@ -30,11 +30,18 @@ async function entry(audience, { signedIn = false, offer = waitlistOffer, enroll
   const render = () => { cursor = 0; return Component({ audience }); };
   render(); effects.splice(0).forEach(fn => fn());
   await new Promise(resolve => setImmediate(resolve));
-  const tree = render();
-  const nodes = [];
-  const visit = node => { if (Array.isArray(node)) return node.forEach(visit); if (!React.isValidElement(node)) return; nodes.push(node); visit(node.props.children); };
-  visit(tree);
-  return { html: renderToStaticMarkup(tree), nodes, signOutCalls, navigations };
+  const snapshot = () => {
+    const tree = render(); const nodes = [];
+    const visit = node => { if (Array.isArray(node)) return node.forEach(visit); if (!React.isValidElement(node)) return; nodes.push(node); visit(node.props.children); };
+    visit(tree);
+    return { html: renderToStaticMarkup(tree), nodes, signOutCalls, navigations, rerender: snapshot };
+  };
+  return snapshot();
+}
+
+async function advance(view) {
+  await view.nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+  return view.rerender();
 }
 
 test('each unlisted entry route selects its own audience and forbids indexing', () => {
@@ -68,7 +75,7 @@ test('guest pages advertise separate prices and use a single authentication cont
 test('phone-only sessions can enter the required contact email and show their authenticated phone', async () => {
   const view = await entry('public', { signedIn: true, phoneOnly: true });
   const email = view.nodes.find(node => node.props.id === 'founding-email');
-  assert.equal(email.props.readOnly, false);
+  assert.notEqual(email.props.readOnly, true);
   assert.equal(email.props.required, true);
   assert.equal(email.props.value, '');
   assert.match(view.html, /Contact email/);
@@ -76,19 +83,19 @@ test('phone-only sessions can enter the required contact email and show their au
 });
 
 test('general entry keeps its own title while honoring an eligible family’s better account rate and saved identities', async () => {
-  const waitlist = await entry('public', { signedIn: true, offer: { ...waitlistOffer, can_enroll: true } });
-  assert.equal(waitlist.nodes.filter(node => node.type === 'span' && node.props.children === 'Public founding').length, 2);
+  let waitlist = await entry('public', { signedIn: true, offer: { ...waitlistOffer, can_enroll: true } });
+  assert.equal(waitlist.nodes.filter(node => node.type === 'span' && node.props.children === 'Public founding').length, 1);
   assert.match(waitlist.html, /Your account qualifies for original Wanderlist pricing/);
-  assert.match(waitlist.html, /\$60\/mo/);
-  assert.equal(waitlist.nodes.find(node => node.props.id === 'founding-email').props.value, 'existing@example.test');
-  assert.equal(waitlist.nodes.find(node => node.props.id === 'founding-email').props.readOnly, true);
+  assert.match(waitlist.html, /existing@example.test/);
+  assert.equal(waitlist.nodes.some(node => node.props.id === 'founding-email'), false);
+  waitlist = await advance(waitlist);
   assert.equal(waitlist.nodes.find(node => node.props.id === 'first-saved-child').props.value, 'Sam');
   assert.equal(waitlist.nodes.find(node => node.props.id === 'birth-saved-child').props.value, '01/01/2023');
 });
 
 test('Wanderlist entry never changes to Public after login and cannot silently enroll an ineligible family at public pricing', async () => {
   const view = await entry('waitlist', { signedIn: true, offer: { phase: 'public', tier: 'public', can_enroll: true, base_cents: 5000, sibling_cents: 2000 }, config: { applicationId: 'test-app', locationId: 'test-location', environment: 'sandbox' } });
-  assert.equal(view.nodes.filter(node => node.type === 'span' && node.props.children === 'Wanderlist founding').length, 2);
+  assert.equal(view.nodes.filter(node => node.type === 'span' && node.props.children === 'Wanderlist founding').length, 1);
   assert.match(view.html, /\+\$10\/mo/);
   assert.match(view.html, /could not confirm eligibility with this account/);
   assert.doesNotMatch(view.html, /Public founding|\+\$20\/mo/);
@@ -97,7 +104,7 @@ test('Wanderlist entry never changes to Public after login and cannot silently e
   assert.equal(view.nodes.some(node => node.props.src?.includes('squarecdn.com')), false);
   assert.ok(view.nodes.some(node => node.props.href === '/general-founding'));
   assert.equal(view.signOutCalls.length, 0);
-  await view.nodes.find(node => node.type === 'button' && node.props.children === 'Use my Wanderlist account').props.onClick();
+  await view.nodes.find(node => node.type === 'button' && node.props.children === 'Use my Wanderlist email').props.onClick();
   assert.equal(view.signOutCalls[0].scope, 'local');
   assert.deepEqual(view.navigations, ['/login?mode=continue&next=%2Fwanderlist-founding']);
 });
@@ -107,7 +114,7 @@ test('Wanderlist identity stays stable for existing public reservations without 
     status: 'pending', pricing_tier: 'public', base_cents: 5000, sibling_cents: 2000,
     card_brand: 'VISA', card_last4: '1111', start_date: null, paid_through: null,
   } });
-  assert.equal(view.nodes.filter(node => node.type === 'span' && node.props.children === 'Wanderlist founding').length, 2);
+  assert.equal(view.nodes.filter(node => node.type === 'span' && node.props.children === 'Wanderlist founding').length, 1);
   assert.match(view.html, /\+\$10\/mo/);
   assert.match(view.html, /\$20\/month per sibling/);
   assert.equal(view.nodes.some(node => node.type === 'form'), false);
@@ -124,4 +131,65 @@ test('opening ends both advertised founding offers; existing reservations retain
   } });
   assert.match(saved.html, /\+\$10\/mo/);
   assert.match(saved.html, /not set yet/);
+});
+
+
+test('family setup presents one step at a time, retains edits, and loads Square only on the card step', async () => {
+  const config = { applicationId: 'test-app', locationId: 'test-location', environment: 'sandbox' };
+  let view = await entry('waitlist', { signedIn: true, offer: { ...waitlistOffer, can_enroll: true }, config });
+  assert.ok(view.nodes.some(node => node.props.id === 'founding-first'));
+  assert.equal(view.nodes.some(node => node.props.id === 'first-saved-child'), false);
+  assert.equal(view.nodes.some(node => node.props.src?.includes('squarecdn.com')), false);
+  view = await advance(view);
+  assert.equal(view.nodes.some(node => node.props.id === 'founding-first'), false);
+  assert.ok(view.nodes.some(node => node.props.id === 'first-saved-child'));
+  view.nodes.find(node => node.props.id === 'first-saved-child').props.onChange({ target: { value: 'Updated name' } });
+  view = view.rerender();
+  view = await advance(view);
+  assert.match(view.html, /Please confirm your children/);
+  assert.equal(view.nodes.some(node => node.props.id === 'founding-card'), false);
+  view.nodes.find(node => node.props.type === 'checkbox').props.onChange({ target: { checked: true } });
+  view = view.rerender();
+  view = await advance(view);
+  assert.match(view.html, /Updated name/);
+  assert.match(view.html, /\$50\/mo/);
+  assert.ok(view.nodes.some(node => node.props.id === 'founding-card'));
+  assert.ok(view.nodes.some(node => node.props.src?.includes('sandbox.web.squarecdn.com')));
+  assert.ok(view.nodes.some(node => node.props.type === 'submit' && node.props.disabled));
+  view.nodes.find(node => node.props.children === '← Back').props.onClick();
+  view = view.rerender();
+  assert.equal(view.nodes.find(node => node.props.id === 'first-saved-child').props.value, 'Updated name');
+  assert.equal(view.nodes.some(node => node.props.id === 'founding-card'), false);
+  view.nodes.find(node => node.props.id === 'birth-saved-child').props.onChange({ target: { value: '12/31/2099' } });
+  view = view.rerender(); view = await advance(view);
+  assert.match(view.html, /actual birthday/);
+  assert.equal(view.nodes.some(node => node.props.id === 'founding-card'), false);
+});
+
+test('an invalid phone stays on the parent step before loading Square', async () => {
+  let view = await entry('public', { signedIn: true, offer: { ...waitlistOffer, phase: 'public', tier: 'public', can_enroll: true } });
+  view.nodes.find(node => node.props.id === 'founding-phone').props.onChange({ target: { value: '123' } });
+  view = view.rerender(); view = await advance(view);
+  assert.match(view.html, /10-digit US phone/);
+  assert.ok(view.nodes.some(node => node.props.id === 'founding-first'));
+  assert.equal(view.nodes.some(node => node.props.id === 'founding-card'), false);
+});
+
+test('membership header removes navigation distractions only on membership and its login continuation', () => {
+  for (const [path, query, compact] of [
+    ['/wanderlist-founding', '', true], ['/general-founding', '', true],
+    ['/login', 'mode=continue&next=/wanderlist-founding', true],
+    ['/', '', false], ['/party', '', false], ['/login', '', false],
+  ]) {
+    const header = loadModule('src/components/membership/FoundingHeader.tsx', {
+      'next/navigation': { usePathname: () => path, useSearchParams: () => new URLSearchParams(query) },
+      'next/link': ({ children, ...props }) => React.createElement('a', props, children),
+      'next/image': props => React.createElement('img', { ...props, priority: undefined }),
+      './founding.module.css': {},
+    }, { React }).default;
+    const output = header({ children: 'Existing website navigation' });
+    const html = renderToStaticMarkup(output);
+    assert.equal(html.includes('Need help?'), compact);
+    assert.equal(html.includes('Existing website navigation'), !compact);
+  }
 });
