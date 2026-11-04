@@ -57,7 +57,7 @@ test('one email continuation handles both existing and first-time users without 
 test('first-time and existing phone users verify SMS and return through the authenticated membership continuation', async () => {
   for (const existing of [false, true]) {
     const view = await login({ existing, next: '/general-founding' });
-    await view.click('Continue with phone');
+    await view.click('Use a linked phone number instead');
     view.input('phone', '(860) 555-0123');
     await view.click('Text me a code');
     assert.equal(view.authCalls[0].phone, '+18605550123');
@@ -105,4 +105,17 @@ test('SMS finishing uses the verified account and preserves membership destinati
     assert.equal(destination.pathname, user ? '/general-founding' : '/login');
     if (!user) { assert.equal(destination.searchParams.get('mode'), 'continue'); assert.equal(destination.searchParams.get('next'), '/general-founding'); }
   }
+});
+
+
+test('Wanderlist login defaults to email and explains linked-phone eligibility before SMS', async () => {
+  const view = await login();
+  assert.match(view.html(), /email you joined the Wanderlist with/);
+  assert.ok(view.nodes().some(node => node.props.id === 'email'));
+  assert.equal(view.nodes().some(node => node.props.id === 'phone'), false);
+  await view.click('Use a linked phone number instead');
+  assert.match(view.html(), /already verified on your Wanderlist account/);
+  await view.click('Use email instead');
+  assert.ok(view.nodes().some(node => node.props.id === 'email'));
+  assert.equal(view.authCalls.length, 0);
 });

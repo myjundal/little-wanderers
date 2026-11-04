@@ -40,6 +40,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [step, setStep] = useState(0);
   const cardRef = useRef<Card | null>(null);
   const submitting = useRef(false);
   const locked = enrollment && !['draft', 'saving_card'].includes(enrollment.status);
@@ -65,7 +66,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
   }, []);
 
   useEffect(() => {
-    if (!sdkReady || !config || locked || waitlistUnavailable) return;
+    if (step !== 2 || !sdkReady || !config || locked || waitlistUnavailable) return;
     let disposed = false;
     let localCard: Card | undefined;
     const setup = async () => {
@@ -78,7 +79,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
     };
     void setup().catch(() => { if (!disposed) setError('The secure Square card form could not load. Please refresh and try again.'); });
     return () => { disposed = true; cardRef.current = null; setCardReady(false); if (localCard) void localCard.destroy(); };
-  }, [sdkReady, config, locked, waitlistUnavailable]);
+  }, [step, sdkReady, config, locked, waitlistUnavailable]);
 
   const patch = (key: keyof Omit<Profile, 'children'>, value: string) => setProfile(current => ({ ...current, [key]: value }));
   const patchChild = (id: string, next: Partial<Child>) => { setProfile(current => ({ ...current, children: current.children.map(child => child.id === id ? { ...child, ...next } : child) })); setBirthdaysConfirmed(false); };
@@ -104,8 +105,29 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
     } catch { setError('We could not switch accounts. Please refresh and try again.'); setBusy(false); }
   }
 
+  function changeStep(next: number) {
+    setStep(next); setError(null);
+    if (next !== 2) setConsent(false);
+    if (typeof document !== 'undefined') document.getElementById('join')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function continueFamily() {
+    if (step === 0) {
+      const digits = profile.phone.replace(/\D/g, '');
+      const local = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+      if (!/^\d{10}$/.test(local)) { setError('Enter a 10-digit US phone number.'); return; }
+      changeStep(1);
+      return;
+    }
+    const dates = profile.children.map(child => parseBirthdate(child.birthdate));
+    if (dates.some(date => !date || date > easternDate())) { setError('Enter each child’s actual birthday as MM/DD/YYYY.'); return; }
+    if (!birthdaysConfirmed) { setError('Please confirm your children’s names and birthdays.'); return; }
+    changeStep(2);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (step < 2) { continueFamily(); return; }
     if (submitting.current || !cardRef.current || !consent || !birthdaysConfirmed || !offer.can_enroll || waitlistUnavailable) return;
     const dates = profile.children.map(child => parseBirthdate(child.birthdate));
     if (dates.some(date => !date)) { setError('Enter a real birthday for each child as MM/DD/YYYY.'); return; }
@@ -138,93 +160,108 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
   }
 
   return <main className={styles.page}>
-    <section className={styles.hero}>
-      <div className={styles.heroCopy}>
-        <span className={styles.eyebrow}>{founding ? price.label : 'Monthly membership'}</span>
-        <h1>Little moments.<br /><em>{founding ? 'Founding families.' : 'More days to play.'}</em></h1>
-        <p>A familiar place to play, grow, and come back to. Make Little Wanderers part of your everyday.</p>
-        <a className={styles.primary} href="#join">{founding ? 'Become a founding member' : 'Join our membership'} <span aria-hidden="true">↗</span></a>
-        <span className={styles.small}>Save your card today. Pay $0 today.</span>
-      </div>
-      <div className={styles.priceCard}>
+    <div className={styles.layout}>
+      <section className={`${styles.offer} ${auth === 'signedIn' ? styles.offerCompact : ''}`} aria-label="Membership offer">
         <span className={styles.eyebrow}>{price.label}</span>
+        <h1>{founding ? 'Founding membership.' : 'Monthly membership.'}</h1>
+        <p className={styles.tagline}>Unlimited open play for your family.</p>
         <div className={styles.price}>{money(price.base_cents)}<span>/mo</span></div>
-        {founding && <p className={styles.regular}>Regularly <s>$60/month</s></p>}
-        <p className={styles.rateNote}>{founding ? <>Both rates locked in for life,<br />while your membership stays active.</> : 'Regular monthly pricing.'}</p>
-        <div className={styles.priceDivider} />
-        <p><strong>+{money(price.sibling_cents)}/mo</strong> for each sibling 6 months or older</p>
-        <p className={styles.small}>Baby siblings under 6 months: no additional charge.</p>
-        {founding && <p className={styles.small}>Two children (sibling 6mo+): {money(price.base_cents + price.sibling_cents)}/mo · {price.two_child_discount}% off the regular $80/mo.</p>}<div className={styles.badge}>Cancel anytime · No commitment</div>
-      </div>
-    </section>
+        <p className={styles.firstChild}>First child{founding && <> · regularly <s>$60/mo</s></>}</p>
+        <p className={styles.sibling}><strong>+{money(price.sibling_cents)}/mo</strong> per sibling, 6 months or older</p>
+        <p className={styles.small}>Baby siblings under 6 months are free.</p>
+        <p className={styles.rateNote}>{founding ? 'Lifetime rates while active.' : 'Regular monthly pricing.'} Cancel anytime.</p>
+        <div className={styles.today}><strong>Pay $0 today.</strong><span>Monthly billing starts on your first membership visit, including during soft opening.</span></div>
+        <details className={styles.offerDetails}>
+          <summary>What’s included & membership details</summary>
+          <ul><li>Unlimited open play, with up to two accompanying adults.</li><li>Visits throughout our soft opening period are included, with no separate admission charge. Reservations, capacity limits, and a signed waiver apply.</li><li>Priority registration for select classes and events.</li></ul>
+          {founding && <p>Two children, both 6mo+: {money(price.base_cents + price.sibling_cents)}/mo · {price.two_child_discount}% off regular pricing.</p>}
+          <p>No commitment. {founding && 'Both first-child and sibling rates stay locked in while your membership stays active.'} If you cancel and rejoin, regular $60 + $20 pricing applies. Sibling charges begin with the billing cycle after a baby turns 6 months.</p>
+        </details>
+      </section>
 
-    <section className={styles.benefits} aria-label="Membership includes">
-      <article><span aria-hidden="true">✳</span><h2>More days to play</h2><p>Unlimited open play during regular open play hours, with up to two accompanying adults.</p></article>
-      <article><span aria-hidden="true">♡</span><h2>Be here from the start</h2><p>Visits throughout our soft opening period are included with your membership, with no separate admission charge. Reservations, capacity limits, and a signed waiver apply.</p></article>
-      <article><span aria-hidden="true">↗</span><h2>A little head start</h2><p>Priority registration for select classes and special events.</p></article>
-    </section>
-
-    <section className={styles.timing}><div><span className={styles.eyebrow}>Here’s how it works</span><h2>Join now. Your first payment can wait.</h2></div><ol><li><strong>Confirm your family.</strong> Verify your email or phone, then confirm your contact and child information.</li><li><strong>Save your card with Square.</strong> There is no membership charge today.</li><li><strong>Start with us.</strong> Monthly billing begins on your first membership visit, including during soft opening, when we activate your membership at the studio. Saving your card does not start billing.</li></ol></section>
-
-    <section id="join" className={styles.join}>
-      <div className={styles.joinIntro}><span className={styles.eyebrow}>Let’s get your family ready</span><h2>Your place in<br />{' '}<em>the beginning.</em></h2><p>{founding ? `Your ${money(price.base_cents)} first-child and ${money(price.sibling_cents)} sibling rates are locked in for the lifetime of your active membership.` : 'Regular membership is $60/month for the first child and $20/month per eligible sibling.'} Cancel anytime, with no commitment. If you cancel and rejoin, regular $60 + $20 pricing applies.</p><p>When a baby sibling turns 6 months, {money(price.sibling_cents)} sibling pricing begins with the following billing cycle.</p><p className={styles.small}>Questions? <a href="/contact">We’re here to help.</a></p></div>
-      <div className={styles.formCard}>
-        {auth === 'loading' && <p role="status">Loading your family account…</p>}
-        {auth === 'guest' && <div className={styles.guest}><h3>{!founding ? 'Welcome to Little Wanderers.' : audience === 'public' ? 'Welcome, founding family.' : offer.phase === 'waitlist' ? 'Wanderlist families go first.' : 'Welcome, founding family.'}</h3><p>Verify your email or phone to continue. If you’ve visited before, use the same email or verified phone number to bring back your saved family details. No separate signup is needed.</p><p>For original Wanderlist pricing, use your Wanderlist email or a verified phone already linked to that account. We’ll confirm your children’s details before you save your card.</p>{audience === 'public' && offer.phase === 'waitlist' && <p>Public founding registration opens after Wanderlist families have had first access.</p>}<Link className={styles.primary} href={signInHref}>Continue with email or phone</Link><p className={styles.small}>No payment today. Monthly billing starts on your first membership visit.</p></div>}
+      <section id="join" className={styles.formCard} aria-label="Join membership">
+        {auth === 'loading' && <p role="status">Checking your sign-in…</p>}
+        {auth === 'error' && <div className={styles.guest}><h2>Let’s try that again.</h2><p>Your family details could not load.</p><button type="button" className={styles.primary} onClick={() => window.location.reload()}>Reload membership</button></div>}
+        {auth === 'guest' && <div className={styles.guest}>
+          <span className={styles.eyebrow}>Start here</span><h2>Join in a few simple steps.</h2>
+          <ol className={styles.guestSteps}><li>Sign in</li><li>Add your family</li><li>Save your card</li></ol>
+          <p>{audience === 'waitlist' ? 'Use the email you joined the Wanderlist with to unlock your $10 sibling rate.' : 'Use your email to continue. Your family account is created automatically if you’re new.'}</p>
+          {audience === 'public' && offer.phase === 'waitlist' && <p className={styles.notice}>Public founding opens after Wanderlist families have had first access.</p>}
+          <Link className={styles.primary} href={signInHref}>Continue with email</Link>
+          <p className={styles.small}>Already have an account? Use the same email or a phone already linked to it. No separate signup.</p>
+          <p className={styles.reassurance}>$0 today · No commitment</p>
+        </div>}
         {auth === 'signedIn' && !locked && waitlistUnavailable && <div className={styles.guest}>
-          <h3>Wanderlist founding membership</h3>
-          {signedInAs && <p>Signed in as <strong>{signedInAs}</strong></p>}
-          <p>This $50/month + $10/month sibling offer is reserved for original Wanderlist families. We could not confirm eligibility with this account.</p>
-          <p>Use the email you joined the Wanderlist with, or a verified phone already linked to that account. If you need help, <Link href="/contact">contact us</Link>.</p>
-          <button type="button" className={styles.primary} disabled={busy} onClick={switchAccount}>{busy ? 'Switching accounts…' : 'Use my Wanderlist account'}</button>
+          <h2>Use your Wanderlist email.</h2>
+          {signedInAs && <p className={styles.account}>Signed in as <strong>{signedInAs}</strong></p>}
+          <p>We could not confirm eligibility with this account. Sign in with the email you joined the Wanderlist with for $50/month + $10 per eligible sibling.</p>
+          <p className={styles.small}>First-time phone sign-in doesn’t connect to your Wanderlist email.</p>
+          <button type="button" className={styles.primary} disabled={busy} onClick={switchAccount}>{busy ? 'Switching accounts…' : 'Use my Wanderlist email'}</button>
           <Link className={styles.secondary} href={offer.tier === 'regular' ? '/founding-membership' : '/general-founding'}>{offer.tier === 'regular' ? 'View regular membership' : 'View general founding membership'}</Link>
-          <p className={styles.small}>No payment is due today.</p>
+          <Link className={styles.help} href="/contact">Need a hand? Contact us</Link>
         </div>}
         {auth === 'signedIn' && locked && <div id="founding-status" tabIndex={-1} className={styles.status}>
           <span className={styles.eyebrow}>{enrollment.status === 'canceled' ? 'Membership canceled' : accountPrice.label}</span>
           <h3>{enrollment.status === 'canceled' ? 'Your cancellation is confirmed.' : enrollment.status === 'pending' ? 'You’re in. We can’t wait to meet you.' : 'Your founding membership'}</h3>
           {enrollment.status !== 'canceled' && <><p>Card saved: {enrollment.card_brand} ending in {enrollment.card_last4}.</p><p>{enrollment.start_date ? `Monthly billing starts ${enrollment.start_date}.` : 'No payment has been taken for your reservation. Your first monthly payment begins on your first membership visit, including during soft opening, when we activate your membership at the studio. Your billing start date is not set yet.'}</p><p><strong>{money(enrollment.base_cents)}/month</strong> for the first child + {money(enrollment.sibling_cents)}/month per sibling age 6 months or older.{enrollment.pricing_tier !== 'regular' && ' Both rates stay locked in while your membership stays active.'}</p><p>Your visits throughout the soft opening period are included with your membership, with no separate admission charge. <Link href="/landing/soft-opening">Reserve a visit</Link> when times become available.</p></>}
           {enrollment.status === 'canceled' && <p>Your founding rates have ended. Rejoining is $60/month for the first child + $20/month per eligible sibling.{enrollment.paid_through ? ` Any paid access continues through ${enrollment.paid_through}.` : ' No further monthly billing is scheduled.'}</p>}
-          {enrollment.status === 'canceled' && (waitlistUnavailable ? <Link className={styles.primary} href="/founding-membership">Rejoin at regular $60 + $20 pricing</Link> : <button type="button" className={styles.primary} onClick={() => { setEnrollment(null); setConsent(false); setBirthdaysConfirmed(false); }}>Rejoin at regular $60 + $20 pricing</button>)}
+          {enrollment.status === 'canceled' && (waitlistUnavailable ? <Link className={styles.primary} href="/founding-membership">Rejoin at regular $60 + $20 pricing</Link> : <button type="button" className={styles.primary} onClick={() => { setEnrollment(null); setStep(0); setConsent(false); setBirthdaysConfirmed(false); }}>Rejoin at regular $60 + $20 pricing</button>)}
           <Link className={styles.secondary} href="/landing">Go to my family dashboard</Link>
           {enrollment.status !== 'canceled' && <>{!cancelConfirm ? <button type="button" className={styles.textButton} onClick={() => setCancelConfirm(true)}>Cancel my membership</button> : <div className={styles.cancelBox}><p>Cancel anytime. Canceling ends your founding rates. Rejoining is $60/month + $20/month per eligible sibling. Future renewals stop.</p><button type="button" className={styles.secondary} disabled={busy} onClick={cancel}>{busy ? 'Canceling…' : 'Confirm cancellation'}</button><button className={styles.textButton} type="button" disabled={busy} onClick={() => setCancelConfirm(false)}>Keep my membership</button></div>}</>}
         </div>}
         {auth === 'signedIn' && !locked && !waitlistUnavailable && <form onSubmit={submit}>
-          <h3>Confirm your family details</h3><p className={styles.small}>All fields are required unless marked optional. Your existing family details are filled in below. This membership will be saved to your signed-in family account.</p>
-          {signedInAs && <p className={styles.small}>Signed in as <strong>{signedInAs}</strong></p>}
-          {audience && audience !== accountTier && offer.can_enroll && <p className={styles.notice}>{accountTier === 'waitlist' ? 'Your account qualifies for original Wanderlist pricing: $50/month + $10/month per eligible sibling.' : accountTier === 'regular' ? 'Your account is eligible for regular membership: $60/month + $20/month per eligible sibling.' : 'Your account qualifies for public founding pricing: $50/month + $20/month per eligible sibling. The $10 sibling rate is reserved for original Wanderlist families.'}</p>}
-          <fieldset disabled={busy}><legend>Parent or caregiver</legend><div className={styles.grid}>
-            <label htmlFor="founding-first">First name<input id="founding-first" autoComplete="given-name" maxLength={80} required value={profile.adultFirstName} onChange={e => patch('adultFirstName', e.target.value)} /></label>
-            <label htmlFor="founding-last">Last name<input id="founding-last" autoComplete="family-name" maxLength={80} required value={profile.adultLastName} onChange={e => patch('adultLastName', e.target.value)} /></label>
-            <label htmlFor="founding-gender">Gender<GenderSelect id="founding-gender" value={profile.adultGender} onChange={value => patch('adultGender', value)} /></label>
-            <label htmlFor="founding-email">{emailLocked ? 'Account email' : 'Contact email'}<input id="founding-email" type="email" autoComplete="email" required value={profile.email} readOnly={emailLocked} onChange={e => patch('email', e.target.value)} /></label>
-            <label htmlFor="founding-phone">US phone number<input id="founding-phone" type="tel" autoComplete="tel" placeholder="(860) 555-0123" required value={profile.phone} onChange={e => patch('phone', e.target.value)} /></label>
-            <label htmlFor="founding-city">City or town<input id="founding-city" autoComplete="address-level2" required maxLength={100} value={profile.city} onChange={e => patch('city', e.target.value)} /></label>
-            <label htmlFor="founding-state">State (two letters)<input id="founding-state" autoComplete="address-level1" required pattern="[A-Z]{2}" maxLength={2} value={profile.state} onChange={e => patch('state', e.target.value.toUpperCase())} /></label>
-          </div></fieldset>
-          <fieldset disabled={busy}><legend>Your children</legend><p className={styles.small}>Include every child who will be part of your family membership. Please confirm actual birthdays, including any previously entered as approximate ages.</p>
-            {profile.children.map((child, index) => <div key={child.id} className={styles.child}><div className={styles.childHeading}><strong>Child {index + 1}</strong>{!child.existing && profile.children.length > 1 && <button type="button" className={styles.textButton} onClick={() => { setProfile(p => ({ ...p, children: p.children.filter(c => c.id !== child.id) })); setBirthdaysConfirmed(false); }}>Remove</button>}</div><div className={styles.grid}>
-              <label htmlFor={`first-${child.id}`}>First name<input id={`first-${child.id}`} required maxLength={80} value={child.firstName} onChange={e => patchChild(child.id, { firstName: e.target.value })} /></label>
-              <label htmlFor={`last-${child.id}`}>Last name (optional)<input id={`last-${child.id}`} maxLength={80} value={child.lastName} onChange={e => patchChild(child.id, { lastName: e.target.value })} /></label>
-              <label htmlFor={`gender-${child.id}`}>Gender<GenderSelect id={`gender-${child.id}`} value={child.gender} onChange={value => patchChild(child.id, { gender: value })} /></label>
-              <label htmlFor={`birth-${child.id}`}>Birthday (MM/DD/YYYY)<input id={`birth-${child.id}`} required inputMode="numeric" placeholder="03/15/2023" maxLength={10} value={child.birthdate} onChange={e => patchChild(child.id, { birthdate: formatBirthdateInput(e.target.value) })} /></label>
-            </div></div>)}
+          <ol className={styles.progress} aria-label="Membership setup">
+            {['Your details', 'Children', 'Card'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} data-complete={step > index}><span>{step > index ? '✓' : index + 1}</span>{label}</li>)}
+          </ol>
+          <p className={styles.account}>Signed in as <strong>{signedInAs}</strong></p>
+          {audience && audience !== accountTier && offer.can_enroll && <p className={styles.notice}>{accountTier === 'waitlist' ? 'Your account qualifies for original Wanderlist pricing: $50/month + $10/month per eligible sibling.' : accountTier === 'regular' ? 'Your account is eligible for regular membership: $60/month + $20/month per eligible sibling.' : 'Your account qualifies for public founding pricing: $50/month + $20/month per eligible sibling.'}</p>}
+          {!offer.can_enroll && <p className={styles.notice}>Public founding registration opens next. We’re saving first access for Wanderlist families.</p>}
+
+          {step === 0 && <fieldset disabled={busy}><legend>Your details</legend>
+            <p className={styles.stepIntro}>Confirm your contact details. Saved information is filled in for you.</p>
+            <div className={styles.grid}>
+              <label htmlFor="founding-first">First name<input id="founding-first" autoComplete="given-name" maxLength={80} required value={profile.adultFirstName} onChange={e => patch('adultFirstName', e.target.value)} /></label>
+              <label htmlFor="founding-last">Last name<input id="founding-last" autoComplete="family-name" maxLength={80} required value={profile.adultLastName} onChange={e => patch('adultLastName', e.target.value)} /></label>
+              <label htmlFor="founding-phone">US phone number<input id="founding-phone" type="tel" autoComplete="tel" placeholder="(860) 555-0123" required value={profile.phone} onChange={e => patch('phone', e.target.value)} /></label>
+              <label htmlFor="founding-gender">Gender<GenderSelect id="founding-gender" value={profile.adultGender} onChange={value => patch('adultGender', value)} /></label>
+              {!emailLocked && <label className={styles.fullWidth} htmlFor="founding-email">Contact email<input id="founding-email" type="email" autoComplete="email" required value={profile.email} onChange={e => patch('email', e.target.value)} /></label>}
+              <label htmlFor="founding-city">City or town<input id="founding-city" autoComplete="address-level2" required maxLength={100} value={profile.city} onChange={e => patch('city', e.target.value)} /></label>
+              <label htmlFor="founding-state">State<input id="founding-state" autoComplete="address-level1" required pattern="[A-Z]{2}" maxLength={2} placeholder="CT" value={profile.state} onChange={e => patch('state', e.target.value.toUpperCase())} /></label>
+            </div>
+          </fieldset>}
+
+          {step === 1 && <fieldset disabled={busy}><legend>Your children</legend>
+            <p className={styles.stepIntro}>Add every child in your membership, with their actual birthday.</p>
+            {profile.children.map((child, index) => <div key={child.id} className={styles.child}>
+              <div className={styles.childHeading}><strong>Child {index + 1}</strong>{!child.existing && profile.children.length > 1 && <button type="button" className={styles.textButton} onClick={() => { setProfile(p => ({ ...p, children: p.children.filter(c => c.id !== child.id) })); setBirthdaysConfirmed(false); }}>Remove</button>}</div>
+              <div className={styles.grid}>
+                <label htmlFor={`first-${child.id}`}>First name<input id={`first-${child.id}`} required maxLength={80} value={child.firstName} onChange={e => patchChild(child.id, { firstName: e.target.value })} /></label>
+                <label htmlFor={`birth-${child.id}`}>Birthday<input id={`birth-${child.id}`} required inputMode="numeric" placeholder="MM/DD/YYYY" maxLength={10} value={child.birthdate} onChange={e => patchChild(child.id, { birthdate: formatBirthdateInput(e.target.value) })} /></label>
+                <label htmlFor={`gender-${child.id}`}>Gender<GenderSelect id={`gender-${child.id}`} value={child.gender} onChange={value => patchChild(child.id, { gender: value })} /></label>
+                <label htmlFor={`last-${child.id}`}>Last name (optional)<input id={`last-${child.id}`} maxLength={80} value={child.lastName} onChange={e => patchChild(child.id, { lastName: e.target.value })} /></label>
+              </div>
+            </div>)}
             <button type="button" className={styles.secondary} disabled={profile.children.length >= 20} onClick={() => { setProfile(p => ({ ...p, children: [...p.children, blankChild()] })); setBirthdaysConfirmed(false); }}>+ Add a sibling</button>
-            <label className={styles.checkbox}><input type="checkbox" required checked={birthdaysConfirmed} onChange={e => setBirthdaysConfirmed(e.target.checked)} /><span>I confirm every child’s name and actual birthday are correct.</span></label>
-          </fieldset>
-          <div className={styles.total}><span>Due today</span><strong>$0</strong><span>Monthly total at today’s ages</span><strong>{estimate === null ? 'Add birthdays' : `${money(estimate)}/mo`}</strong></div>
-          <p className={styles.small}>Your first monthly total is based on your children’s ages when billing begins. {money(accountPrice.base_cents)} base rate + {money(accountPrice.sibling_cents)} for each eligible sibling.</p>
-          <fieldset disabled={busy}><legend>Save your card securely</legend>
-            {config ? <><div id="founding-card" className={styles.cardMount} />{!cardReady && <p className={styles.small}>Loading secure card form…</p>}</> : <p className={styles.notice}>{offer.can_enroll ? 'Card registration will be available soon. No payment is due today.' : 'Wanderlist families have first access. Public founding membership will open next.'}</p>}
-            <details className={styles.terms}><summary>Monthly membership & card authorization</summary><p>{terms}</p></details>
-            <label className={styles.checkbox}><input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>I authorize Square to save my card and monthly billing to begin on my first membership visit, including during soft opening, when Little Wanderers activates my membership at the studio. I agree to the membership terms above, including sibling pricing and cancellation.</span></label>
-            <button className={styles.primary} type="submit" disabled={busy || !cardReady || !consent || !birthdaysConfirmed || !offer.can_enroll}>{busy ? 'Saving your card…' : 'Save my card · $0 today'}</button>
-            <p className={styles.small}>Card details go directly to Square. Saving your card does not start billing; your monthly membership starts on your first membership visit.</p>
-          </fieldset>
+            <label className={styles.checkbox}><input type="checkbox" required checked={birthdaysConfirmed} onChange={e => setBirthdaysConfirmed(e.target.checked)} /><span>My children’s names and birthdays are correct.</span></label>
+          </fieldset>}
+
+          {step === 2 && <fieldset disabled={busy}><legend>Save your card</legend>
+            <p className={styles.stepIntro}>Last step. No membership payment today.</p>
+            <div className={styles.review}><strong>{profile.adultFirstName} {profile.adultLastName}</strong><span>{profile.children.map(child => child.firstName).join(' · ')}</span><button type="button" className={styles.textButton} onClick={() => changeStep(0)}>Edit family details</button></div>
+            <div className={styles.total}><span>Due today</span><strong>$0</strong><span>Monthly membership</span><strong>{estimate === null ? 'Check birthdays' : `${money(estimate)}/mo`}</strong></div>
+            <p className={styles.small}>Starts on your first membership visit, including soft opening. Total is based on your children’s ages when billing begins.</p>
+            {config ? <><div id="founding-card" className={styles.cardMount} />{!cardReady && <p role="status" className={styles.small}>Loading secure card form…</p>}</> : <p className={styles.notice}>Card registration is not available yet. No payment is due today.</p>}
+            <details className={styles.terms}><summary>Membership terms & card authorization</summary><p>{terms}</p></details>
+            <label className={styles.checkbox}><input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>I agree to the membership terms and authorize Square to save my card. Monthly billing starts on my first membership visit, including soft opening.</span></label>
+          </fieldset>}
+          {step < 2 ? <button className={styles.primary} type="submit" disabled={busy || !offer.can_enroll}>{step === 0 ? 'Continue to children' : 'Continue to card'}</button> : <button className={styles.primary} type="submit" disabled={busy || !cardReady || !consent || !birthdaysConfirmed || !offer.can_enroll}>{busy ? 'Saving your card…' : 'Save my card · $0 today'}</button>}
+          {step > 0 && <button type="button" className={styles.textButton} disabled={busy} onClick={() => changeStep(step - 1)}>← Back</button>}
+          <p className={styles.reassurance}>{step === 2 ? 'Card details go directly to Square.' : 'Your information stays linked to this family account.'}</p>
         </form>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
-      </div>
-    </section>
-    {config && !locked && !waitlistUnavailable && <Script src={config.environment === 'production' ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js'} strategy="afterInteractive" onReady={() => setSdkReady(true)} onError={() => setError('The secure Square card form could not load. Please refresh and try again.')} />}
+        <p className={styles.help}><Link href="/contact">Questions? We’re here to help.</Link></p>
+      </section>
+    </div>
+    {step === 2 && config && !locked && !waitlistUnavailable && <Script src={config.environment === 'production' ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js'} strategy="afterInteractive" onReady={() => setSdkReady(true)} onError={() => setError('The secure Square card form could not load. Please refresh and try again.')} />}
   </main>;
 }

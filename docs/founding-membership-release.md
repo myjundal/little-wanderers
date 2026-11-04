@@ -183,3 +183,17 @@ activation. Visits throughout the soft-opening period are included with the
 membership with no separate admission charge; this is not a one-visit benefit.
 Old authorization versions cannot be activated under the revised policy. No
 production enrollment existed when this policy changed. Billing remains disabled.
+
+## Simplified enrollment — November 4, 2026
+
+Both entry pages share a compact price overview and one sign-in action. Benefits
+and detailed policies are collapsed, and the membership header shows only the
+brand and help link. Once signed in, families confirm parent details, then
+children, then the card authorization. Returning to earlier steps preserves
+family inputs. Changing children clears birthday confirmation; going back from
+the card step clears card authorization. Square initializes only on the card
+step, is destroyed when leaving it, and the final save still uses the existing
+validated account/family API. No family fields, required confirmations, prices,
+billing controls, or saved account identities are removed. Wanderlist sign-in
+starts with the original email; linked phone sign-in remains available with an
+explicit explanation. No opening date, subscription or charge is created.
