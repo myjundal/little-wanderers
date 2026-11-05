@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import PartyGuestWaivers from '@/components/waivers/PartyGuestWaivers';
-import { PARTY_TIME_ZONE } from '@/lib/party-config';
+import PartyScheduleEditor, { type PartySchedule } from '@/components/staff/PartyScheduleEditor';
+import { getPartyDateKey, PARTY_TIME_ZONE } from '@/lib/party-config';
+import { PARTY_SCHEDULE_UPDATED_EVENT } from '@/lib/party-management';
 import styles from './party-management.module.css';
 
 type Party = {
@@ -28,7 +30,7 @@ type Party = {
 
 const time = (value: string) => new Date(value).toLocaleTimeString('en-US', { timeZone: PARTY_TIME_ZONE, hour: 'numeric', minute: '2-digit' });
 
-export default function PartyManagement() {
+export default function PartyManagement({ canEditSchedule = false }: { canEditSchedule?: boolean }) {
   const [parties, setParties] = useState<Party[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [date, setDate] = useState('');
@@ -68,7 +70,19 @@ export default function PartyManagement() {
     return () => { controller.abort(); window.clearInterval(timer); };
   }, [load]);
 
-  const selected = parties.find(item => item.id === selectedId);
+  useEffect(() => {
+    const syncSchedule = (event: Event) => {
+      const item = (event as CustomEvent<PartySchedule>).detail;
+      ++revision.current;
+      setParties(previous => previous.map(party => party.id === item.id ? { ...party, ...item } : party)
+        .filter(party => getPartyDateKey(party.start_time) === date)
+        .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time)));
+    };
+    window.addEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
+    return () => window.removeEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
+  }, [date]);
+
+  const selected = parties.find(item => item.id === selectedId) ?? parties[0];
   async function update(action: string) {
     if (!selected || saving.current) return;
     saving.current = true;
@@ -101,7 +115,7 @@ export default function PartyManagement() {
     <p className={styles.feedback} role="status" aria-live="polite">{busy ? 'Saving attendance…' : message}</p>
     {loading ? <p>Loading today’s parties…</p> : !parties.length ? <div className={styles.card}><h3>No confirmed parties today</h3><p>Today’s confirmed parties will appear here with their waiver QR and attendance counters.</p></div> : <>
       <div className={styles.tabs} aria-label="Choose a party">
-        {parties.map(party => <button type="button" key={party.id} disabled={busy} aria-pressed={party.id === selectedId} onClick={() => { setSelectedId(party.id); setError(''); setMessage(''); }}>
+        {parties.map(party => <button type="button" key={party.id} disabled={busy} aria-pressed={party.id === selected?.id} onClick={() => { setSelectedId(party.id); setError(''); setMessage(''); }}>
           <strong>{time(party.start_time)} – {time(party.end_time)}</strong><span>{party.birthday_child_name || party.household_name}</span>
         </button>)}
       </div>
@@ -110,6 +124,14 @@ export default function PartyManagement() {
           <p className={styles.eyebrow}>Party details</p>
           <h3>{selected.birthday_child_name ? `${selected.birthday_child_name}’s party` : selected.household_name}</h3>
           <p className={styles.time}>{time(selected.start_time)} – {time(selected.end_time)}</p>
+          {canEditSchedule && new Date(selected.end_time).getTime() > Date.now() && <PartyScheduleEditor
+            key={`${selected.id}:${selected.start_time}:${selected.end_time}`}
+            booking={selected}
+            disabled={busy}
+            onSaved={item => {
+              setMessage(getPartyDateKey(item.start_time) === date ? 'Party date and time saved.' : 'Party moved to the new date. Find it under All bookings & requests.');
+            }}
+          />}
           <dl className={styles.details}>
             <div><dt>Host family</dt><dd><Link href={`/staff/families/${selected.household_id}`}>{selected.household_name}</Link></dd></div>
             <div><dt>Parent email</dt><dd>{selected.household_email ? <a href={`mailto:${selected.household_email}`}>{selected.household_email}</a> : 'Not provided'}</dd></div>
