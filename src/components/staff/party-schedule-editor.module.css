@@ -1,0 +1,13 @@
+.editor { margin: 20px 0; padding: 18px; border: 1px solid #dfd0ee; border-radius: 16px; background: #f8f3fd; color: #4f3f82; }
+.editor h4 { margin: 0 0 6px; font-size: 18px; }
+.editor p { margin: 6px 0 12px; line-height: 1.5; color: #6d6480; }
+.editor fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); gap: 12px; }
+.fields label { display: grid; gap: 6px; min-width: 0; font-size: 14px; font-weight: 700; }
+.fields input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 48px; border: 1px solid #d9c8e9; border-radius: 10px; padding: 10px; background: white; color: #4f3f82; font: inherit; }
+.editor button { min-height: 48px; margin-top: 14px; padding: 12px 18px; border: 1px solid #5f3da4; border-radius: 12px; background: #5f3da4; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+.editor button:disabled, .editor fieldset:disabled { opacity: .55; cursor: default; }
+.editor input:focus-visible, .editor button:focus-visible { outline: 3px solid #8555c2; outline-offset: 3px; }
+.editor .error { color: #903f29; }
+.editor .feedback { color: #356447; margin-bottom: 0; }
+.feedback:empty { display: none; }

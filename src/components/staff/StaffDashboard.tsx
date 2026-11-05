@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PartyGuestWaivers from '@/components/waivers/PartyGuestWaivers';
+import PartyScheduleEditor, { type PartySchedule } from '@/components/staff/PartyScheduleEditor';
+import { PARTY_TIME_ZONE } from '@/lib/party-config';
+import { PARTY_SCHEDULE_UPDATED_EVENT } from '@/lib/party-management';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 import Link from 'next/link';
 import ClassPreRegistrationRosters, { ClassViewSwitcher } from '@/components/classes/ClassPreRegistrationRosters';
@@ -430,6 +433,15 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
   const [classWeekStart, setClassWeekStart] = useState(() => startOfWeek(new Date()));
   const [classView, setClassView] = useState<'rosters' | 'sessions'>('rosters');
   const [focusedSessionId, setFocusedSessionId] = useState('');
+  useEffect(() => {
+    if (view !== 'parties') return;
+    const syncSchedule = (event: Event) => {
+      const item = (event as CustomEvent<PartySchedule>).detail;
+      setPartyBookings(previous => previous.map(party => party.id === item.id ? { ...party, ...item } : party));
+    };
+    window.addEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
+    return () => window.removeEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
+  }, [view]);
   const rosterSessions = useMemo<RosterSession[]>(() => classes.map(item => ({
     id: item.id, title: item.title, startTime: item.start_time, endTime: item.end_time,
     status: item.status, scheduleLabel: item.schedule_label,
@@ -764,7 +776,12 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
     <div id={`party-details-${selectedBooking.id}`} role="region" aria-label="Selected party details" style={{ marginTop: 12, borderRadius: 20, border: '1px solid #eadfff', background: '#fff', padding: 18 }}>
       <h3 style={{ marginTop: 0, color: '#4f3f82' }}>{selectedBooking.household_name}</h3>
       <p style={{ color: '#6d6480', overflowWrap: 'anywhere' }}><strong>Parent email:</strong> {selectedBooking.household_email ? <a href={`mailto:${selectedBooking.household_email}`}>{selectedBooking.household_email}</a> : 'Not provided'}</p>
-      <p style={{ color: '#6d6480' }}><strong>When:</strong> {new Date(selectedBooking.start_time).toLocaleString()} → {new Date(selectedBooking.end_time).toLocaleString()}</p>
+      <p style={{ color: '#6d6480' }}><strong>When:</strong> {new Date(selectedBooking.start_time).toLocaleString('en-US', { timeZone: PARTY_TIME_ZONE })} → {new Date(selectedBooking.end_time).toLocaleString('en-US', { timeZone: PARTY_TIME_ZONE })} ET</p>
+      {selectedBooking.status !== 'cancelled' && Date.parse(selectedBooking.end_time) > partyNow && <PartyScheduleEditor
+        key={`${selectedBooking.id}:${selectedBooking.start_time}:${selectedBooking.end_time}`}
+        booking={selectedBooking}
+        onSaved={() => setMessage('Party date and time saved.')}
+      />}
       <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{partyStatusLabel(selectedBooking, partyNow)}</span></p>
       {hasCancellationRequest(selectedBooking) && (
         <p style={{ color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested by family</p>
@@ -1340,7 +1357,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                   <span style={{ color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 700, textTransform: 'capitalize' }}>{partyStatusLabel(item, partyNow)}</span>
                 </div>
                 {hasCancellationRequest(item) && <div style={{ marginTop: 6, color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested</div>}
-                <div style={{ marginTop: 6, color: '#6d6480' }}>{new Date(item.start_time).toLocaleString()} → {new Date(item.end_time).toLocaleString()}</div>
+                <div style={{ marginTop: 6, color: '#6d6480' }}>{new Date(item.start_time).toLocaleString('en-US', { timeZone: PARTY_TIME_ZONE })} → {new Date(item.end_time).toLocaleString('en-US', { timeZone: PARTY_TIME_ZONE })} ET</div>
                 <div style={{ marginTop: 6, color: '#6d6480' }}>Guests: {item.headcount_expected ?? '-'} · Quote: {dollars(item.price_quote_cents)}</div>
                 {celebrationLines(item).map((line) => (
                   <div key={`${item.id}-${line}`} style={{ marginTop: 6, color: '#6d6480' }}>{line}</div>

@@ -82,6 +82,9 @@ async function dashboardHarness(canManageClasses) {
   const { default: Dashboard } = loadModule('src/components/staff/StaffDashboard.tsx', {
     react,
     '@/lib/party-booking-groups': loadModule('src/lib/party-booking-groups.ts'),
+    '@/lib/party-config': { PARTY_TIME_ZONE: 'America/New_York' },
+    '@/lib/party-management': { PARTY_SCHEDULE_UPDATED_EVENT: 'party-schedule-updated' },
+    '@/components/staff/PartyScheduleEditor': () => null,
     'next/link': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,
     '@/components/waivers/PartyGuestWaivers': () => null,

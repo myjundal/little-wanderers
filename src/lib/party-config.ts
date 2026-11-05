@@ -91,9 +91,9 @@ function timeZoneOffsetMs(date: Date) {
   return localAsUtc - date.getTime();
 }
 
-export function toPartyDateTimeIso(date: string, hourLocal: number) {
+export function toPartyDateTimeIso(date: string, hourLocal: number, minuteLocal = 0) {
   const [year, month, day] = date.split('-').map(Number);
-  const wallTimeAsUtc = Date.UTC(year, month - 1, day, hourLocal, 0, 0);
+  const wallTimeAsUtc = Date.UTC(year, month - 1, day, hourLocal, minuteLocal, 0);
   let instant = new Date(wallTimeAsUtc - timeZoneOffsetMs(new Date(wallTimeAsUtc)));
   instant = new Date(wallTimeAsUtc - timeZoneOffsetMs(instant));
   return instant.toISOString();

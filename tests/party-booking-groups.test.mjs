@@ -69,6 +69,9 @@ test('dashboard moves parties while open, labels completed details and keeps att
   const items = [party('today'), party('future', { start_time: '2026-11-07T10:00:00-05:00', end_time: '2026-11-07T13:00:00-05:00' })];
   const { default: Dashboard } = loadModule('src/components/staff/StaffDashboard.tsx', {
     react, 'next/link': 'a', '@/lib/party-booking-groups': grouping,
+    '@/lib/party-config': { PARTY_TIME_ZONE: 'America/New_York' },
+    '@/lib/party-management': { PARTY_SCHEDULE_UPDATED_EVENT: 'party-schedule-updated' },
+    '@/components/staff/PartyScheduleEditor': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,
     '@/components/waivers/PartyGuestWaivers': () => null,
     '@/components/classes/ClassPreRegistrationRosters': { __esModule: true, default: () => null, ClassViewSwitcher: () => null },
