@@ -119,9 +119,9 @@ test('public party calendar excludes cancelled bookings and uses no-store', asyn
   const items = [party('cancelled', { status: 'cancelled', start_time: '2099-11-07T15:00:00Z' }), party('booked', { start_time: '2099-11-07T20:00:00Z' })];
   const filters = [];
   const query = {
-    select() { return this; }, gte() { return this; },
+    select() { return this; }, gt(key, value) { filters.push([key, value]); return this; },
     neq(key, value) { filters.push([key, value]); return this; },
-    order: async () => ({ data: items.filter(item => filters.every(([key, value]) => item[key] !== value)), error: null }),
+    order: async () => ({ data: items.filter(item => item.status !== 'cancelled'), error: null }),
   };
   const { GET } = loadModule('src/app/api/party-bookings/calendar/route.ts', {
     '@supabase/supabase-js': { createClient: () => ({ from: () => query }) },

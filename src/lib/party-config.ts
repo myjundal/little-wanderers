@@ -17,6 +17,12 @@ export const PARTY_BOOKING_SLOTS: Array<{
 const PARTY_BOOKING_START_MS = Date.parse(`${PARTY_BOOKING_START_DATE}T00:00:00.000Z`);
 export const PARTY_TIME_ZONE = 'America/New_York';
 
+export function isPartyRangeAvailable(start: string, end: string, bookings: ReadonlyArray<{ start_time: string; end_time: string }>) {
+  const startsAt = Date.parse(start);
+  const endsAt = Date.parse(end);
+  return !bookings.some(booking => Date.parse(booking.start_time) < endsAt && Date.parse(booking.end_time) > startsAt);
+}
+
 export function getPartyBookingStartDate() {
   return new Date(PARTY_BOOKING_START_MS);
 }

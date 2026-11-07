@@ -12,6 +12,7 @@ import {
   getPartyBookingStartDate,
   getPartySlotFromStart,
   isPartyBookingDate,
+  isPartyRangeAvailable,
   isVisiblePartyCalendarSlot,
   PARTY_BOOKING_START_DATE,
   PARTY_BOOKING_START_LABEL,
@@ -367,18 +368,15 @@ export default function PartyPage() {
         const day = d.getUTCDay();
         if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const blockedStarts = new Set(
-          [...bookedSlots, ...items.filter((item) => item.status !== 'cancelled')].map((item) =>
-            new Date(item.start_time).getTime()
-          )
-        );
+        const blockedRanges = [...bookedSlots, ...items.filter(item => item.status !== 'cancelled')];
         for (const slot of getPartyBookingSlotOptionsForDate(dayStr)) {
           const start = toPartyDateTimeIso(dayStr, slot.startHour);
-          if (blockedStarts.has(new Date(start).getTime())) continue;
+          const end = toPartyDateTimeIso(dayStr, slot.endHour);
+          if (!isPartyRangeAvailable(start, end, blockedRanges)) continue;
           generated.push({
             id: `avail-${dayStr}-${slot.value}`,
             start,
-            end: toPartyDateTimeIso(dayStr, slot.endHour),
+            end,
             label: 'Available party slot',
             status: 'available',
           });
