@@ -476,18 +476,23 @@ export default function PartyPage() {
             Bring your food, cake, and personal touches, and enjoy the party at your own pace. We will take care of cleanup afterward.
           </p>
         </div>
-        <div className="partyRenderingImage">
-          <Image
-            src="/party-room-original.jpg"
-            alt="Little Wanderers party room decorated with pastel balloons, flowers, and celebration tables"
-            width={1280}
-            height={960}
-            unoptimized
-            priority
-            sizes="(max-width: 900px) 100vw, 380px"
-            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </div>
+        <figure style={{ margin: 0 }}>
+          <div className="partyRenderingImage">
+            <Image
+              src="/party-room-original.jpg"
+              alt="Little Wanderers party room decorated with pastel balloons, flowers, and celebration tables"
+              width={1280}
+              height={960}
+              unoptimized
+              priority
+              sizes="(max-width: 900px) 100vw, 380px"
+              style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
+          <figcaption style={{ marginTop: 8, color: '#6f628d', fontSize: 12, lineHeight: 1.5 }}>
+            Decorations shown are an example only. Please bring and set up your own party decorations.
+          </figcaption>
+        </figure>
       </section>
 
       <div className="partyIntroGrid">
@@ -520,7 +525,7 @@ export default function PartyPage() {
             Parties are available on Friday afternoons, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
           </p>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '8px 0 0' }}>
-            For non-birthday events, larger gatherings, or special requests, please contact us at{' '}
+            <strong>Private parties are also available.</strong> For private party options, non-birthday events, larger gatherings, or special requests, please contact us at{' '}
             <a href="mailto:hello@thelittlewanderers.com" style={{ color: '#5f3da4', fontWeight: 800 }}>hello@thelittlewanderers.com</a>{' '}
             or on Instagram at{' '}
             <a href="https://www.instagram.com/littlewanderers.weha" target="_blank" rel="noreferrer" style={{ color: '#5f3da4', fontWeight: 800 }}>@littlewanderers.weha</a>.
