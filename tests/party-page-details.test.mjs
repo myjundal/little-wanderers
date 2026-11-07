@@ -43,7 +43,7 @@ test('party page opens this month and uses the real room photo and flexible thre
   }, { React, Date: clock(now) }).default;
   const html = renderToStaticMarkup(React.createElement(Page));
   assert.ok(html.includes('November 2026'));
-  assert.ok(html.includes('/party-room-celebration.jpg'));
+  assert.ok(html.includes('/party-room-original.jpg'));
   assert.ok(html.includes(partyInfo.PARTY_TIME_POLICY));
   assert.doesNotMatch(html, /separate 30-minute|Birthday Galaxy|Staff support for setup|party-room-rendering|Planned party room rendering|This image is a rendering/);
 });
