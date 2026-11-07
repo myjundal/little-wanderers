@@ -56,7 +56,7 @@ type PartyForm = {
 const PARTY_SLOT_LOOKAHEAD_DAYS = 370;
 const PARTY_BRING_GROUPS = [
   {
-    title: 'Food',
+    title: 'Food & beverage',
     detail: 'Please be allergy mindful. Ready-to-serve food only; no onsite cooking or heating, no Sterno, and no open flame.',
   },
   {
