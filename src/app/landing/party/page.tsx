@@ -507,7 +507,7 @@ export default function PartyPage() {
           </p>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>Late-afternoon private parties</h3>
           <p style={{ color: '#6f628d', lineHeight: 1.55, margin: 0 }}>
-            Private parties are available in the 3 PM–6 PM slot. The first hour, 3 PM–4 PM, is for your setup while Open Play guests finish their visit and leave. Your private party time is 4 PM–6 PM, with exclusive use of the space during those two hours. With the space all to yourselves, you can host a larger group, with additional charges for extra guests.
+            Private parties are available in the 3 PM–6 PM slot. The first hour, 3 PM–4 PM, is for your setup while Open Play guests finish their visit and leave. Your private party time is 4 PM–6 PM, with exclusive use of the space during those two hours. Private parties carry an additional fee. Additional guests can be accommodated, and the final price may vary depending on your guest count.
           </p>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What is included</h3>
           <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
