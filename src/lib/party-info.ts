@@ -1,6 +1,7 @@
 export const PARTY_TOTAL_FEE_CENTS = 30000;
 export const PARTY_DEPOSIT_CENTS = 15000;
 export const PARTY_INCLUDED_GUESTS = 30;
+export const PARTY_TIME_POLICY = 'Your booking includes a total of 3 hours. Use that time however you like for setup, play, food, cake, and celebrating. Our team handles cleanup afterward.';
 
 export const PARTY_WHAT_TO_BRING = [
   'Food. Please be allergy mindful. Ready-to-serve food only; no onsite cooking or heating, no Sterno, and no open flame.',
@@ -14,7 +15,7 @@ export const PARTY_WHAT_WE_PROVIDE = [
   'Serving utensils',
   'Basic plates and utensils',
   'High chairs',
-  'Cleaning afterwards',
+  'Cleanup by our team after your party',
 ];
 
 export const PARTY_FINAL_DETAILS = [

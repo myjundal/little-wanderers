@@ -98,8 +98,8 @@ export default function AvailabilityCalendar({
       const [year, month] = initialMonth.split('-').map(Number);
       if (year && month) return new Date(year, month - 1, 1);
     }
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    const [year, month] = ymd(new Date(), timeZone).split('-').map(Number);
+    return new Date(year, month - 1, 1);
   });
   const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
   const upcoming = useMemo(
