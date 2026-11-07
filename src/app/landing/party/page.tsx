@@ -478,11 +478,11 @@ export default function PartyPage() {
         </div>
         <div className="partyRenderingImage">
           <Image
-            src="/party-room-celebration.jpg"
+            src="/party-room-original.jpg"
             alt="Little Wanderers party room decorated with pastel balloons, flowers, and celebration tables"
-            width={1448}
-            height={1086}
-            quality={92}
+            width={1280}
+            height={960}
+            unoptimized
             priority
             sizes="(max-width: 900px) 100vw, 380px"
             style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
