@@ -21,7 +21,7 @@ import {
   toPartyDateTimeIso,
   type PartyBookingSlot,
 } from '@/lib/party-config';
-import { PARTY_FINAL_DETAILS, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
+import { PARTY_FINAL_DETAILS, PARTY_TIME_POLICY, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 type PartyBooking = {
@@ -467,21 +467,21 @@ export default function PartyPage() {
 
       <section className="partyRenderingCard">
         <div>
-          <p style={{ margin: 0, color: '#7a63a5', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 12 }}>Planned party room rendering</p>
-          <h2 style={{ margin: '8px 0 0', color: '#4f3f82', fontSize: 22 }}>This is the party room we are building.</h2>
+          <p style={{ margin: 0, color: '#7a63a5', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 12 }}>Our party room</p>
+          <h2 style={{ margin: '8px 0 0', color: '#4f3f82', fontSize: 22 }}>Make the celebration your own.</h2>
           <p style={{ color: '#6f628d', lineHeight: 1.55, margin: '10px 0 0' }}>
-            This image is a rendering of our planned party room. We are creating a soft, space-inspired celebration space with long party tables, gentle lighting, and a small photo moment wall for birthdays and family celebrations.
+            A real celebration in our party room, with space to gather, share a meal, and make memories with your favorite people.
           </p>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '8px 0 0' }}>
-            Final finishes may shift as construction continues, but this is the look and feeling we are designing for Little Wanderers parties.
+            Bring your food, cake, and personal touches, and enjoy the party at your own pace. We will take care of cleanup afterward.
           </p>
         </div>
         <div className="partyRenderingImage">
           <Image
-            src="/party-room-rendering.jpg"
-            alt="Rendering of the planned Little Wanderers party room"
-            width={1536}
-            height={1024}
+            src="/party-room-celebration.jpg"
+            alt="Little Wanderers party room decorated with pastel balloons, flowers, and celebration tables"
+            width={1448}
+            height={1086}
             quality={92}
             priority
             sizes="(max-width: 900px) 100vw, 380px"
@@ -498,14 +498,11 @@ export default function PartyPage() {
             <span style={{ color: '#6f628d', fontWeight: 700 }}>3 hours semi-private party time</span>
           </div>
           <p style={{ color: '#6f628d', lineHeight: 1.55, margin: '10px 0 0' }}>
-            Your party includes 3 hours of semi-private celebration time in our party area, which is separated from the main play space by barn doors while still allowing play area access during the party. You will also have a separate 30-minute family setup window before the party and cleanup by our team afterward. Parties are limited to 30 guests total.
+            {PARTY_TIME_POLICY} Our semi-private party area is separated from the main play space by barn doors, with play area access during your booking. Parties are limited to 30 guests total.
           </p>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What is included</h3>
           <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
             {PARTY_WHAT_WE_PROVIDE.map((item) => <li key={item}>{item}</li>)}
-            <li>Staff support for setup and party flow</li>
-            <li><strong>Our signature Little Wanderers Birthday Galaxy activity</strong></li>
-            <li>A sweet group photo moment</li>
           </ul>
           <h3 style={{ margin: '14px 0 8px', color: '#4f3f82', fontSize: 18 }}>What to bring</h3>
           <ul style={{ margin: '0 0 0 20px', display: 'grid', gap: 6, color: '#4f3f82', lineHeight: 1.45 }}>
@@ -520,7 +517,7 @@ export default function PartyPage() {
             {PARTY_FINAL_DETAILS.map((item) => <li key={item}>{item}</li>)}
           </ul>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '12px 0 0' }}>
-            Because our buildout and opening are still in progress, birthday parties are available starting {PARTY_BOOKING_START_LABEL}. Available Friday evenings, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
+            Parties are available on Friday afternoons, Saturdays, and Sundays. Suggested weekend party times are 10 AM-1 PM or 3 PM-6 PM, with flexible timing available when possible.
           </p>
           <p style={{ color: '#6f628d', lineHeight: 1.5, margin: '8px 0 0' }}>
             For non-birthday events, larger gatherings, or special requests, please contact us at{' '}
@@ -533,11 +530,10 @@ export default function PartyPage() {
         <div>
           <AvailabilityCalendar
             title="Party booking calendar"
-            subtitle={`Party holds are available starting ${PARTY_BOOKING_START_LABEL}. Select an available Friday afternoon, Saturday, or Sunday slot to fill the booking form below.`}
+            subtitle="Choose an available Friday afternoon, Saturday, or Sunday to start planning your party."
             slots={slots}
             onSlotSelect={selectSlot}
             visibleWeekdays={[5, 6, 0]}
-            initialMonth={PARTY_BOOKING_START_DATE}
             timeZone={PARTY_TIME_ZONE}
           />
         </div>

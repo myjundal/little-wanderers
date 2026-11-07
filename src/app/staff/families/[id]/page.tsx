@@ -458,7 +458,7 @@ export default function StaffFamilyDetailPage() {
 
         <div style={{ marginTop: 18 }}>
           <h4 style={{ marginBottom: 6 }}>Book party</h4>
-          <AvailabilityCalendar title="Party calendar" slots={partySlots} initialMonth={PARTY_BOOKING_START_DATE} timeZone={PARTY_TIME_ZONE} />
+          <AvailabilityCalendar title="Party calendar" slots={partySlots} timeZone={PARTY_TIME_ZONE} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginTop: 8, maxWidth: 520 }}>
             <input type="date" min={PARTY_BOOKING_START_DATE} value={partyForm.party_date} onChange={(e) => {
               const partyDate = e.target.value;

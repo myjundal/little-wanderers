@@ -7,6 +7,7 @@ import {
   PARTY_FINAL_DETAILS,
   PARTY_INCLUDED_GUESTS,
   PARTY_TOTAL_FEE_CENTS,
+  PARTY_TIME_POLICY,
   PARTY_WHAT_TO_BRING,
   PARTY_WHAT_WE_PROVIDE,
 } from '@/lib/party-info';
@@ -74,19 +75,6 @@ function formatPartyRange(startIso: string, endIso: string) {
     minute: '2-digit',
   }).format(end);
   return `${date}, ${startTime}-${endTime}`;
-}
-
-function formatSetupArrival(startIso: string) {
-  const setup = new Date(new Date(startIso).getTime() - 30 * 60 * 1000);
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(setup);
 }
 
 function listItems(items: string[]) {
@@ -254,7 +242,7 @@ async function createPartyBalancePaymentLink(booking: PartyBookingRow, to: strin
 function partyRows(booking: PartyBookingRow) {
   return [
     ['Date and time', formatPartyRange(booking.start_time, booking.end_time)],
-    ['Setup arrival', formatSetupArrival(booking.start_time)],
+    ['Your party time', PARTY_TIME_POLICY],
     ['Expected guests', booking.headcount_expected ?? '-'],
     ['Birthday child', booking.birthday_child_name],
     ['Age', booking.birthday_age],
@@ -341,7 +329,6 @@ export async function sendPartyFinalDetailsEmail(admin: SupabaseClient, booking:
         ...partyRows(booking),
         ['Final headcount', finalHeadcount],
         ['Remaining balance', formatMoney(remainingBalanceCents)],
-        ['Setup arrival', formatSetupArrival(booking.start_time)],
       ])}
       ${paymentUrl ? `<p style="margin:20px 0;"><a href="${escapeHtml(paymentUrl)}" style="display:inline-block;background:#5f3da4;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px;">Pay remaining balance</a></p>` : '<p>Please reply to this email and we will send your remaining balance payment link.</p>'}
       <h2 style="font-size:17px;color:#4f3f82;margin:18px 0 6px;">Food and decor reminder</h2>
