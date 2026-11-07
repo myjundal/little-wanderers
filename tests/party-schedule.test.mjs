@@ -9,6 +9,39 @@ const id = '2af2cb2b-db0b-4d28-bfa2-fb23d50c00bc';
 const booking = { id, start_time: '2099-11-07T15:00:00Z', end_time: '2099-11-07T18:00:00Z', status: 'confirmed' };
 const payload = { date: '2099-11-08', start_time: '15:30', end_time: '18:45', expected_start_time: booking.start_time, expected_end_time: booking.end_time };
 
+test('calendar slots block any overlap with custom party times and allow adjacent bookings', () => {
+  const day = '2027-03-14';
+  const iso = (hour, minute = 0) => config.toPartyDateTimeIso(day, hour, minute);
+  const custom = [{ start_time: iso(10, 30), end_time: iso(13, 30) }];
+  assert.equal(config.isPartyRangeAvailable(iso(10), iso(13), custom), false);
+  assert.equal(config.isPartyRangeAvailable(iso(11), iso(12), custom), false);
+  assert.equal(config.isPartyRangeAvailable(iso(9), iso(14), custom), false);
+  assert.equal(config.isPartyRangeAvailable(iso(13), iso(16), custom), false);
+  assert.equal(config.isPartyRangeAvailable(iso(15), iso(18), custom), true);
+  assert.equal(config.isPartyRangeAvailable(iso(8), iso(10, 30), custom), true);
+  assert.equal(config.isPartyRangeAvailable(iso(13, 30), iso(16), custom), true);
+  assert.equal(config.isPartyRangeAvailable(iso(10), iso(13), []), true);
+});
+
+test('public calendar includes ongoing and custom Friday ranges that block afternoon availability', async () => {
+  const morning = management.parsePartySchedule('2099-11-06', '10:30', '13:30');
+  const spanning = management.parsePartySchedule('2099-11-06', '10:30', '16:30');
+  const filters = [];
+  const query = {
+    select() { return this; }, neq() { return this; },
+    gt(key, value) { filters.push([key, value]); return this; },
+    order: async () => ({ data: [{ id: 'morning', ...morning }, { id: 'spanning', ...spanning }], error: null }),
+  };
+  const { GET } = loadModule('src/app/api/party-bookings/calendar/route.ts', {
+    '@supabase/supabase-js': { createClient: () => ({ from: () => query }) },
+    '@/lib/party-config': config,
+  }, { process: { env: {} } });
+  const response = await GET();
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).items.map(item => item.id), ['spanning']);
+  assert.equal(filters[0][0], 'end_time');
+});
+
 test('operator schedules preserve Eastern wall times and minutes across DST changes', () => {
   for (const [date, offset] of [['2027-03-13', 5], ['2027-03-14', 4], ['2027-11-06', 4], ['2027-11-07', 5]]) {
     const schedule = management.parsePartySchedule(date, '10:15', '13:45');

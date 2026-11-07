@@ -13,6 +13,7 @@ import {
   getPartyBookingSlotOptionsForDate,
   getPartyBookingStartDate,
   isVisiblePartyCalendarSlot,
+  isPartyRangeAvailable,
   PARTY_BOOKING_START_DATE,
   PARTY_BOOKING_SLOTS,
   PARTY_TIME_ZONE,
@@ -302,9 +303,7 @@ export default function StaffFamilyDetailPage() {
     ...(() => {
       const generated: CalendarSlot[] = [];
       const now = getPartyBookingStartDate();
-      const blockedStarts = new Set(
-        [...bookedSlots, ...(item?.upcoming_parties ?? [])].map((slot) => new Date(slot.start_time).getTime())
-      );
+      const blockedRanges = [...bookedSlots, ...(item?.upcoming_parties ?? []).filter(party => party.status !== 'cancelled')];
 
       for (let i = 0; i < PARTY_SLOT_LOOKAHEAD_DAYS; i += 1) {
         const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
@@ -313,8 +312,9 @@ export default function StaffFamilyDetailPage() {
         const dayStr = d.toISOString().slice(0, 10);
         for (const slot of getPartyBookingSlotOptionsForDate(dayStr)) {
           const start = toIsoLocal(dayStr, slot.startHour);
-          if (blockedStarts.has(new Date(start).getTime())) continue;
-          generated.push({ id: `avail-${dayStr}-${slot.value}`, start, end: toIsoLocal(dayStr, slot.endHour), label: 'Available party slot', status: 'available' });
+          const end = toIsoLocal(dayStr, slot.endHour);
+          if (!isPartyRangeAvailable(start, end, blockedRanges)) continue;
+          generated.push({ id: `avail-${dayStr}-${slot.value}`, start, end, label: 'Available party slot', status: 'available' });
         }
       }
       return generated;
