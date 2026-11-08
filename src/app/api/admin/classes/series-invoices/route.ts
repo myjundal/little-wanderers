@@ -1,5 +1,5 @@
 import { requireOwnerContext } from '@/lib/authz';
-import { createSeriesInvoiceDraft, publishSeriesInvoice, readSeriesSale, reconcileSeriesSales } from '@/lib/class-series-payments';
+import { createSeriesInvoiceDraft, updateSeriesDraftPaymentNote, publishSeriesInvoice, readSeriesSale, reconcileSeriesSales } from '@/lib/class-series-payments';
 
 export const maxDuration = 60;
 export async function POST(req: Request) {
@@ -10,6 +10,11 @@ export async function POST(req: Request) {
     if (body.action === 'refresh') {
       await reconcileSeriesSales(ctx.admin);
       return Response.json({ ok: true });
+    }
+    if (body.action === 'update_draft_note') {
+      if (typeof body.sale_id !== 'string') return Response.json({ ok: false, error: 'Choose an unsent draft.' }, { status: 400 });
+      const { sale, description } = await updateSeriesDraftPaymentNote(ctx.admin, await readSeriesSale(ctx.admin, body.sale_id));
+      return Response.json({ ok: true, id: sale.id, status: sale.status, sent: false, description });
     }
     if (body.action === 'send') {
       if (body.send_confirmed !== true || typeof body.sale_id !== 'string') return Response.json({ ok: false, error: 'Review the recipient, amount, and terms, then confirm Send.' }, { status: 400 });

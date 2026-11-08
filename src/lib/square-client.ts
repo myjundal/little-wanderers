@@ -75,6 +75,7 @@ export type SquareOrder = {
 };
 export type SquareInvoice = {
   id: string;
+  description?: string;
   version: number;
   location_id?: string;
   order_id?: string;

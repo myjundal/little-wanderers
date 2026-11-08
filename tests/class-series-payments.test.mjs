@@ -112,7 +112,7 @@ test('public availability counts confirmed children and never pending invoices',
  const result=await (await route.GET()).json();assert.equal(result.seats_available,7);assert.equal(result.payments_enabled,true);
 });
 
-function providerHarness({ invoiceStatus='PAID', amount=15000, paymentOrder='order', refunded=0, paymentStatus='COMPLETED' }={}) {
+function providerHarness({ invoiceStatus='PAID', amount=15000, paymentOrder='order', refunded=0, paymentStatus='COMPLETED', invoiceDescription='Original dates, deadline, and nonrefundable policy.' }={}) {
  const sale={id:crypto.randomUUID(),program_id:program,household_id:family,child_ids:[children[0]],class_ids:[],environment:'sandbox',location_id:'loc',amount_cents:15000,discount_cents:0,recipient_email:'parent@example.com',source:'invoice',status:'held',due_at:'2099-01-01T00:00:00Z',created_at:'2026-01-01T00:00:00Z',square_customer_id:'customer',square_order_id:'order',square_invoice_id:'invoice',payment_url:null};
  const requests=[],rpc=[];
  const squareRequest=async(path,method='GET',body)=>{
@@ -120,13 +120,16 @@ function providerHarness({ invoiceStatus='PAID', amount=15000, paymentOrder='ord
   if(path==='/v2/customers')return {customer:{id:'customer'}};
   if(path==='/v2/orders'&&method==='POST')return {order:{id:'order',total_money:{amount:15000,currency:'USD'}}};
   if(path==='/v2/invoices'&&method==='POST')return {invoice:{id:'invoice',version:0,status:'DRAFT',order_id:'order'}};
-  if(path.startsWith('/v2/invoices/'))return {invoice:{id:'invoice',version:1,status:invoiceStatus,order_id:'order',location_id:'loc',primary_recipient:{customer_id:'customer'}}};
+  if(path.startsWith('/v2/invoices/')) {
+   if(method==='PUT') invoiceDescription=body.invoice.description ?? invoiceDescription;
+   return {invoice:{id:'invoice',version:1,status:invoiceStatus,description:invoiceDescription,order_id:'order',location_id:'loc',primary_recipient:{customer_id:'customer'},public_url:'https://square.link/u/example'}};
+  }
   if(path==='/v2/orders/order')return {order:{id:'order',location_id:'loc',reference_id:`cs_${sale.id}`,customer_id:'customer',total_money:{amount:15000,currency:'USD'},net_amount_due_money:{amount:0,currency:'USD'},tenders:[{payment_id:'payment'}]}};
   if(path==='/v2/payments/payment')return {payment:{id:'payment',order_id:paymentOrder,location_id:'loc',status:paymentStatus,amount_money:{amount,currency:'USD'},refunded_money:{amount:refunded},created_at:'2026-01-02T00:00:00Z'}};
   throw Error(`Unexpected request ${path}`);
  };
  const admin={from(){let patch;const q={update(p){patch=p;Object.assign(sale,p);return q;},select(){return q;},eq(){return q;},in(){return q;},single:async()=>({data:{...sale},error:null}),then(resolve){resolve({data:patch?sale:[{id:children[0],first_name:'Test',last_name:'Child'}],error:null});}};return q;},async rpc(name,args){rpc.push({name,args});return {data:{...sale,status:name==='fulfill_class_series_sale'?'paid':sale.status},error:null};}};
- const client={squareConfig:()=>({environment:'sandbox',locationId:'loc'}),squareRequest,assertUsd(money,expected){assert.equal(money.currency,'USD');assert.equal(money.amount,expected);}};
+ const client={assertSquarePaymentUrl:value=>value,squareConfig:()=>({environment:'sandbox',locationId:'loc'}),squareRequest,assertUsd(money,expected){assert.equal(money.currency,'USD');assert.equal(money.amount,expected);}};
  const module=loadModule('src/lib/class-series-payments.ts',{'@/lib/square-client':client},{console});
  return {sale,requests,rpc,admin,module};
 }
@@ -135,6 +138,7 @@ test('a draft invoice includes deadline, refund terms, all dates, and cannot sen
  await h.module.createSeriesInvoiceDraft(h.admin,{householdId:family,childIds:[children[0]],userId:user,source:'invoice'});
  const invoice=h.requests.find(r=>r.path==='/v2/invoices').body.invoice;
  assert.equal(invoice.delivery_method,'EMAIL');assert.equal(invoice.payment_requests[0].due_date,'2026-11-11');
+ assert.match(invoice.description,/If your plans change and you decide not to attend, simply leave this invoice unpaid/);
  assert.match(invoice.description,/nonrefundable unless canceled by the instructor/);
  assert.match(invoice.description,/November 11, 2026 at 5:00 PM Eastern/);
  assert.match(invoice.description,/November 12, November 19, December 3, December 10, and December 17/);
@@ -159,4 +163,33 @@ test('legacy staff payment links cannot collect an unverified Jamie series payme
   const result=await api.POST({json:async()=>({mode,person_id:'child',items:[{class_id:'art'}]})},{params:{id:'family'}});
   assert.equal(result.status,409);assert.match((await result.json()).error,/verified series payment/);
  }
+});
+
+
+test('updating an unsent draft preserves its description and adds the note once without publishing',async()=>{
+ const h=providerHarness({invoiceStatus:'DRAFT'});Object.assign(h.sale,{status:'draft',sent_at:null});
+ const result=await h.module.updateSeriesDraftPaymentNote(h.admin,h.sale);
+ assert.equal(result.description,`Original dates, deadline, and nonrefundable policy.\n\n${h.module.SERIES_OPTIONAL_PAYMENT_NOTE}`);
+ await h.module.updateSeriesDraftPaymentNote(h.admin,h.sale);
+ assert.equal(h.requests.filter(r=>r.method==='PUT').length,1);
+ assert.equal(h.requests.some(r=>r.path.endsWith('/publish')),false);
+});
+test('sent and provider-published invoices cannot be edited by the draft note action',async()=>{
+ const h=providerHarness({invoiceStatus:'UNPAID'});Object.assign(h.sale,{status:'held',sent_at:'2026-11-08T12:00:00Z'});
+ await assert.rejects(h.module.updateSeriesDraftPaymentNote(h.admin,h.sale),/Only an unsent draft/);
+ assert.equal(h.requests.length,0);
+ Object.assign(h.sale,{status:'draft',sent_at:null});
+ await assert.rejects(h.module.updateSeriesDraftPaymentNote(h.admin,h.sale),/Only an unsent draft/);
+ assert.equal(h.requests.some(r=>r.method==='PUT'),false);
+});
+test('sending older drafts adds the note before publishing; already sent invoices are not edited',async()=>{
+ const h=providerHarness({invoiceStatus:'DRAFT'});
+ await assert.rejects(h.module.publishSeriesInvoice(h.admin,h.sale,true),/not available/);
+ const update=h.requests.find(r=>r.method==='PUT');
+ assert.match(update.body.invoice.description,/Original dates, deadline, and nonrefundable policy/);
+ assert.match(update.body.invoice.description,/simply leave this invoice unpaid/);
+ assert(h.requests.findIndex(r=>r.method==='PUT')<h.requests.findIndex(r=>r.path.endsWith('/publish')));
+ const sent=providerHarness({invoiceStatus:'UNPAID'});
+ await sent.module.publishSeriesInvoice(sent.admin,sent.sale,true);
+ assert.equal(sent.requests.some(r=>r.method==='PUT'||r.path.endsWith('/publish')),false);
 });
