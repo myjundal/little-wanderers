@@ -14,7 +14,7 @@ await db.exec(`create role anon;create role authenticated;create role service_ro
 await db.query('insert into auth.users values($1)',[user]);await db.query("insert into roles values($1,'owner')",[user]);await db.query("insert into households values($1,'sandbox-family@example.invalid')",[family]);
 await db.query("insert into people values($1,$3,'child','First','Sandbox'),($2,$3,'child','Twin','Sandbox')",[one,two,family]);
 for(const date of ['2026-11-12','2026-11-19','2026-12-03','2026-12-10','2026-12-17'])await db.query("insert into classes values($1,'Little Hands, Big Canvases',$2,'scheduled',15000,7)",[crypto.randomUUID(),`${date}T22:00:00Z`]);
-await db.exec(fs.readFileSync('db/migrations/20261108_class_series_payments.sql','utf8'));await db.exec(fs.readFileSync('db/migrations/20261108_class_series_paid_first.sql','utf8'));await db.exec("update class_series_programs set payments_enabled=true");
+await db.exec(fs.readFileSync('db/migrations/20261108_class_series_payments.sql','utf8'));await db.exec(fs.readFileSync('db/migrations/20261108_class_series_payments_paid_first.sql','utf8'));await db.exec("update class_series_programs set payments_enabled=true");
 const admin=localSquareAdmin(db);
 admin.rpc=async(name,args)=>{try{assert(/^[a-z_]+$/.test(name));const {rows}=await db.query(`select to_jsonb(${name}(${Object.keys(args).map((key,i)=>`${key} := $${i+1}`).join(',')})) as result`,Object.values(args));return {data:rows[0].result,error:null};}catch(error){return {data:null,error:{message:error.message}};}};
 try{

@@ -23,7 +23,7 @@ await db.query("insert into households values($1,'first@example.com'),($2,'secon
 for(let i=0;i<4;i++) await db.query("insert into people values($1,$2,'child')",[children[i],i<2?family:other]);
 for(const date of ['2026-11-12','2026-11-19','2026-12-03','2026-12-10','2026-12-17']) await db.query("insert into classes values($1,'Little Hands, Big Canvases',$2,'scheduled',15000,7)",[crypto.randomUUID(),`${date}T22:00:00Z`]);
 await db.exec(fs.readFileSync('db/migrations/20261108_class_series_payments.sql','utf8'));
-await db.exec(fs.readFileSync('db/migrations/20261108_class_series_paid_first.sql','utf8'));
+await db.exec(fs.readFileSync('db/migrations/20261108_class_series_payments_paid_first.sql','utf8'));
 await db.exec("update class_series_programs set due_at=now()+interval '7 days',payments_enabled=true");
 const program='jamie-art-2026-11-12';
 const query=async(sql,params=[])=>(await db.query(sql,params)).rows;
