@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     if (error || !program?.payments_enabled) return Response.json({ ok: false, error: 'Paid registration is not open yet.' }, { status: 503 });
     if (Date.parse(program.due_at) <= Date.now()) return Response.json({ ok: false, error: 'The series payment deadline has passed. Please contact us.' }, { status: 409 });
     await ensureGuardianProfile({ admin: ctx.db, householdId: ctx.householdId, userId: ctx.user.id, email: ctx.user.email, firstName: guardian.firstName, lastName: guardian.lastName });
-    // Close expired provider pages before making their seats available to another buyer.
+    // Reconcile completed payments. Unpaid invoices and checkout pages do not reserve seats.
     await reconcileSeriesSales(ctx.db);
     let sale = await createSeriesInvoiceDraft(ctx.db, { householdId: ctx.householdId, childIds: body.child_ids, userId: ctx.user.id, source: 'online' });
     const { error: termsError } = await ctx.db.from('class_series_sales').update({ terms_accepted_at: new Date().toISOString(), terms_accepted_by_user_id: ctx.user.id }).eq('id', sale.id);

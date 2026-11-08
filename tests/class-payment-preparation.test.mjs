@@ -67,3 +67,13 @@ test('owner authorization is checked before family payment details are read', as
   await assert.rejects(page.default(), /redirect/);
   assert.equal(queried, false);
 });
+
+test('paid and pending invoices stay visible with frozen children and prices after interest is promoted', () => {
+ const {buildSeriesInvoiceFamilies} = loadModule('src/lib/class-payment-preparation.ts');
+ const sales=[{id:'paid',household_id:'family',child_ids:['a'],amount_cents:15000,discount_cents:0,status:'paid',recipient_email:'frozen@example.com'}];
+ const pending=prepare({sessions,registrations:[registration('b'),registration('c')],people,households,paidChildrenByHousehold:{family:1}}).families;
+ const result=buildSeriesInvoiceFamilies({sales,pending,people,households});
+ assert.equal(result.length,3);
+ const paid=result.find(row=>row.saleId==='paid'); assert.equal(paid.children[0].id,'a');assert.equal(paid.quote.totalCents,15000);assert.equal(paid.email,'frozen@example.com');
+ assert.equal(result.find(row=>!row.saleId&&row.householdId==='family').quote.totalCents,13000);
+});

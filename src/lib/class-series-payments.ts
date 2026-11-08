@@ -136,7 +136,7 @@ export async function closeUnpaidSeriesInvoice(db: SupabaseClient, sale: SeriesS
   return { ...sale, status: 'cancelled' as const };
 }
 
-/** Never release a hold based on our clock alone: close the Square invoice first. */
+/** Reconcile verified payments and close unpaid pages after the payment deadline. */
 export async function reconcileSeriesSales(db: SupabaseClient, householdId?: string) {
   let query = db.from('class_series_sales').select('*').eq('program_id', JAMIE_PROGRAM_ID).eq('environment', squareConfig().environment).eq('status', 'held').limit(12);
   if (householdId) query = query.eq('household_id', householdId);

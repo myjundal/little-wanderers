@@ -6,7 +6,7 @@
 .heading p { color: #7b6d87; line-height: 1.6; font-size: 14px; margin: 7px 0; }
 .eyebrow { margin: 0; color: #927ba4; font-size: 12px; }
 .button { border: 1px solid #ddd1e9; border-radius: 10px; padding: 10px 14px; color: #76579c; text-decoration: none; font-weight: 600; background: #fff; font-size: 13px; }
-.overview { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 26px 0; }
+.overview { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin: 26px 0; }
 .overview div { background: #fff; border: 1px solid #e8e1ee; border-radius: 15px; padding: 18px; }
 .overview span { display: block; font-size: 12px; color: #897793; }
 .overview strong { display: block; font-size: 27px; color: #65449b; margin-top: 9px; }
