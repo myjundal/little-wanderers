@@ -99,6 +99,7 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
   const householdId = params.id;
   const body = (await req.json()) as CheckoutBody;
   const mode = body.mode ?? 'create_payment_link';
+  if (context.role !== 'owner' && mode !== 'register') return Response.json({ ok: false, error: 'Only the owner can change or confirm existing registrations.' }, { status: 403 });
   const personId = body.person_id;
   const items = (body.items ?? [])
     .filter((item) => item.class_id)
@@ -157,6 +158,8 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
 
     const { data: household } = await admin.from('households').select('email').eq('id', householdId).maybeSingle();
     const nextStatus = 'preregistered' as const;
+
+    if (already && already.status === 'cancelled' && context.role !== 'owner') return Response.json({ ok: false, error: 'Only the owner can restore a cancelled registration.' }, { status: 403 });
 
     if (already && already.status === 'cancelled') {
       const { error } = await admin

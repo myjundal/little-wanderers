@@ -4,7 +4,7 @@ import { requireOwnerContext } from '@/lib/authz';
 import { JAMIE_ART_TITLE, prepareJamieArtPayments } from '@/lib/class-payment-preparation';
 import { squareEnvironment } from '@/lib/square-client';
 import ClassInvoiceDrafts from '@/components/classes/ClassInvoiceDrafts';
-import { SERIES_TERMS, SERIES_DATES, reconcileSeriesSales } from '@/lib/class-series-payments';
+import { reconcileSeriesSales } from '@/lib/class-series-payments';
 import styles from './payment-preparation.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -44,38 +44,26 @@ export default async function ClassPaymentPreparationPage() {
   const preparation = prepareJamieArtPayments({ sessions: sessions ?? [], registrations: registrations ?? [], people: people ?? [], households: households ?? [], paidChildrenByHousehold: Object.fromEntries((households ?? []).map(household => [household.id, new Set((sales ?? []).filter(sale => sale.household_id === household.id && sale.status === 'paid').flatMap(sale => sale.child_ids)).size])) });
 
   return <main className={styles.page}>
-    <Link className={styles.back} href="/staff/classes">← Class Management</Link>
+    <Link className={styles.back} href="/staff/classes">← Classes</Link>
     <header className={styles.heading}>
-      <div><p className={styles.eyebrow}>Owner tools</p><h1>Class payment preparation</h1><p>Review Jamie’s full-series amounts and family details before opening payment.</p></div>
-      <a className={styles.button} href="/staff/classes/payments">Refresh details</a>
+      <div><p className={styles.eyebrow}>Ms. Jamie · Little Hands, Big Canvases</p><h1>Series invoices</h1><p>Review each family’s invoice before sending.</p></div>
+      <a className={styles.button} href="/staff/classes/payments">Refresh</a>
     </header>
-    <section className={styles.panel} aria-labelledby="series-heading">
-      <div className={styles.seriesHeading}><div><p className={styles.eyebrow}>Ms. Jamie · 5-week art series</p><h2 id="series-heading">{JAMIE_ART_TITLE}</h2></div><span className={styles.badge}>Preparation only</span></div>
-      <div className={styles.facts}>
-        <div><span>Full series, per child</span><strong>{preparation.priceCents == null ? 'Needs review' : money(preparation.priceCents)}</strong></div>
-        <div><span>Sibling / twin discount</span><strong>$20 off the second child</strong></div>
-        <div><span>Pre-registered interest</span><strong>{preparation.interestCount} children · {preparation.capacity ?? 'TBA'} seats</strong></div>
+    <section className={styles.overview} aria-label="Invoice summary">
+      <div><span>Drafts · not sent</span><strong>{(sales ?? []).filter(sale => sale.status === 'draft' && sale.square_invoice_id && !sale.sent_at).length}</strong></div>
+      <div><span>Sent · awaiting payment</span><strong>{(sales ?? []).filter(sale => sale.sent_at && sale.status !== 'paid' && sale.status !== 'cancelled').length}</strong></div>
+      <div><span>Paid</span><strong>{(sales ?? []).filter(sale => sale.status === 'paid').length}</strong></div>
+    </section>
+    <details id="series-invoice-policy" className={styles.policy}>
+      <summary>Series dates, pricing &amp; payment policy</summary>
+      <div className={styles.policyBody}>
+        <p><strong>Five Thursdays · 5:00–5:45 PM Eastern</strong></p>
+        <ul className={styles.dates}>{preparation.sessions.map(session => <li key={session.id}>{sessionLabel(session.start_time)}</li>)}</ul>
+        <p>No class on Thanksgiving, November 26.</p>
+        <dl className={styles.policyFacts}><div><dt>Series price</dt><dd>{preparation.priceCents == null ? 'Needs review' : money(preparation.priceCents)} per child</dd></div><div><dt>Sibling / twin discount</dt><dd>$20 off the second child · $280 for two</dd></div><div><dt>Payment deadline</dt><dd>November 11, 2026 · 5:00 PM Eastern<br />24 hours before the first class</dd></div><div><dt>Cancellation policy</dt><dd>Nonrefundable unless canceled by the instructor</dd></div><div><dt>Seat confirmation</dt><dd>Only completed payment confirms a seat · {preparation.capacity ?? 'Limited'} seats</dd></div></dl>
       </div>
-      <p className={styles.note}>One registration covers all five sessions. The second-child discount applies once per family for the series.</p>
-      <ul className={styles.dates}>{preparation.sessions.map(session => <li key={session.id}>{sessionLabel(session.start_time)}</li>)}</ul>
-      <p className={styles.note}>{SERIES_DATES}</p>
-      <p className={styles.note}><strong>{SERIES_TERMS}</strong></p>
-    </section>
-    {preparation.issues.length > 0 && <section className={styles.review} aria-labelledby="review-heading"><h2 id="review-heading">Review before opening payment</h2><ul>{preparation.issues.map(issue => <li key={issue}>{issue}</li>)}</ul></section>}
-    <section className={styles.panel} aria-labelledby="family-heading">
-      <h2 id="family-heading">Prepared family amounts</h2>
-      <p className={styles.note}>These are estimates for interested families. Invoice drafts are not sent automatically. Only completed payment confirms a place; spaces are limited.</p>
-      {!preparation.families.length ? <p>No family amounts to prepare yet.</p> : <div className={styles.tableWrap}><table>
-        <caption className={styles.srOnly}>Jamie art series payment estimates by family</caption>
-        <thead><tr><th scope="col">Family &amp; children</th><th scope="col">Full-series subtotal</th><th scope="col">Sibling / twin discount</th><th scope="col">Prepared total</th></tr></thead>
-        <tbody>{preparation.families.map(family => <tr key={family.householdId}>
-          <th scope="row"><Link href={`/staff/families/${encodeURIComponent(family.householdId)}`}>{family.familyName || family.children.map(child => child.name).join(' & ')}</Link><span className={styles.detail}>{family.children.map(child => child.name).join(' · ')}</span><span className={styles.detail}>{family.email || 'Email address needed'}</span></th>
-          <td>{family.quote ? money(family.quote.subtotalCents) : 'Needs review'}</td>
-          <td>{family.quote?.discountCents ? `−${money(family.quote.discountCents)}` : '—'}</td>
-          <td className={styles.total}>{family.quote ? money(family.quote.totalCents) : 'Needs review'}</td>
-        </tr>)}</tbody>
-      </table></div>}
-    </section>
+    </details>
+    {preparation.issues.length > 0 && <aside className={styles.review}><strong>Before sending</strong><ul>{preparation.issues.map(issue => <li key={issue}>{issue}</li>)}</ul></aside>}
     <ClassInvoiceDrafts families={preparation.families} sales={sales ?? []} />
   </main>;
 }

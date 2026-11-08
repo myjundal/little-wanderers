@@ -21,11 +21,12 @@ test('class route admits staff, owner and admin while rejecting other roles', as
   }
 });
 
-test('server page gives management controls and instructor assignments to owners/admins only', async () => {
+test('server page gives management controls and instructor assignments to the owner only', async () => {
   function Dashboard() {}
   function Assignments() {}
   for (const role of ['staff', 'owner', 'admin']) {
     const { default: Page } = loadModule('src/app/staff/classes/page.tsx', {
+      'next/link': () => null,
       '@/components/staff/InstructorAssignments': Assignments,
       '@/components/staff/StaffDashboard': Dashboard,
       '@/components/staff/StaffToolNav': () => null,
@@ -33,8 +34,8 @@ test('server page gives management controls and instructor assignments to owners
     }, { React });
     const page = await Page();
     const children = React.Children.toArray(page.props.children);
-    assert.equal(children.find(child => child.type === Dashboard).props.canManageClasses, role !== 'staff');
-    assert.equal(children.some(child => child.type === Assignments), role !== 'staff');
+    assert.equal(children.find(child => child.type === Dashboard).props.canManageClasses, role === 'owner');
+    assert.equal(children.some(child => child.type === Assignments), role === 'owner');
   }
 });
 
@@ -77,6 +78,7 @@ async function dashboardHarness(canManageClasses) {
     useEffect: (fn, deps) => memo(() => { effects.push(fn); }, deps),
   };
   function Roster() {}
+  function CheckIn() {}
   function Switcher() {}
   const requests = [];
   const { default: Dashboard } = loadModule('src/components/staff/StaffDashboard.tsx', {
@@ -88,6 +90,7 @@ async function dashboardHarness(canManageClasses) {
     'next/link': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,
     '@/components/waivers/PartyGuestWaivers': () => null,
+    '@/components/classes/ClassCheckIn': CheckIn,
     '@/components/classes/ClassPreRegistrationRosters': { __esModule: true, default: Roster, ClassViewSwitcher: Switcher },
   }, {
     React: react,
@@ -113,14 +116,15 @@ async function dashboardHarness(canManageClasses) {
   render();
   await new Promise(resolve => setImmediate(resolve));
   render();
-  return { render, requests, roster: () => find(node => node.type === Roster)[0], switcher: () => find(node => node.type === Switcher)[0], management: () => find(node => node.props.id === 'class-management')[0] };
+  return { render, requests, checkIn: () => find(node => node.type === CheckIn)[0], roster: () => find(node => node.type === Roster)[0], switcher: () => find(node => node.type === Switcher)[0], management: () => find(node => node.props.id === 'class-management')[0] };
 }
 
 test('staff dashboard loads its roster but cannot enter owner schedule controls', async () => {
   const staff = await dashboardHarness(false);
   assert.deepEqual(staff.requests, ['/api/admin/classes']);
-  assert.ok(staff.roster());
-  assert.equal(staff.roster().props.onSessionSelect, undefined);
+  assert.ok(staff.checkIn());
+  assert.equal(staff.checkIn().props.allowManualRegistration, true);
+  assert.equal(staff.roster(), undefined);
   assert.equal(staff.switcher(), undefined);
   assert.equal(staff.management(), undefined);
   const owner = await dashboardHarness(true);
@@ -128,4 +132,31 @@ test('staff dashboard loads its roster but cannot enter owner schedule controls'
   owner.switcher().props.onChange('sessions');
   owner.render();
   assert.ok(owner.management());
+});
+
+test('check-in view exposes actions only for confirmed children and no registration change controls', () => {
+  const { default: CheckIn } = loadModule('src/components/classes/ClassCheckIn.tsx', {
+    react: React, 'next/link': props => React.createElement('a', { href: props.href }, props.children),
+    './class-check-in.module.css': {},
+  }, { React });
+  const sessions = [{ id: 'class', title: 'Art', startTime: '2099-11-12T22:00:00Z', endTime: '2099-11-12T22:45:00Z', status: 'scheduled', registrations: [
+    { id:'paid', personId:'paid-child', name:'Paid Child', status:'scheduled', attendanceStatus:'unknown' },
+    { id:'interested', personId:'interested-child', name:'Interested Child', status:'preregistered' },
+  ] }];
+  const markup = renderToStaticMarkup(React.createElement(CheckIn, {sessions, onRefresh() {}}));
+  assert.match(markup, /Paid Child/); assert.match(markup, /Interested Child/);
+  assert.equal((markup.match(/>Check in<\/button>/g) ?? []).length, 1);
+  assert.doesNotMatch(markup, />Cancel|>Edit|>Register|\/staff\/families/);
+  const staff = renderToStaticMarkup(React.createElement(CheckIn, {sessions, onRefresh() {}, allowManualRegistration:true}));
+  assert.match(staff, /Register a walk-in family/);
+});
+test('staff cannot use legacy confirmation or payment overrides before any database write', async () => {
+  for (const mode of ['finalize','create_payment_link']) {
+    const api = loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts', {
+      '@/lib/authz': { requireStaffContext: async () => ({ok:true,role:'staff',admin:{from(){throw new Error('Database must not be reached');}}}) },
+      crypto:{}, '@/lib/square':{}, '@/lib/class-waitlist':{}, '@/lib/admin-notifications':{}, '@/lib/family-profile':{}, '@/lib/logger':{},
+    });
+    const response = await api.POST({json:async()=>({mode,person_id:'child',items:[{class_id:'art'}]})},{params:{id:'family'}});
+    assert.equal(response.status,403);
+  }
 });

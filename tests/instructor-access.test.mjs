@@ -117,3 +117,19 @@ test('teaching endpoint scopes every class and roster query to assignments and e
   const serialized = JSON.stringify(result);
   for (const privateValue of ['private@example.com', 'private-household', 'birthdate', '2021-01-01']) assert.equal(serialized.includes(privateValue), false);
 });
+
+test('staff can check in every class while registration overrides remain owner-only', async () => {
+  for (const primary of ['staff', 'instructor', 'admin', 'user', 'owner']) {
+    const { api } = auth({ primary });
+    const management = await api.requireClassManagementContext();
+    assert.equal(management.ok, primary === 'owner');
+    if (primary === 'staff') assert.equal((await api.requireClassAttendanceContext('any-class')).ok, true);
+  }
+});
+test('staff and instructors can only check in or undo a check-in, without changing registrations', async () => {
+  for (const role of ['staff','instructor','admin']) for (const status of ['cancelled','no_show','attended','unknown']) {
+    const handler = attendance({role});
+    assert.equal((await handler.run(status)).status, ['attended','unknown'].includes(status) ? 200 : 403);
+    assert.equal(handler.writes(), ['attended','unknown'].includes(status) ? 1 : 0);
+  }
+});

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
+import { requireStaffContext, requireClassManagementContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -218,7 +218,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const context = await requireOwnerContext();
+  const context = await requireClassManagementContext();
   if (!context.ok) return context.response;
 
   try {

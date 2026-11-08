@@ -146,10 +146,10 @@ export default async function HomeComingSoon() {
       <section className={`${styles.partyFeature} ${styles.classFeature}`}>
         <div className={styles.classFeatureCopy}>
           <p className={styles.partyEyebrow}>Class pre-registration</p>
-          <h2>Class pre-registration is open</h2>
+          <h2>Find your next class</h2>
           <p>{CLASS_START_NOTE}</p>
           <p>
-            Browse our first small-group classes and pre-register with your My Little Wanderers account. New families can sign in by email, add a child&apos;s name and approximate age, then choose a class.
+            Browse our small-group classes. Sign in, add your child, and choose free interest-only registration or Pay now for an available paid class.
           </p>
           <p><strong>{CLASS_PRE_REGISTRATION_NOTE}</strong></p>
           {!isAuthenticated && (

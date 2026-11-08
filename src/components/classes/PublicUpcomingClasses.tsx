@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { classSizeLabel } from '@/lib/class-config';
+import ClassDescription from './ClassDescription';
 import {
   WEEKDAY_COLUMNS,
+  compareWeeklyClasses,
   buildGeneralWeeklySchedule,
   compactCaregiverLabel,
   timeOnlyLabel,
@@ -154,7 +156,7 @@ function ScheduleLine({ item }: { item: Pick<ClassItem, 'schedule_note' | 'sched
 export default function PublicUpcomingClasses({ classes }: { classes: PublicClassItem[] }) {
   const [focusedSeriesId, setFocusedSeriesId] = useState<string | null>(null);
 
-  const visibleClasses = useMemo(() => groupClassSeries(classes).slice(0, 6), [classes]);
+  const visibleClasses = useMemo(() => groupClassSeries(classes).sort(compareWeeklyClasses).slice(0, 6), [classes]);
   const weeklySchedule = useMemo(() => buildGeneralWeeklySchedule(visibleClasses), [visibleClasses]);
 
   useEffect(() => {
@@ -279,7 +281,7 @@ export default function PublicUpcomingClasses({ classes }: { classes: PublicClas
                 {item.instructor_name}
               </p>
             )}
-            {item.description && <p style={{ margin: 0, color: '#6f628d', lineHeight: 1.7 }}>{item.description}</p>}
+            <ClassDescription title={item.title} description={item.description} />
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginTop: 2 }}>
               {item.age_range && (

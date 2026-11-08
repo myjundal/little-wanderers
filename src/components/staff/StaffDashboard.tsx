@@ -7,6 +7,7 @@ import { PARTY_TIME_ZONE } from '@/lib/party-config';
 import { PARTY_SCHEDULE_UPDATED_EVENT } from '@/lib/party-management';
 import StaffFamilyRegistration from '@/components/staff/StaffFamilyRegistration';
 import Link from 'next/link';
+import ClassCheckIn from '@/components/classes/ClassCheckIn';
 import ClassPreRegistrationRosters, { ClassViewSwitcher } from '@/components/classes/ClassPreRegistrationRosters';
 import type { RosterSession } from '@/lib/class-rosters';
 import { groupPartyBookings, hasPartyCancellationRequest as hasCancellationRequest, isCompletedParty } from '@/lib/party-booking-groups';
@@ -445,7 +446,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
   const rosterSessions = useMemo<RosterSession[]>(() => classes.map(item => ({
     id: item.id, title: item.title, startTime: item.start_time, endTime: item.end_time,
     status: item.status, scheduleLabel: item.schedule_label,
-    registrations: item.registrants.map(reg => ({ id: reg.registration_id, personId: reg.person_id, name: reg.person_name, status: reg.registration_status, householdId: reg.household_id })),
+    registrations: item.registrants.map(reg => ({ id: reg.registration_id, personId: reg.person_id, name: reg.person_name, status: reg.registration_status, householdId: reg.household_id, attendanceStatus: reg.attendance_status })),
   })), [classes]);
 
   useEffect(() => {
@@ -960,7 +961,8 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
 
       {view === 'classes' && <>
         {canManageClasses && <ClassViewSwitcher value={classView} onChange={setClassView} />}
-        {(!canManageClasses || classView === 'rosters') && <ClassPreRegistrationRosters sessions={rosterSessions} onSessionSelect={canManageClasses ? openRosterSession : undefined} onRefresh={load} showFamilyLinks />}
+        {!canManageClasses && <ClassCheckIn sessions={rosterSessions} onRefresh={load} allowManualRegistration />}
+        {canManageClasses && classView === 'rosters' && <ClassPreRegistrationRosters sessions={rosterSessions} onSessionSelect={canManageClasses ? openRosterSession : undefined} onRefresh={load} showFamilyLinks />}
       </>}
 
       {view === 'classes' && canManageClasses && classView === 'sessions' && (

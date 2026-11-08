@@ -8,6 +8,9 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import ActionToast from '@/components/ui/ActionToast';
 import ClassSeriesPaymentChoice from '@/components/classes/ClassSeriesPaymentChoice';
 import PreRegistrationNotice from '@/components/classes/PreRegistrationNotice';
+import ClassDescription from '@/components/classes/ClassDescription';
+import { compareWeeklyClasses } from '@/lib/public-classes';
+import registrationStyles from '@/components/classes/class-registration.module.css';
 
 type Person = {
   id: string;
@@ -154,11 +157,6 @@ function classDateLabel(item: ClassItem) {
   const startTime = start.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
   const endTime = end.toLocaleTimeString('en-US', { timeZone: CLASS_TIME_ZONE, hour: 'numeric', minute: '2-digit' }).toLowerCase();
   return `${date} · ${startTime}-${endTime}`;
-}
-
-function classScheduleLabel(item: ClassItem) {
-  if (item.schedule_note && item.schedule_label) return `${item.schedule_note} · ${item.schedule_label}`;
-  return item.schedule_note ?? item.schedule_label ?? classDateLabel(item);
 }
 
 function compactCaregiverLabel(value: string | null) {
@@ -394,20 +392,7 @@ export default function ClassSchedulePage() {
   );
 
   const classSeries = useMemo(() => groupClassSeries(classes), [classes]);
-  const activeSeriesKey = useMemo(() => {
-    if (!activeClassId) return null;
-    const item = classes.find((klass) => klass.id === activeClassId);
-    return item ? classSeriesKey(item) : null;
-  }, [activeClassId, classes]);
-  const sortedClassSeries = useMemo(() => {
-    if (!activeSeriesKey) return classSeries;
-    return [...classSeries].sort((a, b) => {
-      const aActive = classSeriesKey(a) === activeSeriesKey;
-      const bActive = classSeriesKey(b) === activeSeriesKey;
-      if (aActive === bActive) return 0;
-      return aActive ? -1 : 1;
-    });
-  }, [activeSeriesKey, classSeries]);
+  const sortedClassSeries = useMemo(() => [...classSeries].sort(compareWeeklyClasses), [classSeries]);
   const weeklySchedule = useMemo(() => {
     const grouped = new Map<number, ClassItem[]>();
     WEEKDAY_COLUMNS.forEach((day) => grouped.set(day.value, []));
@@ -424,7 +409,7 @@ export default function ClassSchedulePage() {
       });
     });
     grouped.forEach((items, day) => {
-      grouped.set(day, [...items].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()));
+      grouped.set(day, [...items].sort(compareWeeklyClasses));
     });
     return grouped;
   }, [classSeries]);
@@ -710,7 +695,7 @@ export default function ClassSchedulePage() {
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Registration</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose Interested — no payment, no seat reserved to express interest without paying now, or Pay now to reserve seat for an available paid class. Spaces are limited. Only completed payment confirms your place.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Find a class, choose your child, then share interest or reserve an available seat with payment.</p>
       <PreRegistrationNotice />
 
       <p style={{ color: '#6f628d' }}>{CLASS_START_NOTE}</p>
@@ -722,7 +707,7 @@ export default function ClassSchedulePage() {
           <div>
             <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82' }}>Weekly class map</h2>
             <p style={{ margin: '6px 0 0', color: '#6f628d', fontSize: 14 }}>
-              Tap a class time to bring its card and registration options to the top.
+              Classes are listed Monday to Friday. Tap a time to jump to its registration options.
             </p>
           </div>
         </div>
@@ -770,9 +755,9 @@ export default function ClassSchedulePage() {
       </section>
 
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>Your registration details</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          The interest-only option is free. No payment is collected, and no seat is reserved. Choose Pay now for an available paid class to confirm your place. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
+          Add your child’s name and age, then choose a class below. Enter age in years or months (for example, 4 years or 18 months).
         </p>
         {isAuthenticated && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>
@@ -939,43 +924,20 @@ export default function ClassSchedulePage() {
                 <div
                   id={classCardDomId(series)}
                   key={series.id}
-                  style={{
-                    border: isActiveSeries ? '2px solid #8f66d8' : '1px solid #e3d4fa',
-                    borderRadius: 14,
-                    padding: 14,
-                    background: isActiveSeries ? '#fffdf9' : '#fff',
-                    boxShadow: isActiveSeries ? '0 10px 24px rgba(95,61,164,0.18)' : '0 6px 16px rgba(138, 103, 193, 0.08)',
-                    scrollMarginTop: 18,
-                  }}
+                  className={`${registrationStyles.card} ${isActiveSeries ? registrationStyles.active : ''}`}
                 >
-                  {isActiveSeries && (
-                    <p style={{ margin: '0 0 8px', color: '#5f3da4', fontWeight: 800, fontSize: 13 }}>
-                      Selected from schedule: {weekdayTimeLabel(target)}
-                    </p>
-                  )}
-                  <h3 style={{ margin: 0 }}>
-                    {series.title}{' '}
-                    {series.occurrences.some((item) => item.is_popular) && (
-                      <span style={{ fontSize: 12, padding: '3px 7px', borderRadius: 999, background: '#ffe4f1', color: '#9d2f65' }}>
-                        Popular
-                      </span>
-                    )}
-                  </h3>
-                  <p style={{ margin: '8px 0', color: '#666' }}>
-                    {classScheduleLabel(series)}
-                  </p>
-                  <p style={{ margin: '6px 0' }}>Category: {series.category ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Instructor: {series.instructor_name ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Age(s): {series.age_range ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Caregiver: {series.caregiver_participation ?? '-'}</p>
-                  <p style={{ margin: '6px 0' }}>Duration: {series.duration_minutes ?? Math.round((new Date(series.end_time).getTime() - new Date(series.start_time).getTime()) / 60000)} min</p>
-                  <p style={{ margin: '6px 0' }}>Price: ${(series.price_cents / 100).toFixed(2)}</p>
-                  {series.description && <p style={{ margin: '6px 0', color: '#666' }}>{series.description}</p>}
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', border: '1px solid #efe3ff', borderRadius: 12, padding: 10, background: '#fcf9ff', marginTop: 12 }}>
-                    <div style={{ minWidth: 220, flex: '1 1 240px', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
-                      {classSizeLabel(target.capacity)}
-                    </div>
-                    <button style={{ flex: '0 0 auto', maxWidth: '100%', whiteSpace: 'normal' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
+                  {isActiveSeries && <p className={registrationStyles.selected}>Selected from schedule · {weekdayTimeLabel(target)}</p>}
+                  <header className={registrationStyles.header}>
+                    <div><p className={registrationStyles.eyebrow}>{series.category} · {series.instructor_name}</p><h3>{series.title}</h3></div>
+                    <div className={registrationStyles.price}><strong>${(series.price_cents / 100).toFixed(2)}</strong><span>{series.title === 'Little Hands, Big Canvases' ? '5-session series / child' : 'per class / child'}</span></div>
+                  </header>
+                  <p className={registrationStyles.schedule}>{series.schedule_label ?? classDateLabel(series)}</p>
+                  {series.schedule_note && <p className={registrationStyles.start}>{series.schedule_note}</p>}
+                  <div className={registrationStyles.facts}><span>Ages {series.age_range ?? 'TBA'}</span><span>{compactCaregiverLabel(series.caregiver_participation)}</span><span>{series.duration_minutes ?? Math.round((new Date(series.end_time).getTime() - new Date(series.start_time).getTime()) / 60000)} minutes</span><span>{classSizeLabel(target.capacity)}</span></div>
+                  <ClassDescription title={series.title} description={series.description} />
+                  <div className={registrationStyles.interest}>
+                    <div><strong>Just interested?</strong><p>No payment today. No seat reserved.</p></div>
+                    <button onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
                       {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? (existingStatus === 'preregistered' ? 'Interest saved — no seat reserved' : 'Seat confirmed') : 'Interested — no payment, no seat reserved'}
                     </button>
                   </div>
