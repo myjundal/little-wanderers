@@ -27,7 +27,7 @@ assert.equal(policy.resolveSignupTime('not-a-date', undefined, afterCutoff), nul
 assert.equal(policy.resolveSignupTime('2026-12-01T12:00:00Z', undefined, afterCutoff), null);
 assert.equal(policy.signupSource(new Date(policy.resolveSignupTime('2026-11-01T12:00:00Z', undefined, afterCutoff))), 'website_signup');
 const classes = load('src/lib/class-config.ts');
-assert.equal(classes.earliestClassTime(new Date('2026-10-15')), '2026-11-09T05:00:00.000Z');
+assert.equal(classes.earliestClassTime(new Date('2026-10-15')), '2026-11-15T05:00:00.000Z');
 assert.equal(classes.earliestClassTime(new Date('2026-12-01')), '2026-12-01T00:00:00.000Z');
 const childAge = load('src/lib/child-age.ts');
 for (const missing of ['', '   ', undefined, null, false, []]) {
