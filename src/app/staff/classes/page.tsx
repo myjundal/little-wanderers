@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import InstructorAssignments from '@/components/staff/InstructorAssignments';
 import { getCurrentUserRole } from '@/lib/authz';
 import StaffDashboard from '@/components/staff/StaffDashboard';
@@ -18,6 +19,8 @@ export default async function StaffClassesPage() {
         </div>
         <StaffToolNav active="classes" />
       </div>
+
+      {(role === 'owner' || role === 'admin') && <p style={{ marginTop: 20 }}><Link href="/staff/classes/payments" style={{ color: '#65449b', fontWeight: 700 }}>Prepare Jamie art payments →</Link></p>}
 
       <StaffDashboard view="classes" canManageClasses={role === 'owner' || role === 'admin'} />
       {(role === 'owner' || role === 'admin') && <InstructorAssignments />}
