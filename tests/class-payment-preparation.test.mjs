@@ -13,6 +13,9 @@ test('series charges once per child, with a single $20 second-child discount', (
   assert.equal(quote(['a', 'b'], 15000).totalCents, 28000);
   assert.equal(quote(['a', 'b', 'c'], 15000).totalCents, 43000);
   assert.equal(quote(['a', 'b'], 15000).discountCents, 2000);
+  assert.equal(quote(['second'], 15000, 1).totalCents, 13000);
+  assert.equal(quote(['third'], 15000, 2).totalCents, 15000);
+  assert.equal(quote(['third', 'fourth'], 15000, 2).totalCents, 30000);
   assert.throws(() => quote(['a', 'a'], 15000));
   assert.throws(() => quote([], 15000));
   for (const price of [0, -1, 15000.5, NaN, Infinity]) assert.throws(() => quote(['a'], price));
@@ -59,7 +62,7 @@ test('owner authorization is checked before family payment details are read', as
   const page = loadModule('src/app/staff/classes/payments/page.tsx', {
     'next/link': {}, 'next/navigation': { redirect() { throw new Error('redirect'); } },
     '@/lib/authz': { requireOwnerContext: async () => ({ ok: false, admin: { from() { queried = true; } } }) },
-    '@/lib/class-payment-preparation': {}, './payment-preparation.module.css': {},
+    '@/lib/class-payment-preparation': {}, '@/lib/class-series-payments': {}, '@/lib/square-client': {}, '@/components/classes/ClassInvoiceDrafts': {}, './payment-preparation.module.css': {},
   });
   await assert.rejects(page.default(), /redirect/);
   assert.equal(queried, false);

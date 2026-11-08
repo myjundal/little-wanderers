@@ -76,6 +76,7 @@ export async function classPageHarness({
     '@/lib/supabase/browser': {},
     '@/components/ui/ActionToast': toast,
     '@/components/classes/PreRegistrationNotice': function Notice() {},
+    '@/components/classes/ClassSeriesPaymentChoice': function PaymentChoice() {},
   }, {
     React: react,
     document: { getElementById: id => ({ scrollIntoView() {}, focus() { focused = id; } }) },
@@ -113,7 +114,7 @@ export async function classPageHarness({
     visit(tree);
     return found;
   };
-  const button = () => all(node => node.type === 'button' && /^(Pre-register|Pre-registered|Saving\.\.\.)$/.test(node.props.children))[0];
+  const button = () => all(node => node.type === 'button' && /^(I’m interested|Interest saved|Seat confirmed|Saving\.\.\.)$/.test(node.props.children))[0];
   render();
   await flush();
   return {

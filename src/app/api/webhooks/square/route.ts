@@ -5,6 +5,8 @@ export const runtime = 'nodejs';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySquareWebhook } from '@/lib/square-webhook';
+import { verifySeriesPayment, type SeriesSale } from '@/lib/class-series-payments';
+import { squareEnvironment } from '@/lib/square-client';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { syncFoundingSubscription } from '@/lib/founding-square';
 import { waitUntil } from '@vercel/functions';
@@ -36,6 +38,21 @@ export async function POST(req: NextRequest) {
     try {
       if (await syncFoundingSubscription(supa, foundingSubscriptionId)) return new Response('ok', { status: 200 });
     } catch { return new Response('membership reconciliation pending', { status: 503 }); }
+  }
+
+  const eventType = payload?.type ?? '';
+  if (['payment.created', 'payment.updated', 'invoice.payment_made'].includes(eventType)) {
+    const eventOrder = payload?.data?.object?.payment?.order_id ?? payload?.data?.object?.invoice?.order_id;
+    if (eventOrder) {
+      const { data: classSale, error: classSaleError } = await supa.from('class_series_sales').select('*').eq('environment', squareEnvironment()).eq('square_order_id', eventOrder).maybeSingle();
+      if (classSaleError) return new Response('Unable to find class payment', { status: 500 });
+      if (classSale) {
+        try {
+          await verifySeriesPayment(supa, classSale as SeriesSale);
+          return new Response('class payment verified', { status: 200 });
+        } catch { return new Response('Class payment verification pending', { status: 500 }); }
+      }
+    }
   }
 
   // -------- idempotency guard --------

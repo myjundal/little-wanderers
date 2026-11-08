@@ -319,7 +319,7 @@ export default function PublicUpcomingClasses({ classes }: { classes: PublicClas
                 cursor: 'pointer',
               }}
             >
-              Pre-register
+              View registration options
             </button>
           </article>
           );

@@ -214,6 +214,10 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
     return Response.json({ ok: true, id: inserted?.id ?? null, status: nextStatus, email_pending: true });
   }
 
+  if (mode === 'finalize' && (classes ?? []).some(klass => klass.title === 'Little Hands, Big Canvases')) {
+    return Response.json({ ok: false, error: 'Use verified series payment to confirm Jamie art seats.' }, { status: 409 });
+  }
+
   if (mode === 'finalize') {
     const registrationIds: string[] = [];
 

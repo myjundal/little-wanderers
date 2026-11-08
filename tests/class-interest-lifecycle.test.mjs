@@ -16,7 +16,7 @@ test('staff checkout promotes existing interest without inserting a duplicate or
         maybeSingle: async () => ({ data: { id: 'existing' }, error: null }),
         then(resolve) { resolve({ data: {
           people: [{ id: 'guardian', role: 'adult' }, { id: 'child', role: 'child' }],
-          classes: [{ ...fixtureClass, capacity: 1 }],
+          classes: [{ ...fixtureClass, title: 'Toddler Yoga', capacity: 1 }],
           class_registrations: [{ id: 'existing', person_id: 'child', status }],
         }[table], error: null }); },
       };
