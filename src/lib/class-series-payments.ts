@@ -3,6 +3,7 @@ import { squareConfig, squareRequest, assertUsd, assertSquarePaymentUrl, type Sq
 
 export const JAMIE_PROGRAM_ID = 'jamie-art-2026-11-12';
 export const SERIES_TERMS = 'This five-session series is nonrefundable unless canceled by the instructor. Payment is due November 11, 2026 at 5:00 PM Eastern (24 hours before the first class). Your seat is confirmed only after full payment is completed. Spaces are limited.';
+export const SERIES_OPTIONAL_PAYMENT_NOTE = 'Your seat is confirmed only after payment. If your plans change and you decide not to attend, simply leave this invoice unpaid.';
 export const SERIES_DATES = 'November 12, November 19, December 3, December 10, and December 17, 2026, 5:00–5:45 PM Eastern. No class on November 26 (Thanksgiving).';
 export type SeriesSale = {
   id: string; program_id: string; household_id: string; child_ids: string[]; class_ids: string[];
@@ -42,7 +43,7 @@ export async function createSeriesInvoiceDraft(db: SupabaseClient, input: { hous
     if (!child) throw new Error('Child profile changed; contact us');
     return [child.first_name, child.last_name].filter(Boolean).join(' ');
   });
-  const description = `Little Hands, Big Canvases with Ms. Jamie — 5-week series.\nChildren: ${names.join(', ')}.\n${SERIES_DATES}\n${SERIES_TERMS}\nSibling/Twin discount: $20 off the second child's series registration.`;
+  const description = `Little Hands, Big Canvases with Ms. Jamie — 5-week series.\nChildren: ${names.join(', ')}.\n${SERIES_DATES}\n${SERIES_TERMS}\n${SERIES_OPTIONAL_PAYMENT_NOTE}\nSibling/Twin discount: $20 off the second child's series registration.`;
   if (!sale.square_order_id) {
     const { order } = await squareRequest<{ order: SquareOrder }>('/v2/orders', 'POST', {
       idempotency_key: `cs-order-${sale.id}`, order: {
@@ -69,6 +70,23 @@ export async function createSeriesInvoiceDraft(db: SupabaseClient, input: { hous
   return saveSale(db, sale, { square_invoice_id: invoice.id, square_invoice_version: invoice.version, delivery_method: input.source === 'invoice' ? 'EMAIL' : 'SHARE_MANUALLY' });
 }
 
+/** Update an unsent provider draft only. Never publishes or emails an invoice. */
+export async function updateSeriesDraftPaymentNote(db: SupabaseClient, sale: SeriesSale) {
+  if (sale.sent_at || !['draft', 'held'].includes(sale.status) || !sale.square_invoice_id) throw new Error('Only an unsent draft can be updated');
+  const path = `/v2/invoices/${encodeURIComponent(sale.square_invoice_id)}`;
+  const { invoice } = await squareRequest<{ invoice: SquareInvoice }>(path);
+  if (invoice.status !== 'DRAFT') throw new Error('Only an unsent draft can be updated');
+  if (invoice.id !== sale.square_invoice_id || invoice.order_id !== sale.square_order_id || invoice.location_id !== sale.location_id || invoice.primary_recipient?.customer_id !== sale.square_customer_id) throw new Error('Invoice does not match this family');
+  if (!invoice.description) throw new Error('Invoice description needs review');
+  const description = invoice.description.includes(SERIES_OPTIONAL_PAYMENT_NOTE) ? invoice.description : `${invoice.description}\n\n${SERIES_OPTIONAL_PAYMENT_NOTE}`;
+  if (description !== invoice.description) {
+    await squareRequest(path, 'PUT', { idempotency_key: `cs-optional-note-v1-${sale.id}-${invoice.version}`, invoice: { version: invoice.version, description } });
+  }
+  const { invoice: verified } = await squareRequest<{ invoice: SquareInvoice }>(path);
+  if (verified.status !== 'DRAFT' || verified.description !== description) throw new Error('Draft note update needs review');
+  return { sale: await saveSale(db, sale, { square_invoice_version: verified.version }), description };
+}
+
 /** Only call for an explicit customer Pay now action or an owner's review-and-send action. */
 export async function publishSeriesInvoice(db: SupabaseClient, sale: SeriesSale, email: boolean) {
   sale = checked(await db.rpc('hold_class_series_sale', { p_id: sale.id, p_invoice: email })) as SeriesSale;
@@ -80,8 +98,8 @@ export async function publishSeriesInvoice(db: SupabaseClient, sale: SeriesSale,
     const delivery = email ? 'EMAIL' : 'SHARE_MANUALLY';
     deliveryMethod = delivery;
     const updated = await squareRequest<{ invoice: SquareInvoice }>(`/v2/invoices/${encodeURIComponent(invoice.id)}`, 'PUT', {
-      idempotency_key: `cs-delivery-${sale.id}-${email ? 'email' : 'manual'}`,
-      invoice: { version: invoice.version, delivery_method: delivery },
+      idempotency_key: `cs-delivery-note-v1-${sale.id}-${email ? 'email' : 'manual'}-${invoice.version}`,
+      invoice: { version: invoice.version, delivery_method: delivery, description: invoice.description?.includes(SERIES_OPTIONAL_PAYMENT_NOTE) ? invoice.description : `${invoice.description ?? ''}\n\n${SERIES_OPTIONAL_PAYMENT_NOTE}`.trim() },
     });
     invoice = (await squareRequest<{ invoice: SquareInvoice }>(`/v2/invoices/${encodeURIComponent(invoice.id)}/publish`, 'POST', { version: updated.invoice.version, idempotency_key: `cs-publish-${sale.id}` })).invoice;
   }
