@@ -2,9 +2,13 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireOwnerContext } from '@/lib/authz';
 import { JAMIE_ART_TITLE, prepareJamieArtPayments } from '@/lib/class-payment-preparation';
+import { squareEnvironment } from '@/lib/square-client';
+import ClassInvoiceDrafts from '@/components/classes/ClassInvoiceDrafts';
+import { SERIES_TERMS, SERIES_DATES, reconcileSeriesSales } from '@/lib/class-series-payments';
 import styles from './payment-preparation.module.css';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 export const metadata = { title: 'Class Payment Preparation - Little Wanderers' };
 
 function money(cents: number) { return `$${(cents / 100).toFixed(2)}`; }
@@ -16,6 +20,7 @@ export default async function ClassPaymentPreparationPage() {
   const context = await requireOwnerContext();
   if (!context.ok) redirect('/staff/classes');
   const db = context.admin;
+  await reconcileSeriesSales(db);
   const { data: sessions, error: classError } = await db.from('classes')
     .select('id,title,status,start_time,price_cents,capacity').eq('title', JAMIE_ART_TITLE).order('start_time');
   if (classError) throw new Error('Unable to load class payment preparation.');
@@ -34,7 +39,9 @@ export default async function ClassPaymentPreparationPage() {
     ? await db.from('households').select('id,name,email').in('id', householdIds)
     : { data: [], error: null };
   if (householdError) throw new Error('Unable to load family payment details.');
-  const preparation = prepareJamieArtPayments({ sessions: sessions ?? [], registrations: registrations ?? [], people: people ?? [], households: households ?? [] });
+  const { data: sales, error: saleError } = await db.from('class_series_sales').select('id,household_id,child_ids,amount_cents,status,square_invoice_id,sent_at,recipient_email').eq('program_id', 'jamie-art-2026-11-12').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
+  if (saleError) throw new Error('Unable to load invoice drafts.');
+  const preparation = prepareJamieArtPayments({ sessions: sessions ?? [], registrations: registrations ?? [], people: people ?? [], households: households ?? [], paidChildrenByHousehold: Object.fromEntries((households ?? []).map(household => [household.id, new Set((sales ?? []).filter(sale => sale.household_id === household.id && sale.status === 'paid').flatMap(sale => sale.child_ids)).size])) });
 
   return <main className={styles.page}>
     <Link className={styles.back} href="/staff/classes">← Class Management</Link>
@@ -51,12 +58,13 @@ export default async function ClassPaymentPreparationPage() {
       </div>
       <p className={styles.note}>One registration covers all five sessions. The second-child discount applies once per family for the series.</p>
       <ul className={styles.dates}>{preparation.sessions.map(session => <li key={session.id}>{sessionLabel(session.start_time)}</li>)}</ul>
-      <p className={styles.note}>No class on November 26 (Thanksgiving). All times are Eastern.</p>
+      <p className={styles.note}>{SERIES_DATES}</p>
+      <p className={styles.note}><strong>{SERIES_TERMS}</strong></p>
     </section>
     {preparation.issues.length > 0 && <section className={styles.review} aria-labelledby="review-heading"><h2 id="review-heading">Review before opening payment</h2><ul>{preparation.issues.map(issue => <li key={issue}>{issue}</li>)}</ul></section>}
     <section className={styles.panel} aria-labelledby="family-heading">
       <h2 id="family-heading">Prepared family amounts</h2>
-      <p className={styles.note}>These are estimates for pre-registered children. No payment links have been sent or created. Spots are confirmed after payment when official registration opens.</p>
+      <p className={styles.note}>These are estimates for interested families. Invoice drafts are not sent automatically. Only completed payment confirms a place; spaces are limited.</p>
       {!preparation.families.length ? <p>No family amounts to prepare yet.</p> : <div className={styles.tableWrap}><table>
         <caption className={styles.srOnly}>Jamie art series payment estimates by family</caption>
         <thead><tr><th scope="col">Family &amp; children</th><th scope="col">Full-series subtotal</th><th scope="col">Sibling / twin discount</th><th scope="col">Prepared total</th></tr></thead>
@@ -68,5 +76,6 @@ export default async function ClassPaymentPreparationPage() {
         </tr>)}</tbody>
       </table></div>}
     </section>
+    <ClassInvoiceDrafts families={preparation.families} sales={sales ?? []} />
   </main>;
 }

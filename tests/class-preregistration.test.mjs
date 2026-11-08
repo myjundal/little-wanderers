@@ -42,7 +42,7 @@ test('successful pre-registration updates the class card immediately even if ref
   const page = await classPageHarness({ failRefresh: true });
   await page.click();
   await page.flush();
-  assert.equal(page.button().props.children, 'Pre-registered');
+  assert.equal(page.button().props.children, 'Interest saved');
   assert.equal(page.button().props.disabled, true);
   assert.match(page.feedback(), /first come, first served/);
   assert.match(page.feedback(), /payment is completed/);
@@ -55,7 +55,7 @@ test('a newly created child is immediately reflected on the successful class car
   page.field('class-child-age', '3');
   await page.click();
   await page.flush();
-  assert.equal(page.button().props.children, 'Pre-registered');
+  assert.equal(page.button().props.children, 'Interest saved');
   assert.equal(page.toast.tone, 'success');
 });
 
@@ -85,7 +85,7 @@ test('rapid clicks share one registration request and keep the Saving state unti
   release(Response.json({ ok: true, id: 'registration', status: 'scheduled', email: { ok: true } }));
   await first;
   await page.flush();
-  assert.equal(page.button().props.children, 'Pre-registered');
+  assert.equal(page.button().props.children, 'Seat confirmed');
 });
 
 test('confirmation email uses pre-registration and payment terms for interest and legacy statuses', async () => {

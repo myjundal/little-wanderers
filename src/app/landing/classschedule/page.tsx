@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import ActionToast from '@/components/ui/ActionToast';
+import ClassSeriesPaymentChoice from '@/components/classes/ClassSeriesPaymentChoice';
 import PreRegistrationNotice from '@/components/classes/PreRegistrationNotice';
 
 type Person = {
@@ -505,7 +506,7 @@ export default function ClassSchedulePage() {
     const firstName = guardianFirstName.trim();
     const lastName = guardianLastName.trim();
     if (!firstName || !lastName) {
-      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then press Pre-register again.');
+      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then choose I’m interested or Pay now again.');
     }
     return { guardian_first_name: firstName, guardian_last_name: lastName };
   };
@@ -514,11 +515,11 @@ export default function ClassSchedulePage() {
     if (selectedPerson && !selectedPersonNeedsAge) return selectedPerson;
     const name = quickChildName.trim();
     if (!selectedPerson && !name) {
-      registrationFieldError('class-child-name', 'Please enter your child’s name above, then press Pre-register again.');
+      registrationFieldError('class-child-name', 'Please enter your child’s name above, then choose I’m interested or Pay now again.');
     }
     const ageValue = parsedQuickAge();
     if (ageValue == null) {
-      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then press Pre-register again.');
+      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then choose I’m interested or Pay now again.');
     }
 
     if (selectedPersonId && !isAddingAdditionalChild && selectedPersonNeedsAge) {
@@ -597,7 +598,7 @@ export default function ClassSchedulePage() {
       const emailFailed = json.email && (!json.email.ok || json.email.skipped);
       const emailPending = Boolean(json.email_pending);
       const registeredClass = classes.find((item) => item.id === classId) ?? null;
-      const optimisticStatus: RegistrationItem['status'] = json.status === 'preregistered' ? 'preregistered' : json.status === 'waitlist' ? 'waitlist' : 'scheduled';
+      const optimisticStatus: RegistrationItem['status'] = json.status === 'scheduled' ? 'scheduled' : json.status === 'waitlist' ? 'waitlist' : 'preregistered';
       if (json.id && registeredClass && registeredPerson) {
         const optimisticItem: RegistrationItem = {
           id: json.id,
@@ -708,8 +709,8 @@ export default function ClassSchedulePage() {
   return (
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Pre-registration</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Wanderlist families get first access to pre-registration. Choose a class below to share your interest.</p>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Registration</h1>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose I’m interested to share interest, or Pay now to reserve seat for an available paid class. Only completed payment confirms your place.</p>
       <PreRegistrationNotice />
 
       <p style={{ color: '#6f628d' }}>{CLASS_START_NOTE}</p>
@@ -721,7 +722,7 @@ export default function ClassSchedulePage() {
           <div>
             <h2 style={{ fontSize: 22, margin: 0, color: '#4f3f82' }}>Weekly class map</h2>
             <p style={{ margin: '6px 0 0', color: '#6f628d', fontSize: 14 }}>
-              Tap a class time to bring its card and pre-registration button to the top.
+              Tap a class time to bring its card and registration options to the top.
             </p>
           </div>
         </div>
@@ -771,7 +772,7 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          No payment is collected for pre-registration. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
+          I’m interested is free and does not hold a seat. Choose Pay now for an available paid class to confirm your place. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
         </p>
         {isAuthenticated && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>
@@ -975,9 +976,14 @@ export default function ClassSchedulePage() {
                       {classSizeLabel(target.capacity)}
                     </div>
                     <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
-                      {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? 'Pre-registered' : 'Pre-register'}
+                      {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? (existingStatus === 'preregistered' ? 'Interest saved' : 'Seat confirmed') : 'I’m interested'}
                     </button>
                   </div>
+                  {series.title === 'Little Hands, Big Canvases' && <ClassSeriesPaymentChoice
+                    familyChildren={people} selectedChildId={selectedPersonId} authenticated={isAuthenticated}
+                    confirmed={existingStatus === 'scheduled' || existingStatus === 'attended'}
+                    resolveChild={async () => { const guardian = guardianPayload(); const child = await ensureSelectedChild(); return { id: child.id, ...guardian }; }}
+                  />}
                   {registrationFeedback?.classId === target.id && (
                     <p role={registrationFeedback.tone === 'error' ? 'alert' : 'status'} style={{ margin: '12px 0 0', padding: 12, borderRadius: 10, background: registrationFeedback.tone === 'error' ? '#fff5f8' : '#f3ebff', color: registrationFeedback.tone === 'error' ? '#8a3f6b' : '#4f3f82', lineHeight: 1.6 }}>
                       {registrationFeedback.message}
@@ -1002,7 +1008,7 @@ export default function ClassSchedulePage() {
             {people.map((p) => <option key={`hist-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
           </select>
           <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
-            Pre-registrations ({upcomingHistoryItems.length})
+            Classes & interest ({upcomingHistoryItems.length})
           </button>
           <button onClick={() => setHistoryTab('past')} style={historyTab === 'past' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Past ({pastHistoryItems.length})
@@ -1036,7 +1042,7 @@ export default function ClassSchedulePage() {
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status:{' '}
                   <b style={{ textTransform: 'uppercase' }}>
-                    {item.status === 'preregistered' || item.status === 'waitlist' || item.attendance_display_status === 'upcoming' ? 'pre-registered' : item.attendance_display_status}
+                    {item.status === 'preregistered' ? 'interested — seat not confirmed' : item.status === 'waitlist' ? 'waitlisted' : item.attendance_display_status === 'upcoming' ? 'confirmed' : item.attendance_display_status}
                   </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>

@@ -14,12 +14,13 @@ type Person = { id: string; role: string | null; household_id: string | null; fi
 type Household = { id: string; name: string | null; email: string | null };
 
 /** One full-series charge per child. The discount applies once, to the second child. */
-export function quoteJamieArtSeries(childIds: string[], priceCents: number) {
+export function quoteJamieArtSeries(childIds: string[], priceCents: number, paidChildCount = 0) {
   if (!Number.isSafeInteger(priceCents) || priceCents <= 0) throw new Error('A valid series price is required.');
   if (!childIds.length || childIds.some(id => !id) || new Set(childIds).size !== childIds.length) {
     throw new Error('Choose distinct children for the series.');
   }
-  const discountCents = childIds.length >= 2 ? Math.min(SECOND_CHILD_DISCOUNT_CENTS, priceCents) : 0;
+  if (!Number.isSafeInteger(paidChildCount) || paidChildCount < 0) throw new Error('Invalid paid child count.');
+  const discountCents = (paidChildCount === 0 && childIds.length >= 2) || paidChildCount === 1 ? Math.min(SECOND_CHILD_DISCOUNT_CENTS, priceCents) : 0;
   const subtotalCents = childIds.length * priceCents;
   if (!Number.isSafeInteger(subtotalCents)) throw new Error('Series amount is too large.');
   return { childCount: childIds.length, subtotalCents, discountCents, totalCents: subtotalCents - discountCents };
@@ -27,7 +28,7 @@ export function quoteJamieArtSeries(childIds: string[], priceCents: number) {
 
 /** Read-only preparation: pre-registration is interest, never evidence of payment. */
 export function prepareJamieArtPayments(input: {
-  sessions: Session[]; registrations: Registration[]; people: Person[]; households: Household[];
+  sessions: Session[]; registrations: Registration[]; people: Person[]; households: Household[]; paidChildrenByHousehold?: Record<string, number>;
 }) {
   const course = input.sessions.filter(session => session.title === JAMIE_ART_TITLE);
   const sessions = course.filter(session => session.status === 'scheduled').sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time));
@@ -70,7 +71,7 @@ export function prepareJamieArtPayments(input: {
       householdId: group.household.id, familyName: group.household.name,
       email: group.household.email,
       children: children.map(person => ({ id: person.id, name: [person.first_name, person.last_name].filter(Boolean).join(' ') || 'Name needed' })),
-      quote: validPrice ? quoteJamieArtSeries(children.map(child => child.id), priceCents!) : null,
+      quote: validPrice ? quoteJamieArtSeries(children.map(child => child.id), priceCents!, input.paidChildrenByHousehold?.[group.household.id] ?? 0) : null,
     };
   }).sort((a, b) => (a.familyName ?? a.children[0].name).localeCompare(b.familyName ?? b.children[0].name));
   const missingContactCount = families.filter(family => !family.email?.trim()).length;
