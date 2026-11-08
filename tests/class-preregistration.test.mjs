@@ -42,7 +42,7 @@ test('successful pre-registration updates the class card immediately even if ref
   const page = await classPageHarness({ failRefresh: true });
   await page.click();
   await page.flush();
-  assert.equal(page.button().props.children, 'Interest saved');
+  assert.equal(page.button().props.children, 'Interest saved — no seat reserved');
   assert.equal(page.button().props.disabled, true);
   assert.match(page.feedback(), /first come, first served/);
   assert.match(page.feedback(), /payment is completed/);
@@ -55,7 +55,7 @@ test('a newly created child is immediately reflected on the successful class car
   page.field('class-child-age', '3');
   await page.click();
   await page.flush();
-  assert.equal(page.button().props.children, 'Interest saved');
+  assert.equal(page.button().props.children, 'Interest saved — no seat reserved');
   assert.equal(page.toast.tone, 'success');
 });
 
@@ -113,7 +113,7 @@ test('confirmation email uses pre-registration and payment terms for interest an
     assert.doesNotMatch(sent.html, /waitlist|next family in line|private claim/i);
     assert.match(sent.html, /first come, first served/);
     assert.match(sent.html, /payment is completed/);
-    assert.match(sent.html, /does not reserve or guarantee a spot/);
+    assert.match(sent.html, /no payment is collected and no seat is reserved or guaranteed/);
     assert.match(sent.html, /&lt;Sam&gt;/);
     assert.match(sent.html, /Painting &lt;Together&gt;/);
   }

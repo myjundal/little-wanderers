@@ -104,3 +104,14 @@ test('return URLs or invoice status alone cannot confirm a seat without verified
  const good=providerHarness();assert.equal((await good.module.verifySeriesPayment(good.admin,good.sale)).status,'paid');
  assert.equal(good.rpc[0].name,'fulfill_class_series_sale');
 });
+
+test('legacy staff payment links cannot collect an unverified Jamie series payment', async () => {
+ const api=loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts',{
+  '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:'owner'},admin:{from(table){const q={select(){return q;},eq(){return q;},order(){return q;},in(){return q;},then(resolve){resolve({data:table==='people'?[{id:'child',role:'child'}]:[{id:'art',title:'Little Hands, Big Canvases',price_cents:15000,status:'scheduled'}],error:null});}};return q;}}})},
+  crypto:{},'@/lib/square':{},'@/lib/class-waitlist':{},'@/lib/admin-notifications':{},'@/lib/family-profile':{},'@/lib/logger':{},
+ });
+ for(const mode of ['create_payment_link','finalize']){
+  const result=await api.POST({json:async()=>({mode,person_id:'child',items:[{class_id:'art'}]})},{params:{id:'family'}});
+  assert.equal(result.status,409);assert.match((await result.json()).error,/verified series payment/);
+ }
+});

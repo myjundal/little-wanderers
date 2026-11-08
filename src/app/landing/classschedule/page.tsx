@@ -506,7 +506,7 @@ export default function ClassSchedulePage() {
     const firstName = guardianFirstName.trim();
     const lastName = guardianLastName.trim();
     if (!firstName || !lastName) {
-      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then choose I’m interested or Pay now again.');
+      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then choose the interest-only option or Pay now again.');
     }
     return { guardian_first_name: firstName, guardian_last_name: lastName };
   };
@@ -515,11 +515,11 @@ export default function ClassSchedulePage() {
     if (selectedPerson && !selectedPersonNeedsAge) return selectedPerson;
     const name = quickChildName.trim();
     if (!selectedPerson && !name) {
-      registrationFieldError('class-child-name', 'Please enter your child’s name above, then choose I’m interested or Pay now again.');
+      registrationFieldError('class-child-name', 'Please enter your child’s name above, then choose the interest-only option or Pay now again.');
     }
     const ageValue = parsedQuickAge();
     if (ageValue == null) {
-      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then choose I’m interested or Pay now again.');
+      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then choose the interest-only option or Pay now again.');
     }
 
     if (selectedPersonId && !isAddingAdditionalChild && selectedPersonNeedsAge) {
@@ -710,7 +710,7 @@ export default function ClassSchedulePage() {
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Registration</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose I’m interested to share interest, or Pay now to reserve seat for an available paid class. Only completed payment confirms your place.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Choose Interested — no payment, no seat reserved to express interest without paying now, or Pay now to reserve seat for an available paid class. Spaces are limited. Only completed payment confirms your place.</p>
       <PreRegistrationNotice />
 
       <p style={{ color: '#6f628d' }}>{CLASS_START_NOTE}</p>
@@ -772,7 +772,7 @@ export default function ClassSchedulePage() {
       <section style={{ marginTop: 18, border: '1px solid #e1d2fb', borderRadius: 14, background: '#fff', padding: 14 }}>
         <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>First access</h2>
         <p style={{ margin: 0, color: '#6f628d', fontSize: 14 }}>
-          I’m interested is free and does not hold a seat. Choose Pay now for an available paid class to confirm your place. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
+          The interest-only option is free. No payment is collected, and no seat is reserved. Choose Pay now for an available paid class to confirm your place. If you are new, add your child’s name and age here, then choose the class you want. Enter age as a number (for example, 4 years or 18 months), not a birthday. Birthdays can be updated later in My Info/People.
         </p>
         {isAuthenticated && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 12 }}>
@@ -975,8 +975,8 @@ export default function ClassSchedulePage() {
                     <div style={{ minWidth: 220, flex: '1 1 240px', color: '#7a6d97', fontSize: 13, fontWeight: 700 }}>
                       {classSizeLabel(target.capacity)}
                     </div>
-                    <button style={{ flex: '0 0 auto' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
-                      {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? (existingStatus === 'preregistered' ? 'Interest saved' : 'Seat confirmed') : 'I’m interested'}
+                    <button style={{ flex: '0 0 auto', maxWidth: '100%', whiteSpace: 'normal' }} onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
+                      {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? (existingStatus === 'preregistered' ? 'Interest saved — no seat reserved' : 'Seat confirmed') : 'Interested — no payment, no seat reserved'}
                     </button>
                   </div>
                   {series.title === 'Little Hands, Big Canvases' && <ClassSeriesPaymentChoice

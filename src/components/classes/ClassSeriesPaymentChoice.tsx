@@ -62,7 +62,7 @@ export default function ClassSeriesPaymentChoice({ familyChildren, selectedChild
     <label style={{ display: 'block', margin: '10px 0' }}><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} /> I agree to the series dates, payment deadline, and cancellation policy.</label>
     {checkout ? <div><strong>Series total: ${(checkout.amount / 100).toFixed(2)}</strong><p><a href={checkout.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 16px', borderRadius: 12, background: '#65449b', color: '#fff', fontWeight: 800 }}>Continue to secure payment ↗</a></p><p>Your seat is not confirmed until payment is completed. Return here to check your confirmation.</p></div>
       : <button type="button" onClick={() => void start()} disabled={busy || !accepted || !availability?.payments_enabled || availability.seats_available === 0} style={{ padding: '12px 16px', borderRadius: 12, border: 0, background: '#65449b', color: '#fff', fontWeight: 800, opacity: busy || !accepted || !availability?.payments_enabled || availability.seats_available === 0 ? .55 : 1 }}>{busy ? 'Preparing secure payment…' : 'Pay now to reserve seat'}</button>}
-    {availability && !availability.payments_enabled && <p>Paid registration is not open right now. You can still select “I’m interested.”</p>}
+    {availability && !availability.payments_enabled && <p>Paid registration is not open right now. You can still express interest for free. No payment is collected, and no seat is reserved.</p>}
     {error && <p role="alert" style={{ color: '#8a3f6b' }}>{error}</p>}
   </div>;
 }
