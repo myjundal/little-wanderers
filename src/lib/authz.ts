@@ -79,10 +79,20 @@ export async function requireTeachingContext() {
   return { ok: true as const, user, role, roles, admin: createAdminSupabaseClient() };
 }
 
-export async function requireClassAttendanceContext(classId: string) {
-  const context = await requireTeachingContext();
+/** Class schedule changes and registration overrides belong to the owner. */
+export async function requireClassManagementContext() {
+  const context = await requireStaffContext();
   if (!context.ok) return context;
-  if (context.role === 'owner' || context.role === 'admin') return context;
+  if (context.role !== 'owner') return { ok: false as const, response: Response.json({ ok: false, error: 'Only the owner can change class registrations or schedules.' }, { status: 403 }) };
+  return context;
+}
+
+export async function requireClassAttendanceContext(classId: string) {
+  const { user, role, roles } = await getCurrentUserRole();
+  if (!user) return { ok: false as const, response: Response.json({ ok: false, error: 'unauthorized' }, { status: 401 }) };
+  if (!isStaffRole(role) && !roles.includes('instructor')) return { ok: false as const, response: Response.json({ ok: false, error: 'forbidden' }, { status: 403 }) };
+  const context = { ok: true as const, user, role, roles, admin: createAdminSupabaseClient() };
+  if (isStaffRole(role)) return context;
   const { data, error } = await context.admin.from('class_instructors').select('class_id').eq('class_id', classId).eq('user_id', context.user.id).maybeSingle();
   if (error) return { ok: false as const, response: Response.json({ ok: false, error: 'Unable to verify class assignment.' }, { status: 500 }) };
   if (!data) return { ok: false as const, response: Response.json({ ok: false, error: 'Class access denied.' }, { status: 403 }) };

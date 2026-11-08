@@ -107,7 +107,7 @@ test('return URLs or invoice status alone cannot confirm a seat without verified
 
 test('legacy staff payment links cannot collect an unverified Jamie series payment', async () => {
  const api=loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts',{
-  '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:'owner'},admin:{from(table){const q={select(){return q;},eq(){return q;},order(){return q;},in(){return q;},then(resolve){resolve({data:table==='people'?[{id:'child',role:'child'}]:[{id:'art',title:'Little Hands, Big Canvases',price_cents:15000,status:'scheduled'}],error:null});}};return q;}}})},
+  '@/lib/authz':{requireStaffContext:async()=>({ok:true,role:'owner',user:{id:'owner'},admin:{from(table){const q={select(){return q;},eq(){return q;},order(){return q;},in(){return q;},then(resolve){resolve({data:table==='people'?[{id:'child',role:'child'}]:[{id:'art',title:'Little Hands, Big Canvases',price_cents:15000,status:'scheduled'}],error:null});}};return q;}}})},
   crypto:{},'@/lib/square':{},'@/lib/class-waitlist':{},'@/lib/admin-notifications':{},'@/lib/family-profile':{},'@/lib/logger':{},
  });
  for(const mode of ['create_payment_link','finalize']){

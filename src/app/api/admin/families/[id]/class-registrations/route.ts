@@ -1,10 +1,10 @@
-import { requireStaffContext } from '@/lib/authz';
+import { requireClassManagementContext } from '@/lib/authz';
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, { params: pendingParams }: Params) {
   const params = await pendingParams;
-  const context = await requireStaffContext();
+  const context = await requireClassManagementContext();
   if (!context.ok) return context.response;
 
   const { id: householdId } = params;

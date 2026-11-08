@@ -31,9 +31,9 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
       return Response.json({ ok: false, error: 'Pre-registration does not confirm a place. Complete official registration before recording attendance.' }, { status: 409 });
     }
 
-    if (context.role !== 'owner' && context.role !== 'admin' && attendanceStatus === 'cancelled') return Response.json({ ok: false, error: 'Instructors can record attendance only.' }, { status: 403 });
+    if (context.role !== 'owner' && !['attended', 'unknown'].includes(attendanceStatus)) return Response.json({ ok: false, error: 'Check-in access only. Registration changes require the owner.' }, { status: 403 });
 
-    if (context.role !== 'owner' && context.role !== 'admin') {
+    if (context.role !== 'owner') {
       if (!['scheduled', 'attended'].includes(registration.status)) return Response.json({ ok: false, error: 'Attendance is available for registered children only.' }, { status: 409 });
       const { data: klass, error } = await context.admin.from('classes').select('status').eq('id', params.id).maybeSingle();
       if (error) return Response.json({ ok: false, error: 'Unable to verify class status.' }, { status: 500 });

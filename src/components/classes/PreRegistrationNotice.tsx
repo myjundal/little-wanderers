@@ -1,10 +1,8 @@
-import { CLASS_PRE_REGISTRATION_NOTE } from '@/lib/class-config';
+import styles from './class-registration.module.css';
 
 export default function PreRegistrationNotice() {
-  return (
-    <aside style={{ margin: '16px 0', padding: '16px 18px', borderRadius: 16, border: '1px solid #d9c8f7', background: '#f3ebff', color: '#4f3f82', lineHeight: 1.7 }}>
-      <strong style={{ display: 'block', marginBottom: 4 }}>Two ways to register — only payment confirms your seat</strong>
-      <p style={{ margin: 0 }}>{CLASS_PRE_REGISTRATION_NOTE}</p>
-    </aside>
-  );
+  return <aside className={styles.notice} aria-label="Registration options">
+    <div className={styles.options}><div><strong>Express interest · free</strong><p>No payment today. No seat reserved.</p></div><div><strong>Pay now · reserve a seat</strong><p>Your seat is confirmed after payment is completed.</p></div></div>
+    <p className={styles.noticeFoot}>Spaces are limited. Paid registration is currently available for Ms. Jamie’s art series.</p>
+  </aside>;
 }

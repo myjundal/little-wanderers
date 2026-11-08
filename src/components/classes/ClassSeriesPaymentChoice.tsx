@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import styles from './class-registration.module.css';
 
 type Child = { id: string; first_name: string; last_name: string | null };
 type Availability = { payments_enabled: boolean; seats_available: number | null };
@@ -53,16 +54,17 @@ export default function ClassSeriesPaymentChoice({ familyChildren, selectedChild
     finally { setBusy(false); }
   };
   if (confirmed || paid) return <p role="status" style={{ color: '#2f7a47', fontWeight: 800 }}>Payment confirmed — your seat is reserved for all five sessions.</p>;
-  return <div style={{ marginTop: 12, padding: 14, borderRadius: 14, background: '#f3ebff', color: '#4f3f82', lineHeight: 1.6 }}>
-    <strong>Limited seats. Only completed payment confirms your place.</strong>
-    <p style={{ margin: '6px 0' }}>Full 5-session series: first child $150; second child $130. Dates: Nov 12, Nov 19, Dec 3, Dec 10, Dec 17, 5:00–5:45 PM Eastern. No class on Thanksgiving.</p>
-    <p style={{ margin: '6px 0' }}><strong>{availability?.seats_available == null ? 'Checking seats…' : `${availability.seats_available} seat${availability.seats_available === 1 ? '' : 's'} currently available`}</strong>. Interest does not reserve a seat.</p>
-    {familyChildren.some(child => child.id !== selectedChildId) && <fieldset style={{ border: '1px solid #d9c8f7', borderRadius: 10, margin: '10px 0' }}><legend>Include a sibling / twin</legend>{familyChildren.filter(child => child.id !== selectedChildId).map(child => <label key={child.id} style={{ display: 'block' }}><input type="checkbox" checked={siblings.includes(child.id)} onChange={event => setSiblings(current => event.target.checked ? [...current, child.id] : current.filter(id => id !== child.id))} /> {child.first_name} {child.last_name}</label>)}</fieldset>}
-    <p style={{ margin: '8px 0' }}>Payment due <strong>Nov 11 at 5:00 PM Eastern</strong>, 24 hours before the first class. This series is <strong>nonrefundable unless canceled by the instructor</strong>.</p>
-    <label style={{ display: 'block', margin: '10px 0' }}><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} /> I agree to the series dates, payment deadline, and cancellation policy.</label>
+  return <section className={styles.payment} aria-label="Reserve a seat with payment">
+    <h4>Ready to reserve a seat?</h4>
+    <p>First child <strong>$150</strong> · Second child <strong>$130</strong> for all five sessions.</p>
+    <p><strong>{availability?.seats_available == null ? 'Checking seats…' : `${availability.seats_available} seat${availability.seats_available === 1 ? '' : 's'} available`}</strong> · Only completed payment confirms your place.</p>
+    <details><summary>5 series dates · Thursdays, 5:00–5:45 PM</summary><ul className={styles.dates}>{['Nov 12', 'Nov 19', 'Dec 3', 'Dec 10', 'Dec 17'].map(date => <li key={date}>{date}</li>)}</ul><p>No class on Thanksgiving, Nov 26. All times Eastern.</p></details>
+    {familyChildren.some(child => child.id !== selectedChildId) && <fieldset className={styles.sibling}><legend>Include a sibling / twin · $20 off the second child</legend>{familyChildren.filter(child => child.id !== selectedChildId).map(child => <label key={child.id} style={{ display: 'block' }}><input type="checkbox" checked={siblings.includes(child.id)} onChange={event => setSiblings(current => event.target.checked ? [...current, child.id] : current.filter(id => id !== child.id))} /> {child.first_name} {child.last_name}</label>)}</fieldset>}
+    <p>Due <strong>Nov 11, 5:00 PM Eastern</strong> — 24 hours before the first class.<br /><strong>Nonrefundable unless canceled by the instructor.</strong></p>
+    <label className={styles.check}><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} /> I agree to the series dates, payment deadline, and cancellation policy.</label>
     {checkout ? <div><strong>Series total: ${(checkout.amount / 100).toFixed(2)}</strong><p><a href={checkout.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 16px', borderRadius: 12, background: '#65449b', color: '#fff', fontWeight: 800 }}>Continue to secure payment ↗</a></p><p>Your seat is not confirmed until payment is completed. Return here to check your confirmation.</p></div>
-      : <button type="button" onClick={() => void start()} disabled={busy || !accepted || !availability?.payments_enabled || availability.seats_available === 0} style={{ padding: '12px 16px', borderRadius: 12, border: 0, background: '#65449b', color: '#fff', fontWeight: 800, opacity: busy || !accepted || !availability?.payments_enabled || availability.seats_available === 0 ? .55 : 1 }}>{busy ? 'Preparing secure payment…' : 'Pay now to reserve seat'}</button>}
+      : <button type="button" onClick={() => void start()} disabled={busy || !accepted || !availability?.payments_enabled || availability.seats_available === 0} className={styles.payButton}>{busy ? 'Preparing secure payment…' : 'Pay now to reserve seat'}</button>}
     {availability && !availability.payments_enabled && <p>Paid registration is not open right now. You can still express interest for free. No payment is collected, and no seat is reserved.</p>}
     {error && <p role="alert" style={{ color: '#8a3f6b' }}>{error}</p>}
-  </div>;
+  </section>;
 }

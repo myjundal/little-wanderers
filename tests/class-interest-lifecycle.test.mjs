@@ -40,8 +40,8 @@ test('staff checkout promotes existing interest without inserting a duplicate or
   }
 });
 
-test('manual pre-registration also ignores capacity and waitlist priority', async () => {
-  for (const existing of [null, { id: 'old', status: 'cancelled' }]) {
+test('staff can manually register new interest but only the owner can restore cancelled registrations', async () => {
+  for (const role of ['staff', 'owner']) for (const existing of [null, { id: 'old', status: 'cancelled' }]) {
     const writes = [];
     const admin = { from(table) {
       const query = {
@@ -56,7 +56,7 @@ test('manual pre-registration also ignores capacity and waitlist priority', asyn
       return query;
     } };
     const api = loadModule('src/app/api/admin/families/[id]/classes/checkout/route.ts', {
-      '@/lib/authz': { requireStaffContext: async () => ({ ok: true, admin, role: 'staff', user: { id: 'employee' } }) },
+      '@/lib/authz': { requireStaffContext: async () => ({ ok: true, admin, role, user: { id: 'employee' } }) },
       crypto: {}, '@/lib/square': {},
       '@/lib/class-waitlist': {
         countConfirmedClassRegistrations: async () => { throw new Error('Do not count seats for interest'); },
@@ -69,6 +69,7 @@ test('manual pre-registration also ignores capacity and waitlist priority', asyn
       '@/lib/logger': { logger: { warn() {}, error() {} } },
     });
     const response = await api.POST({ json: async () => ({ mode: 'register', person_id: 'child', items: [{ class_id: 'painting' }] }) }, { params: { id: 'family' } });
+    if (existing && role === 'staff') { assert.equal(response.status, 403); assert.equal(writes.length, 0); continue; }
     assert.equal(response.status, 200);
     assert.equal((await response.json()).status, 'preregistered');
     assert.equal(writes[0].status, 'preregistered');

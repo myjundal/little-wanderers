@@ -38,6 +38,16 @@ export const WEEKDAY_COLUMNS = [
   { value: 5, label: 'Fri' },
 ];
 
+export function compareWeeklyClasses(a: { start_time: string; title: string }, b: { start_time: string; title: string }) {
+  const order = (item: { start_time: string }) => {
+    const key = weekdayTimeKey(item);
+    if (!key) return Number.MAX_SAFE_INTEGER;
+    const [day, hour, minute] = key.split('-').map(Number);
+    return ((day + 6) % 7) * 1440 + hour * 60 + minute;
+  };
+  return order(a) - order(b) || a.title.localeCompare(b.title);
+}
+
 export function publicClassSeriesKey(item: Pick<PublicClassItem, 'title' | 'category' | 'schedule_label' | 'duration_minutes' | 'capacity' | 'price_cents'>) {
   return [
     item.title,
@@ -81,7 +91,7 @@ export function groupPublicClassSeries(items: PublicClassItem[]) {
   return Array.from(groups.values()).map((occurrences) => {
     const sorted = [...occurrences].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     return { ...seriesBase(sorted), occurrences: sorted } satisfies PublicClassSeries;
-  });
+  }).sort(compareWeeklyClasses);
 }
 
 export function weekdayTimeKey(item: Pick<PublicClassItem, 'start_time'>) {
@@ -129,7 +139,7 @@ export function buildGeneralWeeklySchedule(seriesItems: PublicClassSeries[]) {
   });
 
   grouped.forEach((items, day) => {
-    grouped.set(day, [...items].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()));
+    grouped.set(day, [...items].sort(compareWeeklyClasses));
   });
 
   return grouped;

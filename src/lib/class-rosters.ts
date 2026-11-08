@@ -4,6 +4,7 @@ export type RosterRegistration = {
   name: string;
   status: string;
   age?: number | null;
+  attendanceStatus?: string;
   householdId?: string | null;
 };
 
@@ -14,6 +15,7 @@ export type RosterSession = {
   endTime: string;
   status: string;
   scheduleLabel?: string | null;
+  instructorNote?: string | null;
   registrations: RosterRegistration[];
 };
 
