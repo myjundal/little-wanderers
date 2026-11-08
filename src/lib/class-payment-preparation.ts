@@ -82,3 +82,31 @@ export function prepareJamieArtPayments(input: {
   }
   return { sessions, priceCents: validPrice ? priceCents : null, capacity, interestCount, families, issues };
 }
+
+/** Keep sent and paid invoices visible with their frozen children and amounts. */
+export function buildSeriesInvoiceFamilies(input: {
+  pending: ReturnType<typeof prepareJamieArtPayments>['families']; people: Person[]; households: Household[];
+  sales: Array<{ id: string; household_id: string; child_ids: string[]; amount_cents: number; discount_cents: number; recipient_email: string; status: string }>;
+}) {
+  type Row = ReturnType<typeof prepareJamieArtPayments>['families'][number] & { saleId?: string };
+  const active = input.sales.filter(sale => sale.status !== 'cancelled');
+  const rows: Row[] = active.map(sale => {
+    const household = input.households.find(item => item.id === sale.household_id);
+    return {
+      saleId: sale.id, householdId: sale.household_id, familyName: household?.name ?? null, email: sale.recipient_email,
+      children: sale.child_ids.map(id => {
+        const person = input.people.find(item => item.id === id);
+        return { id, name: person ? [person.first_name,person.last_name].filter(Boolean).join(' ') : 'Child profile needs review' };
+      }),
+      quote: { childCount: sale.child_ids.length, subtotalCents: sale.amount_cents + sale.discount_cents, discountCents: sale.discount_cents, totalCents: sale.amount_cents },
+    };
+  });
+  const covered = new Set(active.flatMap(sale => sale.child_ids));
+  for (const family of input.pending) {
+    const children = family.children.filter(child => !covered.has(child.id));
+    if (!children.length) continue;
+    const paidCount = new Set(active.filter(sale => sale.household_id === family.householdId && sale.status === 'paid').flatMap(sale => sale.child_ids)).size;
+    rows.push({ ...family, children, quote: family.quote ? quoteJamieArtSeries(children.map(child => child.id), family.quote.subtotalCents / family.children.length, paidCount) : null });
+  }
+  return rows.sort((a,b) => (a.familyName ?? a.children[0]?.name ?? '').localeCompare(b.familyName ?? b.children[0]?.name ?? ''));
+}

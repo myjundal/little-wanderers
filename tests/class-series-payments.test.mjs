@@ -23,12 +23,13 @@ await db.query("insert into households values($1,'first@example.com'),($2,'secon
 for(let i=0;i<4;i++) await db.query("insert into people values($1,$2,'child')",[children[i],i<2?family:other]);
 for(const date of ['2026-11-12','2026-11-19','2026-12-03','2026-12-10','2026-12-17']) await db.query("insert into classes values($1,'Little Hands, Big Canvases',$2,'scheduled',15000,7)",[crypto.randomUUID(),`${date}T22:00:00Z`]);
 await db.exec(fs.readFileSync('db/migrations/20261108_class_series_payments.sql','utf8'));
+await db.exec(fs.readFileSync('db/migrations/20261108_class_series_payments_paid_first.sql','utf8'));
 await db.exec("update class_series_programs set due_at=now()+interval '7 days',payments_enabled=true");
 const program='jamie-art-2026-11-12';
 const query=async(sql,params=[])=>(await db.query(sql,params)).rows;
 const prepare=async(ids=children.slice(0,2),household=family)=>(await query("select * from prepare_class_series_sale($1,$2,$3,$4,'sandbox','loc','invoice')",[program,household,ids,user]))[0];
 const bind=async(sale)=>{await db.query('update class_series_sales set square_order_id=$2,square_invoice_id=$3 where id=$1',[sale.id,`o-${sale.id}`,`i-${sale.id}`]);return sale;};
-const hold=async(sale)=>(await query('select * from hold_class_series_sale($1,false)',[sale.id]))[0];
+const hold=async(sale,invoice=false)=>(await query('select * from hold_class_series_sale($1,$2)',[sale.id,invoice]))[0];
 
 test('database prices one full series, applies sibling discount once, and deduplicates retries',async()=>{
  const a=await prepare();assert.equal(a.amount_cents,28000);assert.equal(a.class_ids.length,5);
@@ -37,13 +38,14 @@ test('database prices one full series, applies sibling discount once, and dedupl
  await assert.rejects(prepare([children[2]]),/your family/);
  await assert.rejects(prepare([children[0]]),/already exists/);
 });
-test('interest never consumes capacity; concurrent family holds cannot oversell any series session',async()=>{
+test('unpaid invoices and online checkouts do not consume seats or block another family',async()=>{
  const a=await bind(await prepare());
  await db.query("insert into class_registrations(class_id,person_id,status) select id,$1,'preregistered' from classes",[children[0]]);
  await db.exec('update classes set capacity=2');
  await hold(a);
  const b=await bind(await prepare([children[2]],other));
- await assert.rejects(hold(b),/Not enough seats/);
+ assert.equal((await hold(b,true)).status,'held');
+ assert.equal((await query('select hold_until=due_at as deadline from class_series_sales where id=$1',[b.id]))[0].deadline,true);
  assert.equal((await query("select count(*)::int as n from class_registrations where status='scheduled'"))[0].n,0);
 });
 test('payment verification promotes all five sessions atomically and preserves interest IDs',async()=>{
@@ -65,6 +67,49 @@ test('holds release only after the provider invoice is closed; authenticated use
  await db.exec('set role authenticated');
  await assert.rejects(query('select * from class_series_sales'),/permission denied/);
  await db.exec('reset role');
+});
+
+test('verified excess payment is recorded for review without taking a seat, and retries are idempotent', async () => {
+ const sale=await bind(await prepare([children[2]],other));
+ // Sending remains allowed even when paid registrations have filled capacity.
+ assert.equal((await hold(sale,true)).status,'held');
+ const args=[sale.id,`o-${sale.id}`,['receipt-excess'],15000];
+ const review=(await query('select * from fulfill_class_series_sale($1,$2,$3,$4)',args))[0];
+ assert.equal(review.status,'review'); assert.ok(review.paid_at);
+ assert.equal((await query("select count(*)::int n from class_registrations where status='scheduled'"))[0].n,10);
+ assert.equal((await query('select count(*)::int n from class_series_payment_receipts where sale_id=$1',[sale.id]))[0].n,1);
+ assert.equal((await query('select * from fulfill_class_series_sale($1,$2,$3,$4)',args))[0].status,'review');
+ assert.equal((await query('select count(*)::int n from class_series_payment_receipts where sale_id=$1',[sale.id]))[0].n,1);
+});
+
+test('eight families can open invoices for ten children, while only the first eight paid seats confirm', async () => {
+ await db.exec('begin');
+ try {
+  await db.exec('delete from class_series_payment_receipts; delete from class_registrations; delete from class_series_sales; update classes set capacity=8');
+  const invoices=[];
+  for (const count of [1,2,2,1,1,1,1,1]) {
+    const household=crypto.randomUUID(),ids=Array.from({length:count},()=>crypto.randomUUID());
+    await db.query('insert into households values($1,$2)',[household,`${household}@example.invalid`]);
+    for(const id of ids) await db.query("insert into people values($1,$2,'child')",[id,household]);
+    const sale=await bind(await prepare(ids,household));
+    invoices.push(sale);assert.equal((await hold(sale,true)).status,'held');
+  }
+  assert.equal((await query("select count(*)::int n from class_registrations where status='scheduled'"))[0].n,0);
+  const paid=await Promise.all(invoices.map((sale,i)=>query('select * from fulfill_class_series_sale($1,$2,$3,$4)',[sale.id,`o-${sale.id}`,[`first-come-${i}`],sale.amount_cents])));
+  assert.deepEqual(paid.map(rows=>rows[0].status),['paid','paid','paid','paid','paid','paid','review','review']);
+  assert.equal((await query("select count(*)::int n from class_registrations where status='scheduled'"))[0].n,40);
+  assert.equal((await query('select count(*)::int n from class_series_payment_receipts'))[0].n,8);
+ } finally { await db.exec('rollback'); }
+});
+
+test('public availability counts confirmed children and never pending invoices', async () => {
+ const ids=['one','two','three','four','five'];
+ const admin={from(table){
+  if(table==='class_series_sales')throw Error('Pending invoices must not affect availability');
+  const q={select(){return q;},eq(){return q;},in(){return q;},maybeSingle:async()=>({data:{class_ids:ids,payments_enabled:true,due_at:'2099-01-01',price_cents:15000,second_child_discount_cents:2000},error:null}),then(resolve){resolve({data:table==='classes'?ids.map(id=>({id,capacity:8,status:'scheduled'})):ids.map(class_id=>({class_id})),error:null});}};return q;
+ }};
+ const route=loadModule('src/app/api/classes/series/route.ts',{'@vercel/functions':{waitUntil(){}},'@/lib/supabase/admin':{createAdminSupabaseClient:()=>admin},'@/lib/class-series-payments':{JAMIE_PROGRAM_ID:program,reconcileSeriesSales:async()=>{}}});
+ const result=await (await route.GET()).json();assert.equal(result.seats_available,7);assert.equal(result.payments_enabled,true);
 });
 
 function providerHarness({ invoiceStatus='PAID', amount=15000, paymentOrder='order', refunded=0, paymentStatus='COMPLETED' }={}) {

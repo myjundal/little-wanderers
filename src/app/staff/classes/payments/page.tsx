@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireOwnerContext } from '@/lib/authz';
-import { JAMIE_ART_TITLE, prepareJamieArtPayments } from '@/lib/class-payment-preparation';
+import { JAMIE_ART_TITLE, prepareJamieArtPayments, buildSeriesInvoiceFamilies } from '@/lib/class-payment-preparation';
 import { squareEnvironment } from '@/lib/square-client';
 import ClassInvoiceDrafts from '@/components/classes/ClassInvoiceDrafts';
 import { reconcileSeriesSales } from '@/lib/class-series-payments';
@@ -29,7 +29,9 @@ export default async function ClassPaymentPreparationPage() {
     ? await db.from('class_registrations').select('class_id,person_id,status').in('class_id', sessionIds)
     : { data: [], error: null };
   if (registrationError) throw new Error('Unable to load class pre-registrations.');
-  const personIds = [...new Set((registrations ?? []).map(registration => registration.person_id))];
+  const { data: sales, error: saleError } = await db.from('class_series_sales').select('id,household_id,child_ids,amount_cents,discount_cents,status,square_invoice_id,sent_at,recipient_email').eq('program_id', 'jamie-art-2026-11-12').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
+  if (saleError) throw new Error('Unable to load invoice drafts.');
+  const personIds = [...new Set([...(registrations ?? []).map(registration => registration.person_id), ...(sales ?? []).flatMap(sale => sale.child_ids)])];
   const { data: people, error: peopleError } = personIds.length
     ? await db.from('people').select('id,role,household_id,first_name,last_name').in('id', personIds)
     : { data: [], error: null };
@@ -39,9 +41,9 @@ export default async function ClassPaymentPreparationPage() {
     ? await db.from('households').select('id,name,email').in('id', householdIds)
     : { data: [], error: null };
   if (householdError) throw new Error('Unable to load family payment details.');
-  const { data: sales, error: saleError } = await db.from('class_series_sales').select('id,household_id,child_ids,amount_cents,status,square_invoice_id,sent_at,recipient_email').eq('program_id', 'jamie-art-2026-11-12').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
-  if (saleError) throw new Error('Unable to load invoice drafts.');
   const preparation = prepareJamieArtPayments({ sessions: sessions ?? [], registrations: registrations ?? [], people: people ?? [], households: households ?? [], paidChildrenByHousehold: Object.fromEntries((households ?? []).map(household => [household.id, new Set((sales ?? []).filter(sale => sale.household_id === household.id && sale.status === 'paid').flatMap(sale => sale.child_ids)).size])) });
+
+  const invoiceFamilies = buildSeriesInvoiceFamilies({ pending: preparation.families, people: people ?? [], households: households ?? [], sales: sales ?? [] });
 
   return <main className={styles.page}>
     <Link className={styles.back} href="/staff/classes">← Classes</Link>
@@ -51,9 +53,11 @@ export default async function ClassPaymentPreparationPage() {
     </header>
     <section className={styles.overview} aria-label="Invoice summary">
       <div><span>Drafts · not sent</span><strong>{(sales ?? []).filter(sale => sale.status === 'draft' && sale.square_invoice_id && !sale.sent_at).length}</strong></div>
-      <div><span>Sent · awaiting payment</span><strong>{(sales ?? []).filter(sale => sale.sent_at && sale.status !== 'paid' && sale.status !== 'cancelled').length}</strong></div>
+      <div><span>Sent · awaiting payment</span><strong>{(sales ?? []).filter(sale => sale.sent_at && sale.status !== 'paid' && sale.status !== 'cancelled' && sale.status !== 'review').length}</strong></div>
       <div><span>Paid</span><strong>{(sales ?? []).filter(sale => sale.status === 'paid').length}</strong></div>
+      {(sales ?? []).some(sale => sale.status === 'review') && <div><span>Paid · owner review</span><strong>{(sales ?? []).filter(sale => sale.status === 'review').length}</strong></div>}
     </section>
+    <p className={styles.note}>Invoices and unpaid checkout pages do not reserve seats. Seats are confirmed in order of completed payment. Payments above capacity are saved for owner review.</p>
     <details id="series-invoice-policy" className={styles.policy}>
       <summary>Series dates, pricing &amp; payment policy</summary>
       <div className={styles.policyBody}>
@@ -64,6 +68,6 @@ export default async function ClassPaymentPreparationPage() {
       </div>
     </details>
     {preparation.issues.length > 0 && <aside className={styles.review}><strong>Before sending</strong><ul>{preparation.issues.map(issue => <li key={issue}>{issue}</li>)}</ul></aside>}
-    <ClassInvoiceDrafts families={preparation.families} sales={sales ?? []} />
+    <ClassInvoiceDrafts families={invoiceFamilies} sales={sales ?? []} />
   </main>;
 }
