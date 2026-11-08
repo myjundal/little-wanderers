@@ -114,7 +114,7 @@ export async function classPageHarness({
     visit(tree);
     return found;
   };
-  const button = () => all(node => node.type === 'button' && /^(I’m interested|Interest saved|Seat confirmed|Saving\.\.\.)$/.test(node.props.children))[0];
+  const button = () => all(node => node.type === 'button' && /^(Interested — no payment, no seat reserved|Interest saved — no seat reserved|Seat confirmed|Saving\.\.\.)$/.test(node.props.children))[0];
   render();
   await flush();
   return {
