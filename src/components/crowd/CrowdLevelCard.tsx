@@ -33,6 +33,18 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
   const [data, setData] = useState<CrowdPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!showHours) return;
+    const updateClock = () => setNow(new Date());
+    const interval = window.setInterval(updateClock, 60_000);
+    document.addEventListener('visibilitychange', updateClock);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', updateClock);
+    };
+  }, [showHours]);
 
   useEffect(() => {
     if (!showStatus) return;
@@ -78,7 +90,6 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
     };
   }, [showStatus]);
 
-  const now = new Date();
   const weekday = new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, weekday: 'long' }).format(now);
   const dayIndex = WEEKLY_HOURS.findIndex((entry) => entry.label === weekday);
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, hour: 'numeric', hourCycle: 'h23' }).format(now));
