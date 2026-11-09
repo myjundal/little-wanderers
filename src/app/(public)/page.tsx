@@ -33,10 +33,10 @@ export const metadata = {
     type: 'website',
     images: [
       {
-        url: '/logo.png',
-        width: 1254,
-        height: 1254,
-        alt: 'Little Wanderers Play Studio & Cafe logo',
+        url: '/play-studio.jpg',
+        width: 1280,
+        height: 749,
+        alt: 'Little Wanderers play studio in West Hartford',
       },
     ],
   },

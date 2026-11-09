@@ -137,6 +137,7 @@ export default function PartyPage() {
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
+  const [calendarReady, setCalendarReady] = useState(false);
   const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
   const finalizingPaymentRef = useRef(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
@@ -155,43 +156,50 @@ export default function PartyPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setCalendarReady(false);
     const requestKey = Date.now();
     const supabase = createBrowserSupabaseClient();
-    const [bookingsRes, authRes] = await Promise.all([
-      fetch(`/api/party-bookings?ts=${requestKey}`, { cache: 'no-store' }),
-      supabase.auth.getUser(),
-    ]);
-    const bookingsJson = await bookingsRes.json();
-    setIsAuthenticated(Boolean(authRes.data.user?.id));
-
-    if (!bookingsRes.ok || !bookingsJson.ok) {
-      if (bookingsRes.status === 401) {
-        setItems([]);
-      } else {
-        setMessage(bookingsJson.error ?? 'Could not load party bookings.');
-        setLoading(false);
-        return;
-      }
-    } else {
-      setItems((bookingsJson.items ?? []) as PartyBooking[]);
-    }
-
-    const calendarRes = await fetch(`/api/party-bookings/calendar?ts=${requestKey}`, { cache: 'no-store' });
-    const calendarJson = await calendarRes.json();
-    if (calendarRes.ok && calendarJson.ok) {
-      setBookedSlots(calendarJson.items ?? []);
-    }
-    if (authRes.data.user?.id) {
-      const profileJson = await fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' })
-        .then((res) => res.json())
+    try {
+      const authPromise = supabase.auth.getUser();
+      // A public calendar read can start before account-specific requests finish.
+      const calendarPromise = fetch(`/api/party-bookings/calendar?ts=${requestKey}`, { cache: 'no-store' })
+        .then(async (res) => ({ res, json: await res.json() }))
         .catch(() => null);
-      if (profileJson?.ok && profileJson.guardian) {
-        setGuardianFirstName((prev) => prev || profileJson.guardian.first_name || '');
-        setGuardianLastName((prev) => prev || profileJson.guardian.last_name || '');
+      const profilePromise = authPromise.then(async ({ data }) => {
+        if (!data.user?.id) return null;
+        return fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' })
+          .then((res) => res.json()).catch(() => null);
+      }).catch(() => null);
+      const [bookingsRes, authRes, calendar] = await Promise.all([
+        fetch(`/api/party-bookings?ts=${requestKey}`, { cache: 'no-store' }),
+        authPromise,
+        calendarPromise,
+      ]);
+      const bookingsJson = await bookingsRes.json();
+      setIsAuthenticated(Boolean(authRes.data.user?.id));
+      if (!bookingsRes.ok || !bookingsJson.ok) {
+        if (bookingsRes.status === 401) setItems([]);
+        else throw new Error(bookingsJson.error ?? 'Could not load party bookings.');
+      } else {
+        setItems((bookingsJson.items ?? []) as PartyBooking[]);
       }
+      if (calendar?.res.ok && calendar.json.ok) {
+        setBookedSlots(calendar.json.items ?? []);
+        setCalendarReady(true);
+      }
+      else setMessage('Could not refresh the party calendar. Please reload before choosing a time.');
+      // Prefilling names must not hold up the calendar or booking form.
+      void profilePromise.then((profileJson) => {
+        if (profileJson?.ok && profileJson.guardian) {
+          setGuardianFirstName((prev) => prev || profileJson.guardian.first_name || '');
+          setGuardianLastName((prev) => prev || profileJson.guardian.last_name || '');
+        }
+      });
+    } catch {
+      setMessage('Could not load party bookings. Please reload and try again.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -258,6 +266,10 @@ export default function PartyPage() {
   }, [load]);
 
   const submit = async () => {
+    if (!calendarReady) {
+      setMessage('Please wait for the party calendar to load before requesting a hold.');
+      return;
+    }
     if (!isAuthenticated) {
       sessionStorage.setItem('post_login_redirect', '/landing/party');
       window.location.assign(`/login?mode=new&next=${encodeURIComponent('/landing/party')}`);
@@ -361,6 +373,7 @@ export default function PartyPage() {
     ...getPartyBlackoutSlots(),
     ...(() => {
       const generated: CalendarSlot[] = [];
+      if (!calendarReady) return generated;
       const now = new Date();
       const firstAvailableDate = now.getTime() > getPartyBookingStartDate().getTime() ? now : getPartyBookingStartDate();
       for (let i = 0; i < PARTY_SLOT_LOOKAHEAD_DAYS; i += 1) {
@@ -666,7 +679,7 @@ export default function PartyPage() {
             <textarea style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
           </label>
 
-          <button style={{ width: '100%' }} onClick={submit} disabled={submitting}>
+          <button style={{ width: '100%' }} onClick={submit} disabled={submitting || !calendarReady}>
             {submitting ? 'Requesting hold...' : 'Request to hold'}
           </button>
         </div>

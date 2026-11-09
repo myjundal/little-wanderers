@@ -10,12 +10,13 @@ import {
   timeOnlyLabel,
 } from '@/lib/public-classes';
 import { getPublicClasses } from '@/lib/public-class-data';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
+import Link from 'next/link';
+import { Suspense } from 'react';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://thelittlewanderers.com';
-const ACCOUNT_URL = '/login?mode=new';
+const ACCOUNT_URL = '/login?mode=new&next=%2Flanding';
 
 const localBusinessJsonLd = {
   '@context': 'https://schema.org',
@@ -24,7 +25,7 @@ const localBusinessJsonLd = {
   alternateName: 'Little Wanderers West Hartford',
   url: siteUrl,
   logo: `${siteUrl}/logo.png`,
-  image: `${siteUrl}/Lobby.png`,
+  image: `${siteUrl}/play-studio.jpg`,
   description:
     'Little Wanderers Play Studio & Cafe is an indoor play cafe for kids ages 0-5 and their grown-ups in Bishop’s Corner, West Hartford, CT.',
   address: {
@@ -49,19 +50,40 @@ const localBusinessJsonLd = {
   ],
 };
 
-export default async function HomeComingSoon() {
-  const supabase = await createServerSupabaseClient();
-  const [
-    {
-      data: { user },
-    },
-    waitlistCount,
-    classItems,
-  ] = await Promise.all([supabase.auth.getUser(), getWaitlistCount(), getPublicClasses(80)]);
-  const isAuthenticated = Boolean(user);
+async function WeeklyClassPreview() {
+  const classItems = await getPublicClasses(80);
   const weeklyClassSchedule = buildGeneralWeeklySchedule(groupPublicClassSeries(classItems));
   const hasWeeklyClasses = WEEKDAY_COLUMNS.some((day) => (weeklyClassSchedule.get(day.value) ?? []).length > 0);
+  return (
+    <div className={styles.classWeekStrip}>
+      {WEEKDAY_COLUMNS.map((day) => {
+        const dayItems = weeklyClassSchedule.get(day.value) ?? [];
+        return (
+          <div className={styles.classWeekColumn} key={day.value}>
+            <div className={styles.classWeekDayLabel}>{day.label}</div>
+            <div className={styles.classWeekSlots}>
+              {dayItems.length === 0 ? (
+                <Link className={`${styles.classWeekSlot} ${styles.classWeekSlotEmpty}`} href="/classes">
+                  <span className={styles.classWeekTime}>{hasWeeklyClasses ? 'Open' : 'Soon'}</span>
+                  <span className={styles.classWeekTitle}>{hasWeeklyClasses ? 'Open play' : 'Classes'}</span>
+                </Link>
+              ) : dayItems.slice(0, 2).map((item) => (
+                <Link className={styles.classWeekSlot} href={`/classes?class=${encodeURIComponent(item.id)}`} key={item.id}>
+                  <span className={styles.classWeekTime}>{timeOnlyLabel(item.start_time)}</span>
+                  <span className={styles.classWeekTitle}>{item.title}</span>
+                  <span className={styles.classWeekMeta}>{item.age_range ?? 'Ages TBA'} · {classSizeLabel(item.capacity)}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
+export default async function HomeComingSoon() {
+  const waitlistCount = await getWaitlistCount();
   return (
     <main className={styles.page}>
       <script
@@ -81,9 +103,9 @@ export default async function HomeComingSoon() {
           <p>
             We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
             in West Hartford, CT. For opening updates and priority reservation access,{' '}
-            <a href={ACCOUNT_URL} className={styles.inlineLink}>
+            <Link href={ACCOUNT_URL} className={styles.inlineLink}>
               join our Little Wanderers
-            </a>{' '}
+            </Link>{' '}
             and we&apos;ll share our opening date as soon as it&apos;s confirmed!
           </p>
           <p>
@@ -92,7 +114,7 @@ export default async function HomeComingSoon() {
           </p>
           <div className={styles.actions}>
             <div className={styles.waitlistAction}>
-              <PastelButton href={isAuthenticated ? '/landing' : ACCOUNT_URL}>
+              <PastelButton href={ACCOUNT_URL}>
                 <span>Join/Login to My Little Wanderers</span>
                 <small>Get opening updates and priority booking access from your account</small>
               </PastelButton>
@@ -114,7 +136,7 @@ export default async function HomeComingSoon() {
         <div className={styles.right}>
           <PastelCard>
             <div className={styles.heroImageFrame}>
-              <Image src="/Lobby.png" alt="Little Wanderers lobby" width={900} height={700} priority sizes="(max-width: 980px) 100vw, 50vw" />
+              <Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" />
             </div>
           </PastelCard>
         </div>
@@ -131,15 +153,13 @@ export default async function HomeComingSoon() {
           <p>
             With our buildout and opening timeline in mind, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}. Peek at available Friday afternoon, Saturday, and Sunday slots, then request a hold with no deposit today.
           </p>
-          {!isAuthenticated && (
-            <p className={styles.accessNote}>
-              Requesting a party hold requires My Little Wanderers access. Sign up through October 28, 2026 to join the Wanderlist. From October 29, new accounts are regular website signups.
-            </p>
-          )}
+          <p className={styles.accessNote}>
+            Requesting a party hold requires My Little Wanderers access. Sign up through October 28, 2026 to join the Wanderlist. From October 29, new accounts are regular website signups.
+          </p>
         </div>
         <PastelButton href="/party">
           <span>View party calendar</span>
-          <small>{isAuthenticated ? 'Request a hold from your account' : 'Sign in when you are ready to reserve'}</small>
+          <small>Sign in to request a hold</small>
         </PastelButton>
       </section>
 
@@ -152,54 +172,21 @@ export default async function HomeComingSoon() {
             Browse our small-group classes. Sign in, add your child, and choose free interest-only registration or Pay now for an available paid class.
           </p>
           <p><strong>{CLASS_PRE_REGISTRATION_NOTE}</strong></p>
-          {!isAuthenticated && (
-            <p className={styles.accessNote}>
-              Magic link sign-in will bring you back to class pre-registration.
-            </p>
-          )}
+          <p className={styles.accessNote}>Magic link sign-in will bring you back to class pre-registration.</p>
         </div>
         <div className={styles.classPreviewPanel} aria-label="Weekly class schedule preview">
           <div className={styles.classPreviewHeader}>
             <span>Weekly class map</span>
-            <a href="/classes">View all</a>
+            <Link href="/classes">View all</Link>
           </div>
-          <div className={styles.classWeekStrip}>
-            {WEEKDAY_COLUMNS.map((day) => {
-              const dayItems = weeklyClassSchedule.get(day.value) ?? [];
-              return (
-                <div className={styles.classWeekColumn} key={day.value}>
-                  <div className={styles.classWeekDayLabel}>{day.label}</div>
-                  <div className={styles.classWeekSlots}>
-                    {dayItems.length === 0 ? (
-                      <a className={`${styles.classWeekSlot} ${styles.classWeekSlotEmpty}`} href="/classes">
-                        <span className={styles.classWeekTime}>{hasWeeklyClasses ? 'Open' : 'Soon'}</span>
-                        <span className={styles.classWeekTitle}>{hasWeeklyClasses ? 'Open play' : 'Classes'}</span>
-                      </a>
-                    ) : (
-                      dayItems.slice(0, 2).map((item) => (
-                        <a
-                          className={styles.classWeekSlot}
-                          href={`/classes?class=${encodeURIComponent(item.id)}`}
-                          key={`home-class-${item.id}`}
-                        >
-                          <span className={styles.classWeekTime}>{timeOnlyLabel(item.start_time)}</span>
-                          <span className={styles.classWeekTitle}>{item.title}</span>
-                          <span className={styles.classWeekMeta}>
-                            {item.age_range ?? 'Ages TBA'} · {classSizeLabel(item.capacity)}
-                          </span>
-                        </a>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <Suspense fallback={<div role="status" style={{ minHeight: 200 }}>Loading the weekly schedule…</div>}>
+            <WeeklyClassPreview />
+          </Suspense>
         </div>
         <div className={styles.classFeatureAction}>
           <PastelButton href="/classes">
             <span>View classes</span>
-            <small>{isAuthenticated ? 'Choose a class from your account' : 'Sign in when you are ready to pre-register'}</small>
+            <small>Choose a class from your account</small>
           </PastelButton>
         </div>
       </section>

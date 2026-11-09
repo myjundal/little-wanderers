@@ -72,6 +72,7 @@ test('dashboard moves parties while open, labels completed details and keeps att
     '@/lib/party-config': { PARTY_TIME_ZONE: 'America/New_York' },
     '@/lib/party-management': { PARTY_SCHEDULE_UPDATED_EVENT: 'party-schedule-updated' },
     '@/components/staff/PartyScheduleEditor': () => null,
+    '@/components/classes/ClassCheckIn': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,
     '@/components/waivers/PartyGuestWaivers': () => null,
     '@/components/classes/ClassPreRegistrationRosters': { __esModule: true, default: () => null, ClassViewSwitcher: () => null },
