@@ -1,20 +1,12 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import NotificationPreferences from '@/components/pwa/NotificationPreferences';
 import { formatBirthdateInput, parseBirthdate } from '@/lib/birthdate';
-
-type Person = {
-  id: string;
-  role: 'adult' | 'child';
-  first_name: string;
-  last_name: string | null;
-  gender: string | null;
-  birthdate: string | null;
-};
+import FamilyMemberEditor, { type FamilyPerson as Person } from '@/components/family/FamilyMemberEditor';
 
 type Invite = {
   id: string;
@@ -46,30 +38,44 @@ export default function PeoplePage() {
   const [openAdd, setOpenAdd] = useState(false);
   const [openNotify, setOpenNotify] = useState(false);
   const [openInvite, setOpenInvite] = useState(false);
-  const [savingBirthdateId, setSavingBirthdateId] = useState<string | null>(null);
+  const [savingContact, setSavingContact] = useState(false);
+  const [addingPerson, setAddingPerson] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const contactInFlight = useRef(false);
+  const addInFlight = useRef(false);
+  const loadVersion = useRef(0);
 
   const load = useCallback(async () => {
-    const { data: userData } = await supabase.auth.getUser();
-    const uid = userData.user?.id;
-    if (!uid) return;
+    const version = ++loadVersion.current;
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) return;
 
-    const hid = await getLatestHouseholdIdForUser(supabase, uid);
-    if (!hid) return;
+      const hid = await getLatestHouseholdIdForUser(supabase, uid);
+      if (!hid) return;
 
-    setHouseholdId(hid);
-    const { data: household } = await supabase.from('households').select('phone,city,state').eq('id', hid).maybeSingle();
-    setContactForm({ phone: userData.user?.phone ?? household?.phone ?? '', city: household?.city ?? '', state: household?.state ?? 'CT' });
+      const { data: household, error: householdError } = await supabase.from('households').select('phone,city,state').eq('id', hid).maybeSingle();
+      if (householdError) throw householdError;
 
-    const [{ data: ppl }, invitesRes] = await Promise.all([
-      supabase.from('people').select('id, role, first_name, last_name, gender, birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
-      fetch('/api/family/invites', { cache: 'no-store' }),
-    ]);
+      const [{ data: ppl, error: peopleError }, invitesRes] = await Promise.all([
+        supabase.from('people').select('id, role, first_name, last_name, gender, birthdate').eq('household_id', hid).order('created_at', { ascending: true }),
+        fetch('/api/family/invites', { cache: 'no-store' }),
+      ]);
 
-    setPeople((ppl ?? []) as Person[]);
-
-    const invitesJson = await invitesRes.json();
-    if (invitesRes.ok && invitesJson.ok) {
-      setInvites((invitesJson.items ?? []) as Invite[]);
+      if (peopleError) throw peopleError;
+      const invitesJson = await invitesRes.json();
+      if (version !== loadVersion.current) return;
+      setHouseholdId(hid);
+      setContactForm({ phone: household ? household.phone ?? '' : userData.user?.phone ?? '', city: household?.city ?? '', state: household?.state ?? 'CT' });
+      setPeople((ppl ?? []) as Person[]);
+      if (invitesRes.ok && invitesJson.ok) {
+        setInvites((invitesJson.items ?? []) as Invite[]);
+      }
+    } catch {
+      if (version === loadVersion.current) setUiError('Unable to load your family information. Please refresh and try again.');
+    } finally {
+      if (version === loadVersion.current) setLoading(false);
     }
   }, [supabase]);
 
@@ -78,10 +84,11 @@ export default function PeoplePage() {
   }, [load]);
 
   const addPerson = async () => {
+    if (addInFlight.current) return;
     setUiError(null);
     setUiMessage(null);
 
-    if (!householdId || !form.first_name) {
+    if (!householdId || !form.first_name.trim()) {
       setUiError('Please add at least a first name.');
       return;
     }
@@ -92,26 +99,33 @@ export default function PeoplePage() {
       return;
     }
 
-    const { error } = await supabase.from('people').insert({
-      household_id: householdId,
-      role: form.role as 'adult' | 'child',
-      first_name: form.first_name,
-      last_name: form.last_name || null,
-      gender: form.gender || null,
-      birthdate,
-    });
+    addInFlight.current = true;
+    setAddingPerson(true);
+    try {
+      const { data: person, error } = await supabase.from('people').insert({
+        household_id: householdId,
+        role: form.role as 'adult' | 'child',
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim() || null,
+        gender: form.gender || null,
+        birthdate,
+      }).select('id,role,first_name,last_name,gender,birthdate').single();
 
-    if (error) {
-      setUiError('Something went wrong while saving your family member.');
-      return;
+      if (error || !person) throw new Error('Unable to save family member.');
+
+      ++loadVersion.current;
+      setPeople(current => [...current, person as Person]);
+      setForm({ role: form.role, first_name: '', last_name: '', gender: '', birthdate: '' });
+      setUiMessage('Family member added.');
+    } catch {
+      setUiError('Something went wrong while saving your family member. Please try again.');
+    } finally {
+      addInFlight.current = false;
+      setAddingPerson(false);
     }
-
-    setForm({ role: form.role, first_name: '', last_name: '', gender: '', birthdate: '' });
-    setUiMessage('Family member added.');
-    await load();
   };
   const saveHouseholdLocation = async () => {
-    if (!householdId) return;
+    if (!householdId || contactInFlight.current) return;
     setUiError(null);
     setUiMessage(null);
 
@@ -121,29 +135,37 @@ export default function PeoplePage() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    const authPhone = userData.user?.phone ?? '';
-    const { error: householdError } = await supabase
-      .from('households')
-      .update({ phone: normalizedPhone || null, city: contactForm.city || null, state: contactForm.state || 'CT' })
-      .eq('id', householdId);
+    contactInFlight.current = true;
+    setSavingContact(true);
+    try {
+      const response = await fetch('/api/family/profile', {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ phone: normalizedPhone || null, city: contactForm.city.trim() || null, state: contactForm.state || 'CT' }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !result.household) throw new Error(result.error || 'Something went wrong while saving your family information.');
+      ++loadVersion.current;
+      setContactForm({ phone: result.household.phone ?? '', city: result.household.city ?? '', state: result.household.state ?? 'CT' });
+      setUiMessage('Family information updated.');
 
-    if (householdError) {
-      setUiError('Something went wrong while saving your family information.');
-      return;
-    }
-
-    if (normalizedPhone && normalizedPhone !== authPhone) {
-      const { error: authError } = await supabase.auth.updateUser({ phone: normalizedPhone });
-      if (authError) {
+      // The contact save is already complete; phone-login verification is separate.
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const authPhone = userData.user?.phone ?? '';
+        if (normalizedPhone && normalizedPhone !== authPhone) {
+          const { error: authError } = await supabase.auth.updateUser({ phone: normalizedPhone });
+          if (authError) throw authError;
+          setUiMessage('Family information updated. Please check your text messages to confirm phone login.');
+        }
+      } catch {
         setUiMessage('Family information updated, but phone login could not be enabled yet. Please try the phone number again later.');
-        return;
       }
-      setUiMessage('Family information updated. Please check your text messages to confirm phone login.');
-      return;
+    } catch (cause) {
+      setUiError(cause instanceof Error ? cause.message : 'Something went wrong while saving your family information. Please try again.');
+    } finally {
+      contactInFlight.current = false;
+      setSavingContact(false);
     }
-
-    setUiMessage('Family information updated.');
   };
 
   const sendInvite = async () => {
@@ -171,31 +193,23 @@ export default function PeoplePage() {
     } else {
       setUiMessage('Invite sent.');
     }
-    await load();
+    const invitesRes = await fetch('/api/family/invites', { cache: 'no-store' });
+    const invitesJson = await invitesRes.json();
+    if (invitesRes.ok && invitesJson.ok) setInvites(invitesJson.items ?? []);
   };
 
   const removePerson = async (id: string) => {
-    await supabase.from('people').delete().eq('id', id);
-    await load();
-  };
-
-  const updateBirthdate = async (personId: string, birthdate: string) => {
-    setSavingBirthdateId(personId);
     setUiError(null);
     setUiMessage(null);
-    const { error } = await supabase
-      .from('people')
-      .update({ birthdate: birthdate || null })
-      .eq('id', personId);
-    setSavingBirthdateId(null);
-
-    if (error) {
-      setUiError('Something went wrong while saving the birthday.');
-      return;
+    try {
+      const { data, error } = await supabase.from('people').delete().eq('id', id).eq('household_id', householdId!).select('id').single();
+      if (error || !data) throw new Error('Unable to remove family member.');
+      ++loadVersion.current;
+      setPeople(current => current.filter(person => person.id !== id));
+      setUiMessage('Family member removed.');
+    } catch {
+      setUiError('Unable to remove this family member. Please try again.');
     }
-
-    setPeople((current) => current.map((person) => person.id === personId ? { ...person, birthdate: birthdate || null } : person));
-    setUiMessage('Birthday updated.');
   };
 
   return (
@@ -204,55 +218,38 @@ export default function PeoplePage() {
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
       <section style={{ marginTop: 24, overflow: 'visible' }}>
         <h3 style={{ margin: 0, padding: '0 2px' }}>Family Members</h3>
-        {people.length === 0 && <p>No one is registered yet.</p>}
+        {loading ? <p>Loading family members…</p> : people.length === 0 && <p>No one is registered yet.</p>}
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-          {people.map((p) => (
-            <li key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, padding: 10, border: '1px solid #e6ddf4', borderRadius: 10 }}>
-              <span style={{ fontSize: 13, textTransform: 'capitalize', color: '#6d6480' }}>{p.role}</span>
-              <span style={{ fontWeight: 700 }}>{p.first_name} {p.last_name ?? ''}</span>
-              <span style={{ color: '#666', fontSize: 14, textTransform: 'capitalize' }}>{p.gender ? p.gender.replaceAll('_', ' ') : '-'}</span>
-              {p.role === 'child' ? (
-                <label style={{ display: 'grid', gap: 4, color: '#666', fontSize: 14 }}>
-                  Birthday
-                  <input
-                    type="date"
-                    value={p.birthdate ?? ''}
-                    onChange={(event) => updateBirthdate(p.id, event.target.value)}
-                    disabled={savingBirthdateId === p.id}
-                    style={{ width: '100%', minWidth: 0 }}
-                  />
-                </label>
-              ) : (
-                <span style={{ color: '#666', fontSize: 14 }}>{p.birthdate ?? '-'}</span>
-              )}
-              <button onClick={() => removePerson(p.id)} style={{ width: '100%' }}>Remove</button>
-            </li>
-          ))}
+          {people.map(person => <FamilyMemberEditor key={person.id} person={person} onRemove={removePerson} onSaved={saved => {
+            ++loadVersion.current;
+            setPeople(current => current.map(item => item.id === saved.id ? saved : item));
+          }} />)}
         </ul>
       </section>
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
         <h3 style={{ marginTop: 0 }}>Family information</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <fieldset disabled={savingContact || loading} style={{ border: 0, margin: 0, padding: 0, minWidth: 0, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input
             style={{ width: '100%' }}
             type="tel"
+            aria-label="Phone number"
             placeholder="Phone number"
             value={contactForm.phone}
             onChange={(e) => setContactForm((p) => ({ ...p, phone: e.target.value }))}
             autoComplete="tel"
           />
-          <input style={{ width: '100%' }} placeholder="City" value={contactForm.city} onChange={(e) => setContactForm((p) => ({ ...p, city: e.target.value }))} />
-          <select style={{ width: '100%' }} value={contactForm.state} onChange={(e) => setContactForm((p) => ({ ...p, state: e.target.value }))}>
+          <input style={{ width: '100%' }} aria-label="City" placeholder="City" value={contactForm.city} onChange={(e) => setContactForm((p) => ({ ...p, city: e.target.value }))} />
+          <select aria-label="State" style={{ width: '100%' }} value={contactForm.state} onChange={(e) => setContactForm((p) => ({ ...p, state: e.target.value }))}>
             {['CT', 'MA', 'NY', 'RI', 'NJ', 'NH', 'VT', 'ME'].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button type="button" onClick={saveHouseholdLocation}>Save family information</button>
-        </div>
+          <button type="button" onClick={saveHouseholdLocation} disabled={!householdId}>{savingContact ? 'Saving…' : 'Save family information'}</button>
+        </fieldset>
       </section>
 
       <section style={{ marginTop: 16, padding: 14, border: '1px solid #ddd', borderRadius: 12 }}>
         <button type="button" onClick={() => setOpenAdd((v) => !v)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', fontWeight: 700, color: '#4f3f82' }}>{openAdd ? '▾' : '▸'} Add Family Member</button>
         {openAdd && <>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <fieldset disabled={addingPerson || loading} style={{ border: 0, margin: '8px 0 0', padding: 0, minWidth: 0, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <select aria-label="Family member role" style={{ width: '100%', minWidth: 0 }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             <option value="adult">Adult</option>
             <option value="child">Child</option>
@@ -271,8 +268,8 @@ export default function PeoplePage() {
             <input style={{ width: '100%', minWidth: 0 }} type="text" inputMode="numeric" maxLength={10} placeholder="03/15/2022" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: formatBirthdateInput(e.target.value) })} aria-describedby="family-birthday-help" />
           </label>
           <p id="family-birthday-help" style={{ margin: 0, color: '#6d6480', fontSize: 14 }}>Month / day / four-digit year. For a child, enter their date of birth, not their age. You can leave this blank and add it later.</p>
-          <button style={{ width: '100%' }} type="button" onClick={addPerson}>Add Family Member</button>
-        </div>
+          <button style={{ width: '100%' }} type="button" onClick={addPerson} disabled={!householdId}>{addingPerson ? 'Adding…' : 'Add Family Member'}</button>
+        </fieldset>
         </>}
       </section>
 
