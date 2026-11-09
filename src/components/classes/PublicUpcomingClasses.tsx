@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import Link from 'next/link';
 import { classSizeLabel } from '@/lib/class-config';
 import ClassDescription from './ClassDescription';
 import {
@@ -173,14 +173,6 @@ export default function PublicUpcomingClasses({ classes }: { classes: PublicClas
     }, 80);
   }, [visibleClasses]);
 
-  const goToClassPreRegistration = async () => {
-    const next = '/landing/classschedule';
-    sessionStorage.setItem('post_login_redirect', next);
-    const supabase = createBrowserSupabaseClient();
-    const { data } = await supabase.auth.getUser();
-    window.location.assign(data.user ? next : `/login?mode=new&next=${encodeURIComponent(next)}`);
-  };
-
   if (visibleClasses.length === 0) return null;
 
   return (
@@ -305,9 +297,8 @@ export default function PublicUpcomingClasses({ classes }: { classes: PublicClas
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
               <strong style={{ color: '#7b6aa8' }}>{formatPrice(item.price_cents)}</strong>
             </div>
-            <button
-              type="button"
-              onClick={goToClassPreRegistration}
+            <Link
+              href="/login?mode=new&next=%2Flanding%2Fclassschedule"
               style={{
                 display: 'inline-flex',
                 justifyContent: 'center',
@@ -319,10 +310,11 @@ export default function PublicUpcomingClasses({ classes }: { classes: PublicClas
                 padding: '11px 14px',
                 fontWeight: 800,
                 cursor: 'pointer',
+                textDecoration: 'none',
               }}
             >
               View registration options
-            </button>
+            </Link>
           </article>
           );
         })}

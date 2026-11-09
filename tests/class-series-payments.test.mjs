@@ -130,8 +130,8 @@ function providerHarness({ invoiceStatus='PAID', amount=15000, paymentOrder='ord
  };
  const admin={from(){let patch;const q={update(p){patch=p;Object.assign(sale,p);return q;},select(){return q;},eq(){return q;},in(){return q;},single:async()=>({data:{...sale},error:null}),then(resolve){resolve({data:patch?sale:[{id:children[0],first_name:'Test',last_name:'Child'}],error:null});}};return q;},async rpc(name,args){rpc.push({name,args});return {data:{...sale,status:name==='fulfill_class_series_sale'?'paid':sale.status},error:null};}};
  const client={assertSquarePaymentUrl:value=>value,squareConfig:()=>({environment:'sandbox',locationId:'loc'}),squareRequest,assertUsd(money,expected){assert.equal(money.currency,'USD');assert.equal(money.amount,expected);}};
- const module=loadModule('src/lib/class-series-payments.ts',{'@/lib/square-client':client},{console});
- return {sale,requests,rpc,admin,module};
+ const payments=loadModule('src/lib/class-series-payments.ts',{'@/lib/square-client':client},{console});
+ return {sale,requests,rpc,admin,module:payments};
 }
 test('a draft invoice includes deadline, refund terms, all dates, and cannot send email',async()=>{
  const h=providerHarness();Object.assign(h.sale,{square_customer_id:null,square_order_id:null,square_invoice_id:null,status:'draft'});

@@ -29,18 +29,18 @@ test('public class metadata is cached for a minute and never reads registrations
     tables.push(table);
     assert.equal(table, 'classes');
     const query = { select() { return query; }, gte() { return query; }, eq() { return query; }, order() { return query; },
-      limit: async () => ({ data: [{ id: 'painting', title: fixtureClass.title, start_time: fixtureClass.start_time, end_time: fixtureClass.end_time, capacity: 7, price_cents: 15000 }], error: null }),
+      limit() { return query; }, abortSignal: async () => ({ data: [{ id: 'painting', title: fixtureClass.title, start_time: fixtureClass.start_time, end_time: fixtureClass.end_time, capacity: 7, price_cents: 15000 }], error: null }),
     };
     return query;
   } };
   const api = loadModule('src/lib/public-class-data.ts', {
     'server-only': {}, 'next/cache': cache, '@/lib/class-config': classConfig,
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
-  }, { process: { env: { NEXT_PUBLIC_SUPABASE_URL: 'test', SUPABASE_SERVICE_ROLE_KEY: 'test' } } });
+  }, { process: { env: { NEXT_PUBLIC_SUPABASE_URL: 'test', SUPABASE_SERVICE_ROLE_KEY: 'test' } }, AbortSignal });
   const first = await api.getPublicClasses(60);
   assert.equal(first[0].duration_minutes, 45);
   assert.equal('booked_count' in first[0], false);
-  await api.getPublicClasses(60);
+  await api.getPublicClasses(80);
   assert.equal(tables.length, 1);
   cache.advance(61);
   await api.getPublicClasses(60);
@@ -51,11 +51,13 @@ test('class cards are included in server HTML without a follow-up API request', 
   const { default: Classes } = loadModule('src/components/classes/PublicUpcomingClasses.tsx', {
     react: React, '@/lib/class-config': classConfig,
     '@/lib/public-classes': loadModule('src/lib/public-classes.ts'),
-    '@/lib/supabase/browser': {},
+    'next/link': ({ children, ...props }) => React.createElement('a', props, children),
+    './ClassDescription': ({ description }) => React.createElement('p', null, description),
   }, { React });
   const markup = renderToStaticMarkup(React.createElement(Classes, { classes: [fixtureClass] }));
   assert.match(markup, /Little Hands, Big Canvases/);
-  assert.match(markup, /Pre-register/);
+  assert.match(markup, /View registration options/);
+  assert.match(markup, /href="\/login\?mode=new&amp;next=%2Flanding%2Fclassschedule"/);
   assert.match(markup, /Class size: 7 kids/);
   assert.doesNotMatch(markup, /Waitlist|seats left/);
 });
@@ -106,4 +108,149 @@ test('unchanged guardian details skip the extra people update', async () => {
   const guardian = await ensureGuardianProfile({ admin, householdId: 'family', userId: 'parent', firstName: 'Parent', lastName: 'Family' });
   assert.equal(guardian.id, 'guardian');
   assert.equal(writes.filter(write => write.table === 'people').length, 0);
+});
+
+function walk(element, predicate) {
+  if (!element || typeof element !== 'object') return null;
+  if (predicate(element)) return element;
+  for (const child of React.Children.toArray(element.props?.children)) {
+    const found = walk(child, predicate);
+    if (found) return found;
+  }
+  return null;
+}
+
+test('home hero renders before class metadata and uses the complete play studio photo', async () => {
+  let classReads = 0;
+  const home = loadModule('src/components/home/HomeComingSoon.tsx', {
+    react: React, 'next/image': 'img', 'next/link': 'a',
+    '@/app/(public)/home.module.css': {},
+    '@/lib/class-config': classConfig,
+    '@/components/home/WaitlistCountCard': () => null,
+    '@/components/pastel/PastelPrimitives': { PastelButton: 'a', PastelCard: 'div' },
+    '@/lib/party-config': { PARTY_BOOKING_START_LABEL: 'October 31, 2026' },
+    '@/lib/public-classes': loadModule('src/lib/public-classes.ts'),
+    '@/lib/public-class-data': { getPublicClasses: async () => { classReads++; return [fixtureClass]; } },
+    '@/lib/waitlist-count': { getWaitlistCount: async () => ({ displayCount: 460 }) },
+  }, { React, process: { env: {} } });
+  const tree = await home.default();
+  assert.equal(classReads, 0, 'hero must not wait for a class query or authentication');
+  const image = walk(tree, element => element.type === 'img');
+  assert.equal(image.props.src, '/play-studio.jpg');
+  assert.equal(image.props.width, 1280);
+  assert.equal(image.props.height, 749);
+  const boundary = walk(tree, element => element.type === React.Suspense);
+  assert.ok(boundary.props.fallback);
+  const schedule = await boundary.props.children.type();
+  assert.equal(classReads, 1);
+  assert.match(renderToStaticMarkup(schedule), /Little Hands, Big Canvases/);
+});
+
+function crowdHarness(showStatus = true) {
+  let effect;
+  let interval;
+  let visibilityListener;
+  let release;
+  const loadingUpdates = [];
+  let hooks = 0;
+  const requests = [];
+  const document = { hidden: false,
+    addEventListener: (_name, listener) => { visibilityListener = listener; },
+    removeEventListener: (_name, listener) => { assert.equal(listener, visibilityListener); visibilityListener = null; },
+  };
+  const component = loadModule('src/components/crowd/CrowdLevelCard.tsx', {
+    react: { useState: initial => { const index = hooks++; return [initial, value => { if (index === 1) loadingUpdates.push(value); }]; },
+      useEffect: callback => { effect = callback; } },
+    './CrowdLevelCard.module.css': {},
+  }, { React, document, AbortController,
+    window: { setInterval: fn => { interval = fn; return 1; }, clearInterval: () => { interval = null; } },
+    fetch: async (_url, options) => { requests.push(options); return new Promise(resolve => { release = resolve; }); },
+  }).default;
+  component({ showStatus });
+  const cleanup = effect();
+  return { requests, document, cleanup, loadingUpdates, poll: () => interval(), reveal: () => visibilityListener(),
+    resolve: async () => { release(Response.json({ ok: true, occupancy: 7, capacity: 80 })); await new Promise(resolve => setImmediate(resolve)); },
+    get listening() { return Boolean(visibilityListener); },
+  };
+}
+
+test('hours-only crowd card does not poll occupancy', () => {
+  const harness = crowdHarness(false);
+  assert.equal(harness.requests.length, 0);
+  assert.equal(harness.cleanup, undefined);
+});
+
+test('occupancy polling avoids overlapping and background requests and keeps readings during refresh', async () => {
+  const harness = crowdHarness();
+  assert.equal(harness.requests.length, 1);
+  harness.poll();
+  assert.equal(harness.requests.length, 1);
+  await harness.resolve();
+  harness.document.hidden = true;
+  harness.poll();
+  assert.equal(harness.requests.length, 1);
+  harness.document.hidden = false;
+  harness.reveal();
+  assert.equal(harness.requests.length, 2);
+  assert.deepEqual(harness.loadingUpdates, [false]);
+  harness.cleanup();
+  assert.equal(harness.requests[1].signal.aborted, true);
+  assert.equal(harness.listening, false);
+  await harness.resolve();
+});
+
+function partyLoadHarness({ failCalendar = false } = {}) {
+  const state = [];
+  const callbacks = [];
+  const requests = [];
+  let cursor = 0;
+  let resolveAuth;
+  const auth = new Promise(resolve => { resolveAuth = resolve; });
+  const react = { ...React, useState(initial) {
+    const index = cursor++;
+    if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial;
+    return [state[index], value => { state[index] = typeof value === 'function' ? value(state[index]) : value; }];
+  }, useEffect() {}, useMemo: read => read(), useCallback: fn => { callbacks.push(fn); return fn; }, useRef: value => ({ current: value }) };
+  const config = loadModule('src/lib/party-config.ts');
+  const Page = loadModule('src/app/landing/party/page.tsx', {
+    react, 'next/link': 'a', 'next/image': 'img',
+    '@/components/calendar/AvailabilityCalendar': 'calendar', '@/components/ui/ActionToast': () => null,
+    '@/lib/party-config': config, '@/lib/party-info': loadModule('src/lib/party-info.ts'),
+    '@/lib/supabase/browser': { createBrowserSupabaseClient: () => ({ auth: { getUser: () => auth } }) },
+  }, { React: react, fetch: (url) => new Promise((resolve, reject) => { requests.push({ url, resolve, reject }); }) }).default;
+  const render = () => { cursor = 0; return Page(); };
+  const initial = render();
+  const loading = callbacks[0]();
+  return { state, requests, initial, render, loading, resolveAuth,
+    finish: async () => {
+      requests.find(r => r.url.includes('/calendar')).resolve(Response.json({ ok: !failCalendar, items: [] }, { status: failCalendar ? 503 : 200 }));
+      requests.find(r => r.url.startsWith('/api/party-bookings?')).resolve(Response.json({ ok: true, items: [] }));
+      await loading;
+    },
+  };
+}
+
+test('party calendar and bookings start together and do not wait for guardian prefill', async () => {
+  const h = partyLoadHarness();
+  assert.equal(h.requests.length, 2, 'calendar and bookings start before auth finishes');
+  assert.ok(h.requests.some(r => r.url.includes('/calendar')));
+  const initialCalendar = walk(h.initial, node => node.type === 'calendar');
+  assert.equal(initialCalendar.props.slots.some(slot => slot.status === 'available'), false);
+  h.resolveAuth({ data: { user: { id: 'parent' } } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.requests.length, 3, 'profile starts as soon as auth resolves');
+  await h.finish();
+  assert.equal(h.state[2], false, 'form stops loading while profile is still pending');
+  assert.ok(walk(h.render(), node => node.type === 'calendar').props.slots.some(slot => slot.status === 'available'));
+  h.requests.find(r => r.url.includes('/family/profile')).resolve(Response.json({ ok: true, guardian: { first_name: 'Parent', last_name: 'Family' } }));
+  await new Promise(resolve => setImmediate(resolve));
+});
+
+test('failed party availability finishes loading without offering unknown times', async () => {
+  const h = partyLoadHarness({ failCalendar: true });
+  h.resolveAuth({ data: { user: null } });
+  await h.finish();
+  assert.equal(h.state[2], false);
+  assert.match(h.state[4], /Could not refresh the party calendar/);
+  assert.equal(walk(h.render(), node => node.type === 'calendar').props.slots.some(slot => slot.status === 'available'), false);
 });

@@ -35,12 +35,16 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!showStatus) return;
     let alive = true;
+    let inFlight = false;
+    const controller = new AbortController();
 
     const load = async () => {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
       try {
-        setLoading(true);
-        const res = await fetch(`/api/crowd-level?ts=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(`/api/crowd-level?ts=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
         const json = (await res.json()) as CrowdPayload;
 
         if (!alive) return;
@@ -57,34 +61,38 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
         setError('Unable to load the current crowd level right now.');
         setData(null);
       } finally {
+        inFlight = false;
         if (alive) setLoading(false);
       }
     };
 
     load();
     const interval = window.setInterval(load, 10_000);
+    document.addEventListener('visibilitychange', load);
 
     return () => {
       alive = false;
+      controller.abort();
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', load);
     };
-  }, []);
+  }, [showStatus]);
 
   const now = new Date();
-  const localNow = new Date(now.toLocaleString('en-US', { timeZone: BUSINESS_TIME_ZONE }));
-  const dayIndex = localNow.getDay();
-  const hour = localNow.getHours();
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, weekday: 'long' }).format(now);
+  const dayIndex = WEEKLY_HOURS.findIndex((entry) => entry.label === weekday);
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, hour: 'numeric', hourCycle: 'h23' }).format(now));
   const todaysCloseHour = dayIndex === 5 || dayIndex === 6 ? 19 : 18;
   const isOpenNow = hour >= 9 && hour < todaysCloseHour;
   const todaysHours = WEEKLY_HOURS[dayIndex]?.hours ?? '9am–6pm';
-  const currentDate = localNow.toLocaleDateString('en-US', {
+  const currentDate = now.toLocaleDateString('en-US', {
     timeZone: BUSINESS_TIME_ZONE,
     weekday: 'long',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
-  const currentTime = localNow.toLocaleTimeString('en-US', {
+  const currentTime = now.toLocaleTimeString('en-US', {
     timeZone: BUSINESS_TIME_ZONE,
     hour: 'numeric',
     minute: '2-digit',
@@ -121,7 +129,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
           className={styles.badge}
           style={{ background: `linear-gradient(135deg, ${data?.accent ?? '#eadcff'}, ${data?.accent_strong ?? '#8751df'})` }}
         >
-          {data?.label ?? 'Loading'}
+          {data?.label ?? (error ? 'Unavailable' : 'Loading')}
         </span>
       </div>}
 
@@ -139,7 +147,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
         <div className={styles.metricCard}>
           <span className={styles.metricLabel}>Current estimated occupancy</span>
           <strong className={styles.metricValue}>
-            {loading ? '—' : `${data?.occupancy ?? 0} / ${data?.capacity ?? 24}`}
+            {loading || !data ? '—' : `${data.occupancy} / ${data.capacity}`}
           </strong>
         </div>
       </div>}
@@ -148,7 +156,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
         <span>{data?.last_updated_at ? `Updated ${new Date(data.last_updated_at).toLocaleTimeString()}` : 'Updates throughout the day'}</span>
       </div>}
 
-      {error && <p className={`${styles.helper} ${styles.error}`}>{error}</p>}
+      {showStatus && error && <p className={`${styles.helper} ${styles.error}`}>{error}</p>}
     </section>
   );
 }

@@ -21,7 +21,8 @@ async function selectClasses(limit: number) {
     .gte('start_time', earliestClassTime())
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
-    .limit(limit);
+    .limit(limit)
+    .abortSignal(AbortSignal.timeout(5000));
 
   if (!primary.error) return (primary.data ?? []) as ClassRow[];
   if (!isMissingClassDetailColumn(primary.error.message)) throw primary.error;
@@ -32,14 +33,15 @@ async function selectClasses(limit: number) {
     .gte('start_time', earliestClassTime())
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
-    .limit(limit);
+    .limit(limit)
+    .abortSignal(AbortSignal.timeout(5000));
 
   if (fallback.error) throw fallback.error;
   return (fallback.data ?? []) as ClassRow[];
 }
 
-const readPublicClasses = unstable_cache(async (limit: number): Promise<PublicClassItem[]> => {
-  const classes = await selectClasses(limit);
+const readPublicClasses = unstable_cache(async (): Promise<PublicClassItem[]> => {
+  const classes = await selectClasses(200);
   return classes.map((item) => ({
     ...item,
     duration_minutes: item.duration_minutes ?? Math.max(Math.round((new Date(item.end_time).getTime() - new Date(item.start_time).getTime()) / 60_000), 1),
@@ -50,12 +52,12 @@ const readPublicClasses = unstable_cache(async (limit: number): Promise<PublicCl
     schedule_note: item.schedule_note ?? null,
     schedule_label: item.schedule_label ?? null,
   }));
-}, ['public-class-catalog-v1'], { revalidate: 60 });
+}, ['public-class-catalog-v2'], { revalidate: 60 });
 
 export async function getPublicClasses(limit = 80): Promise<PublicClassItem[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
   try {
-    return await readPublicClasses(limit);
+    return (await readPublicClasses()).slice(0, limit);
   } catch {
     return [];
   }
