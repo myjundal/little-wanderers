@@ -146,38 +146,66 @@ test('home hero renders before class metadata and uses the complete play studio 
   assert.match(renderToStaticMarkup(schedule), /Little Hands, Big Canvases/);
 });
 
-function crowdHarness(showStatus = true) {
-  let effect;
-  let interval;
-  let visibilityListener;
+function crowdHarness(showStatus = true, showHours = false) {
+  const effects = [];
+  const timers = new Map();
+  const visibilityListeners = new Set();
+  let nextTimer = 0;
   let release;
+  let cursor = 0;
+  let currentTime = Date.parse('2026-11-09T13:59:00Z');
+  const values = [];
   const loadingUpdates = [];
-  let hooks = 0;
   const requests = [];
+  class Clock extends Date {
+    constructor(...args) { if (args.length) super(...args); else super(currentTime); }
+    static now() { return currentTime; }
+  }
   const document = { hidden: false,
-    addEventListener: (_name, listener) => { visibilityListener = listener; },
-    removeEventListener: (_name, listener) => { assert.equal(listener, visibilityListener); visibilityListener = null; },
+    addEventListener: (_name, listener) => visibilityListeners.add(listener),
+    removeEventListener: (_name, listener) => visibilityListeners.delete(listener),
   };
   const component = loadModule('src/components/crowd/CrowdLevelCard.tsx', {
-    react: { useState: initial => { const index = hooks++; return [initial, value => { if (index === 1) loadingUpdates.push(value); }]; },
-      useEffect: callback => { effect = callback; } },
+    react: { useState: initial => { const index = cursor++; if (!(index in values)) values[index] = typeof initial === 'function' ? initial() : initial;
+      return [values[index], value => { values[index] = value; if (index === 1) loadingUpdates.push(value); }]; },
+      useEffect: callback => { effects.push(callback); } },
     './CrowdLevelCard.module.css': {},
-  }, { React, document, AbortController,
-    window: { setInterval: fn => { interval = fn; return 1; }, clearInterval: () => { interval = null; } },
+  }, { React, document, AbortController, Date: Clock,
+    window: { setInterval: (fn, ms) => { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; }, clearInterval: id => timers.delete(id) },
     fetch: async (_url, options) => { requests.push(options); return new Promise(resolve => { release = resolve; }); },
   }).default;
-  component({ showStatus });
-  const cleanup = effect();
-  return { requests, document, cleanup, loadingUpdates, poll: () => interval(), reveal: () => visibilityListener(),
+  const render = () => { cursor = 0; return component({ showStatus, showHours }); };
+  render();
+  const cleanups = effects.splice(0).map(effect => effect()).filter(Boolean);
+  return { requests, document, cleanup: cleanups.length ? () => cleanups.forEach(cleanup => cleanup()) : undefined,
+    loadingUpdates, render, setTime: value => { currentTime = Date.parse(value); },
+    poll: () => [...timers.values()].find(timer => timer.ms === 10000).fn(),
+    clockTick: () => [...timers.values()].find(timer => timer.ms === 60000).fn(),
+    reveal: () => visibilityListeners.forEach(listener => listener()),
     resolve: async () => { release(Response.json({ ok: true, occupancy: 7, capacity: 80 })); await new Promise(resolve => setImmediate(resolve)); },
-    get listening() { return Boolean(visibilityListener); },
+    get listening() { return visibilityListeners.size > 0; },
+    get timerCount() { return timers.size; },
   };
 }
 
-test('hours-only crowd card does not poll occupancy', () => {
-  const harness = crowdHarness(false);
-  assert.equal(harness.requests.length, 0);
-  assert.equal(harness.cleanup, undefined);
+test('hours-only card updates Eastern opening and closing times without occupancy requests', () => {
+  const h = crowdHarness(false, true);
+  assert.equal(h.requests.length, 0);
+  assert.match(renderToStaticMarkup(h.render()), /closed now/);
+  h.setTime('2026-11-09T14:00:00Z');
+  h.clockTick();
+  assert.match(renderToStaticMarkup(h.render()), /we are open now/);
+  h.setTime('2026-11-09T23:00:00Z');
+  h.clockTick();
+  assert.match(renderToStaticMarkup(h.render()), /closed now/);
+  h.setTime('2026-11-10T14:00:00Z');
+  h.reveal();
+  assert.match(renderToStaticMarkup(h.render()), /Tuesday/);
+  assert.match(renderToStaticMarkup(h.render()), /we are open now/);
+  assert.equal(h.requests.length, 0);
+  h.cleanup();
+  assert.equal(h.timerCount, 0);
+  assert.equal(h.listening, false);
 });
 
 test('occupancy polling avoids overlapping and background requests and keeps readings during refresh', async () => {
