@@ -103,6 +103,8 @@ export async function reconcileOpenPlayPayments(db: SupabaseClient, householdId:
     for (const row of rows) {
         if (!row.square_order_id)
             throw new Error('Online checkout is still being prepared; verify before collecting payment');
-        await verifyOpenPlayPayment(db, row);
+        const current = await verifyOpenPlayPayment(db, row);
+        if (current.payment_status !== 'paid')
+            throw new Error('Online checkout is still pending. Complete or close it before collecting counter payment.');
     }
 }
