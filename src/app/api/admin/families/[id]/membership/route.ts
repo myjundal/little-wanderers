@@ -1,3 +1,4 @@
+import { squareEnvironment } from '@/lib/square-client';
 import { requireOwnerContext } from '@/lib/authz';
 import crypto from 'crypto';
 import { buildPrePopulatedData, logSquarePayload } from '@/lib/square';
@@ -105,14 +106,14 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
     if (existing?.id) {
       const { error } = await admin
         .from('memberships')
-        .update({ renews_at: renewsAt })
+        .update({ renews_at: renewsAt, square_environment: squareEnvironment() })
         .eq('id', existing.id);
       if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
       membershipId = existing.id;
     } else {
       const { data, error } = await admin
         .from('memberships')
-        .insert({ household_id: householdId, renews_at: renewsAt })
+        .insert({ household_id: householdId, renews_at: renewsAt, square_environment: squareEnvironment() })
         .select('id')
         .maybeSingle();
       if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });

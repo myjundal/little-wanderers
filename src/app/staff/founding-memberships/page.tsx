@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import styles from '@/components/membership/founding.module.css';
-import { MEMBERSHIP_PRICES, easternDate, type MembershipPhase, type MembershipTier } from '@/lib/founding-membership';
+import MembershipManagementSummary from '@/components/staff/MembershipManagementSummary';
+import StaffToolNav from '@/components/staff/StaffToolNav';
+import { MEMBERSHIP_MANAGEMENT_LABELS } from '@/lib/membership-summary';
+import { easternDate, type MembershipPhase, type MembershipTier } from '@/lib/founding-membership';
 
 type Item = { id: string; status: string; pricing_tier: MembershipTier; base_cents: number; sibling_cents: number; amount_cents: number; start_date: string | null; card_last4: string | null; household: { name: string; email: string; phone: string } };
 
 export default function FoundingMembershipsPage() {
+  const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [items, setItems] = useState<Item[]>([]);
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [phase, setPhase] = useState<MembershipPhase>('waitlist');
@@ -22,7 +26,7 @@ export default function FoundingMembershipsPage() {
     const response = await fetch('/api/admin/founding-memberships', { cache: 'no-store' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
-    setItems(data.items); setBillingEnabled(data.billing_enabled); setPhase(data.phase); setNextPhase(data.phase);
+    setItems(data.items); setBillingEnabled(data.billing_enabled); setPhase(data.phase); setNextPhase(data.phase); setSummaryRefresh(value => value + 1);
   }, []);
   useEffect(() => { void load().catch(err => setError(err.message)); }, [load]);
 
@@ -51,12 +55,14 @@ export default function FoundingMembershipsPage() {
   }
 
   return <main className={styles.page}>
-    <p className={styles.eyebrow}>Owner · Founding families</p><h1>Founding memberships</h1>
+    <StaffToolNav active="memberships" includeMembershipManagement />
+    <p className={styles.eyebrow}>Owner · Memberships</p><h1>Membership management</h1>
+    <MembershipManagementSummary refreshKey={summaryRefresh} />
     <p><Link href="/founding-membership">View the private enrollment page</Link></p>
-    <section className={styles.formCard} style={{ marginBottom: 24 }}><h2>Enrollment phase</h2><p>Current: <strong>{phase === 'waitlist' ? 'Wanderlist first' : phase === 'public' ? 'Public founding' : 'Regular pricing'}</strong>. Existing members keep the rates saved at enrollment. Canceled members rejoin at $60 + $20.</p><label htmlFor="membership-phase">Offer for new members<select id="membership-phase" value={nextPhase} disabled={busy} onChange={event => setNextPhase(event.target.value as MembershipPhase)} style={{ display: 'block', padding: 12, margin: '12px 0', maxWidth: '100%' }}><option value="waitlist">1. Wanderlist only · $50 + $10</option><option value="public">2. Public founding · $50 + $20 (Wanderlist stays $50 + $10)</option><option value="regular">3. After opening · $60 + $20</option></select></label><button className={styles.secondary} disabled={busy || nextPhase === phase} onClick={savePhase}>Save enrollment phase</button><p className={styles.small}>Changing this offer does not set a billing start date, start billing, or change existing members’ rates.</p></section>
+    <section className={styles.formCard} style={{ marginBottom: 24 }}><h2>Enrollment phase</h2><p>Current: <strong>{phase === 'waitlist' ? 'Wanderlist first' : phase === 'public' ? 'General Founding' : 'General'}</strong>. Existing members keep the rates saved at enrollment. Canceled members rejoin at $60 + $20.</p><label htmlFor="membership-phase">Offer for new members<select id="membership-phase" value={nextPhase} disabled={busy} onChange={event => setNextPhase(event.target.value as MembershipPhase)} style={{ display: 'block', padding: 12, margin: '12px 0', maxWidth: '100%' }}><option value="waitlist">1. Wanderlist only · $50 + $10</option><option value="public">2. General Founding · $50 + $20 (Wanderlist stays $50 + $10)</option><option value="regular">3. After opening · $60 + $20</option></select></label><button className={styles.secondary} disabled={busy || nextPhase === phase} onClick={savePhase}>Save enrollment phase</button><p className={styles.small}>Changing this offer does not set a billing start date, start billing, or change existing members’ rates.</p></section>
     <div className={styles.notice}><strong>{billingEnabled ? 'Billing is enabled for explicit owner activation.' : 'Billing is disabled. Cards only; no subscriptions or charges.'}</strong><p>Start each family separately on its first membership visit, including during soft opening. Confirm the family has arrived, enter that day’s date, and activate that family explicitly. Soft opening visits have no separate admission charge. Saving a card or checking in does not start billing automatically.</p></div>
     <div style={{ display: 'grid', gap: 16, marginTop: 24 }}>{items.map(item => <article key={item.id} className={styles.formCard}>
-      <h2>{item.household?.name || 'Family'}</h2><p>{item.household?.email} · {item.household?.phone}</p><p>Status: <strong>{item.status}</strong>{item.card_last4 ? ` · Card ending ${item.card_last4}` : ''}</p><p>{MEMBERSHIP_PRICES[item.pricing_tier].label}: ${item.base_cents / 100} first child + ${item.sibling_cents / 100} per eligible sibling.</p><p>Estimate at enrollment: ${item.amount_cents / 100}/month. Sibling ages are recalculated at activation.</p>
+      <h2>{item.household?.name || 'Family'}</h2><p>{item.household?.email} · {item.household?.phone}</p><p>Status: <strong>{item.status}</strong>{item.card_last4 ? ` · Card ending ${item.card_last4}` : ''}</p><p>{MEMBERSHIP_MANAGEMENT_LABELS[item.pricing_tier]}: ${item.base_cents / 100} first child + ${item.sibling_cents / 100} per eligible sibling.</p><p>Estimate at enrollment: ${item.amount_cents / 100}/month. Sibling ages are recalculated at activation.</p>
       {item.start_date && <p>Billing start: {item.start_date}</p>}
       {['pending', 'activating'].includes(item.status) && <button className={styles.secondary} disabled={!billingEnabled || busy} onClick={() => { setSelected(item); setStartDate(item.status === 'activating' ? item.start_date || '' : ''); setConfirmation(''); setFirstVisitConfirmed(false); }}>Review billing activation</button>}
     </article>)}</div>

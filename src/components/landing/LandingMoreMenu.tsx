@@ -9,7 +9,7 @@ import StaffToolNav from '@/components/staff/StaffToolNav';
 
 export default function LandingMoreMenu() {
   const [open, setOpen] = useState(false);
-  const { isLoading, canUseOwnerDashboard, isInstructor, isKiosk } = useOperatorAccess();
+  const { isLoading, canUseOwnerDashboard, isInstructor, isKiosk, role } = useOperatorAccess();
 
   return (
     <div style={{ marginBottom: 12, position: 'sticky', top: 8, zIndex: 40 }}>
@@ -24,7 +24,7 @@ export default function LandingMoreMenu() {
       </header>
       {open && !isLoading && (
         <section style={{ display: 'grid', gap: 10, border: '1px solid #e3d0fb', borderRadius: 14, background: '#fffdf9', padding: 12 }}>
-          {canUseOwnerDashboard ? <StaffToolNav variant="menu" includePersonal={!isKiosk} onNavigate={() => setOpen(false)} /> : <>
+          {canUseOwnerDashboard ? <StaffToolNav variant="menu" includePersonal={!isKiosk} includeMembershipManagement={role === 'owner' || role === 'admin'} onNavigate={() => setOpen(false)} /> : <>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href="/">Main Homepage</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href={isInstructor ? '/teaching' : '/landing'}>
             My dashboard

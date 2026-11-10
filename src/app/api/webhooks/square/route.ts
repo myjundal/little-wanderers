@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
       {
         household_id: householdId,
         square_subscription_id: sub?.id ?? null,
+        square_environment: squareEnvironment(),
         renews_at: renewsAt ? new Date(renewsAt).toISOString() : null,
       },
       { onConflict: 'household_id' }

@@ -16,7 +16,7 @@ export default async function AdministrationPage() {
     {isOwner && <section className={styles.card}><h2>Administration</h2><div className={styles.links}>
       <Link href="/staff/team">Staff &amp; Timecards</Link>
       <Link href="/staff/campaigns">Email campaigns</Link>
-      <Link href="/staff/founding-memberships">Founding memberships</Link>
+      <Link href="/staff/founding-memberships">Membership management</Link>
     </div></section>}
   </main>;
 }
