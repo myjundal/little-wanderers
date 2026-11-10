@@ -9,6 +9,7 @@ const Nav = loadModule('src/components/staff/StaffToolNav.tsx', {
   'next/link': 'a', '@/lib/operator-navigation': navigation, './operator-navigation.module.css': {},
 }, { React }).default;
 const Dashboard = loadModule('src/components/staff/OperatorDashboard.tsx', {
+  './MembershipManagementSummary': 'membership-summary',
   'next/link': 'a', './StaffToolNav': Nav, './StaffPortal.module.css': {},
 }, { React }).default;
 const links = html => [...html.matchAll(/href="([^"]+)"[^>]*>([^<]+)</g)].map(match => [match[1], match[2]]);
@@ -35,10 +36,14 @@ test('personal owners and staff see personal bookings; shared PIN sessions keep 
   for (const role of ['staff', 'owner', 'admin']) {
     for (const isKiosk of [false, true]) {
       const html = renderToStaticMarkup(React.createElement(Dashboard, { role, roles: [role], isKiosk }));
-      assert.deepEqual(links(html), expected.slice(0, isKiosk ? 8 : 10));
+      const menu = expected.slice(0, 8);
+      if (role !== 'staff') menu.push(['/staff/founding-memberships', 'Membership management']);
+      if (!isKiosk) menu.push(...expected.slice(8));
+      assert.deepEqual(links(html), menu);
+      assert.equal(html.includes('membership-summary'), role !== 'staff');
       assert.equal(html.includes('My parties'), !isKiosk);
       assert.equal(html.includes('My classes'), !isKiosk);
-      assert.doesNotMatch(html, /href="\/employee"|href="\/staff\/team"|href="\/staff\/campaigns"|<h2/);
+      assert.doesNotMatch(html, /href="\/employee"|href="\/staff\/team"|href="\/staff\/campaigns"/);
       assert.doesNotMatch(html, /<details/);
       assert.equal((html.match(/Timecard &amp; admin/g) ?? []).length, 1);
     }
