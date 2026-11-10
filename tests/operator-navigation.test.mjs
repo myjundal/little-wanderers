@@ -15,6 +15,7 @@ const links = html => [...html.matchAll(/href="([^"]+)"[^>]*>([^<]+)</g)].map(ma
 const expected = [
   ['/staff/dashboard', 'My dashboard'], ['/staff/admin', 'Timecard &amp; admin'],
   ['/', 'Main homepage'], ['/staff/checkin', 'Check-in &amp; occupancy management'],
+  ['/staff/open-play-reservations', 'Open Play reservations'],
   ['/staff/parties', 'Party management'], ['/staff/families', 'Family management'], ['/staff/classes', 'Class management'],
   ['/landing/party', 'My parties'], ['/landing/classschedule', 'My classes'],
 ];
@@ -34,7 +35,7 @@ test('personal owners and staff see personal bookings; shared PIN sessions keep 
   for (const role of ['staff', 'owner', 'admin']) {
     for (const isKiosk of [false, true]) {
       const html = renderToStaticMarkup(React.createElement(Dashboard, { role, roles: [role], isKiosk }));
-      assert.deepEqual(links(html), expected.slice(0, isKiosk ? 7 : 9));
+      assert.deepEqual(links(html), expected.slice(0, isKiosk ? 8 : 10));
       assert.equal(html.includes('My parties'), !isKiosk);
       assert.equal(html.includes('My classes'), !isKiosk);
       assert.doesNotMatch(html, /href="\/employee"|href="\/staff\/team"|href="\/staff\/campaigns"|<h2/);

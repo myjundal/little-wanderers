@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import FamilyOpenPlayBooking from '@/components/staff/FamilyOpenPlayBooking';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import { classSizeLabel } from '@/lib/class-config';
 import {
@@ -484,6 +485,7 @@ export default function StaffFamilyDetailPage() {
         </div>
       </section>
 
+      <FamilyOpenPlayBooking familyId={familyId} canManage={canEdit} />
       <section style={{ marginTop: 16 }}>
         <h3>Upcoming classes</h3>
         {item.upcoming_classes.length === 0 ? <p>-</p> : item.upcoming_classes.map((c) => <p key={c.id}>{c.person_name}: {c.class?.title} ({c.class?.start_time ? new Date(c.class.start_time).toLocaleString() : '-'})</p>)}

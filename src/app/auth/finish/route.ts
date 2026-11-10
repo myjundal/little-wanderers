@@ -1,3 +1,4 @@
+import { completeAccountLink } from '@/lib/complete-account-link';
 import { safeAuthNextPath } from '@/lib/auth-redirect';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -23,6 +24,6 @@ export async function GET(request: NextRequest) {
     if (/^\/(?:wanderlist-founding|general-founding|founding-membership(?:\/(?:public|waitlist))?)$/.test(next)) login.searchParams.set('mode', 'continue');
     return NextResponse.redirect(login);
   }
-  const redirectPath = await getPostAuthRedirectForUser(user, next);
+  const redirectPath = await completeAccountLink(user) ?? await getPostAuthRedirectForUser(user, next);
   return NextResponse.redirect(getRedirectUrl(request, redirectPath));
 }

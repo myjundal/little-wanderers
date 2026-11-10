@@ -15,7 +15,7 @@ test('customer and operator calendars both exclude all windows before November 1
   const api=load(operator?'src/app/api/admin/open-play-reservations/route.ts':'src/app/api/open-play-reservations/route.ts',{
    '@/lib/open-play-reservations':lib,
    '@/lib/party-config':load('src/lib/party-config.ts'),
-   '@/lib/authz':{requireStaffContext:async()=>({ok:true,admin})},
+   '@/lib/waivers':{getWaiverStatus:()=>({status:'required'}),WAIVER_STATUS_SELECT:'signed_at'},'@/lib/authz':{requireStaffContext:async()=>({ok:true,admin})},
    'next/server':{NextResponse:{json:Response.json}},
    '@/lib/supabase/admin':{createAdminSupabaseClient:()=>admin},
    '@/lib/supabase/server':{createServerSupabaseClient:()=>({auth:{getUser:async()=>({data:{user:{id:'family'}}})}})},
@@ -39,7 +39,7 @@ test('owner bulk changes use Eastern calendar days and cannot reopen pre-opening
   const filters=[];const admin={from(){const q={select(){return q},eq(){return q},gte(k,v){filters.push(['gte',k,v]);return q},lt(k,v){filters.push(['lt',k,v]);return q},then(resolve){resolve({data:[],error:null})}};return q;}};
   const api=load('src/app/api/admin/open-play-reservations/route.ts',{
    '@/lib/open-play-reservations':lib,'@/lib/party-config':load('src/lib/party-config.ts'),
-   '@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin})},
+   '@/lib/waivers':{getWaiverStatus:()=>({status:'required'}),WAIVER_STATUS_SELECT:'signed_at'},'@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin})},
   });
   const response=await api.PATCH({json:async()=>({action:'update_slots',status:'open',...body})});
   assert.equal(response.status,200);assert.deepEqual(filters,[['gte','starts_at',expectedStart],['lt','starts_at',expectedEnd]]);

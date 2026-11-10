@@ -57,8 +57,16 @@ test('failed reservation mutations show feedback and release the busy state for 
   assert.equal(h.changes(), 0);
 });
 
-test('old Open Play management bookmarks redirect to the unified reservation workspace', () => {
-  let target;
-  const page = loadModule('src/app/staff/open-play-reservations/page.tsx', { 'next/navigation': { redirect: url => { target = url; } } }).default;
-  page(); assert.equal(target, '/staff/checkin?view=reservations');
+test('Open Play stays separate and opens the chosen family in the check-in desk', () => {
+  const selected=[];
+  const Page=loadModule('src/app/staff/open-play-reservations/page.tsx', {
+    'next/navigation': {useRouter:()=>({push:url=>selected.push(url)})},
+    '@/components/staff/OpenPlayReservationsAdmin':'reservations-admin',
+    '@/components/staff/StaffToolNav':'nav',
+    '@/lib/use-owner-dashboard-access':{useOperatorAccess:()=>({role:'owner'})},
+  },{React}).default;
+  const tree=Page();
+  const admin=React.Children.toArray(tree.props.children).find(node=>node.type==='reservations-admin');
+  assert.equal(admin.props.canManage,true);admin.props.onCheckIn('family-id');
+  assert.deepEqual(selected,['/staff/checkin?family=family-id']);
 });

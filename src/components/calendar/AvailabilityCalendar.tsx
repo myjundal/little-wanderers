@@ -22,6 +22,9 @@ type Props = {
   formatSlotPillLabel?: (slot: CalendarSlot) => string;
   selectableStatuses?: CalendarSlot['status'][];
   timeZone?: string;
+  reservationDays?: string[];
+  onDaySelect?: (date: string) => void;
+  selectedDay?: string;
 };
 
 const statusColor: Record<CalendarSlot['status'], string> = {
@@ -92,6 +95,9 @@ export default function AvailabilityCalendar({
   formatSlotPillLabel,
   selectableStatuses = ['available'],
   timeZone,
+  reservationDays,
+  onDaySelect,
+  selectedDay,
 }: Props) {
   const [cursor, setCursor] = useState(() => {
     if (initialMonth) {
@@ -101,6 +107,7 @@ export default function AvailabilityCalendar({
     const [year, month] = ymd(new Date(), timeZone).split('-').map(Number);
     return new Date(year, month - 1, 1);
   });
+  const compact = reservationDays !== undefined;
   const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
   const upcoming = useMemo(
     () => [...slots]
@@ -246,17 +253,25 @@ export default function AvailabilityCalendar({
           return (
             <div
               key={key}
+              role={compact ? 'button' : undefined}
+              tabIndex={compact ? 0 : undefined}
+              aria-label={compact ? `${key}${reservationDays?.includes(key) ? ', has reservations' : ', no reservations'}` : undefined}
+              aria-pressed={compact ? selectedDay === key : undefined}
+              onClick={compact ? () => onDaySelect?.(key) : undefined}
+              onKeyDown={compact ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onDaySelect?.(key); } } : undefined}
               style={{
                 minHeight: 88,
                 border: '1px solid #efe4ff',
                 borderRadius: 12,
                 padding: 6,
-                background: inMonth ? '#fff' : '#faf7ff',
-                opacity: inMonth ? 1 : 0.72,
+                background: compact ? reservationDays?.includes(key) ? '#fce8ee' : '#fff' : inMonth ? '#fff' : '#faf7ff',
+                outline: compact && selectedDay === key ? '2px solid #a66a84' : undefined,
+                cursor: compact ? 'pointer' : undefined,
+                opacity: compact || inMonth ? 1 : 0.72,
               }}
             >
               <div style={{ fontSize: 12, fontWeight: 800, color: '#5d4f88' }}>{d.getDate()}</div>
-              <div style={{ display: 'grid', gap: 4, marginTop: 5 }}>
+              {!compact && <div style={{ display: 'grid', gap: 4, marginTop: 5 }}>
                 {displaySlots.slice(0, maxVisibleSlotsPerDay).map((slot) => {
                   const selectable = selectableStatuses.includes(slot.status) && Boolean(onSlotSelect);
                   const pillLabel = formatSlotPillLabel
@@ -305,7 +320,7 @@ export default function AvailabilityCalendar({
                     +{displaySlots.length - maxVisibleSlotsPerDay} more
                   </button>
                 )}
-              </div>
+              </div>}
             </div>
           );
         })}
@@ -355,7 +370,7 @@ export default function AvailabilityCalendar({
       )}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
-        {legendEntries.map(([k, v]) => (
+        {compact ? <span style={{ fontSize: 12 }}>Pink: reservations · White: no reservations</span> : legendEntries.map(([k, v]) => (
           <span key={k} style={{ fontSize: 12, color: '#55417f', fontWeight: 700 }}>
             <span
               style={{

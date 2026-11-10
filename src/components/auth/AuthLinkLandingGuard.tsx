@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { persistBrowserSession } from '@/lib/browser-session';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 export default function AuthLinkLandingGuard() {
@@ -31,11 +32,15 @@ export default function AuthLinkLandingGuard() {
       } = await supabase.auth.getSession();
 
       if (session) {
+        await persistBrowserSession();
         window.location.replace(`/auth/finish?next=${encodeURIComponent(next)}`);
       }
     };
 
-    void finishHashAuth();
+    void finishHashAuth().catch(() => {
+      const next = searchParams.get('next') || '/landing';
+      window.location.replace(`/login?next=${encodeURIComponent(next)}&error=session-not-persisted`);
+    });
   }, []);
 
   return null;

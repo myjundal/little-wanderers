@@ -19,6 +19,7 @@ async function login({ next = '/wanderlist-founding', existing = false, mode = '
     useEffect(fn, deps) { memo(() => { effects.push(fn); }, deps); },
   };
   const page = loadModule('src/app/(public)/login/page.tsx', {
+    '@/lib/browser-session': { persistBrowserSession: async () => {} },
     react, '@/lib/auth-redirect': redirect, './login.module.css': {},
     '@/lib/auth-request': { withAuthDeadline: run => authRequest.withAuthDeadline(run, timeoutMs) },
     '@/lib/supabase/browser': { createBrowserSupabaseClient: () => ({ auth: {
@@ -78,6 +79,7 @@ test('first-time and existing phone users verify SMS and return through the auth
 
 test('email callbacks return to membership and retain its continuation when the email code is missing or expired', async () => {
   const api = error => loadSquareModules({ mocks: {
+    '@/lib/complete-account-link': { completeAccountLink: async () => null },
     '@supabase/ssr': { createServerClient: () => ({ auth: {
       exchangeCodeForSession: async () => ({ error }), getUser: async () => ({ data: { user: error ? null : { id: 'verified-user' } } }),
     } }) },
@@ -98,6 +100,7 @@ test('email callbacks return to membership and retain its continuation when the 
 test('SMS finishing uses the verified account and preserves membership destination if the session is lost', async () => {
   for (const user of [null, { id: 'verified-phone-user', phone: '18605550123' }]) {
     const api = loadSquareModules({ mocks: {
+      '@/lib/complete-account-link': { completeAccountLink: async () => null },
       '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }) },
       '@/lib/waitlist-claim': { getPostAuthRedirectForUser: async (actual, next) => { assert.equal(actual.id, user.id); return next; } },
     } }).load('src/app/auth/finish/route.ts');
