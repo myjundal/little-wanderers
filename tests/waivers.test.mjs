@@ -84,7 +84,8 @@ test('server fixes signer, family, text, children and expiration; photo refusal 
 test('check-in only uses authenticated staff identity and never trusts QR-supplied amounts or group size', async () => {
   let args;
   const api = loadModule('src/app/api/checkin/route.ts', {
-    '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: 'staff' }, role: 'staff', admin: { rpc: async (_name, values) => { args = values; return { data: { ok: false, code: 'waiver_required' } }; } } }) },
+    '@/lib/soft-opening-payments': {reconcileOpenPlayPayments: async()=>{}},
+    '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: 'staff' }, role: 'staff', admin: { from: () => ({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:null,error:null})}), rpc: async (_name, values) => { args = values; return { data: { ok: false, code: 'waiver_required' } }; } } }) },
     '@/lib/waiver-content': content,
     '@/lib/open-play-reservations': { isUuid: value => /^[a-f0-9-]{36}$/.test(value) },
   });

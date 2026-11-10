@@ -1,102 +1,24 @@
-import { WANDERLIST_CUTOFF } from '@/lib/signup-policy';
 import type { User } from '@supabase/supabase-js';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { normalizeWaitlistEmail } from '@/lib/waitlist';
-
-type AdminClient = ReturnType<typeof createAdminSupabaseClient>;
-
 export type SoftOpeningAccess = {
-  allowed: boolean;
-  email: string | null;
-  on_wanderlist: boolean;
-  party_early_access: boolean;
-  has_party_booking: boolean;
-  founding_member?: boolean;
+    allowed: boolean;
+    email: string | null;
+    on_wanderlist: boolean;
+    website_signup: boolean;
+    party_early_access: boolean;
+    has_party_booking: boolean;
+    founding_member: boolean;
 };
-
-async function hasPartyEarlyAccessContact(admin: AdminClient, normalizedEmail: string) {
-  const { data: contact, error: contactError } = await admin
-    .from('contacts')
-    .select('id')
-    .eq('normalized_email', normalizedEmail)
-    .maybeSingle();
-
-  if (contactError) throw new Error(contactError.message);
-  if (!contact?.id) return false;
-
-  const { data: tag, error: tagError } = await admin
-    .from('contact_tags')
-    .select('contact_id')
-    .eq('contact_id', contact.id)
-    .eq('tag', 'party_early_access')
-    .maybeSingle();
-
-  if (tagError) throw new Error(tagError.message);
-  return Boolean(tag);
-}
-
-async function hasPartyBookingForUser(admin: AdminClient, userId: string) {
-  const { data: memberships, error: memberError } = await admin
-    .from('household_members')
-    .select('household_id')
-    .eq('user_id', userId)
-    .limit(25);
-
-  if (memberError) throw new Error(memberError.message);
-
-  const householdIds = [...new Set((memberships ?? []).map((item) => item.household_id as string).filter(Boolean))];
-  if (householdIds.length === 0) return false;
-
-  const { data: booking, error: bookingError } = await admin
-    .from('party_bookings')
-    .select('id')
-    .in('household_id', householdIds)
-    .neq('status', 'cancelled')
-    .limit(1)
-    .maybeSingle();
-
-  if (bookingError) throw new Error(bookingError.message);
-  return Boolean(booking);
-}
-
-export async function getSoftOpeningAccessForUser(admin: AdminClient, user: Pick<User, 'id' | 'email'>): Promise<SoftOpeningAccess> {
-  const normalizedEmail = normalizeWaitlistEmail(user.email ?? '');
-  let onWanderlist = false;
-  let partyEarlyAccess = false;
-
-  if (normalizedEmail) {
-    const { data: waitlist, error: waitlistError } = await admin
-      .from('waitlist_entries')
-      .select('id')
-      .lt('created_at', WANDERLIST_CUTOFF)
-      .eq('normalized_email', normalizedEmail)
-      .maybeSingle();
-
-    if (waitlistError) throw new Error(waitlistError.message);
-
-    onWanderlist = Boolean(waitlist);
-    partyEarlyAccess = await hasPartyEarlyAccessContact(admin, normalizedEmail);
-  }
-
-  const hasPartyBooking = await hasPartyBookingForUser(admin, user.id);
-
-  const householdRows = await admin.from('household_members').select('household_id').eq('user_id', user.id);
-  if (householdRows.error) throw new Error(householdRows.error.message);
-  const householdIds = (householdRows.data ?? []).map(row => row.household_id);
-  let foundingMember = false;
-  if (householdIds.length) {
-    const founding = await admin.from('founding_memberships').select('id').in('household_id', householdIds).eq('environment', 'production').in('status', ['pending', 'activating', 'scheduled', 'active']).limit(1);
-    // Keep existing access working while the additive migration is being deployed.
-    if (founding.error && !['42P01', 'PGRST205'].includes(founding.error.code)) throw new Error(founding.error.message);
-    foundingMember = Boolean(founding.data?.length);
-  }
-
-  return {
-    allowed: onWanderlist || partyEarlyAccess || hasPartyBooking || foundingMember,
-    email: user.email ?? null,
-    on_wanderlist: onWanderlist,
-    party_early_access: partyEarlyAccess,
-    has_party_booking: hasPartyBooking,
-    founding_member: foundingMember,
-  };
+/** The emailed URL is unlisted. Every customer must sign in; website signups are eligible too. */
+export async function getSoftOpeningAccessForUser(admin: ReturnType<typeof createAdminSupabaseClient>, user: Pick<User, 'id' | 'email'>): Promise<SoftOpeningAccess> {
+    const email = normalizeWaitlistEmail(user.email ?? '');
+    let onWanderlist = false;
+    if (email) {
+        const result = await admin.from('waitlist_entries').select('id').eq('normalized_email', email).limit(1);
+        if (result.error)
+            throw new Error(result.error.message);
+        onWanderlist = Boolean(result.data?.length);
+    }
+    return { allowed: Boolean(user.id && email), email: user.email ?? null, on_wanderlist: onWanderlist, website_signup: !onWanderlist, party_early_access: false, has_party_booking: false, founding_member: false };
 }

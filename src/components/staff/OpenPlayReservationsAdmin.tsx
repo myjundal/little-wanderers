@@ -20,6 +20,9 @@ type Reservation = {
   slot_id: string;
   household_id: string;
   contact_email: string | null;
+  payment_status?: string;
+  payment_choice?: string;
+  amount_cents?: number;
   child_count: number;
   adult_count: number;
   notes: string | null;
@@ -52,7 +55,7 @@ type SlotActionInput = {
 
 type UpdateScope = 'window' | 'day' | 'week' | 'range' | 'timeRange';
 
-const SOFT_OPENING_END_DATE = '2026-10-31';
+const SOFT_OPENING_END_DATE = '2026-12-31';
 
 function ymd(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -312,12 +315,12 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
       ) : slots.length === 0 ? (
         <section style={{ border: '1px solid #f0d89b', borderRadius: 18, background: '#fff8e6', padding: 16 }}>
           <strong style={{ color: '#6b4d12' }}>No soft opening windows yet.</strong>
-          <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Seed the end-of-October soft opening windows in Supabase first.</p>
+          <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Seed the November–December soft opening windows in Supabase first.</p>
         </section>
       ) : (
         <AvailabilityCalendar
           title="Open Play reservation calendar"
-          subtitle="End-of-October soft opening windows. Click a pill to inspect the date below."
+          subtitle="November–December soft opening windows. Click a pill to inspect the date below."
           slots={calendarSlots}
           onSlotSelect={(slot) => {
             setSelectedSlotId(slot.id);
@@ -325,7 +328,7 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
           }}
           selectableStatuses={['available', 'booked', 'full', 'closed']}
           initialMonth={selectedDate.slice(0, 7)}
-          maxVisibleSlotsPerDay={4}
+          maxVisibleSlotsPerDay={8}
           formatSlotPillLabel={(slot) => slot.label}
           timeZone="America/New_York"
         />
@@ -384,6 +387,7 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
               </div>
               <span style={{ color: statusColor(reservation.status), fontWeight: 900, textTransform: 'capitalize' }}>{reservation.status.replace('_', ' ')}</span>
             </div>
+            {reservation.payment_status && <p style={{margin:'8px 0',fontWeight:700,color:'#51406e'}}>{reservation.payment_status==='paid'?'Paid online — do not collect admission again':reservation.payment_status==='covered'?'Included with membership':`$${((reservation.amount_cents??0)/100).toFixed(2)} · ${reservation.payment_choice==='now'?'Online payment pending — verify before collecting':'Pay at the counter'}`}</p>}
             {reservation.people.length > 0 && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>People: {reservation.people.join(', ')}</p>}
             {reservation.notes && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Notes: {reservation.notes}</p>}
             {reservation.slot && easternYmd(reservation.slot.starts_at) === easternYmd(new Date().toISOString()) && checkedInFamilyIds.includes(reservation.household_id) && <p style={{ color: '#2f7a47', fontWeight: 700 }}>Admission recorded today</p>}

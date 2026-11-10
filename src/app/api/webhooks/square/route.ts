@@ -5,6 +5,7 @@ export const runtime = 'nodejs';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySquareWebhook } from '@/lib/square-webhook';
+import { verifyOpenPlayPayment, type OpenPlayPayment } from '@/lib/soft-opening-payments';
 import { verifySeriesPayment, type SeriesSale } from '@/lib/class-series-payments';
 import { squareEnvironment } from '@/lib/square-client';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -44,6 +45,10 @@ export async function POST(req: NextRequest) {
   if (['payment.created', 'payment.updated', 'invoice.payment_made'].includes(eventType)) {
     const eventOrder = payload?.data?.object?.payment?.order_id ?? payload?.data?.object?.invoice?.order_id;
     if (eventOrder) {
+      const {data: visit, error: visitError} = await supa.from('open_play_reservations').select('*').eq('payment_environment',squareEnvironment()).eq('square_order_id',eventOrder).maybeSingle();
+      if (visitError) return new Response('Reservation payment lookup pending',{status:503});
+      if (visit) { try { await verifyOpenPlayPayment(supa,visit as OpenPlayPayment); return new Response('Reservation payment verified',{status:200}); } catch { return new Response('Reservation payment verification pending',{status:503}); } }
+
       const { data: classSale, error: classSaleError } = await supa.from('class_series_sales').select('*').eq('environment', squareEnvironment()).eq('square_order_id', eventOrder).maybeSingle();
       if (classSaleError) return new Response('Unable to find class payment', { status: 500 });
       if (classSale) {
