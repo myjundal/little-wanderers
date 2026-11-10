@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { safeAuthNextPath } from '@/lib/auth-redirect';
+import { withAuthDeadline } from '@/lib/auth-request';
 import styles from './login.module.css';
 
 type AuthMethod = 'phone' | 'email';
@@ -25,6 +26,9 @@ const normalizeUsPhone = (input: string) => {
 
 function formatAuthError(message: string, method: AuthMethod) {
   const normalized = message.toLowerCase();
+  if (['auth_request_timeout', 'failed to fetch', 'fetch failed', 'networkerror', 'network request failed', 'load failed', 'timed out', 'timeout', 'aborted'].some(value => normalized.includes(value))) {
+    return 'The sign-in service is not responding. Please wait a moment and try again.';
+  }
   if (normalized.includes('missing-code')) {
     return 'That login link did not include a usable sign-in code. Please request a fresh email link and use the newest email.';
   }
@@ -116,6 +120,7 @@ export default function LoginPage() {
   const firstInputRef = useRef<HTMLInputElement>(null);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   const requestInFlightRef = useRef(false);
+  const verificationInFlightRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -133,9 +138,12 @@ export default function LoginPage() {
 
     const redirectIfSignedIn = async () => {
       const supabase = createBrowserSupabaseClient();
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) return;
-      window.location.replace(getSafeNextPath());
+      try {
+        const { data } = await withAuthDeadline(() => supabase.auth.getUser());
+        if (data.user) window.location.replace(getSafeNextPath());
+      } catch {
+        // A stalled session check must not block the sign-in form.
+      }
     };
 
     void redirectIfSignedIn();
@@ -200,30 +208,28 @@ export default function LoginPage() {
 
     let response;
     try {
-      response = authMethod === 'phone'
-        ? await supabase.auth.signInWithOtp({
+      response = await withAuthDeadline(() => authMethod === 'phone'
+        ? supabase.auth.signInWithOtp({
             phone: normalizedPhone,
             options: {
               shouldCreateUser,
               channel: 'sms',
             },
           })
-        : await supabase.auth.signInWithOtp({
+        : supabase.auth.signInWithOtp({
             email: normalizedEmail,
             options: {
               shouldCreateUser,
               emailRedirectTo: getEmailRedirectTo(journeyMode),
             },
-          });
-    } catch {
+          }));
+    } catch (error) {
+      setError(formatAuthError(error instanceof Error ? error.message : 'network request failed', authMethod));
+      return;
+    } finally {
       requestInFlightRef.current = false;
       setPending(false);
-      setError('We could not send the login link. Please check your connection and try again.');
-      return;
     }
-
-    setPending(false);
-    requestInFlightRef.current = false;
 
     if (response.error) {
       setError(formatAuthError(response.error.message, authMethod));
@@ -250,51 +256,46 @@ export default function LoginPage() {
   };
 
   const verifyOtp = useCallback(async () => {
+    if (verificationInFlightRef.current) return;
     clearFeedback();
     if (otpToken.length !== OTP_LENGTH) {
       setError(`Please enter the ${OTP_LENGTH}-digit code.`);
       return;
     }
 
+    verificationInFlightRef.current = true;
+    setLastAutoSubmitToken(otpToken);
     setPending(true);
-    const supabase = createBrowserSupabaseClient();
-    const response = authMethod === 'phone'
-      ? await supabase.auth.verifyOtp({
-          phone: pendingPhone,
-          token: otpToken,
-          type: 'sms',
-        })
-      : await supabase.auth.verifyOtp({
-          email: pendingEmail,
-          token: otpToken,
-          type: 'email',
-        });
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const response = await withAuthDeadline(() => authMethod === 'phone'
+        ? supabase.auth.verifyOtp({ phone: pendingPhone, token: otpToken, type: 'sms' })
+        : supabase.auth.verifyOtp({ email: pendingEmail, token: otpToken, type: 'email' }));
 
-    setPending(false);
+      if (response.error) {
+        setError(formatAuthError(response.error.message, authMethod));
+        return;
+      }
 
-    if (response.error) {
-      setError(formatAuthError(response.error.message, authMethod));
-      setLastAutoSubmitToken(null);
-      return;
+      const { data: { user }, error: userError } = await withAuthDeadline(() => supabase.auth.getUser());
+      if (userError || !user) {
+        setError(userError ? formatAuthError(userError.message, authMethod) : 'We could not finish signing you in. Please try again.');
+        return;
+      }
+
+      const next = getSafeNextPath();
+      sessionStorage.removeItem('post_login_redirect');
+      window.location.replace(`/auth/finish?next=${encodeURIComponent(next)}`);
+    } catch (error) {
+      setError(formatAuthError(error instanceof Error ? error.message : 'network request failed', authMethod));
+    } finally {
+      verificationInFlightRef.current = false;
+      setPending(false);
     }
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError('We could not finish signing you in. Please try again.');
-      return;
-    }
-
-    const next = getSafeNextPath();
-    sessionStorage.removeItem('post_login_redirect');
-
-    window.location.replace(`/auth/finish?next=${encodeURIComponent(next)}`);
   }, [authMethod, clearFeedback, otpToken, pendingEmail, pendingPhone]);
 
   const onOtpChange = (index: number, value: string) => {
+    setLastAutoSubmitToken(null);
     const nextDigit = value.replace(/\D/g, '').slice(-1);
     const nextDigits = [...otpDigits];
     nextDigits[index] = nextDigit;
@@ -343,6 +344,7 @@ export default function LoginPage() {
             <label htmlFor="phone" style={{ color: '#4f3f82', fontWeight: 600 }}>Phone number (US)</label>
             <input
               id="phone"
+              disabled={pending}
               ref={firstInputRef}
               type="tel"
               inputMode="tel"
@@ -363,6 +365,7 @@ export default function LoginPage() {
             <label htmlFor="email" style={{ color: '#4f3f82', fontWeight: 600 }}>Email address</label>
             <input
               id="email"
+              disabled={pending}
               type="email"
               ref={firstInputRef}
               autoComplete="email"
@@ -377,7 +380,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {step === 'collect' && <button className={styles.alternative} type="button" onClick={() => { setAuthMethod(authMethod === 'email' ? 'phone' : 'email'); clearFeedback(); }} style={{ display: 'block', width: '100%', marginTop: 12, padding: 10, background: 'transparent', border: 'none', color: '#79618f', textDecoration: 'underline', fontSize: 12, cursor: 'pointer' }}>{authMethod === 'email' ? 'Use a linked phone number instead' : 'Use email instead'}</button>}
+        {step === 'collect' && <button className={styles.alternative} disabled={pending} type="button" onClick={() => { setAuthMethod(authMethod === 'email' ? 'phone' : 'email'); clearFeedback(); }} style={{ display: 'block', width: '100%', marginTop: 12, padding: 10, background: 'transparent', border: 'none', color: '#79618f', textDecoration: 'underline', fontSize: 12, cursor: 'pointer' }}>{authMethod === 'email' ? 'Use a linked phone number instead' : 'Use email instead'}</button>}
 
         {step === 'emailLinkSent' && (
           <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>
@@ -396,7 +399,7 @@ export default function LoginPage() {
               {resendIn > 0 ? `Send a new link (${resendIn}s)` : 'Send a new link'}
             </button>
 
-            <button type="button" onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
+            <button type="button" disabled={pending} onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
               Change email
             </button>
           </div>
@@ -411,6 +414,7 @@ export default function LoginPage() {
               {otpDigits.map((digit, index) => (
                 <input
                   key={`otp-${index}`}
+                  disabled={pending}
                   ref={(element) => { otpRefs.current[index] = element; }}
                   value={digit}
                   onChange={(event) => onOtpChange(index, event.target.value)}
@@ -431,12 +435,12 @@ export default function LoginPage() {
             </button>
 
             {authMethod === 'phone' && (
-              <button type="button" onClick={switchToEmailFallback} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#5f3da4', textDecoration: 'underline', fontWeight: 600 }}>
+              <button type="button" onClick={switchToEmailFallback} disabled={pending} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#5f3da4', textDecoration: 'underline', fontWeight: 600 }}>
                 Did not get a text? Continue with email
               </button>
             )}
 
-            <button type="button" onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
+            <button type="button" disabled={pending} onClick={() => { setStep('collect'); clearFeedback(); }} style={{ padding: '10px 12px', borderRadius: 12, border: 'none', background: 'transparent', color: '#6d6480', fontWeight: 600 }}>
               Change phone or email
             </button>
           </div>
