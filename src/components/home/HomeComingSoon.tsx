@@ -23,7 +23,7 @@ const localBusinessJsonLd = {
   logo: `${siteUrl}/logo.png`,
   image: `${siteUrl}/play-studio.jpg`,
   description:
-    'Little Wanderers Play Studio & Cafe is an indoor play cafe for kids ages 0-5 and their grown-ups in Bishop’s Corner, West Hartford, CT.',
+    'Little Wanderers Play Studio & Cafe is an indoor play cafe for kids ages 0–6 and their grown-ups in Bishop’s Corner, West Hartford, CT.',
   address: {
     '@type': 'PostalAddress',
     addressLocality: 'West Hartford',
@@ -87,7 +87,7 @@ export default async function HomeComingSoon() {
       />
       <section className={styles.hero}>
         <div className={styles.left}>
-          <p className={styles.eyebrow}>West Hartford · Play studio &amp; cafe · Ages 0–5</p>
+          <p className={styles.eyebrow}>West Hartford · Play studio &amp; cafe · Ages 0–6</p>
           <h1>A little play.<br /><span>A little pause.</span></h1>
           <p className={styles.openingBadge}>Soft opening starts November 11</p>
           <p>A thoughtful indoor play space for curious little ones, and a cozy cafe for their grown-ups. We’re ready for our first little adventures together.</p>
@@ -96,7 +96,7 @@ export default async function HomeComingSoon() {
         </div>
         <div className={styles.right}><PastelCard><div className={styles.heroImageFrame}><Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" /></div></PastelCard><p className={styles.photoCaption}>Room to explore. Space to take a breath.</p></div>
       </section>
-      <section className={styles.openingNote} aria-label="Soft opening details"><div><span className={styles.eyebrow}>Our first chapter</span><h2>A warm welcome, with a little extra grace.</h2><p>During soft opening, service may be a little slower as our team learns and finds its rhythm. Thank you for your patience and encouragement. Our grand opening date is coming soon.</p></div><div className={styles.quickFacts}><p><strong>Nov 11–15</strong><span>9am–2pm</span></p><p><strong>Nov 16–Dec 31</strong><span>9am–5pm</span></p><p><strong>5 children</strong><span>per arrival window</span></p></div></section>
+      <section className={styles.openingNote} aria-label="Soft opening details"><div><span className={styles.eyebrow}>Our first chapter</span><h2>A warm welcome, with a little extra grace.</h2><p>During soft opening, service may be a little slower as our team learns and finds its rhythm. Thank you for your patience and encouragement. Our grand opening date is coming soon.</p></div><div className={styles.quickFacts}><p><strong>Soft opening · Nov 11–15</strong><span>9am–2pm</span></p><p><strong>Regular opening · From Nov 16</strong><span>9am–5pm</span></p><p><strong>5 children</strong><span>per arrival window · soft opening only</span></p></div></section>
       <section className={styles.explore} aria-label="Ways to wander"><Link href="/pricing#open-play"><span className={styles.eyebrow}>Drop in, settle in</span><h2>Open play</h2><p>$16 for your first child.<br />$10 for each additional child.</p><strong>See visit pricing →</strong></Link><Link href="/pricing#memberships"><span className={styles.eyebrow}>Make it your little ritual</span><h2>Founding membership</h2><p>$50/month for your first child.<br />+$20/month per eligible sibling.</p><strong>Explore lifetime rates →</strong></Link><Link href="/gift-cards"><span className={styles.eyebrow}>Give a little wonder</span><h2>Gift cards</h2><p>A thoughtful gift for a little explorer<br />and their favorite grown-up.</p><strong>Find a gift card →</strong></Link></section>
 
       <section className={`${styles.partyFeature} ${styles.classFeature}`}>

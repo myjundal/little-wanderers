@@ -31,7 +31,7 @@ export default function HomeFull() {
               </div>
             </div>
             <p className={styles.subtitle}>
-              A calm, dreamy indoor play cafe in West Hartford, CT, designed and crafted for 0-5 year olds, plus a
+              A calm, dreamy indoor play cafe in West Hartford, CT, designed and crafted for 0–6 year olds, plus a
               break in the day and coffee-in-hand moments that feel restorative for parents too.
             </p>
             <p className={styles.subline}>Take a deep breath and a sip of your drink.</p>

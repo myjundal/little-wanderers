@@ -7,7 +7,7 @@ export const metadata = {
     absolute: 'Little Wanderers Play Studio & Cafe | West Hartford, CT',
   },
   description:
-    'Soft opening starts November 11, 2026. Reserve open play at Little Wanderers Play Studio & Cafe in West Hartford, CT for children ages 0–5 and their grown-ups.',
+    'Soft opening starts November 11, 2026. Reserve open play at Little Wanderers Play Studio & Cafe in West Hartford, CT for children ages 0–6 and their grown-ups.',
   keywords: [
     'Little Wanderers West Hartford',
     'Little Wanderers Play Studio',
