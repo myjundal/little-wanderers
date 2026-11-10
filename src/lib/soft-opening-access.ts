@@ -10,8 +10,8 @@ export type SoftOpeningAccess = {
     has_party_booking: boolean;
     founding_member: boolean;
 };
-/** The emailed URL is unlisted. Every customer must sign in; website signups are eligible too. */
-export async function getSoftOpeningAccessForUser(admin: ReturnType<typeof createAdminSupabaseClient>, user: Pick<User, 'id' | 'email'>): Promise<SoftOpeningAccess> {
+/** The emailed URL is unlisted. Email and phone sign-ins are eligible; callers validate the user with Auth. */
+export async function getSoftOpeningAccessForUser(admin: ReturnType<typeof createAdminSupabaseClient>, user: Pick<User, 'id' | 'email' | 'phone'>): Promise<SoftOpeningAccess> {
     const email = normalizeWaitlistEmail(user.email ?? '');
     let onWanderlist = false;
     if (email) {
@@ -20,5 +20,5 @@ export async function getSoftOpeningAccessForUser(admin: ReturnType<typeof creat
             throw new Error(result.error.message);
         onWanderlist = Boolean(result.data?.length);
     }
-    return { allowed: Boolean(user.id && email), email: user.email ?? null, on_wanderlist: onWanderlist, website_signup: !onWanderlist, party_early_access: false, has_party_booking: false, founding_member: false };
+    return { allowed: Boolean(user.id && (email || user.phone)), email: user.email ?? null, on_wanderlist: onWanderlist, website_signup: !onWanderlist, party_early_access: false, has_party_booking: false, founding_member: false };
 }
