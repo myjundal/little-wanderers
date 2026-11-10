@@ -13,7 +13,7 @@ export default function VisitUsPage() {
         <p style={{ lineHeight: 1.7, marginBottom: 16 }}>
           We’re welcoming our first families to Bishop’s Corner in West Hartford, CT. Reserve a soft opening visit and explore our new play studio and cafe at your own pace. Our grand opening date is coming soon.
         </p>
-        <p style={{lineHeight:1.7}}>Soft opening hours: November 11–15, 9am–2pm; November 16–December 31, 9am–5pm (Eastern). Service may be slower while our team learns and finds its rhythm.</p>
+        <p style={{lineHeight:1.7}}>Soft opening: November 11–15, 9am–2pm. Regular opening from November 16: 9am–5pm (Eastern). Service may be slower while our team learns and finds its rhythm.</p>
         <p><Link href="/soft-opening" style={{display:'inline-flex',padding:'12px 20px',borderRadius:999,background:'#9471ae',color:'white',textDecoration:'none',fontSize:13}}>Reserve a soft opening visit →</Link></p>
         <p style={{ marginBottom: 16 }}><strong>Location:</strong> Bishop&apos;s Corner, West Hartford, CT</p>
         <p style={{ lineHeight: 1.7, marginBottom: 16 }}>
