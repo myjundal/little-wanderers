@@ -6,7 +6,8 @@ import { loadModule } from './helpers/class-preregistration-harness.mjs';
 import { loadSquareModules } from './helpers/admission-pos-harness.mjs';
 
 const redirect = loadModule('src/lib/auth-redirect.ts');
-async function login({ next = '/wanderlist-founding', existing = false, mode = 'continue' } = {}) {
+const authRequest = loadModule('src/lib/auth-request.ts', {}, { setTimeout, clearTimeout, AbortController });
+async function login({ next = '/wanderlist-founding', existing = false, mode = 'continue', sendOtp, verifyCode, userLookup, timeoutMs = 15000 } = {}) {
   const hooks = []; const effects = []; let cursor = 0; let tree; let verified = false;
   const authCalls = []; const navigations = []; const requests = [];
   const store = new Map(); const session = { getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) };
@@ -19,10 +20,11 @@ async function login({ next = '/wanderlist-founding', existing = false, mode = '
   };
   const page = loadModule('src/app/(public)/login/page.tsx', {
     react, '@/lib/auth-redirect': redirect, './login.module.css': {},
+    '@/lib/auth-request': { withAuthDeadline: run => authRequest.withAuthDeadline(run, timeoutMs) },
     '@/lib/supabase/browser': { createBrowserSupabaseClient: () => ({ auth: {
-      getUser: async () => ({ data: { user: verified ? { id: existing ? 'existing-user' : 'new-user' } : null } }),
-      signInWithOtp: async input => { authCalls.push(input); return { error: null }; },
-      verifyOtp: async input => { authCalls.push(input); verified = true; return { error: null }; },
+      getUser: async () => userLookup ? userLookup(verified) : ({ data: { user: verified ? { id: existing ? 'existing-user' : 'new-user' } : null } }),
+      signInWithOtp: async input => { authCalls.push(input); return sendOtp ? sendOtp(input) : { error: null }; },
+      verifyOtp: async input => { authCalls.push(input); const result = verifyCode ? await verifyCode(input) : { error: null }; verified = !result.error; return result; },
     } }) },
   }, { React: react, process: { env: { NEXT_PUBLIC_SITE_URL: 'https://thelittlewanderers.com' } }, sessionStorage: session,
     window: { location: { search: `?mode=${mode}&next=${encodeURIComponent(next)}`, origin: 'https://preview.example.test', hostname: 'preview.example.test', replace: url => navigations.push(url) }, localStorage: session, setInterval() {}, clearInterval() {} },
@@ -138,4 +140,77 @@ test('ordinary signup, existing account, and reservation entry all use one email
   await view.click('Email me a login link');
   assert.equal(view.authCalls.length,1,'Repeated sends use the existing email cooldown');
  }
+});
+
+
+test('a stalled SMS send exits Sending, releases the form, and does not claim a code was sent', async () => {
+  let finishSend;
+  const view = await login({ next: '/landing/soft-opening', timeoutMs: 30, sendOtp: () => new Promise(resolve => { finishSend = resolve; }) });
+  await view.click('Use a linked phone number instead');
+  view.input('phone', '(860) 555-0123');
+  const sending = view.click('Text me a code');
+  await view.flush();
+  assert.match(view.html(), /Sending/);
+  assert.equal(view.nodes().find(n => n.type === 'button' && n.props.children === 'Use email instead').props.disabled, true);
+  await sending;
+  assert.match(view.html(), /sign-in service is not responding/);
+  assert.doesNotMatch(view.html(), /Sending|We sent a 4-digit code/);
+  assert.equal(view.nodes().find(n => n.type === 'button' && n.props.children === 'Text me a code').props.disabled, false);
+  finishSend({ error: null });
+  await view.flush();
+  assert.doesNotMatch(view.html(), /Enter the 4-digit code|We sent a 4-digit code/);
+  assert.equal(view.navigations.length, 0);
+});
+
+test('network failures recover both phone and email forms with a useful error', async () => {
+  for (const method of ['phone', 'email']) {
+    const view = await login({ next: '/landing/soft-opening', sendOtp: async () => { throw Error('Failed to fetch'); } });
+    if (method === 'phone') await view.click('Use a linked phone number instead');
+    view.input(method, method === 'phone' ? '(860) 555-0123' : 'parent@example.test');
+    await view.click(method === 'phone' ? 'Text me a code' : 'Email me a login link');
+    assert.match(view.html(), /sign-in service is not responding/);
+    assert.doesNotMatch(view.html(), /Sending|Failed to fetch/);
+    assert.equal(view.navigations.length, 0);
+  }
+});
+
+async function enterSmsCode(view) {
+  await view.click('Use a linked phone number instead');
+  view.input('phone', '(860) 555-0123');
+  await view.click('Text me a code');
+  for (let index = 0; index < 4; index++) {
+    const field = view.nodes().filter(n => n.type === 'input' && n.props.maxLength === 1)[index];
+    field.props.onChange({ target: { value: String(index + 1) } });
+    await view.flush();
+  }
+}
+
+test('a rejected code is not automatically submitted repeatedly; editing it allows a new attempt', async () => {
+  const view = await login({ verifyCode: async () => ({ error: { message: 'Invalid OTP' } }) });
+  await enterSmsCode(view);
+  for (let i = 0; i < 8; i++) await view.flush();
+  assert.equal(view.authCalls.filter(call => call.type === 'sms').length, 1);
+  assert.match(view.html(), /code was not accepted/);
+  assert.doesNotMatch(view.html(), /Checking/);
+  const first = view.nodes().find(n => n.type === 'input' && n.props.maxLength === 1);
+  first.props.onChange({ target: { value: '5' } });
+  await view.flush();
+  assert.equal(view.authCalls.filter(call => call.type === 'sms').length, 2);
+  assert.equal(view.navigations.length, 0);
+});
+
+test('a stalled verification or final user lookup releases Checking without duplicate requests or redirects', async () => {
+  for (const stage of ['verify', 'user']) {
+    const view = await login({ timeoutMs: 5,
+      verifyCode: stage === 'verify' ? () => new Promise(() => {}) : undefined,
+      userLookup: stage === 'user' ? isVerified => isVerified ? new Promise(() => {}) : ({ data: { user: null } }) : undefined,
+    });
+    await enterSmsCode(view);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await view.flush();
+    assert.match(view.html(), /sign-in service is not responding/);
+    assert.doesNotMatch(view.html(), /Checking/);
+    assert.equal(view.authCalls.filter(call => call.type === 'sms').length, 1);
+    assert.equal(view.navigations.length, 0);
+  }
 });
