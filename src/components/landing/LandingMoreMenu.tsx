@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 import { SHOW_CUSTOMER_MEMBERSHIP } from '@/lib/feature-flags';
 import StaffToolNav from '@/components/staff/StaffToolNav';
+import styles from '@/components/staff/operator-navigation.module.css';
 
 export default function LandingMoreMenu() {
   const [open, setOpen] = useState(false);
@@ -13,21 +14,27 @@ export default function LandingMoreMenu() {
 
   return (
     <div style={{ marginBottom: 12, position: 'sticky', top: 8, zIndex: 40 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, background: '#f7f4ef', border: '1px solid #e8dfef', borderRadius: 12, padding: '8px 10px' }}>
+      <header className={styles.operatorHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, background: '#f7f4ef', border: '1px solid #e8dfef', borderRadius: 12, padding: '8px 10px' }}>
         <Link href={canUseOwnerDashboard ? '/staff/dashboard' : isInstructor ? '/teaching' : '/landing'} style={{ fontWeight: 800, color: '#4f3f82', textDecoration: 'none', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
           <Image src="/logo.png" alt="Little Wanderers logo" width={34} height={34} />
           Little Wanderers
         </Link>
+        <div className={styles.headerActions}>
+          {!isLoading && (canUseOwnerDashboard || isInstructor) && <>
+            <Link href={canUseOwnerDashboard ? '/staff/dashboard' : '/teaching'} onClick={() => setOpen(false)}>My dashboard</Link>
+            {canUseOwnerDashboard && <Link href="/staff/admin" onClick={() => setOpen(false)}>Timecard &amp; admin</Link>}
+          </>}
         <button type="button" disabled={isLoading} onClick={() => setOpen((v) => !v)} aria-label="Open more menu" style={{ border: '1px solid #d9c8f7', background: '#fff', borderRadius: 12, padding: '8px 10px', fontSize: 14, fontWeight: 700, color: '#4f3f82' }}>
           ☰ More
         </button>
+        </div>
       </header>
       {open && !isLoading && (
         <section style={{ display: 'grid', gap: 10, border: '1px solid #e3d0fb', borderRadius: 14, background: '#fffdf9', padding: 12 }}>
           {canUseOwnerDashboard ? <StaffToolNav variant="menu" includePersonal={!isKiosk} onNavigate={() => setOpen(false)} /> : <>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href="/">Main Homepage</Link>
           <Link style={{ color: '#4f3f82', fontWeight: 800 }} onClick={() => setOpen(false)} href={isInstructor ? '/teaching' : '/landing'}>
-            {isInstructor ? 'Teaching Classes' : 'My Dashboard'}
+            My dashboard
           </Link>
           </>}
           {isKiosk && <Link onClick={() => setOpen(false)} href="/staff-login">Log out &amp; clock out</Link>}

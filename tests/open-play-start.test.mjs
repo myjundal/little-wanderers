@@ -21,6 +21,7 @@ test('customer and operator calendars both exclude all windows before November 1
    '@/lib/supabase/server':{createServerSupabaseClient:()=>({auth:{getUser:async()=>({data:{user:{id:'family'}}})}})},
    '@/lib/households':{getLatestHouseholdIdForUser:async()=> 'household'},
    '@/lib/soft-opening-family':{readSoftOpeningFamily:async()=>({guardian:null,children:[],memberships:[]})},
+   '@vercel/functions':{}, '@/lib/admin-notifications':{}, '@/lib/logger':{},
    '@/lib/soft-opening-pricing':{},
    '@/lib/soft-opening-access':{getSoftOpeningAccessForUser:async()=>({allowed:true})},
   });

@@ -19,7 +19,7 @@ const button: React.CSSProperties = { padding: '14px 20px', borderRadius: 12, bo
 
 export default function StaffCheckinPage() {
   const { role } = useOperatorAccess();
-  const [view, setView] = useState<'desk' | 'reservations' | 'occupancy'>('desk');
+  const [view, setView] = useState<'desk' | 'reservations'>('desk');
   const [completion, setCompletion] = useState<{ familyName: string; visitors: string[] } | null>(null);
   const completionDialog = useRef<HTMLDialogElement | null>(null);
   const [visits, setVisits] = useState<AdmissionVisit[]>([]);
@@ -85,6 +85,8 @@ export default function StaffCheckinPage() {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Payment verification is pending.');
       await refreshPayments();
+      setDeskRefresh(value => value + 1);
+      setView('desk');
       // Keep the callback until payment is confirmed and the paid view can be refreshed.
       const url = new URL(window.location.href);
       url.searchParams.delete('data');
@@ -103,6 +105,19 @@ export default function StaffCheckinPage() {
     void refreshPayments().catch(error => setMessage(error.message));
     void verifyReturn();
     // Initial load and Square return are handled once; callbacks are idempotent on the server.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const resume = () => {
+      setDeskRefresh(value => value + 1);
+      void refreshPayments().catch(error => setMessage(error.message));
+      void verifyReturn();
+    };
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('focus', resume);
+    return () => { window.removeEventListener('pageshow', resume); window.removeEventListener('focus', resume); };
+    // Refresh saved visits and counts when returning from the Square app.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -126,7 +141,7 @@ export default function StaffCheckinPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedView = params.get('view');
-    if ((requestedView === 'reservations' || requestedView === 'occupancy') && !params.has('data')) setView(requestedView);
+    if (requestedView === 'reservations' && !params.has('data')) setView('reservations');
     let id = params.get('family');
     if (!id && params.has('data')) {
       try { id = window.sessionStorage.getItem('admission-family'); } catch { /* Storage is optional. */ }
@@ -141,7 +156,7 @@ export default function StaffCheckinPage() {
     if (completion && dialog && !dialog.open) dialog.showModal();
   }, [completion]);
 
-  function changeView(next: 'desk' | 'reservations' | 'occupancy') {
+  function changeView(next: 'desk' | 'reservations') {
     setView(next);
     const url = new URL(window.location.href);
     if (next !== 'desk') url.searchParams.set('view', next);
@@ -194,7 +209,7 @@ export default function StaffCheckinPage() {
       setDeskRefresh(value => value + 1);
       setMessage('Check-in complete. Review the family total and continue to Square for payment.');
     } catch (error) { setMessage(`${error instanceof Error ? error.message : 'Unable to check in.'} Any entries already recorded are shown below. Select remaining visitors to retry.`); }
-    finally { if (!refreshed) await refreshPayments().catch(error => setMessage(error.message)); checkinBusy.current = false; setCheckingIn(false); }
+    finally { if (!refreshed) { await refreshPayments().catch(error => setMessage(error.message)); setDeskRefresh(value => value + 1); } checkinBusy.current = false; setCheckingIn(false); }
   }
 
   async function takePayment() {
@@ -228,6 +243,7 @@ export default function StaffCheckinPage() {
       const response=await fetch('/api/admin/admission/pos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'recover',state:pendingSale.id,confirm_no_payment:true})});
       const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Unable to reconcile Square.');
       await refreshPayments();
+      setDeskRefresh(value => value + 1);
       window.history.replaceState({},'',window.location.pathname);
       setNeedsVerification(false);setLaunchUrl('');setRecoveryConfirmed(false);paymentPending.current=false;
       setMessage(result.status==='paid'?'Square payment found and verified — admission is paid. Do not charge again.':'No active or successful payment found after your Square review. You can now prepare a fresh payment.');
@@ -252,15 +268,15 @@ export default function StaffCheckinPage() {
     <StaffToolNav active="checkin" />
     <h1 style={{ color: '#4f3f82', marginBottom: 8 }}>Check-in &amp; occupancy management</h1>
     <nav aria-label="Check-in workspace" style={{ display: 'flex', gap: 10, margin: '16px 0', flexWrap: 'wrap' }}>
-      <button type="button" aria-pressed={view === 'desk'} disabled={locked} onClick={() => changeView('desk')} className={styles.viewButton}>Check-in &amp; payment</button>
-      <button type="button" aria-pressed={view === 'occupancy'} disabled={locked} onClick={() => changeView('occupancy')} className={styles.viewButton}>Occupancy management</button>
+      <button type="button" aria-pressed={view === 'desk'} disabled={locked} onClick={() => changeView('desk')} className={styles.viewButton}>Check-in, payment &amp; occupancy</button>
       <button type="button" aria-pressed={view === 'reservations'} disabled={locked} onClick={() => changeView('reservations')} className={styles.viewButton}>Open Play reservations</button>
+      {view === 'desk' && <a href="#occupancy-management" className={styles.viewButton}>Adjust occupancy ↓</a>}
     </nav>
-    {view === 'occupancy' ? <StaffDashboard view="occupancy" /> : view === 'reservations' ? <section aria-label="Open Play reservation management">
+    {view === 'reservations' ? <section aria-label="Open Play reservation management">
       <h2>Open Play reservations</h2>
       <p>Review bookings and select a family to check in and take payment.</p>
       <OpenPlayReservationsAdmin canManage={role === 'owner' || role === 'admin'} checkedInFamilyIds={[...new Set(visits.map(visit => visit.household_id))]} onCheckIn={id => { changeView('desk'); void openFamily(id); }} onReservationsChange={() => setDeskRefresh(value => value + 1)} />
-    </section> : <>
+    </section> : <div className={styles.workspace}><div className={styles.desk}>
     <p>Find a family or choose today’s Open Play reservation. Select the people who are here, record their visit, then take one family payment in Square.</p>
     <section style={panel}>
       <label htmlFor="family-search" style={{ fontWeight: 700 }}>Search families</label>
@@ -334,7 +350,10 @@ export default function StaffCheckinPage() {
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
       <p><button disabled={busy || checkingIn} onClick={() => void refreshPayments().catch(error => setMessage(error.message))}>Refresh payment status</button></p>
     </section>
-    </>}
+    </div><aside className={styles.occupancy} aria-label="Live occupancy management">
+      <p>Check-ins update occupancy automatically. Use the controls below for departures or other count corrections.</p>
+      <StaffDashboard view="occupancy" refreshKey={deskRefresh} />
+    </aside></div>}
     {completion && <dialog ref={completionDialog} className={styles.completionDialog} aria-labelledby="checkin-complete-title" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setCompletion(null)}>
       <h2 id="checkin-complete-title">Check-in complete</h2>
       <p><strong>{completion.familyName}</strong></p>

@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import ClassCheckIn from '@/components/classes/ClassCheckIn';
 import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
@@ -22,7 +21,7 @@ export default function TeachingPage() {
   }, []);
   useEffect(() => { void load(); }, [load]);
   return <main className={styles.main}>
-    <div className={styles.heading}><div><p>Little Wanderers</p><h1>My teaching classes</h1><p>View your assigned classes and check in confirmed children.</p></div>{canUseOwnerDashboard ? <StaffToolNav includePersonal={!isKiosk} /> : <nav className={styles.links}><Link href="/">Homepage</Link>{!isKiosk && <Link href="/landing">My account</Link>}</nav>}</div>
+    <div className={styles.heading}><div><p>Little Wanderers</p><h1>My teaching classes</h1><p>View your assigned classes and check in confirmed children.</p></div>{canUseOwnerDashboard ? <StaffToolNav includePersonal={!isKiosk} /> : <StaffToolNav audience="instructor" active="dashboard" includePersonal={!isKiosk} />}</div>
     {error && <p role="alert" className={styles.error}>{error} <button onClick={() => void load()}>Retry</button></p>}
     {loading ? <p>Loading your classes…</p> : !items.length ? <section className={styles.card}><h2>No classes assigned yet</h2><p>Your classes appear here when the owner assigns your account.</p></section> : <ClassCheckIn onRefresh={load} sessions={items.map(item => ({ id: item.id, title: item.title, startTime: item.start_time, endTime: item.end_time, status: item.status, scheduleLabel: item.schedule_label, instructorNote: item.instructor_note, registrations: item.registrants.map(reg => ({ id: reg.id, personId: reg.person_id, name: reg.name, age: reg.age, status: reg.status, attendanceStatus: reg.attendance_status })) }))} />}
   </main>;
