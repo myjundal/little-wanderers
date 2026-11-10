@@ -241,9 +241,12 @@ export async function POST(req: Request) {
     // A mail-provider outage must never make a saved reservation appear to fail.
     waitUntil((async () => {
       try {
+        const { data: contact, error: contactError } = await context.admin.from('households')
+          .select('email,phone').eq('id', context.householdId).maybeSingle();
+        if (contactError) logger.warn({ action: 'open_play.notification_contact_lookup_failed', reservationId: reservation.id });
         const notification = await sendOpenPlayReservationNotification({
           reservationId: reservation.id, householdId: context.householdId,
-          guardianName: family.guardianName, email: context.user.email, phone: context.user.phone,
+          guardianName: family.guardianName, email: contact?.email || context.user.email, phone: contact?.phone || context.user.phone,
           children: family.children, startTime: slot.starts_at, endTime: slot.ends_at,
           adultCount, amountCents: amount, paymentChoice: body!.payment_choice!, notes,
         });

@@ -30,7 +30,7 @@ function reservationHarness({ failInsert = false, failEmail = false, denied = fa
   const admin = { from(table) {
     let inserted = false;
     const q = { select() { return q; }, insert(row) { writes.push(row); inserted = true; return q; },
-      async maybeSingle() { return { data: table === 'open_play_reservation_slots' ? slot : inserted && !failInsert ? { id: 'reservation' } : null, error: failInsert && inserted ? { code: '23514', message: 'Full' } : null }; },
+      async maybeSingle() { return { data: table === 'households' ? { phone: 'saved-contact-phone', email: 'contact@example.test' } : table === 'open_play_reservation_slots' ? slot : inserted && !failInsert ? { id: 'reservation' } : null, error: failInsert && inserted ? { code: '23514', message: 'Full' } : null }; },
     };
     for (const method of ['eq', 'gt', 'limit']) q[method] = () => q;
     return q;
@@ -39,7 +39,7 @@ function reservationHarness({ failInsert = false, failEmail = false, denied = fa
     '@vercel/functions': { waitUntil: promise => background.push(promise) },
     'next/server': { NextResponse: { json: Response.json } },
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
-    '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user: denied ? null : { id: 'parent', email: 'parent@example.test' } } }) } }) },
+    '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user: denied ? null : { id: 'parent', email: 'parent@example.test', phone: 'auth-login-phone' } } }) } }) },
     '@/lib/households': { getLatestHouseholdIdForUser: async () => 'family' },
     '@/lib/open-play-reservations': { SOFT_OPENING_START: '2099-11-11', SOFT_OPENING_END: '2100-01-01', isUuid: value => value === slotId, sanitizeReservationCount: value => value, getReservationOccupancy: async () => ({ children: 0, total: 0 }), formatOpenPlayReservationError: value => value, isMissingOpenPlayReservationTable: () => false },
     '@/lib/soft-opening-family': { saveSoftOpeningFamily: async () => ({ childIds: ['child'], memberships: [], guardianName: 'Parent Family', children: [{ name: 'Sam', ageLabel: '3 years' }] }) },
@@ -61,6 +61,8 @@ test('only successful authenticated reservations schedule owner mail; provider f
     assert.equal(h.notifications.length, 1);
     assert.equal(h.notifications[0].paymentChoice, 'now');
     assert.equal(h.notifications[0].guardianName, 'Parent Family');
+    assert.equal(h.notifications[0].phone, 'saved-contact-phone');
+    assert.equal(h.notifications[0].email, 'contact@example.test');
     assert.equal(h.notifications[0].children[0].name, 'Sam');
     assert.equal(h.logs.length, failEmail ? 1 : 0);
   }
