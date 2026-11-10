@@ -91,7 +91,7 @@ export default async function HomeComingSoon() {
           <h1>A little play.<br /><span>A little pause.</span></h1>
           <p className={styles.openingBadge}>Soft opening starts November 11</p>
           <p>A thoughtful indoor play space for curious little ones, and a cozy cafe for their grown-ups. We’re ready for our first little adventures together.</p>
-          <div className={styles.heroActions}><PastelButton href="/soft-opening">Reserve a soft opening visit →</PastelButton><Link href="/pricing">View pricing</Link></div>
+          <div className={styles.heroActions}><PastelButton href="/pricing">View pricing →</PastelButton><Link href="/classes">Explore classes</Link></div>
           <p className={styles.heroFootnote}>Bishop’s Corner, West Hartford · Grand opening coming soon</p>
         </div>
         <div className={styles.right}><PastelCard><div className={styles.heroImageFrame}><Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" /></div></PastelCard><p className={styles.photoCaption}>Room to explore. Space to take a breath.</p></div>
