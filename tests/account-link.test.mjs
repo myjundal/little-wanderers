@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadSquareModules } from './helpers/admission-pos-harness.mjs';
 
-function setup({ populated = ['source-family'], otherRole = 'primary_caregiver', sourceRole = 'primary_caregiver' } = {}) {
+function setup({ populated = ['source-family'], otherRole = 'primary_caregiver', sourceRole = 'primary_caregiver', aliases = [] } = {}) {
   const writes = [];
   const db = { from(table) {
     const filters = {};
     let row;
-    const q = { select() { return q; }, eq(k,v) { filters[k]=v; return q; }, in(){return q;}, maybeSingle() { return q; }, limit() { return q; },
+    const q = { select() { return q; }, eq(k,v) { filters[k]=v; return q; }, in(k,v){filters[k]=v;return q;}, maybeSingle() { return q; }, limit() { return q; },
       upsert(value) { row=value; writes.push({table,row}); return q; },
-      then(resolve) { resolve({ error: null, data: row ? row : table==='household_members' ? {role:filters.user_id==='source-user'?sourceRole:otherRole} : table==='people'&&populated.includes(filters.household_id)?[{id:'child'}]:[] }); },
+      then(resolve) { resolve({ error: null, data: row ? row : table==='household_members' ? {role:filters.user_id==='source-user'?sourceRole:otherRole} : table==='people'&&populated.includes(filters.household_id)?[{id:'child'}]:table==='staff_family_search_aliases'?aliases.filter(a=>Object.entries(filters).every(([k,v])=>Array.isArray(v)?v.includes(a[k]):a[k]===v)):[] }); },
     };return q;
   } };
   const api=loadSquareModules({env:{SUPABASE_SERVICE_ROLE_KEY:'local-test-signing-key'},mocks:{'@/lib/households':{getLatestHouseholdIdForUser:async()=> 'other-family'}}}).load('src/lib/account-link.ts');
@@ -45,4 +45,17 @@ test('phone linking requires verified phone ownership, independently of email an
   await assert.rejects(h.api.linkVerifiedFamilyLogins(h.db,{id:'other-user',phone:'18605550123'},intent));
   assert.equal(h.writes.length,0);
   assert.equal(await h.api.linkVerifiedFamilyLogins(h.db,{id:'other-user',phone:'+18605550123',phone_confirmed_at:'2026-01-01'},intent),'source-family');
+});
+
+
+test('an incoming directory alias blocks changing that household into an alias before any writes',async()=>{
+  const h=setup({populated:['other-family'],aliases:[{alias_household_id:'older-placeholder',canonical_household_id:'source-family'}]});
+  await assert.rejects(h.api.linkVerifiedFamilyLogins(h.db,h.user,h.intent),/confirmed family links/);
+  assert.equal(h.writes.length,0);
+});
+test('incoming aliases on the retained canonical family remain valid when connecting an empty signup',async()=>{
+  const h=setup({populated:['source-family'],aliases:[{alias_household_id:'older-placeholder',canonical_household_id:'source-family'}]});
+  assert.equal(await h.api.linkVerifiedFamilyLogins(h.db,h.user,h.intent),'source-family');
+  assert.equal(h.writes.at(-1).row.alias_household_id,'other-family');
+  assert.equal(h.writes.at(-1).row.canonical_household_id,'source-family');
 });
