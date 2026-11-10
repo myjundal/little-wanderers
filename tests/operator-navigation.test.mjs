@@ -135,3 +135,17 @@ test('administration page exposes only role-appropriate tools', async () => {
     assert.equal(html.includes('href="/staff/campaigns"'), role !== 'staff');
   }
 });
+
+
+test('public page account link also returns operators and instructors to My dashboard', async () => {
+  for (const role of ['owner', 'staff', 'instructor']) {
+    const Header = function Header() {};
+    const Page = loadModule('src/components/Nav.tsx', {
+      '@/components/pastel/PastelPrimitives': { PastelHeader: Header },
+      '@/lib/authz': { getCurrentUserRole: async () => ({ user: { id: 'signed-in' }, role, roles: [role] }), isStaffRole: value => ['owner', 'staff'].includes(value) },
+    }, { React }).default;
+    const result = await Page();
+    assert.equal(result.props.accessLabel, 'My dashboard');
+    assert.equal(result.props.dashboardHref, role === 'instructor' ? '/teaching' : '/staff/dashboard');
+  }
+});
