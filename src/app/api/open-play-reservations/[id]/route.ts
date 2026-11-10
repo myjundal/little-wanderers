@@ -48,6 +48,9 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
     if (!reservation) {
       return NextResponse.json({ ok: false, error: 'reservation not found' }, { status: 404, headers: NO_STORE_HEADERS });
     }
+    if (reservation.payment_choice === 'now' || reservation.payment_status === 'paid') {
+      return NextResponse.json({ok:false,error:'Please contact us to change or cancel a reservation with online checkout so we can review your payment.'},{status:409,headers:NO_STORE_HEADERS});
+    }
     if (reservation.status === 'cancelled') {
       return NextResponse.json({ ok: true, reservation, already_cancelled: true }, { headers: NO_STORE_HEADERS });
     }
@@ -67,6 +70,8 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
       .eq('id', params.id)
       .eq('household_id', householdId)
       .eq('status', 'reserved')
+      .neq('payment_choice', 'now')
+      .neq('payment_status', 'paid')
       .select(OPEN_PLAY_RESERVATION_SELECT)
       .maybeSingle();
 

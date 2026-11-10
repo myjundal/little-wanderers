@@ -9,6 +9,8 @@ type Child = { id: string; first_name: string; last_name: string | null; birthda
 type Data = { children: Child[]; family_revision: string; can_sign: boolean; waiver: WaiverStatusDetails };
 
 export default function WaiverPage() {
+  const [reservation, setReservation] = useState(false);
+  useEffect(() => { setReservation(Boolean(new URLSearchParams(window.location.search).get('reservation'))); }, []);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -49,6 +51,7 @@ export default function WaiverPage() {
 
   return <main className={styles.main}>
     <Link href="/landing">← My dashboard</Link>
+    {reservation && <p>Your visit is reserved. Complete your waiver before arrival. <Link href="/landing/soft-opening">View my reservation</Link></p>}
     <h1>Family waiver</h1>
     <p>A parent or legal guardian must complete this waiver for all participating children before entering Little Wanderers. Valid for 90 days, unless replaced by an updated waiver.</p>
     {error && <div role="alert" className={styles.error}>{error} {!data && <button onClick={() => void load()}>Try again</button>}</div>}

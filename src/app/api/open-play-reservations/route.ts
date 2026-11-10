@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import {
   SOFT_OPENING_START,
+  SOFT_OPENING_END,
   formatOpenPlayReservationError,
   getReservationOccupancy,
   isMissingOpenPlayReservationTable,
@@ -12,6 +13,8 @@ import {
   OPEN_PLAY_SLOT_SELECT,
   sanitizeReservationCount,
 } from '@/lib/open-play-reservations';
+import { readSoftOpeningFamily, saveSoftOpeningFamily, type SoftOpeningPersonInput } from '@/lib/soft-opening-family';
+import { softOpeningAmount } from '@/lib/soft-opening-pricing';
 import { getSoftOpeningAccessForUser } from '@/lib/soft-opening-access';
 
 export const dynamic = 'force-dynamic';
@@ -23,9 +26,13 @@ type ReservationPayload = {
   child_count?: number;
   adult_count?: number;
   notes?: string | null;
+  guardian_first_name?: string;
+  guardian_last_name?: string;
+  children?: SoftOpeningPersonInput[];
+  payment_choice?: string;
 };
 
-const SOFT_OPENING_END = '2026-11-01T00:00:00-04:00';
+
 
 async function getCurrentReservationContext() {
   const server = await createServerSupabaseClient();
@@ -40,7 +47,7 @@ async function getCurrentReservationContext() {
   const admin = createAdminSupabaseClient();
   const access = await getSoftOpeningAccessForUser(admin, user);
   if (!access.allowed) {
-    return { ok: false as const, response: NextResponse.json({ ok: false, allowed: false, error: 'Soft opening reservations are currently reserved for Wanderlist and party early access families.' }, { status: 403, headers: NO_STORE_HEADERS }) };
+    return { ok: false as const, response: NextResponse.json({ ok: false, allowed: false, error: 'Please sign in or create a website account to reserve.' }, { status: 403, headers: NO_STORE_HEADERS }) };
   }
 
   const householdId = await getLatestHouseholdIdForUser(admin, user.id);
@@ -119,7 +126,8 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ ok: true, allowed: true, access: context.access, slots, reservations }, { headers: NO_STORE_HEADERS });
+    const family = await readSoftOpeningFamily(context.admin, context.householdId);
+    return NextResponse.json({ ok: true, allowed: true, access: context.access, slots, reservations, family }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const rawMessage = e instanceof Error ? e.message : 'unknown error';
     const status = isMissingOpenPlayReservationTable(rawMessage) ? 503 : 500;
@@ -138,15 +146,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Choose a soft opening visit time.' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
-    const childCount = sanitizeReservationCount(body?.child_count, 1, 6);
+    const childCount = Array.isArray(body?.children) ? body.children.length : 0;
+    if (childCount < 1 || childCount > 5) return NextResponse.json({ok:false,error:"Choose 1–5 participating children."},{status:400});
+    if (!["counter","now"].includes(body?.payment_choice ?? "")) return NextResponse.json({ok:false,error:"Choose how to pay."},{status:400});
     const adultCount = sanitizeReservationCount(body?.adult_count, 1, 2);
     const notes = typeof body?.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 500) : null;
 
     const { data: existingActive, error: existingActiveError } = await context.admin
       .from('open_play_reservations')
-      .select('id')
+      .select('id,slot:open_play_reservation_slots!inner(ends_at)')
       .eq('household_id', context.householdId)
-      .neq('status', 'cancelled')
+      .eq('status', 'reserved')
+      .gt('slot.ends_at', new Date().toISOString())
       .limit(1)
       .maybeSingle();
 
@@ -187,6 +198,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'This soft opening visit time is full. Please choose another time.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
 
+    let family;
+    try { family = await saveSoftOpeningFamily(context.admin, context.householdId, context.user, body!); }
+    catch (error) { return NextResponse.json({ok:false,error:error instanceof Error ? error.message : 'Complete your family details.'},{status:400}); }
+    const visitDate = new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(slot.starts_at));
+    const amount = softOpeningAmount(family.childIds, family.memberships, visitDate);
+
     const { data: reservation, error: reservationError } = await context.admin
       .from('open_play_reservations')
       .insert({
@@ -195,6 +212,10 @@ export async function POST(req: Request) {
         created_by_user_id: context.user.id,
         contact_email: context.user.email ?? null,
         child_count: childCount,
+        child_ids: family.childIds,
+        amount_cents: amount,
+        payment_choice: amount === 0 ? "membership" : "counter",
+        payment_status: amount === 0 ? "covered" : "due",
         adult_count: adultCount,
         notes,
         status: 'reserved',
@@ -213,7 +234,8 @@ export async function POST(req: Request) {
       throw new Error(reservationError.message);
     }
 
-    return NextResponse.json({ ok: true, reservation }, { headers: NO_STORE_HEADERS });
+    if (!reservation) throw new Error('Unable to save your reservation.');
+    return NextResponse.json({ ok: true, reservation, waiver_url: `/landing/waiver?reservation=${reservation.id}` }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const rawMessage = e instanceof Error ? e.message : 'unknown error';
     const status = isMissingOpenPlayReservationTable(rawMessage) ? 503 : 500;

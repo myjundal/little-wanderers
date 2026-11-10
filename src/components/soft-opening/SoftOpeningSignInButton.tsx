@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 export default function SoftOpeningSignInButton({ children }: { children: ReactNode }) {
   return (
     <Link
-      href="/login"
+      href="/login?next=/landing/soft-opening"
       onClick={() => {
         sessionStorage.setItem('post_login_redirect', '/landing/soft-opening');
       }}

@@ -147,10 +147,10 @@ export async function POST(req: Request) {
     }
 
     if (start.getTime() < new Date(SOFT_OPENING_START).getTime()) {
-      return Response.json({ ok: false, error: 'Open Play reservations begin October 28.' }, { status: 400, headers: NO_STORE_HEADERS });
+      return Response.json({ ok: false, error: 'Open Play reservations begin November 11.' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
-    const capacityChildren = sanitizeReservationCount(body?.capacity_children, 10, 200);
+    const capacityChildren = sanitizeReservationCount(body?.capacity_children, 5, 200);
     const capacityTotal = body?.capacity_total == null ? null : sanitizeReservationCount(body.capacity_total, capacityChildren * 2, 400);
     const notes = typeof body?.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 500) : null;
 
