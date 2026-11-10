@@ -4,6 +4,7 @@ import styles from './reservation-entry.module.css';
 
 export const metadata = {
   title: 'Soft Opening Reservations',
+  robots: { index: false, follow: false },
   description: 'Reserve a Little Wanderers visit. Soft opening starts November 11. Open play for ages 0–6, with flexible arrival windows.',
 };
 

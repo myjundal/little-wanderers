@@ -44,7 +44,6 @@ export function PastelHeader({ isAuthenticated = false, dashboardHref, accessLab
     </nav>
     <div className={styles.headerActions}>
       <Link className={styles.accountLink} href={dashboardHref ?? (isAuthenticated ? '/landing' : '/login')}>{accessLabel ?? (isAuthenticated ? 'My account' : 'Sign in')}</Link>
-      <Link className={styles.reserveButton} href="/soft-opening">Reserve a visit</Link>
     </div>
   </header>;
 }
