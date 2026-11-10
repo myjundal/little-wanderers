@@ -17,6 +17,7 @@ export default function MembershipManagementSummary({ refreshKey = 0 }: { refres
   return <section className={styles.section} aria-label="Membership totals">
     <div className={styles.heading}><h2>Memberships</h2><Link href="/staff/founding-memberships">Membership management →</Link></div>
     {error ? <p role="alert">{error} <button type="button" onClick={() => void load().catch(e => setError(e.message))}>Retry</button></p> : !summary ? <p role="status">Loading membership totals…</p> : <div className={styles.grid}>{(['total', 'waitlist', 'public', 'regular'] as const).map(tier => <article key={tier} className={`${styles.card} ${tier === 'total' ? styles.total : ''}`} aria-label={`${tier === 'total' ? 'Total' : MEMBERSHIP_MANAGEMENT_LABELS[tier]} membership count`}><h3>{tier === 'total' ? 'Total' : MEMBERSHIP_MANAGEMENT_LABELS[tier]}</h3><strong>{summary[tier].memberships}</strong><span>{summary[tier].memberships === 1 ? 'family membership' : 'family memberships'}</span><small>{summary[tier].children} enrolled {summary[tier].children === 1 ? 'child' : 'children'}</small></article>)}</div>}
+    {Boolean(summary?.unverifiedGeneral) && <p role="alert">{summary!.unverifiedGeneral} older membership records need payment environment verification before they can be included in these totals.</p>}
     <p className={styles.note}>Counts families with completed enrollment, including saved cards awaiting a first visit. Drafts and canceled enrollments are excluded.</p>
   </section>;
 }

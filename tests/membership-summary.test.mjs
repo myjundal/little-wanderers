@@ -13,13 +13,13 @@ test('membership totals count enrolled families and their children, preserve tie
   enrollment('wander','waitlist','pending',['a','b']),enrollment('public','public','active',['c']),enrollment('regular','regular','scheduled',['d']),
   ...['draft','saving_card','canceled'].map(s=>enrollment(s,'waitlist',s,['excluded'])),
  ],[],[],'production',now);
- assert.deepEqual(JSON.parse(JSON.stringify(result)),{waitlist:{memberships:1,children:2},public:{memberships:1,children:1},regular:{memberships:1,children:1},total:{memberships:3,children:4}});
+ assert.deepEqual(JSON.parse(JSON.stringify(result)),{waitlist:{memberships:1,children:2},public:{memberships:1,children:1},regular:{memberships:1,children:1},total:{memberships:3,children:4},unverifiedGeneral:0});
 });
 test('legacy General memberships honor expiry and environment and never double-count a family enrolled in the newer system',()=>{
  const result=summarizeMemberships([enrollment('founding','public','pending',['founding-child'])],[
-  {household_id:'founding',renews_at:null},{household_id:'legacy',renews_at:'2026-12-01T00:00:00Z'},
-  {household_id:'legacy',renews_at:null},{household_id:'sandbox',square_environment:'sandbox',renews_at:null},
-  {household_id:'expired',renews_at:'2026-11-10T15:00:00Z'},
+  {square_environment:'production',household_id:'founding',renews_at:null},{square_environment:'production',household_id:'legacy',renews_at:'2026-12-01T00:00:00Z'},
+  {square_environment:'production',household_id:'legacy',renews_at:null},{household_id:'sandbox',square_environment:'sandbox',renews_at:null},
+  {square_environment:'production',household_id:'expired',renews_at:'2026-11-10T15:00:00Z'},
  ],[{id:'l1',household_id:'legacy'},{id:'l2',household_id:'legacy'}],'production',now);
  assert.equal(result.total.memberships,2);assert.equal(result.total.children,3);assert.equal(result.regular.memberships,1);assert.equal(result.regular.children,2);
 });
@@ -50,4 +50,25 @@ test('owner dashboard and hamburger expose Membership management while staff ret
   const Menu=loadModule('src/components/landing/LandingMoreMenu.tsx',{'react':{...React,useState:()=>[true,()=>{}]},'next/link':'a','next/image':'img','@/lib/feature-flags':{},'@/components/staff/StaffToolNav':Nav,'@/lib/use-owner-dashboard-access':{useOperatorAccess:()=>({role,canUseOwnerDashboard:true,isLoading:false,isKiosk:false})}},{React}).default;
   const html=renderToStaticMarkup(React.createElement(Menu));assert.equal(html.includes('Membership management'),role!=='staff');
  }
+});
+
+test('individual General memberships count their family once and only their covered children',()=>{
+ const general=[{household_id:null,person_id:'one',square_environment:'production',renews_at:null},{household_id:null,person_id:'two',square_environment:'production',renews_at:null},{household_id:null,person_id:'adult',square_environment:'production',renews_at:null}];
+ const people=[{id:'one',household_id:'family',role:'child'},{id:'two',household_id:'family',role:'child'},{id:'uncovered',household_id:'family',role:'child'},{id:'adult',household_id:'other',role:'adult'}];
+ const result=summarizeMemberships([],general,people,'production',now);
+ assert.equal(result.total.memberships,2);assert.equal(result.total.children,2);
+ const household=summarizeMemberships([],[...general,{household_id:'family',square_environment:'production',renews_at:null}],people,'production',now);
+ assert.equal(household.total.memberships,2);assert.equal(household.total.children,3);
+});
+test('unclassified legacy records never become production memberships by default',()=>{
+ const rows=[{household_id:'unknown',renews_at:null},{household_id:'sandbox',square_environment:'sandbox',renews_at:null},{household_id:'live',square_environment:'production',renews_at:null}];
+ const result=summarizeMemberships([],rows,[],'production',now);
+ assert.equal(result.total.memberships,1);assert.equal(result.unverifiedGeneral,1);
+});
+test('summary loader resolves person memberships and loads only covered people',async()=>{
+ const calls=[];
+ const admin={from(table){let field,ids,role;const q={select(){return q;},order(){return q;},eq(key,value){if(key==='role')role=value;return q;},in(key,values){field=key;ids=values;return q;},async range(){return {data:table==='memberships'?[{household_id:null,person_id:'covered',renews_at:null,square_environment:'production'}]:[],error:null};},then(resolve){calls.push({table,field,ids,role});return Promise.resolve({data:[{id:'covered',household_id:'family',role:'child'}],error:null}).then(resolve);}};return q;}};
+ const result=await loadMembershipSummary(admin,'production');
+ assert.equal(result.regular.memberships,1);assert.equal(result.regular.children,1);
+ assert.deepEqual(JSON.parse(JSON.stringify(calls)),[{table:'people',field:'id',ids:['covered']}]);
 });

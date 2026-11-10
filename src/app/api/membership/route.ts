@@ -1,3 +1,4 @@
+import { squareEnvironment } from '@/lib/square-client';
 import { onlinePaymentsUnavailable } from '@/lib/online-payment-access';
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -15,7 +16,7 @@ export async function POST() {
   const householdId = await getLatestHouseholdIdForUser(supa, user.id);
   if (!householdId) return NextResponse.redirect('/landing/membership?error=no-household');
 
-  await supa.from('memberships').upsert({ household_id: householdId, renews_at: new Date().toISOString() }, { 
+  await supa.from('memberships').upsert({ household_id: householdId, square_environment: squareEnvironment(), renews_at: new Date().toISOString() }, {
 onConflict: 'household_id' });
 
   return NextResponse.redirect('/landing/membership?success=1');
