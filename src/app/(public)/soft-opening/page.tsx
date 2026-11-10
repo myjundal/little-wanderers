@@ -19,7 +19,7 @@ export default function Page() {
 
       <dl className={styles.facts}>
         <div><dt>Soft opening <span>Nov 11–15</span></dt><dd>9am–2pm</dd></div>
-        <div><dt>Regular opening <span>From Nov 16</span></dt><dd>9am–5pm</dd></div>
+        <div><dt>Tentative Grand &amp; Regular opening</dt><dd>Nov 15</dd></div>
         <div><dt>Open play</dt><dd>$16 first child<br /><span>$10 each additional child</span></dd></div>
       </dl>
       <p className={styles.memberNote}>Founding members play free. <Link href="/pricing">View pricing</Link></p>
@@ -33,7 +33,7 @@ export default function Page() {
           <li>Add any missing family names and child ages when reserving, then complete your waiver.</li>
           <li>Founding admission covers enrolled children; monthly billing starts on your first membership visit.</li>
         </ul>
-        <p>We’re learning too, so service may be slower during soft opening. Thank you for your patience. Grand opening coming soon.</p>
+        <p>We’re learning too, so service may be slower during soft opening. Thank you for your patience.</p>
       </details>
     </main>
   );
