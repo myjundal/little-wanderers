@@ -1,3 +1,4 @@
+import { getWaiverStatus, WAIVER_STATUS_SELECT } from '@/lib/waivers';
 import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
 import { toPartyDateTimeIso } from '@/lib/party-config';
 import {
@@ -83,16 +84,21 @@ export async function GET() {
     if (reservationsRes.error) throw new Error(reservationsRes.error.message);
 
     const householdIds = [...new Set((reservationsRes.data ?? []).map((item) => item.household_id as string).filter(Boolean))];
+    let waiverRows: Array<{ household_id: string; signed_at?: string | null; signed_date?: string | null; waiver_expires_at?: string | null; waiver_version?: string | null; covered_person_ids?: string[] | null }> = [];
+    const childIdsByHousehold = new Map<string, string[]>();
     const peopleByHousehold = new Map<string, string[]>();
     let householdsById = new Map<string, { name: string | null; email: string | null; phone: string | null }>();
 
     if (householdIds.length > 0) {
-      const [householdsRes, peopleRes] = await Promise.all([
+      const [householdsRes, peopleRes, waiversRes] = await Promise.all([
         context.admin.from('households').select('id,name,email,phone').in('id', householdIds),
-        context.admin.from('people').select('household_id,first_name,last_name,role').in('household_id', householdIds).order('created_at', { ascending: true }),
+        context.admin.from('people').select('id,household_id,first_name,last_name,role').in('household_id', householdIds).order('created_at', { ascending: true }),
+        context.admin.from('waivers').select(`household_id,${WAIVER_STATUS_SELECT}`).in('household_id', householdIds),
       ]);
 
       if (householdsRes.error) throw new Error(householdsRes.error.message);
+      if (waiversRes.error) throw new Error('Unable to verify family waivers.');
+      waiverRows = waiversRes.data ?? [];
       if (peopleRes.error) throw new Error(peopleRes.error.message);
 
       householdsById = new Map((householdsRes.data ?? []).map((item) => [item.id as string, {
@@ -103,6 +109,7 @@ export async function GET() {
 
       (peopleRes.data ?? []).forEach((person) => {
         const householdId = person.household_id as string;
+        if (person.role === 'child') childIdsByHousehold.set(householdId, [...(childIdsByHousehold.get(householdId) ?? []), person.id]);
         const name = [person.first_name, person.last_name].filter(Boolean).join(' ').trim();
         if (!name) return;
         const current = peopleByHousehold.get(householdId) ?? [];
@@ -113,8 +120,10 @@ export async function GET() {
 
     const reservations = (reservationsRes.data ?? []).map((reservation) => {
       const household = householdsById.get(reservation.household_id as string) ?? null;
+      const waiver = getWaiverStatus(waiverRows.filter(w => w.household_id === reservation.household_id), new Date(), reservation.child_ids?.length ? reservation.child_ids : childIdsByHousehold.get(reservation.household_id) ?? []);
       return {
         ...reservation,
+        waiver_status: waiver.status, waiver_signed_at: waiver.signedAt, waiver_expires_at: waiver.expiresAt,
         household_name: household?.name ?? null,
         household_email: household?.email ?? null,
         household_phone: household?.phone ?? null,

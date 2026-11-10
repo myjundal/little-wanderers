@@ -1,3 +1,4 @@
+import { completeAccountLink } from '@/lib/complete-account-link';
 import { safeAuthNextPath } from '@/lib/auth-redirect';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       data: { user: existingUser },
     } = await supabase.auth.getUser();
     if (existingUser) {
-      const redirectPath = await getPostAuthRedirectForUser(existingUser, next, {
+      const redirectPath = await completeAccountLink(existingUser) ?? await getPostAuthRedirectForUser(existingUser, next, {
         forceOnboarding: mode === 'new' || type === 'signup',
       });
       response.headers.set('location', getRedirectUrl(request, redirectPath).toString());
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
 
   const forceOnboarding = mode === 'new' || type === 'signup';
   const redirectPath = user
-    ? await getPostAuthRedirectForUser(user, next, { forceOnboarding })
+    ? await completeAccountLink(user) ?? await getPostAuthRedirectForUser(user, next, { forceOnboarding })
     : next;
 
   if (redirectPath === '/onboarding') {

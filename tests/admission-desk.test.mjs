@@ -107,7 +107,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-pos-ui': logic }, {
     React, fetch, AbortController,
     navigator: { userAgent: 'iPad' },
-    window: { addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; }, location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, sessionStorage: { setItem() {}, getItem() { return family.id; } } },
+    window: { addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; }, location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); }, replace(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, sessionStorage: { setItem() {}, getItem() { return family.id; } } },
   }).default;
   const render = () => { cursor = 0; tree = page(); return tree; };
   async function flush() {
@@ -304,14 +304,10 @@ test('dismissing confirmation retains check-ins and the unpaid total; rapid Squa
   assert.equal(other.button('Pay $16.00').props.disabled, false);
 });
 
-test('reservation workspace opens from legacy deep links and selects a family in the same desk', async () => {
+test('legacy calendar deep links open the separate Open Play page', async () => {
   const h = uiHarness({ initialSearch: '?view=reservations', role: 'staff' }); await h.flush();
-  const admin = h.nodes().find(node => node.type === 'reservations-admin');
-  assert.ok(admin); assert.equal(admin.props.canManage, false);
-  admin.props.onCheckIn(family.id); await h.flush();
+  assert.deepEqual(h.navigations, ['/staff/open-play-reservations']);
   assert.ok(!h.nodes().some(node => node.type === 'reservations-admin'));
-  assert.ok(h.text().includes(family.name));
-  assert.ok(h.button('Select everyone remaining'));
 });
 
 

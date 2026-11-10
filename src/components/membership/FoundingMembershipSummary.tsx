@@ -16,6 +16,7 @@ export default function FoundingMembershipSummary() {
     <strong>{MEMBERSHIP_PRICES[tier].label} · {status === 'pending' ? 'Card saved, awaiting first membership visit' : status.replace('_', ' ')}</strong>
     <p style={{ fontSize: 13, lineHeight: 1.8 }}>{status === 'canceled' ? 'Rejoining uses regular $60/month + $20/month per eligible sibling.' : `$${MEMBERSHIP_PRICES[tier].base_cents / 100}/month first child + $${MEMBERSHIP_PRICES[tier].sibling_cents / 100}/month per eligible sibling.`} {['pending', 'saving_card'].includes(status) && 'No payment today. Monthly billing starts on your first membership visit.'}</p>
     {['pending', 'activating', 'scheduled', 'active'].includes(status) && <p><Link href="/landing/soft-opening">Reserve a visit →</Link></p>}
+    <p><Link href="/landing/people">Connect email &amp; phone sign-in</Link></p>
     <Link href="/founding-membership">{status === 'canceled' ? 'View my membership' : 'Manage or cancel my membership'} →</Link>
   </section>;
 }

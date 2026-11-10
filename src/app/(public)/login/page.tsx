@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { safeAuthNextPath } from '@/lib/auth-redirect';
+import { persistBrowserSession } from '@/lib/browser-session';
 import { withAuthDeadline } from '@/lib/auth-request';
 import styles from './login.module.css';
 
@@ -127,6 +128,10 @@ export default function LoginPage() {
     const next = params.get('next');
     const mode = params.get('mode');
     setWanderlistEntry(mode === 'continue' && next === '/wanderlist-founding');
+    const linkMethod = params.get('link');
+    const linkContact = params.get('contact') || '';
+    if (linkMethod === 'phone') { setAuthMethod('phone'); setPhoneInput(linkContact); }
+    if (linkMethod === 'email') { setAuthMethod('email'); setEmailInput(linkContact); }
     const authError = params.get('error');
     if (next && next.startsWith('/') && !next.startsWith('//')) {
       sessionStorage.setItem('post_login_redirect', next);
@@ -140,9 +145,9 @@ export default function LoginPage() {
       const supabase = createBrowserSupabaseClient();
       try {
         const { data } = await withAuthDeadline(() => supabase.auth.getUser());
-        if (data.user) window.location.replace(getSafeNextPath());
-      } catch {
-        // A stalled session check must not block the sign-in form.
+        if (data.user) { await persistBrowserSession(); window.location.replace(`/auth/finish?next=${encodeURIComponent(getSafeNextPath())}`); }
+      } catch (error) {
+        setError(formatAuthError(error instanceof Error ? error.message : 'Unable to save your sign-in session.', 'email'));
       }
     };
 
@@ -283,6 +288,7 @@ export default function LoginPage() {
         return;
       }
 
+      await persistBrowserSession();
       const next = getSafeNextPath();
       sessionStorage.removeItem('post_login_redirect');
       window.location.replace(`/auth/finish?next=${encodeURIComponent(next)}`);

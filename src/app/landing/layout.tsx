@@ -1,3 +1,5 @@
+import { headers } from 'next/headers';
+import { safeAuthNextPath } from '@/lib/auth-redirect';
 import StaffSessionBar from '@/components/staff/StaffSessionBar';
 import StaffQuickNav from '@/components/staff/StaffQuickNav';
 import { ReactNode } from 'react';
@@ -10,6 +12,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) redirect('/login');
+  if (!user) {
+    const next = safeAuthNextPath((await headers()).get('x-lw-next-path'), 'https://thelittlewanderers.com');
+    redirect(`/login?next=${encodeURIComponent(next)}`);
+  }
   return <PastelDashboardShell><LandingMoreMenu /><StaffSessionBar />{children}<StaffQuickNav /></PastelDashboardShell>;
 }

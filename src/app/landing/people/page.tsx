@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
+import AccountLoginLinker from '@/components/family/AccountLoginLinker';
 import NotificationPreferences from '@/components/pwa/NotificationPreferences';
 import { formatBirthdateInput, parseBirthdate } from '@/lib/birthdate';
 import FamilyMemberEditor, { type FamilyPerson as Person } from '@/components/family/FamilyMemberEditor';
@@ -216,6 +217,7 @@ export default function PeoplePage() {
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }}>
       <h1>My Info/People</h1>
       <p style={{ color: '#6d6480' }}>Share access with your family so everyone can manage visits and bookings together.</p>
+      <AccountLoginLinker />
       <section style={{ marginTop: 24, overflow: 'visible' }}>
         <h3 style={{ margin: 0, padding: '0 2px' }}>Family Members</h3>
         {loading ? <p>Loading family members…</p> : people.length === 0 && <p>No one is registered yet.</p>}

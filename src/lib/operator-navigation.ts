@@ -3,6 +3,7 @@ export const operatorLinks = [
   { id: 'admin', href: '/staff/admin', label: 'Timecard & admin' },
   { id: 'home', href: '/', label: 'Main homepage' },
   { id: 'checkin', href: '/staff/checkin', label: 'Check-in & occupancy management' },
+  { id: 'open-play', href: '/staff/open-play-reservations', label: 'Open Play reservations' },
   { id: 'parties', href: '/staff/parties', label: 'Party management' },
   { id: 'families', href: '/staff/families', label: 'Family management' },
   { id: 'classes', href: '/staff/classes', label: 'Class management' },

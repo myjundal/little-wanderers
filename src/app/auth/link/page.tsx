@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
+import { persistBrowserSession } from '@/lib/browser-session';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 
 export default function AuthLinkPage() {
@@ -16,6 +17,7 @@ function AuthLinkContent() {
   if (continuingMembership) loginParams.set('mode', 'continue');
   const loginHref = `/login?${loginParams}`;
   const [opening, setOpening] = useState(false);
+  const [sessionError, setSessionError] = useState('');
 
   useEffect(() => {
     if (hasAuthToken) return;
@@ -35,10 +37,10 @@ function AuthLinkContent() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (session) window.location.replace(`/auth/finish?next=${encodeURIComponent(searchParams.get('next') || '/landing')}`);
+      if (session) { await persistBrowserSession(); window.location.replace(`/auth/finish?next=${encodeURIComponent(searchParams.get('next') || '/landing')}`); }
     };
 
-    void checkSession();
+    void checkSession().catch(() => setSessionError('Your sign-in could not be saved. Enable cookies for this site, then request a fresh login link.'));
   }, [hasAuthToken, searchParams]);
 
   function finishSignIn() {
@@ -56,6 +58,7 @@ function AuthLinkContent() {
         <p style={{ color: '#6d6480', lineHeight: 1.5, marginTop: 0 }}>
           {continuingMembership ? 'Tap once to continue your membership.' : 'Tap once to open My Little Wanderers.'}
         </p>
+        {sessionError && <p role="alert">{sessionError}</p>}
         {hasAuthToken ? (
           <button
             type="button"

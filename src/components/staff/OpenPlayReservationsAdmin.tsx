@@ -32,6 +32,9 @@ type Reservation = {
   household_email: string | null;
   household_phone: string | null;
   people: string[];
+  waiver_status?: string;
+  waiver_signed_at?: string | null;
+  waiver_expires_at?: string | null;
   slot?: Slot | null;
 };
 
@@ -320,7 +323,10 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
       ) : (
         <AvailabilityCalendar
           title="Open Play reservation calendar"
-          subtitle="November–December soft opening windows. Click a pill to inspect the date below."
+          subtitle="Select a date to review its reservations and arrival windows."
+          reservationDays={[...new Set(reservations.filter(r => r.status !== 'cancelled' && r.slot).map(r => easternYmd(r.slot!.starts_at)))]}
+          selectedDay={selectedDate}
+          onDaySelect={date => { setSelectedDate(date); setSelectedSlotId(''); }}
           slots={calendarSlots}
           onSlotSelect={(slot) => {
             setSelectedSlotId(slot.id);
@@ -388,6 +394,7 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
               <span style={{ color: statusColor(reservation.status), fontWeight: 900, textTransform: 'capitalize' }}>{reservation.status.replace('_', ' ')}</span>
             </div>
             {reservation.payment_status && <p style={{margin:'8px 0',fontWeight:700,color:'#51406e'}}>{reservation.payment_status==='paid'?'Paid online — do not collect admission again':reservation.payment_status==='covered'?'Included with membership':`$${((reservation.amount_cents??0)/100).toFixed(2)} · ${reservation.payment_choice==='now'?'Online payment pending — verify before collecting':'Pay at the counter'}`}</p>}
+            <p style={{ margin: '8px 0', fontWeight: 700, color: reservation.waiver_status === 'completed' ? '#2f7a47' : '#8a4b0f' }}>{reservation.waiver_status === 'completed' ? 'Waiver signed' : reservation.waiver_status === 'expired' ? 'Waiver expired — renewal needed' : 'Waiver required'}{reservation.waiver_signed_at ? ` · Signed ${new Date(reservation.waiver_signed_at).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}` : ''}</p>
             {reservation.people.length > 0 && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>People: {reservation.people.join(', ')}</p>}
             {reservation.notes && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Notes: {reservation.notes}</p>}
             {reservation.slot && easternYmd(reservation.slot.starts_at) === easternYmd(new Date().toISOString()) && checkedInFamilyIds.includes(reservation.household_id) && <p style={{ color: '#2f7a47', fontWeight: 700 }}>Admission recorded today</p>}
