@@ -32,7 +32,8 @@ export async function verifyOpenPlayPayment(db: SupabaseClient, r: OpenPlayPayme
     }>(`/v2/orders/${encodeURIComponent(r.square_order_id)}`);
     if (order.id !== r.square_order_id || order.location_id !== cfg.locationId || order.reference_id !== `op_${r.id}`)
         throw new Error('Reservation payment does not match');
-    if (order.state !== 'COMPLETED')
+    // Digital checkout orders can remain OPEN after a completed payment.
+    if (!['OPEN', 'COMPLETED'].includes(order.state ?? '') || order.net_amount_due_money?.amount !== 0 || !(order.tenders ?? []).length)
         return r;
     assertUsd(order.total_money, r.amount_cents);
     assertUsd(order.net_amount_due_money, 0);
@@ -68,7 +69,7 @@ export async function verifyOpenPlayPayment(db: SupabaseClient, r: OpenPlayPayme
         throw new Error('Payment amount does not match');
     return checked(await db.rpc('fulfill_open_play_reservation', { p_id: r.id, p_order: order.id, p_payments: ids, p_amount: total })) as OpenPlayPayment;
 }
-export async function startOpenPlayPayment(db: SupabaseClient, r: OpenPlayPayment, email?: string | null) {
+export async function startOpenPlayPayment(db: SupabaseClient, r: OpenPlayPayment) {
     if (r.status !== 'reserved' || r.amount_cents <= 0 || r.payment_status === 'covered')
         throw new Error('This reservation does not need payment');
     if (r.payment_status === 'paid')
@@ -92,7 +93,6 @@ export async function startOpenPlayPayment(db: SupabaseClient, r: OpenPlayPaymen
     }>('/v2/online-checkout/payment-links', 'POST', {
         idempotency_key: `op-${r.id}`, order: { location_id: cfg.locationId, reference_id: `op_${r.id}`, line_items: [{ name: 'Little Wanderers · Soft opening admission', quantity: '1', base_price_money: { amount: r.amount_cents, currency: 'USD' } }] },
         checkout_options: { redirect_url: `${squareSiteUrl()}/landing/soft-opening?reservation=${r.id}&payment=returned`, ask_for_shipping_address: false, allow_tipping: false, enable_coupon: false, enable_loyalty: false },
-        ...(email ? { pre_populated_data: { buyer_email: email } } : {}),
     });
     const url = assertSquarePaymentUrl(link.url);
     checked(await db.from('open_play_reservations').update({ square_order_id: link.order_id, square_payment_link_id: link.id, payment_url: url }).eq('id', r.id).eq('status', 'reserved').select('id').single());

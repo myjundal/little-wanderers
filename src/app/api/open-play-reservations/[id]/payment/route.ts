@@ -30,7 +30,7 @@ async function handle(req: Request, { params }: {
                 return Response.json({ ok: false, error: 'This visit window is no longer available for online payment. Please contact us.' }, { status: 409 });
         }
         const r = data as OpenPlayPayment;
-        const result = start ? await startOpenPlayPayment(db, r, user.email) : { reservation: await verifyOpenPlayPayment(db, r) };
+        const result = start ? await startOpenPlayPayment(db, r) : { reservation: await verifyOpenPlayPayment(db, r) };
         return Response.json({ ok: true, ...result }, { headers: { 'cache-control': 'no-store' } });
     }
     catch {
