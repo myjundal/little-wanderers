@@ -1,3 +1,6 @@
+import { waitUntil } from '@vercel/functions';
+import { sendOpenPlayReservationNotification } from '@/lib/admin-notifications';
+import { logger } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -235,6 +238,20 @@ export async function POST(req: Request) {
     }
 
     if (!reservation) throw new Error('Unable to save your reservation.');
+    // A mail-provider outage must never make a saved reservation appear to fail.
+    waitUntil((async () => {
+      try {
+        const notification = await sendOpenPlayReservationNotification({
+          reservationId: reservation.id, householdId: context.householdId,
+          guardianName: family.guardianName, email: context.user.email, phone: context.user.phone,
+          children: family.children, startTime: slot.starts_at, endTime: slot.ends_at,
+          adultCount, amountCents: amount, paymentChoice: body!.payment_choice!, notes,
+        });
+        if (!notification.ok) logger.error({ action: 'open_play.owner_notification_failed', reservationId: reservation.id });
+      } catch {
+        logger.error({ action: 'open_play.owner_notification_failed', reservationId: reservation.id });
+      }
+    })());
     return NextResponse.json({ ok: true, reservation, waiver_url: `/landing/waiver?reservation=${reservation.id}` }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const rawMessage = e instanceof Error ? e.message : 'unknown error';

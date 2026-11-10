@@ -338,3 +338,31 @@ export async function sendPartyCancellationNotification(input: {
     idempotencyKey: `party-cancel-owner/${input.bookingId}/${input.requestedAt}`,
   });
 }
+
+export async function sendOpenPlayReservationNotification(input: {
+  reservationId: string; householdId: string; guardianName: string; email?: string | null; phone?: string | null;
+  children: Array<{ name: string; birthdate?: string | null; ageLabel?: string }>;
+  startTime: string; endTime: string; adultCount: number; amountCents: number;
+  paymentChoice: string; notes?: string | null;
+}) {
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').replace(/\/$/, '');
+  const visitTime = formatEasternRange(input.startTime, input.endTime);
+  return sendResendEmail({
+    to: getOwnerNotificationEmail(),
+    subject: `New Open Play reservation: ${visitTime}`,
+    idempotencyKey: `open-play-reservation-owner/${input.reservationId}`,
+    html: renderOperationalNotification({
+      title: 'New Little Wanderers Open Play reservation',
+      rows: [
+        ['Parent/caregiver', input.guardianName], ['Email', input.email], ['Phone', input.phone],
+        ['Arrival window (Eastern)', visitTime], ['Children', input.children.length], ['Adults', input.adultCount],
+        ...input.children.map((child, i): [string, string] => [`Child ${i + 1}`, `${child.name} · ${child.ageLabel || formatAgeFromBirthdate(child.birthdate, new Date(input.startTime)) || 'Age not provided'}`]),
+        ['Admission total', formatPrice(input.amountCents)],
+        ['Payment', input.amountCents === 0 ? 'Covered by membership' : input.paymentChoice === 'now' ? 'Pay now selected — payment pending; check dashboard for latest status' : 'Pay at the counter — payment due'],
+        ['Notes', input.notes], ['Reservation ID', input.reservationId],
+      ],
+      ctaHref: `${siteUrl}/staff/checkin?view=reservations&family=${encodeURIComponent(input.householdId)}`,
+      ctaLabel: 'Open reservation management',
+    }),
+  });
+}

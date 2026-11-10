@@ -13,18 +13,19 @@ const Dashboard = loadModule('src/components/staff/OperatorDashboard.tsx', {
 }, { React }).default;
 const links = html => [...html.matchAll(/href="([^"]+)"[^>]*>([^<]+)</g)].map(match => [match[1], match[2]]);
 const expected = [
+  ['/staff/dashboard', 'My dashboard'], ['/staff/admin', 'Timecard &amp; admin'],
   ['/', 'Main homepage'], ['/staff/checkin', 'Check-in &amp; occupancy management'],
   ['/staff/parties', 'Party management'], ['/staff/families', 'Family management'], ['/staff/classes', 'Class management'],
   ['/landing/party', 'My parties'], ['/landing/classschedule', 'My classes'],
 ];
 
-test('dashboard, hamburger, and quick menus share the same five management links followed by personal bookings', () => {
+test('dashboard, hamburger, and quick menus share the dashboard and administration alongside management links; quick menu stays operational', () => {
   for (const variant of ['dashboard', 'menu', 'quick']) {
     const html = renderToStaticMarkup(React.createElement(Nav, { variant, includePersonal: true, active: 'families' }));
-    assert.deepEqual(links(html), expected);
+    assert.deepEqual(links(html), variant === 'quick' ? expected.slice(0, 7) : expected);
     assert.match(html, /href="\/staff\/families"[^>]+aria-current="page"/);
-    assert.doesNotMatch(html, /href="\/staff\/dashboard"|href="\/staff\/occupancy"/);
-    assert.ok(html.indexOf('My bookings') > html.indexOf('Class management'));
+    assert.doesNotMatch(html, /href="\/staff\/occupancy"/);
+    assert.equal(html.includes('My bookings'), variant !== 'quick');
   }
 });
 
@@ -32,11 +33,12 @@ test('personal owners and staff see personal bookings; shared PIN sessions keep 
   for (const role of ['staff', 'owner', 'admin']) {
     for (const isKiosk of [false, true]) {
       const html = renderToStaticMarkup(React.createElement(Dashboard, { role, roles: [role], isKiosk }));
-      assert.deepEqual(links(html).slice(0, isKiosk ? 5 : 7), expected.slice(0, isKiosk ? 5 : 7));
+      assert.deepEqual(links(html).slice(0, isKiosk ? 7 : 9), expected.slice(0, isKiosk ? 7 : 9));
       assert.equal(html.includes('My parties'), !isKiosk);
       assert.equal(html.includes('My classes'), !isKiosk);
       assert.equal(html.includes('href="/staff/team"'), role !== 'staff');
-      assert.match(html, /<details/);
+      assert.doesNotMatch(html, /<details/);
+      assert.match(html, /Timecard &amp; admin/);
     }
   }
 });
@@ -74,12 +76,12 @@ test('hamburger closes on navigation and includes personal bookings for a person
   const react = { ...React, useState: () => [open, value => { open = value; }] };
   const Menu = loadModule('src/components/landing/LandingMoreMenu.tsx', {
     react, 'next/link': 'a', 'next/image': 'img', '@/lib/feature-flags': {},
-    '@/components/staff/StaffToolNav': Nav,
+    '@/components/staff/StaffToolNav': Nav, '@/components/staff/operator-navigation.module.css': {},
     '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ isLoading: false, canUseOwnerDashboard: true, isKiosk: false }) },
   }, { React: react }).default;
   const tree = Menu();
   const html = renderToStaticMarkup(tree);
-  assert.deepEqual(links(html), expected);
+  assert.deepEqual(links(html).slice(-expected.length), expected);
   const menu = React.Children.toArray(React.Children.toArray(tree.props.children)[1].props.children).find(node => node.type === Nav);
   menu.props.onNavigate();
   assert.equal(open, false);
@@ -95,7 +97,7 @@ test('quick menu handles personal routes, nested family pages, and role visibili
       '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ canUseOwnerDashboard, isKiosk: false }) },
       '@/lib/operator-navigation': navigation, './StaffToolNav': Nav, './operator-navigation.module.css': {},
     }, { React }).default;
-    assert.deepEqual(links(renderToStaticMarkup(React.createElement(Quick))), canUseOwnerDashboard ? expected : []);
+    assert.deepEqual(links(renderToStaticMarkup(React.createElement(Quick))), canUseOwnerDashboard ? expected.slice(0, 7) : []);
   }
 });
 
@@ -103,5 +105,33 @@ test('old Tools and Occupancy URLs redirect into the dashboard and integrated ch
   for (const [source, destination] of [['src/app/staff/page.tsx', '/staff/dashboard'], ['src/app/staff/occupancy/page.tsx', '/staff/checkin?view=occupancy']]) {
     const Page = loadModule(source, { 'next/navigation': { redirect: path => { throw new Error(`redirect:${path}`); } } }).default;
     assert.throws(() => Page(), { message: `redirect:${destination}` });
+  }
+});
+
+
+test('instructors get My dashboard and timecards in quick and tool menus without operator controls', () => {
+  for (const variant of ['tools', 'menu', 'quick']) {
+    const html = renderToStaticMarkup(React.createElement(Nav, { variant, audience: 'instructor' }));
+    assert.deepEqual(links(html), [['/teaching', 'My dashboard'], ['/employee', 'My timecards'], ['/', 'Main homepage']]);
+    assert.doesNotMatch(html, /staff\/checkin|staff\/admin/);
+  }
+  const Quick = loadModule('src/components/staff/StaffQuickNav.tsx', {
+    'next/navigation': { usePathname: () => '/employee' },
+    '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ canUseOwnerDashboard: false, isInstructor: true }) },
+    '@/lib/operator-navigation': navigation, './StaffToolNav': Nav, './operator-navigation.module.css': {},
+  }, { React }).default;
+  assert.match(renderToStaticMarkup(React.createElement(Quick)), /href="\/teaching"[^>]*>My dashboard/);
+});
+
+test('administration page exposes only role-appropriate tools', async () => {
+  for (const role of ['staff', 'owner', 'admin']) {
+    const Page = loadModule('src/app/staff/admin/page.tsx', {
+      'next/link': 'a', '@/components/staff/StaffToolNav': Nav, '@/components/staff/StaffPortal.module.css': {},
+      '@/lib/authz': { getCurrentUserRole: async () => ({ role, roles: [role], isKiosk: false }) },
+    }, { React }).default;
+    const html = renderToStaticMarkup(await Page());
+    assert.match(html, /href="\/employee"/);
+    assert.equal(html.includes('href="/staff/team"'), role !== 'staff');
+    assert.equal(html.includes('href="/staff/campaigns"'), role !== 'staff');
   }
 });

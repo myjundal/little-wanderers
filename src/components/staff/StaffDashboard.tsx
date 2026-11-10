@@ -413,7 +413,7 @@ function prettyNote(note: string | null) {
   );
 }
 
-export default function StaffDashboard({ view = 'overview', canManageClasses = false }: { view?: StaffDashboardView; canManageClasses?: boolean }) {
+export default function StaffDashboard({ view = 'overview', canManageClasses = false, refreshKey = 0 }: { view?: StaffDashboardView; canManageClasses?: boolean; refreshKey?: number }) {
   const [occupancy, setOccupancy] = useState<OccupancyState | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [partyBookings, setPartyBookings] = useState<PartyBookingItem[]>([]);
@@ -563,7 +563,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const mutateOccupancy = async (action: 'increment' | 'decrement' | 'reset', amount = 1, notes?: string) => {
     const res = await fetch('/api/admin/occupancy', {
@@ -931,7 +931,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 12, marginTop: 20 }}>
           {[
             { label: '+2', action: () => mutateOccupancy('increment', 2) },
             { label: '+3', action: () => mutateOccupancy('increment', 3) },
@@ -942,7 +942,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
             <button
               key={item.label}
               onClick={item.action}
-              style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4', minHeight: 62 }}
+              style={{ ...buttonStyle, background: '#f3ebff', color: '#5f3da4', minHeight: 48 }}
             >
               {item.label}
             </button>

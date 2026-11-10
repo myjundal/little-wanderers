@@ -73,5 +73,5 @@ export async function saveSoftOpeningFamily(db: SupabaseClient, householdId: str
             throw new Error('Unable to save your family details. Please try again.');
         ids.push(result.data.id);
     }
-    return { childIds: ids, memberships: family.memberships };
+    return { childIds: ids, memberships: family.memberships, guardianName: `${firstName} ${lastName}`, children: entries.map(e => ({ name: e.name, birthdate: e.birthdate, ageLabel: e.age?.label })) };
 }
