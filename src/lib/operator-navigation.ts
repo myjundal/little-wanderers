@@ -8,12 +8,18 @@ export const operatorLinks = [
   { id: 'classes', href: '/staff/classes', label: 'Class management' },
 ] as const;
 
+export const operatorQuickLinks = [
+  operatorLinks[0],
+  { id: 'checkin', href: '/staff/checkin', label: 'Check-in' },
+] as const;
+
 export const personalBookingLinks = [
   { id: 'my-parties', href: '/landing/party', label: 'My parties' },
   { id: 'my-classes', href: '/landing/classschedule', label: 'My classes' },
 ] as const;
 
 export function activeOperatorLink(pathname: string) {
+  if (pathname === '/landing') return 'dashboard';
   return [...operatorLinks, ...personalBookingLinks].find(link => link.href === '/' ? pathname === '/' : pathname === link.href || pathname.startsWith(`${link.href}/`))?.id;
 }
 

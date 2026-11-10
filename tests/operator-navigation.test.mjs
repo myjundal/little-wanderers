@@ -18,12 +18,13 @@ const expected = [
   ['/staff/parties', 'Party management'], ['/staff/families', 'Family management'], ['/staff/classes', 'Class management'],
   ['/landing/party', 'My parties'], ['/landing/classschedule', 'My classes'],
 ];
+const expectedQuick = [['/staff/dashboard', 'My dashboard'], ['/staff/checkin', 'Check-in']];
 
-test('dashboard, hamburger, and quick menus share the dashboard and administration alongside management links; quick menu stays operational', () => {
+test('dashboard and hamburger keep full menus; quick menu only shows dashboard and check-in', () => {
   for (const variant of ['dashboard', 'menu', 'quick']) {
     const html = renderToStaticMarkup(React.createElement(Nav, { variant, includePersonal: true, active: 'families' }));
-    assert.deepEqual(links(html), variant === 'quick' ? expected.slice(0, 7) : expected);
-    assert.match(html, /href="\/staff\/families"[^>]+aria-current="page"/);
+    assert.deepEqual(links(html), variant === 'quick' ? expectedQuick : expected);
+    if (variant !== 'quick') assert.match(html, /href="\/staff\/families"[^>]+aria-current="page"/);
     assert.doesNotMatch(html, /href="\/staff\/occupancy"/);
     assert.equal(html.includes('My bookings'), variant !== 'quick');
   }
@@ -33,12 +34,12 @@ test('personal owners and staff see personal bookings; shared PIN sessions keep 
   for (const role of ['staff', 'owner', 'admin']) {
     for (const isKiosk of [false, true]) {
       const html = renderToStaticMarkup(React.createElement(Dashboard, { role, roles: [role], isKiosk }));
-      assert.deepEqual(links(html).slice(0, isKiosk ? 7 : 9), expected.slice(0, isKiosk ? 7 : 9));
+      assert.deepEqual(links(html), expected.slice(0, isKiosk ? 7 : 9));
       assert.equal(html.includes('My parties'), !isKiosk);
       assert.equal(html.includes('My classes'), !isKiosk);
-      assert.equal(html.includes('href="/staff/team"'), role !== 'staff');
+      assert.doesNotMatch(html, /href="\/employee"|href="\/staff\/team"|href="\/staff\/campaigns"|<h2/);
       assert.doesNotMatch(html, /<details/);
-      assert.match(html, /Timecard &amp; admin/);
+      assert.equal((html.match(/Timecard &amp; admin/g) ?? []).length, 1);
     }
   }
 });
@@ -81,7 +82,9 @@ test('hamburger closes on navigation and includes personal bookings for a person
   }, { React: react }).default;
   const tree = Menu();
   const html = renderToStaticMarkup(tree);
-  assert.deepEqual(links(html).slice(-expected.length), expected);
+  assert.deepEqual(links(html), expected);
+  const header = React.Children.toArray(tree.props.children)[0];
+  assert.doesNotMatch(renderToStaticMarkup(header), /My dashboard|Timecard &amp; admin/);
   const menu = React.Children.toArray(React.Children.toArray(tree.props.children)[1].props.children).find(node => node.type === Nav);
   menu.props.onNavigate();
   assert.equal(open, false);
@@ -91,13 +94,16 @@ test('quick menu handles personal routes, nested family pages, and role visibili
   assert.equal(navigation.activeOperatorLink('/staff/families/family-id'), 'families');
   assert.equal(navigation.activeOperatorLink('/landing/party'), 'my-parties');
   assert.equal(navigation.activeOperatorLink('/landing/classschedule'), 'my-classes');
+  assert.equal(navigation.activeOperatorLink('/landing'), 'dashboard');
   for (const canUseOwnerDashboard of [false, true]) {
     const Quick = loadModule('src/components/staff/StaffQuickNav.tsx', {
       'next/navigation': { usePathname: () => '/staff/checkin' },
       '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ canUseOwnerDashboard, isKiosk: false }) },
       '@/lib/operator-navigation': navigation, './StaffToolNav': Nav, './operator-navigation.module.css': {},
     }, { React }).default;
-    assert.deepEqual(links(renderToStaticMarkup(React.createElement(Quick))), canUseOwnerDashboard ? expected.slice(0, 7) : []);
+    const html = renderToStaticMarkup(React.createElement(Quick));
+    assert.deepEqual(links(html), canUseOwnerDashboard ? expectedQuick : []);
+    if (canUseOwnerDashboard) assert.match(html, /href="\/staff\/checkin"[^>]+aria-current="page"/);
   }
 });
 
