@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { operatorLinks, personalBookingLinks, instructorLinks } from '@/lib/operator-navigation';
+import { operatorLinks, operatorQuickLinks, personalBookingLinks, instructorLinks } from '@/lib/operator-navigation';
 import styles from './operator-navigation.module.css';
 
 type StaffToolNavProps = {
@@ -20,7 +20,7 @@ export default function StaffToolNav({ active, audience = 'operator', includePer
   ));
 
   return <nav aria-label={variant === 'quick' ? 'Quick menu' : audience === 'instructor' ? 'Instructor menu' : 'Staff and owner menu'} className={`${styles.navigation} ${styles[variant]}`}>
-    <div className={styles.primary}>{links(audience === 'instructor' ? instructorLinks : operatorLinks)}</div>
+    <div className={styles.primary}>{links(audience === 'instructor' ? instructorLinks : variant === 'quick' ? operatorQuickLinks : operatorLinks)}</div>
     {includePersonal && variant !== 'quick' && <div className={styles.personal} aria-label="My bookings">{links(personalBookingLinks)}</div>}
   </nav>;
 }
