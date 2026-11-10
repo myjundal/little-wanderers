@@ -14,14 +14,16 @@ export default function SoftOpeningSignInButton({ children }: { children: ReactN
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 52,
+        minHeight: 50,
+        width: '100%',
+        fontSize: 13,
         padding: '10px 24px',
         borderRadius: 999,
-        background: '#A78BCB',
+        background: '#9471ae',
         color: '#fff',
-        fontWeight: 800,
+        fontWeight: 600,
         textDecoration: 'none',
-        boxShadow: '0 14px 28px rgba(125,103,156,.22)',
+        boxShadow: 'none',
       }}
     >
       {children}

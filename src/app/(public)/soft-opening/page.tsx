@@ -1,5 +1,40 @@
 import Link from 'next/link';
 import SoftOpeningSignInButton from '@/components/soft-opening/SoftOpeningSignInButton';
-import styles from '../public-info.module.css';
-export const metadata = { title: 'Soft Opening Reservations', description: 'Reserve a Little Wanderers soft opening visit starting November 11, 2026. Approximate arrival windows, flexible play, and counter or online payment.' };
-export default function Page() { return <main className={styles.page}><div className={styles.visitHero}><div><span className={styles.eyebrow}>Soft opening · Starts November 11</span><h1>Come wander<br />with us.</h1><p>We’re welcoming our first families to Little Wanderers. Choose an approximate arrival window, then settle in for a little adventure at your own pace.</p><SoftOpeningSignInButton>Sign in / Create account &amp; reserve →</SoftOpeningSignInButton><p className={styles.note}>Wanderlist families and new website members are welcome. Use your existing family email, or create your free account.</p><p><Link href="/pricing">View pricing &amp; membership options →</Link></p></div><aside className={styles.facts}><div><strong>Soft opening · November 11–15</strong><span>9am–2pm · Last arrival window 1–2pm</span></div><div><strong>Regular opening · From November 16</strong><span>9am–5pm · Last arrival window 4–5pm</span></div><div><strong>Soft opening only · 5 children per arrival window</strong><span>All times Eastern. Approximate arrival, flexible departure up to closing.</span></div><div><strong>$16 first child · $10 each additional child</strong><span>Two accompanying adults included. Pay at the counter or pay now online.</span></div><div><strong>Founding members play free</strong><span>Admission included for enrolled children; monthly membership billing begins on your first membership visit.</span></div></aside></div><section className={`${styles.section} ${styles.notice}`}><h2>A little extra patience, a lot of heart.</h2><p>This is our soft opening, and we’re learning too. Service may be slower as our team gets comfortable and finds its rhythm. Thank you for your patience and encouragement.</p><p><strong>Grand opening coming soon.</strong> We’ll share the date once it’s confirmed.</p></section><details className={styles.details}><summary>Before your first visit</summary><p>We’ll collect any missing parent / guardian names and each participating child’s name and age when you reserve. After reserving, complete the family waiver before arrival. Your arrival window is not a one-hour play limit. Aim to arrive within the hour and stay until you’re ready to leave, up to closing.</p></details></main>; }
+import styles from './reservation-entry.module.css';
+
+export const metadata = {
+  title: 'Soft Opening Reservations',
+  description: 'Reserve a Little Wanderers visit. Soft opening starts November 11. Open play for ages 0–6, with flexible arrival windows.',
+};
+
+export default function Page() {
+  return (
+    <main className={styles.page}>
+      <span className={styles.eyebrow}>Open play · Ages 0–6</span>
+      <h1>Come wander.</h1>
+      <p className={styles.intro}>Soft opening starts November 11.</p>
+
+      <SoftOpeningSignInButton>Sign in &amp; reserve →</SoftOpeningSignInButton>
+      <p className={styles.accountNote}>New here? Create your free account at sign-in.</p>
+
+      <dl className={styles.facts}>
+        <div><dt>Soft opening <span>Nov 11–15</span></dt><dd>9am–2pm</dd></div>
+        <div><dt>Regular opening <span>From Nov 16</span></dt><dd>9am–5pm</dd></div>
+        <div><dt>Open play</dt><dd>$16 first child<br /><span>$10 each additional child</span></dd></div>
+      </dl>
+      <p className={styles.memberNote}>Founding members play free. <Link href="/pricing">View pricing</Link></p>
+
+      <details className={styles.details}>
+        <summary>A few visit details</summary>
+        <ul>
+          <li>During soft opening only: 5 children per hourly arrival window. All times Eastern.</li>
+          <li>Aim to arrive within your window; stay until you’re ready to leave, up to closing.</li>
+          <li>Pay online or at the counter. Two accompanying adults included.</li>
+          <li>Add any missing family names and child ages when reserving, then complete your waiver.</li>
+          <li>Founding admission covers enrolled children; monthly billing starts on your first membership visit.</li>
+        </ul>
+        <p>We’re learning too, so service may be slower during soft opening. Thank you for your patience. Grand opening coming soon.</p>
+      </details>
+    </main>
+  );
+}

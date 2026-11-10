@@ -10,8 +10,8 @@ const membershipPath = /^\/(?:wanderlist-founding|general-founding|founding-memb
 
 export default function FoundingHeader({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isMembership = membershipPath.test(pathname) || pathname === '/login';
-  if (!isMembership) return children;
+  const isFocusedEntry = membershipPath.test(pathname) || pathname === '/login' || pathname === '/soft-opening';
+  if (!isFocusedEntry) return children;
   return <header className={styles.checkoutHeader}>
     <Link href="/" className={styles.brand}><Image src="/logo.png" alt="Little Wanderers logo" width={40} height={40} priority /><strong>Little Wanderers</strong></Link>
     <Link href="/contact">Need help?</Link>
