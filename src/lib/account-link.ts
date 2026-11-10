@@ -58,6 +58,8 @@ export async function linkVerifiedFamilyLogins(admin: SupabaseClient, user: User
     if (sourcePopulated && otherPopulated) throw new Error('Both logins have family records. Contact Little Wanderers so we can preserve and connect both histories.');
     canonical = otherPopulated ? other : sourcePopulated ? canonical : [canonical, other].sort()[0];
     placeholder = canonical === other ? intent.household : other;
+    const incoming = await admin.from('staff_family_search_aliases').select('alias_household_id').eq('canonical_household_id', placeholder);
+    if (incoming.error || incoming.data?.length) throw new Error('Other confirmed family links point to this signup household. Contact Little Wanderers to preserve those connections.');
   }
   // Upsert only memberships proven above. No people, waivers, billing records or Auth users are deleted.
   const timestamp = new Date().toISOString();
