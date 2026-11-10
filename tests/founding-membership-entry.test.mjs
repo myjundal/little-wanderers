@@ -175,11 +175,11 @@ test('an invalid phone stays on the parent step before loading Square', async ()
   assert.equal(view.nodes.some(node => node.props.id === 'founding-card'), false);
 });
 
-test('membership header removes navigation distractions only on membership and its login continuation', () => {
+test('compact header removes distractions on membership and every login entry', () => {
   for (const [path, query, compact] of [
     ['/wanderlist-founding', '', true], ['/general-founding', '', true],
     ['/login', 'mode=continue&next=/wanderlist-founding', true],
-    ['/', '', false], ['/party', '', false], ['/login', '', false],
+    ['/', '', false], ['/party', '', false], ['/login', '', true], ['/login', 'next=/landing/soft-opening', true],
   ]) {
     const header = loadModule('src/components/membership/FoundingHeader.tsx', {
       'next/navigation': { usePathname: () => path, useSearchParams: () => new URLSearchParams(query) },

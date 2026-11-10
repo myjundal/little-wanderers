@@ -29,8 +29,8 @@ const faqItems = [
   { q: 'What is Little Wanderers?', a: 'Little Wanderers Play Studio & Cafe is a thoughtfully designed indoor play cafe in West Hartford, CT for children ages 0–5, with gentle, restorative moments for parents.' },
   { q: 'What do you offer?', a: 'We offer unlimited Open Play, small-group classes and programs, birthday parties and private events, and a cafe serving coffee and specialty drinks.' },
   { q: 'Is drop-off permitted for open play?', a: 'No. Little Wanderers is a caregiver-accompanied space, so children must be with a caregiver at all times. For kids-only classes, caregivers should remain onsite outside the classroom.' },
-  { q: 'Are there time limits for open play?', a: 'Open play is unlimited, with no time limits.' },
-  { q: 'Do I need to reserve in advance?', a: 'No. Walk-ins are welcome during regular Open Play hours. Admission is subject to capacity, and there may be a short wait during especially busy times.' },
+  { q: 'Are there time limits for open play?', a: 'Your reservation is an approximate arrival window, not a timed play session. Aim to arrive within the window, then stay until you are ready to leave, up to closing.' },
+  { q: 'Do I need to reserve in advance?', a: <>Please <Link href="/soft-opening">reserve your soft opening visit</Link> before coming. Arrival windows have space for five children, and a signed family waiver is required. Walk-in availability during regular opening hours will depend on capacity.</> },
   { q: 'What happens if Little Wanderers is at capacity?', a: 'To keep the play space comfortable and safe, we limit capacity. If we are full when you arrive, admission may temporarily pause until space becomes available.' },
   { q: 'Can we leave and come back?', a: 'Open Play admission does not include re-entry once you leave for the day.' },
   { q: 'What is your cancellation policy?', a: 'Cancellation and rescheduling policies vary by booking type. Please review the policy shown when registering for a class or booking an event.' },
@@ -41,12 +41,13 @@ const faqItems = [
     a: (
       <>
         Yes! Memberships include unlimited Open Play, up to two accompanying adults per visit, and priority registration
-        for select classes and special events. Visit our <Link href="/membership">Membership page</Link> for pricing and
+        for select classes and special events. Visit our <Link href="/pricing#memberships">Pricing page</Link> for founding and regular membership pricing and
         details.
       </>
     ),
   },
-  { q: 'What are your operating hours?', a: 'We plan to be open year-round: Sunday through Thursday from 9:00 AM to 6:00 PM, and Friday through Saturday from 9:00 AM to 7:00 PM. Hours may be adjusted based on demand.' },
+  { q: 'What are your operating hours?', a: 'Soft opening starts November 11, 2026. November 11–15: 9am–2pm. November 16–December 31: 9am–5pm. All times Eastern; available dates and any closures appear in the reservation calendar. Our grand opening date is coming soon.' },
+  { q: 'Do you offer gift cards?', a: <>Yes! Visit our <Link href="/gift-cards">gift card page</Link> to choose a digital gift card through Square.</> },
   { q: 'How do you keep the space clean?', a: 'We clean and sanitize toys, play materials, and high-touch surfaces throughout the day and as needed.' },
   { q: 'Do we need socks?', a: 'Yes, socks are required for children and adults throughout the play area. Shoes are not permitted. Socks should be removed before entering the sand play area and put back on before returning to the rest of the play space.' },
   { q: 'Can I bring my child who is over 5 years old?', a: 'Children of all ages are welcome. However, our space is thoughtfully designed for younger children, and the experience is best suited for ages 0–5.' },

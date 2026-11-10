@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
-import WaitlistCountCard from '@/components/home/WaitlistCountCard';
-import type { WaitlistDisplayCount } from '@/lib/waitlist-count';
 import styles from './pastel.module.css';
+import PublicMoreMenu from './PublicMoreMenu';
 
 export function PastelButton({
   href,
@@ -33,33 +32,19 @@ export function PastelCard({ children }: { children: ReactNode }) {
   return <div className={styles.card}>{children}</div>;
 }
 
-export function PastelHeader({ isAuthenticated = false, waitlistCount, dashboardHref, accessLabel }: { isAuthenticated?: boolean; waitlistCount?: WaitlistDisplayCount; dashboardHref?: string; accessLabel?: string }) {
-  return (
-    <header className={styles.header}>
-      <Link href="/" className={styles.logoWrap}>
-        <Image src="/logo.png" alt="Little Wanderers logo" width={72} height={72} className={styles.logo} priority />
-        <div className={styles.wordmark}>
-          <strong>Little Wanderers</strong>
-          <span>Play Studio & Cafe</span>
-        </div>
-      </Link>
-
-      <nav className={styles.navOnlyFaq}>
-        <Link href="/party">Party Booking</Link>
-        <Link href="/membership">Membership</Link>
-        <Link href="/classes">Classes</Link>
-        <Link href="/cafe">Cafe</Link>
-        <Link href="/faq">FAQ</Link>
-        <Link href="/visit-us">Find Us</Link>
-        <Link href="/contact">Say Hello</Link>
-      </nav>
-
-      <div className={styles.headerActions}>
-        <PastelButton href={dashboardHref ?? (isAuthenticated ? '/landing' : '/login')} className={styles.accessButton}>
-          <span>{accessLabel ?? 'Join/Login to My Little Wanderers'}</span>
-        </PastelButton>
-        {waitlistCount && <WaitlistCountCard initialCount={waitlistCount} variant="compact" />}
-      </div>
-    </header>
-  );
+export function PastelHeader({ isAuthenticated = false, dashboardHref, accessLabel }: { isAuthenticated?: boolean; dashboardHref?: string; accessLabel?: string }) {
+  return <header className={styles.header}>
+    <Link href="/" className={styles.logoWrap} aria-label="Little Wanderers home">
+      <Image src="/logo.png" alt="" width={52} height={52} className={styles.logo} priority />
+      <div className={styles.wordmark}><strong>Little Wanderers</strong><span>Play Studio &amp; Cafe</span></div>
+    </Link>
+    <nav className={styles.navOnlyFaq} aria-label="Main navigation">
+      <Link href="/pricing">Pricing</Link><Link href="/classes">Classes</Link><Link href="/party">Parties</Link><Link href="/visit-us">Visit us</Link>
+      <PublicMoreMenu />
+    </nav>
+    <div className={styles.headerActions}>
+      <Link className={styles.accountLink} href={dashboardHref ?? (isAuthenticated ? '/landing' : '/login')}>{accessLabel ?? (isAuthenticated ? 'My account' : 'Sign in')}</Link>
+      <Link className={styles.reserveButton} href="/soft-opening">Reserve a visit</Link>
+    </div>
+  </header>;
 }

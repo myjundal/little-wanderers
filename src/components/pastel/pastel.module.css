@@ -1,12 +1,8 @@
-.header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 28px}
-.logoWrap{display:flex;align-items:center;gap:10px;color:#4A4A4A}
-.logo{width:64px;height:auto}
-.wordmark{display:grid;line-height:1.05}
-.wordmark strong{font-family:var(--font-heading);font-size:1.55rem;color:#9E8FBF}
-.wordmark span{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:#8f85a5}
-.navOnlyFaq{display:flex;align-items:center;gap:22px;max-width:100%}
-.navOnlyFaq a{flex:0 0 auto;color:#4A4A4A;font-weight:600;white-space:nowrap}
-.headerActions{display:grid;justify-items:stretch;gap:8px;min-width:340px}
+.header{max-width:1320px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 28px;position:relative;z-index:30}
+.logoWrap{display:flex;align-items:center;gap:10px;color:#514365;flex-shrink:0;text-decoration:none}
+.logo{width:52px;height:52px;object-fit:contain}.wordmark{display:grid;line-height:1.1}.wordmark strong{font-family:var(--font-heading);font-size:1.35rem;color:#806494}.wordmark span{font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;color:#8c7f97;margin-top:5px}
+.navOnlyFaq{display:flex;align-items:center;gap:24px;font-size:13px}.navOnlyFaq a{white-space:nowrap;color:#5b5264;text-decoration:none;font-weight:500}.navOnlyFaq a:hover{color:#8e6aac}.headerActions{display:flex;gap:18px;align-items:center;flex-shrink:0}.accountLink{font-size:12px;color:#746180;white-space:nowrap;text-decoration:none}.reserveButton{padding:12px 18px;border-radius:999px;background:#9471ae;color:#fff;text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap}
+.more{position:relative}.more summary{cursor:pointer;list-style:none;color:#5b5264}.more summary::-webkit-details-marker{display:none}.more summary::after{content:'⌄';margin-left:6px}.more>div{position:absolute;right:0;top:30px;min-width:150px;padding:10px;border:1px solid #e3d8ec;background:#fffdf9;border-radius:14px;box-shadow:0 12px 30px #5a407019;display:grid;gap:4px}.more>div>a{padding:8px 10px;border-radius:8px}.more>div>a:hover{background:#f3edf7}
 .waitlistCluster{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;gap:10px;width:100%}
 .buttonPrimary,.buttonSecondary{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;padding:8px 22px;border-radius:999px;font-weight:600;line-height:1.2;text-align:center;white-space:normal}
 .buttonPrimary small{max-width:280px;font-size:.72rem;font-weight:500;opacity:.95}
@@ -14,6 +10,7 @@
 .buttonSecondary{background:transparent;color:#9E8FBF;border:1px solid #CFC0E2}
 .accessButton{min-height:58px;width:100%;padding:10px 30px;font-size:1.02rem;box-shadow:0 14px 28px rgba(125,103,156,.22)}
 .card{background:#fffdf9;border:1px solid #e8dfef;border-radius:28px;box-shadow:0 14px 30px rgba(158,143,191,.1)}
-@media (max-width:1050px){.header{align-items:flex-start;flex-wrap:wrap}.headerActions{order:3;width:100%;justify-items:stretch}.navOnlyFaq{margin-left:auto}}
-@media (max-width:900px){.header{padding:16px}.wordmark strong{font-size:1.3rem}.wordmark span{font-size:.68rem}.buttonPrimary{width:100%}.buttonSecondary{width:100%}.navOnlyFaq{order:2;width:100%;margin-left:0;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.navOnlyFaq::-webkit-scrollbar{display:none}.waitlistCluster{display:grid;grid-template-columns:minmax(0,1fr) auto}}
-@media (max-width:560px){.header{gap:14px}.logoWrap{width:100%}.navOnlyFaq{justify-content:flex-start;gap:8px}.navOnlyFaq a{padding:8px 11px;border:1px solid #e8dfef;border-radius:999px;background:rgba(255,253,249,.78);font-size:.88rem;box-shadow:0 8px 18px rgba(158,143,191,.08)}.waitlistCluster{grid-template-columns:1fr}.headerActions{min-width:0}.buttonPrimary,.buttonSecondary{min-height:50px}}
+
+@media(max-width:1050px){.header{flex-wrap:wrap;gap:16px}.navOnlyFaq{order:3;width:100%;justify-content:center;border-top:1px solid #e9e0ed;padding-top:14px}.headerActions{margin-left:auto}}
+@media(max-width:600px){.header{padding:16px;gap:14px}.logo{width:40px;height:40px}.wordmark strong{font-size:1.05rem}.wordmark span{font-size:.48rem}.headerActions{gap:10px}.reserveButton{padding:11px 13px;font-size:11px}.accountLink{font-size:11px}.navOnlyFaq{justify-content:space-between;gap:12px;font-size:12px;padding-top:12px}.more>div{top:26px}.buttonPrimary,.buttonSecondary{min-height:48px}.buttonPrimary small{max-width:260px}}
+@media(max-width:390px){.headerActions{gap:8px}.wordmark span{display:none}.logo{width:34px;height:34px}.wordmark strong{font-size:.95rem}.reserveButton{font-size:10px;padding:10px}.accountLink{font-size:10px}.navOnlyFaq{gap:9px;font-size:11px}}

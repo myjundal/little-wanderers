@@ -6,7 +6,7 @@ import { loadModule } from './helpers/class-preregistration-harness.mjs';
 import { loadSquareModules } from './helpers/admission-pos-harness.mjs';
 
 const redirect = loadModule('src/lib/auth-redirect.ts');
-async function login({ next = '/wanderlist-founding', existing = false } = {}) {
+async function login({ next = '/wanderlist-founding', existing = false, mode = 'continue' } = {}) {
   const hooks = []; const effects = []; let cursor = 0; let tree; let verified = false;
   const authCalls = []; const navigations = []; const requests = [];
   const store = new Map(); const session = { getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) };
@@ -18,14 +18,14 @@ async function login({ next = '/wanderlist-founding', existing = false } = {}) {
     useEffect(fn, deps) { memo(() => { effects.push(fn); }, deps); },
   };
   const page = loadModule('src/app/(public)/login/page.tsx', {
-    react, '@/lib/auth-redirect': redirect,
+    react, '@/lib/auth-redirect': redirect, './login.module.css': {},
     '@/lib/supabase/browser': { createBrowserSupabaseClient: () => ({ auth: {
       getUser: async () => ({ data: { user: verified ? { id: existing ? 'existing-user' : 'new-user' } : null } }),
       signInWithOtp: async input => { authCalls.push(input); return { error: null }; },
       verifyOtp: async input => { authCalls.push(input); verified = true; return { error: null }; },
     } }) },
   }, { React: react, process: { env: { NEXT_PUBLIC_SITE_URL: 'https://thelittlewanderers.com' } }, sessionStorage: session,
-    window: { location: { search: `?mode=continue&next=${encodeURIComponent(next)}`, origin: 'https://preview.example.test', hostname: 'preview.example.test', replace: url => navigations.push(url) }, localStorage: session, setInterval() {}, clearInterval() {} },
+    window: { location: { search: `?mode=${mode}&next=${encodeURIComponent(next)}`, origin: 'https://preview.example.test', hostname: 'preview.example.test', replace: url => navigations.push(url) }, localStorage: session, setInterval() {}, clearInterval() {} },
     fetch: async url => { requests.push(url); throw Error('Unified login must not require a signup endpoint.'); },
   }).default;
   const render = () => { cursor = 0; tree = page(); effects.splice(0).forEach(fn => fn()); };
@@ -118,4 +118,24 @@ test('Wanderlist login defaults to email and explains linked-phone eligibility b
   await view.click('Use email instead');
   assert.ok(view.nodes().some(node => node.props.id === 'email'));
   assert.equal(view.authCalls.length, 0);
+});
+
+
+test('ordinary signup, existing account, and reservation entry all use one email continuation', async () => {
+ for (const mode of ['new','existing','continue']) {
+  const view=await login({mode,next:'/landing/soft-opening'});
+  assert.doesNotMatch(view.html(), /Account status|I am new|I already have an account|October 28|early access link/);
+  assert.match(view.html(), /sign in or create your free family account/);
+  view.input('email','Parent@Example.test');
+  await view.click('Email me a login link');
+  assert.equal(view.authCalls.length,1);
+  assert.equal(view.authCalls[0].options.shouldCreateUser,true);
+  const callback=new URL(view.authCalls[0].options.emailRedirectTo);
+  assert.equal(callback.searchParams.get('next'),'/landing/soft-opening');
+  assert.equal(callback.searchParams.get('mode'),'continue');
+  assert.equal(view.requests.length,0);
+  await view.click('Change email');
+  await view.click('Email me a login link');
+  assert.equal(view.authCalls.length,1,'Repeated sends use the existing email cooldown');
+ }
 });
