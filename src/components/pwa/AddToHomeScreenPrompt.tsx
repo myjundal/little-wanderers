@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
@@ -10,11 +11,13 @@ type InstallEvent = Event & {
 const DISMISS_KEY = 'lw_a2hs_prompt_dismissed_v1';
 
 export default function AddToHomeScreenPrompt() {
+  const pathname = usePathname();
+  const showInAccount = /^\/(landing|staff)(\/|$)/.test(pathname);
   const [deferred, setDeferred] = useState<InstallEvent | null>(null);
   const [hidden, setHidden] = useState(true);
 
   useEffect(() => {
-    if (['/party-waiver', '/waiver'].includes(window.location.pathname)) return;
+    if (!showInAccount) return;
     if (window.matchMedia('(display-mode: standalone)').matches) return;
     if (localStorage.getItem(DISMISS_KEY) === '1') return;
 
@@ -26,9 +29,9 @@ export default function AddToHomeScreenPrompt() {
 
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+  }, [showInAccount]);
 
-  if (hidden || !deferred) return null;
+  if (!showInAccount || hidden || !deferred) return null;
 
   return (
     <aside style={{ position: 'fixed', bottom: 16, left: 16, right: 16, zIndex: 1000, borderRadius: 16, padding: 14, background: '#fff8ea', border: '1px solid #f2d9a6', boxShadow: '0 10px 24px rgba(0,0,0,0.12)' }}>

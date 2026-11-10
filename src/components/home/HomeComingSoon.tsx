@@ -1,8 +1,6 @@
 import styles from '@/app/(public)/home.module.css';
 import { CLASS_START_NOTE, CLASS_PRE_REGISTRATION_NOTE, classSizeLabel } from '@/lib/class-config';
-import WaitlistCountCard from '@/components/home/WaitlistCountCard';
 import { PastelButton, PastelCard } from '@/components/pastel/PastelPrimitives';
-import { PARTY_BOOKING_START_LABEL } from '@/lib/party-config';
 import {
   WEEKDAY_COLUMNS,
   buildGeneralWeeklySchedule,
@@ -10,13 +8,11 @@ import {
   timeOnlyLabel,
 } from '@/lib/public-classes';
 import { getPublicClasses } from '@/lib/public-class-data';
-import { getWaitlistCount } from '@/lib/waitlist-count';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://thelittlewanderers.com';
-const ACCOUNT_URL = '/login?mode=new&next=%2Flanding';
 
 const localBusinessJsonLd = {
   '@context': 'https://schema.org',
@@ -83,7 +79,6 @@ async function WeeklyClassPreview() {
 }
 
 export default async function HomeComingSoon() {
-  const waitlistCount = await getWaitlistCount();
   return (
     <main className={styles.page}>
       <script
@@ -92,76 +87,17 @@ export default async function HomeComingSoon() {
       />
       <section className={styles.hero}>
         <div className={styles.left}>
-          <h1>
-            The only indoor
-            <br />
-            play <span className={`${styles.script} ${styles.heroScriptLine}`}>studio + cafe</span>
-            <br />
-            <span className={styles.heroLocationLine}>in West Hartford</span>
-          </h1>
-          <p className={styles.comingSoon}>Opening Soon in November</p>
-          <p>
-            We&apos;re getting ready to open our indoor play studio and cafe for curious 0-5 year olds and their grown-ups
-            in West Hartford, CT. For opening updates and priority reservation access,{' '}
-            <Link href={ACCOUNT_URL} className={styles.inlineLink}>
-              join our Little Wanderers
-            </Link>{' '}
-            and we&apos;ll share our opening date as soon as it&apos;s confirmed!
-          </p>
-          <p>
-            We&apos;re opening in Bishop&apos;s Corner plaza on the Target side, tucked between The Paper Store and Float
-            Forty One, with Marshalls, Chopt, Koma, and more West Hartford neighborhood favorites nearby.
-          </p>
-          <div className={styles.actions}>
-            <div className={styles.waitlistAction}>
-              <PastelButton href={ACCOUNT_URL}>
-                <span>Join/Login to My Little Wanderers</span>
-                <small>Get opening updates and priority booking access from your account</small>
-              </PastelButton>
-              <WaitlistCountCard initialCount={{ displayCount: waitlistCount.displayCount }} />
-            </div>
-            <div className={styles.secondaryActions}>
-              <PastelButton href="https://www.instagram.com/littlewanderers.weha" secondary external>
-                <span>Follow on Instagram</span>
-                <small>Follow along for buildout sneak peeks</small>
-              </PastelButton>
-              <PastelButton href="/visit-us" secondary>
-                <span>Plan your visit</span>
-                <small>Bishop&apos;s Corner, West Hartford, CT</small>
-              </PastelButton>
-            </div>
-          </div>
+          <p className={styles.eyebrow}>West Hartford · Play studio &amp; cafe · Ages 0–5</p>
+          <h1>A little play.<br /><span>A little pause.</span></h1>
+          <p className={styles.openingBadge}>Soft opening starts November 11</p>
+          <p>A thoughtful indoor play space for curious little ones, and a cozy cafe for their grown-ups. We’re ready for our first little adventures together.</p>
+          <div className={styles.heroActions}><PastelButton href="/soft-opening">Reserve a soft opening visit →</PastelButton><Link href="/pricing">View pricing</Link></div>
+          <p className={styles.heroFootnote}>Bishop’s Corner, West Hartford · Grand opening coming soon</p>
         </div>
-
-        <div className={styles.right}>
-          <PastelCard>
-            <div className={styles.heroImageFrame}>
-              <Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" />
-            </div>
-          </PastelCard>
-        </div>
-
-        <span className={styles.starOne}>✦</span>
-        <span className={styles.starTwo}>✦</span>
-        <span className={styles.moon}>☾</span>
+        <div className={styles.right}><PastelCard><div className={styles.heroImageFrame}><Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" /></div></PastelCard><p className={styles.photoCaption}>Room to explore. Space to take a breath.</p></div>
       </section>
-
-      <section className={styles.partyFeature}>
-        <div>
-          <p className={styles.partyEyebrow}>Early access parties</p>
-          <h2>Party holds are open for Wanderlist families</h2>
-          <p>
-            With our buildout and opening timeline in mind, party holds are available for dates starting {PARTY_BOOKING_START_LABEL}. Peek at available Friday afternoon, Saturday, and Sunday slots, then request a hold with no deposit today.
-          </p>
-          <p className={styles.accessNote}>
-            Requesting a party hold requires My Little Wanderers access. Sign up through October 28, 2026 to join the Wanderlist. From October 29, new accounts are regular website signups.
-          </p>
-        </div>
-        <PastelButton href="/party">
-          <span>View party calendar</span>
-          <small>Sign in to request a hold</small>
-        </PastelButton>
-      </section>
+      <section className={styles.openingNote} aria-label="Soft opening details"><div><span className={styles.eyebrow}>Our first chapter</span><h2>A warm welcome, with a little extra grace.</h2><p>During soft opening, service may be a little slower as our team learns and finds its rhythm. Thank you for your patience and encouragement. Our grand opening date is coming soon.</p></div><div className={styles.quickFacts}><p><strong>Nov 11–15</strong><span>9am–2pm</span></p><p><strong>Nov 16–Dec 31</strong><span>9am–5pm</span></p><p><strong>5 children</strong><span>per arrival window</span></p></div></section>
+      <section className={styles.explore} aria-label="Ways to wander"><Link href="/pricing#open-play"><span className={styles.eyebrow}>Drop in, settle in</span><h2>Open play</h2><p>$16 for your first child.<br />$10 for each additional child.</p><strong>See visit pricing →</strong></Link><Link href="/pricing#memberships"><span className={styles.eyebrow}>Make it your little ritual</span><h2>Founding membership</h2><p>$50/month for your first child.<br />+$20/month per eligible sibling.</p><strong>Explore lifetime rates →</strong></Link><Link href="/gift-cards"><span className={styles.eyebrow}>Give a little wonder</span><h2>Gift cards</h2><p>A thoughtful gift for a little explorer<br />and their favorite grown-up.</p><strong>Find a gift card →</strong></Link></section>
 
       <section className={`${styles.partyFeature} ${styles.classFeature}`}>
         <div className={styles.classFeatureCopy}>
@@ -191,14 +127,8 @@ export default async function HomeComingSoon() {
         </div>
       </section>
 
-      <div className={styles.softBand} />
-
-      <section className={styles.values}>
-        <div>🌿 Creative play for little explorers</div>
-        <div>🤍 A gentle pause for parents</div>
-        <div>☕ Cafe with good coffee</div>
-        <div>✨ West Hartford community</div>
-      </section>
+      <section className={styles.partyFeature}><div><p className={styles.partyEyebrow}>Celebrate with us</p><h2>A little party. A big memory.</h2><p>Explore our party spaces, packages, and available dates for your next celebration.</p></div><PastelButton href="/party" secondary>Explore birthday parties →</PastelButton></section>
+      <footer className={styles.homeFooter}><p>Find us in Bishop’s Corner, on the Target side between The Paper Store and Float Forty One.</p><div><Link href="/visit-us">Directions &amp; parking</Link><Link href="/cafe">Our cafe</Link><a href="https://www.instagram.com/littlewanderers.weha" target="_blank" rel="noreferrer">Instagram</a><Link href="/contact">Say hello</Link></div></footer>
     </main>
   );
 }
