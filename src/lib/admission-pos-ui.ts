@@ -29,7 +29,7 @@ export function squarePosCallback(search: string) {
     const data = JSON.parse(raw);
     if (typeof data !== 'object' || !data) return { status: 'error' as const };
     if (data.status !== 'ok' || typeof data.transaction_id !== 'string' || typeof data.state !== 'string') return { status: 'error' as const };
-    return { status: 'ok' as const, transaction_id: data.transaction_id, state: data.state };
+    return { status: 'ok' as const, transaction_id: data.transaction_id, state: data.state.split('.')[0], return_token: data.state.includes('.') ? data.state : undefined };
   } catch { return { status: 'error' as const }; }
 }
 

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import StaffDashboard from '@/components/staff/StaffDashboard';
-import AdmissionVisits from '@/components/staff/AdmissionVisits';
+import { admissionTime, stayLabel, stayMinutes } from '@/lib/admission-stays';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
 import { admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
@@ -38,6 +38,8 @@ export default function StaffCheckinPage() {
   const [busy, setBusy] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState('');
+  const [squareCustomerMessage, setSquareCustomerMessage] = useState('');
+  const [connectingCustomer, setConnectingCustomer] = useState(false);
   const checkoutBusy = useRef(false);
   const [launchUrl, setLaunchUrl] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
@@ -238,6 +240,7 @@ export default function StaffCheckinPage() {
     const request = ++familyRequest.current;
     if (!preserveSelection) { setFamily(null); setPeopleIds([]); }
     setActiveFamily(id);
+    setSquareCustomerMessage('');
     setRecoveryConfirmed(false);
     setDeskError('');
     try {
@@ -253,6 +256,21 @@ export default function StaffCheckinPage() {
       } else if (!new URLSearchParams(window.location.search).has('data')) setMessage(result.items[0].waiver_status === 'completed' ? 'Select only the children and adults who are here today.' : 'Check-in is blocked: a parent or legal guardian must complete the family waiver first.');
       await refreshPayments();
     } catch (error) { if (request === familyRequest.current) setDeskError(error instanceof Error ? error.message : 'Unable to open family.'); }
+  }
+
+  async function connectSquareCustomer() {
+    if (!family || connectingCustomer || locked) return;
+    setConnectingCustomer(true);
+    const id = family.id;
+    const request = familyRequest.current;
+    try {
+      const response = await fetch('/api/admin/families/square', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ household_id: id }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to connect Square customer.');
+      if (request !== familyRequest.current) return;
+      setSquareCustomerMessage(`${result.created ? 'Created' : 'Connected'} Square customer: ${result.name || family.name}. In Square, choose Add customer and search ${result.email || result.phone || result.name}. Attach snack and drink purchases to this customer. New profiles may take a minute to appear.`);
+    } catch (error) { if (request === familyRequest.current) setSquareCustomerMessage(error instanceof Error ? error.message : 'Unable to connect Square customer.'); }
+    finally { setConnectingCustomer(false); }
   }
 
   async function checkInFamily() {
@@ -358,7 +376,6 @@ export default function StaffCheckinPage() {
     : !peopleIds.length ? 'Select the children and adults who are visiting.' : '';
   const familyVisits = visits.filter(visit => visit.household_id === activeFamily);
   const notCheckedIn = family?.people.filter(person => !familyVisits.some(visit => visit.person_id === person.id)) ?? [];
-  const waitingFamilies = families.filter(item => !visits.some(visit => visit.household_id === item.id));
 
   return <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
     <StaffToolNav active="checkin" />
@@ -370,24 +387,29 @@ export default function StaffCheckinPage() {
       <label htmlFor="family-search" style={{ fontWeight: 700 }}>Search families</label>
       <input id="family-search" type="search" value={query} disabled={locked} onChange={event => setQuery(event.target.value)} placeholder="Parent or child name, email, or phone" style={{ display: 'block', boxSizing: 'border-box', width: '100%', padding: 16, marginTop: 8, border: '1px solid #d9c8f7', borderRadius: 12, fontSize: 17 }} />
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <h2>{query.trim() ? 'Search results' : 'Today’s Open Play reservations'}</h2>
+        <h2>{query.trim() ? 'Search results' : 'Today’s reservations & visitors'}</h2>
         <button disabled={locked} onClick={() => { setQuery(''); setDeskRefresh(value => value + 1); void refreshPayments().catch(error => setMessage(error.message)); }}>Show / refresh today</button>
         <Link href="/staff/families/new">+ New family</Link>
       </div>
       {deskError && <p role="alert">{deskError}</p>}
       {deskLoading ? <p role="status">Loading families…</p> : <>
         {truncated && <p>Many matches found. Enter a more specific name or email to narrow the list.</p>}
-        {!waitingFamilies.length && !deskError && <p>{families.length ? 'Families who have visited today are in the checked-in / checked-out lists below.' : query.trim() ? 'No families found. Try another name, email, or phone.' : 'No Open Play reservations today. Search by name to check in a walk-in.'}</p>}
+        {!families.length && !deskError && <p>{query.trim() ? 'No families found. Try another name, email, or phone.' : 'No reservations or visitors today. Search by name to check in a walk-in.'}</p>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 12, maxHeight: 440, overflowY: 'auto' }}>
-          {waitingFamilies.map(item => {
-            return <article key={item.id} style={{ border: `2px solid ${activeFamily === item.id ? '#8a61b9' : '#eee5f8'}`, borderRadius: 12, padding: 16 }}>
+          {families.map(item => {
+            const todayVisits = visits.filter(visit => visit.household_id === item.id);
+            const present = todayVisits.filter(visit => !visit.checked_out_at);
+            const departed = todayVisits.length > 0 && !present.length;
+            return <article key={item.id} className={present.length ? styles.checkedIn : departed ? styles.checkedOut : styles.waiting} style={{ border: `2px solid ${activeFamily === item.id ? '#8a61b9' : present.length ? '#6c9c7d' : '#eee5f8'}`, borderRadius: 12, padding: 16 }}>
               <h3 style={{ margin: 0 }}>{item.name || personName(item.people.find(person => person.role === 'adult') || item.people[0] || { id: '', first_name: 'Family', last_name: null, role: '', birthdate: null })}</h3>
               <p>{item.people.map(personName).join(', ') || 'No family members added'}</p>
               <p style={{ overflowWrap: 'anywhere' }}>{[item.email, item.phone].filter(Boolean).join(' · ')}</p>
               {item.reservations.map(reservation => <p key={reservation.id} style={{ color: '#222' }}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults</p>)}
               {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
-              <p>Not checked in · {item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
-              <button style={{ ...button, width: '100%' }} disabled={locked} onClick={() => void openFamily(item.id)}>Choose family</button>
+              <p><strong>{present.length ? `Checked in · ${present.length} guests here` : departed ? 'Checked out' : 'Not checked in'}</strong> · {item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
+              {todayVisits.map(visit => <p key={visit.id}>{visit.name}{visit.checked_in_at && <> · In {admissionTime(visit.checked_in_at)}{visit.checked_out_at && <> · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</>}</p>)}
+              {present.length > 0 && <button className={styles.checkoutButton} disabled={locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Recording departure…' : `Check out family (${present.length})`}</button>}
+              <button style={{ ...button, width: '100%' }} disabled={locked} onClick={() => void openFamily(item.id)}>{todayVisits.length ? 'Open family / payment' : 'Choose family'}</button>
             </article>;
           })}
         </div>
@@ -396,12 +418,11 @@ export default function StaffCheckinPage() {
     <section style={panel} aria-live="polite"><strong>{message}</strong>
       {needsVerification && <p><button style={button} disabled={busy} onClick={() => void verifyReturn()}>Retry payment verification</button></p>}
     </section>
-    <AdmissionVisits visits={visits} ready={paymentsReady} locked={locked || loading} checkingOut={checkingOut}
-      onCheckout={(id, ids) => void checkOutFamily(id, ids)} onOpenFamily={id => void openFamily(id)}
-      onRefresh={() => void refreshPayments().catch(error => setMessage(error.message))} />
     {family && <section style={panel} aria-label="Visiting family members">
       <h2>{family.name || 'Selected family'}</h2>
       <p><Link href={`/staff/families/${family.id}`}>Open family details / edit people</Link> · <Link href="/waiver" target="_blank">Family waiver</Link></p>
+      <p><button disabled={locked || connectingCustomer} onClick={() => void connectSquareCustomer()}>{connectingCustomer ? 'Connecting Square customer…' : 'Connect Square customer for purchases'}</button></p>
+      {squareCustomerMessage && <p role="status">{squareCustomerMessage}</p>}
       <p>Select everyone arriving now, including adults. Reserved headcounts are a reference; only selected people are checked in.</p>
       <button disabled={entriesLocked} onClick={() => setPeopleIds(peopleIds.length === notCheckedIn.length ? [] : notCheckedIn.map(person => person.id))}>{peopleIds.length && peopleIds.length === notCheckedIn.length ? 'Clear selection' : 'Select everyone remaining'}</button>
       <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>

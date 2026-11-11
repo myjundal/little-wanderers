@@ -12,6 +12,8 @@ import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { syncFoundingSubscription } from '@/lib/founding-square';
 import { waitUntil } from '@vercel/functions';
 import { sendDueMembershipNotifications } from '@/lib/membership-notifications';
+import { verifyAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
+import { squareRequest, type SquareOrder } from '@/lib/square-client';
 
 const SUPA = () =>
   createClient(
@@ -42,6 +44,29 @@ export async function POST(req: NextRequest) {
   }
 
   const eventType = payload?.type ?? '';
+  // The installed staff app can be suspended while Square returns to Safari.
+  // Settle the admission on the server independently of either browser session.
+  // Run before event logging so failed verification remains retryable by Square.
+  const posPayment = payload?.data?.object?.payment;
+  if (['payment.created', 'payment.updated'].includes(eventType) && posPayment?.status === 'COMPLETED' && posPayment.order_id) {
+    try {
+      let reference = typeof posPayment.note === 'string' ? posPayment.note : '';
+      if (!reference.startsWith('LW admission ')) {
+        const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(posPayment.order_id)}`);
+        reference = order.line_items?.find(item => item.note?.startsWith('LW admission '))?.note ?? '';
+      }
+      const match = /^LW admission ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(reference);
+      if (match) {
+        const { data: sale, error } = await supa.from('admission_pos_sales').select('*')
+          .eq('id', match[1]).eq('environment', squareEnvironment()).maybeSingle();
+        if (error) throw error;
+        if (sale) {
+          await verifyAdmissionPos(supa, sale as PosSale, posPayment.order_id);
+          return new Response('Admission payment verified', { status: 200 });
+        }
+      }
+    } catch { return new Response('Admission receipt verification pending', { status: 503 }); }
+  }
   if (['payment.created', 'payment.updated', 'invoice.payment_made'].includes(eventType)) {
     const eventOrder = payload?.data?.object?.payment?.order_id ?? payload?.data?.object?.invoice?.order_id;
     if (eventOrder) {

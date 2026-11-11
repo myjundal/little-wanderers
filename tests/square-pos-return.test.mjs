@@ -16,7 +16,7 @@ test('pending launch restoration rejects malformed, expired and unbounded local 
   assert.equal(ui.readPendingAdmissionPos(JSON.stringify(valid), 86402000), null);
 });
 
-function bridgeHarness({ staff = true, status = 'ok', receipt = 'paid' } = {}) {
+function bridgeHarness({ staff = true, status = 'ok', receipt = 'paid', state = sale } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [];
   let cursor = 0, tree;
   const react = { ...React,
@@ -29,7 +29,7 @@ function bridgeHarness({ staff = true, status = 'ok', receipt = 'paid' } = {}) {
   };
   const Page = loadModule('src/app/square-pos-return/page.tsx', { react, '@/lib/admission-pos-ui': ui }, {
     React, fetch, AbortController,
-    window: { location: { origin: 'https://example.test', search: '?data=' + encodeURIComponent(JSON.stringify({ status, state: sale, transaction_id: 'receipt' })), replace(url) { navigations.push(url); } } },
+    window: { location: { origin: 'https://example.test', search: '?data=' + encodeURIComponent(JSON.stringify({ status, state, transaction_id: 'receipt' })), replace(url) { navigations.push(url); } } },
   }).default;
   const text = node => Array.isArray(node) ? node.map(text).join('') : node == null || typeof node === 'boolean' ? '' : typeof node === 'object' ? text(node.props?.children) : String(node);
   return { requests, navigations, text: () => text(tree), async flush() { for (let i = 0; i < 6; i++) { cursor = 0; tree = Page(); for (const effect of effects.splice(0)) effect(); await new Promise(resolve => setImmediate(resolve)); } } };
@@ -49,6 +49,16 @@ test('a Home Screen-only session gets app-return guidance without a customer-log
   assert.equal(h.navigations.length, 0);
   assert.ok(h.text().includes('Home Screen icon'));
   assert.ok(!h.text().includes('Payment verified'));
+});
+
+test('a signed Home Screen return saves its verified receipt without sharing staff login or family details', async () => {
+  const state = `${sale}.1900000000.signature`;
+  const h = bridgeHarness({ staff: false, state }); await h.flush();
+  assert.equal(h.requests[1].url, '/api/square/pos-return');
+  assert.deepEqual(h.requests[1].body, { state, transaction_id: 'receipt' });
+  assert.ok(h.text().includes('Square payment confirmed and saved'));
+  assert.equal(h.navigations.length, 0);
+  assert.ok(!h.requests.some(request => request.url.startsWith('/api/admin/')));
 });
 
 test('pending verification remains reviewable and cancellation never marks a receipt paid', async () => {

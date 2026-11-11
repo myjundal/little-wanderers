@@ -21,7 +21,14 @@ export default function SquarePosReturnPage() {
         if (!authResponse.ok || !access.ok) throw new Error('Unable to check the staff session. Please retry.');
         if (!access.is_staff) {
           setNeedsApp(true);
-          setMessage('Reopen your Little Wanderers staff app from its Home Screen icon. It will check Square and refresh this payment automatically.');
+          if (callback.status === 'ok' && callback.return_token) {
+            setMessage('Checking the Square receipt…');
+            const response = await fetch('/api/square/pos-return', { method: 'POST', headers: { 'content-type': 'application/json' },
+              signal: controller.signal, body: JSON.stringify({ state: callback.return_token, transaction_id: callback.transaction_id }) });
+            const result = await response.json();
+            if (!response.ok || !result.ok || result.status !== 'paid') throw new Error('Payment verification is pending. Reopen your staff app to retry; do not charge again.');
+            setMessage('Square payment confirmed and saved. Reopen your Little Wanderers staff app from its Home Screen icon — the admission status will refresh automatically.');
+          } else setMessage('Reopen your Little Wanderers staff app from its Home Screen icon. It will check Square and refresh this payment automatically.');
           return;
         }
         const target = new URL('/staff/checkin', window.location.origin);

@@ -11,7 +11,7 @@ const people = [{ id: 'child', household_id: family.id, first_name: 'Sam', last_
 const deskFamily = { ...family, people, waiver_status: 'completed', reservations: [] };
 const booking = { id: 'booking', household_id: family.id, status: 'reserved', child_count: 1, adult_count: 1, slot: [{ label: 'Open Play', starts_at: '2026-10-29T14:00:00Z', ends_at: '2026-10-29T16:00:00Z' }] };
 
-function apiHarness({ allowed = true, failTable = '', many = false, aliases = [], householdRows = [family], peopleRows = people, reservationRows = [booking] } = {}) {
+function apiHarness({ allowed = true, failTable = '', many = false, aliases = [], householdRows = [family], peopleRows = people, reservationRows = [booking], arrivalRows = [] } = {}) {
   const calls = [];
   const admin = { from(table) {
     const filters = [];
@@ -20,7 +20,7 @@ function apiHarness({ allowed = true, failTable = '', many = false, aliases = []
       select(value) { fields = value; return q; },
       then(resolve) {
         calls.push({ table, fields, filters });
-        let data = table === 'staff_family_search_aliases' ? aliases : table === 'households' ? householdRows : table === 'people' ? peopleRows : table === 'waivers' ? [] : reservationRows;
+        let data = table === 'staff_family_search_aliases' ? aliases : table === 'households' ? householdRows : table === 'people' ? peopleRows : table === 'checkins' ? arrivalRows : table === 'waivers' ? [] : reservationRows;
         for (const [op, key, values] of filters) if (op === 'in') data = data.filter(row => values.includes(row[key]));
         for (const [op, key, value] of filters) if (op === 'neq') data = data.filter(row => row[key] !== value);
         if (many && table === 'households' && fields === 'id') data = Array.from({ length: 101 }, () => family);
@@ -54,6 +54,22 @@ test('today list uses Eastern midnight boundaries, excludes cancelled bookings a
   assert.equal(new Date(end).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), tomorrow);
   assert.equal(data.items[0].reservations[0].slot.label, 'Open Play');
   assert.equal(data.items[0].people.length, 2);
+});
+
+test('today list also includes walk-in families without a reservation and a search keeps them in the same results', async () => {
+  const h = apiHarness({ reservationRows: [], arrivalRows: [{ person: { household_id: family.id } }] });
+  assert.equal((await (await h.get()).json()).items[0].id, family.id);
+  assert.equal((await (await h.get('?q=Sam')).json()).items[0].id, family.id);
+  assert.equal((await (await h.get()).json()).items[0].reservations.length, 0);
+});
+
+test('empty signup placeholders sharing a populated family contact do not duplicate search cards, and remain directly accessible', async () => {
+  const placeholder = { ...family, id: '10000000-0000-4000-8000-000000000002', name: 'My Household' };
+  const h = apiHarness({ householdRows: [family, placeholder] });
+  assert.equal((await (await h.get('?q=parent@example.test')).json()).items.length, 1);
+  assert.equal((await (await h.get(`?family=${placeholder.id}`)).json()).items[0].id, placeholder.id);
+  const populated = apiHarness({ householdRows: [family, placeholder], peopleRows: [...people, { ...people[1], household_id: placeholder.id }] });
+  assert.equal((await (await populated.get('?q=parent@example.test')).json()).items.length, 2);
 });
 
 test('search looks up people in database, supports full child/parent names, and does not restrict to recent families', async () => {
@@ -147,7 +163,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     return Response.json(snapshot);
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
-  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-pos-ui': logic }, {
+  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-pos-ui': logic }, {
     React, fetch, AbortController,
     document: { visibilityState: 'visible', addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; } },
     navigator: { userAgent: 'iPad' },
@@ -214,7 +230,7 @@ test('name-based UI checks in selected visitors manually, skips covered charges 
   assert.deepEqual(entries.map(request => request.body), [{ person_id: 'child', source: 'staff_manual' }, { person_id: 'parent', source: 'staff_manual' }]);
   assert.ok(h.text().includes('Total due: $16.00'));
   assert.equal(h.nodes().find(node => node.props?.id === 'family-search').props.value, '');
-  assert.ok(h.text().includes('Today’s Open Play reservations'));
+  assert.ok(h.text().includes('Today’s reservations & visitors'));
   assert.ok(h.requests.some(request => request.url === '/api/admin/admission/desk?q='));
   assert.equal(h.nodes().filter(node => node.type === 'input' && node.props.type === 'checkbox' && node.props.disabled).length, 2);
   assert.ok(h.nodes().some(node => node.type === 'dialog'));
@@ -396,20 +412,22 @@ test('Square return keeps occupancy available, refreshes its count and never rec
   }
 });
 
-test('successful check-in moves the family out of waiting results and checkout retains its unpaid balance', async () => {
+test('checked-in families stay in the same results with checkout and retain their unpaid balance', async () => {
   const h = uiHarness(); await choose(h);
   h.button('Select everyone remaining').props.onClick(); await h.flush();
   await h.button('Check in 2').props.onClick(); await h.flush();
   await h.button('Back to desk').props.onClick(); await h.flush();
   assert.equal(h.button('Choose family'), undefined);
-  let panel = h.nodes().find(node => node.type === 'admission-visits');
-  assert.equal(panel.props.visits.length, 2);
-  const checkout = panel.props.onCheckout;
-  checkout(family.id, ['visit-child', 'visit-parent']);
-  checkout(family.id, ['visit-child', 'visit-parent']);
+  assert.ok(h.button('Open family / payment'));
+  assert.ok(h.text().includes('Checked in · 2 guests here'));
+  assert.ok(!h.nodes().some(node => node.type === 'admission-visits'));
+  const checkout = h.button('Check out family (2)').props.onClick;
+  checkout();
+  checkout();
   await h.flush();
-  panel = h.nodes().find(node => node.type === 'admission-visits');
-  assert.ok(panel.props.visits.every(visit => visit.checked_out_at));
+  assert.ok(h.visits().every(visit => visit.checked_out_at));
+  assert.ok(h.text().includes('Checked out'));
+  assert.equal(h.button('Check out family'), undefined);
   assert.ok(h.text().includes('Total due: $16.00'));
   assert.equal(h.requests.filter(request => request.url === '/api/admin/admission/checkout').length, 1);
   assert.equal(h.requests.filter(request => request.url === '/api/checkin').length, 2);
@@ -421,9 +439,9 @@ test('failed checkout keeps the active visitors and displays an actionable error
   h.button('Select everyone remaining').props.onClick(); await h.flush();
   await h.button('Check in 2').props.onClick(); await h.flush();
   await h.button('Back to desk').props.onClick(); await h.flush();
-  h.nodes().find(node => node.type === 'admission-visits').props.onCheckout(family.id, ['visit-child', 'visit-parent']);
+  h.button('Check out family (2)').props.onClick();
   await h.flush();
-  assert.ok(h.nodes().find(node => node.type === 'admission-visits').props.visits.every(visit => !visit.checked_out_at));
+  assert.ok(h.visits().every(visit => !visit.checked_out_at));
   assert.ok(h.text().includes('Unable to record checkout'));
 });
 
@@ -451,7 +469,7 @@ test('pending receipt is retried and an older read cannot restore the unpaid sta
   h.visible(); await h.flush();
   assert.ok(!h.text().includes('Payment verified'));
   h.holdNextRead();
-  h.nodes().find(node => node.type === 'admission-visits').props.onRefresh();
+  h.button('Show / refresh today').props.onClick();
   await h.flush();
   h.setSyncStatus('paid'); h.poll(); await h.flush();
   assert.ok(h.text().includes('Payment verified'));

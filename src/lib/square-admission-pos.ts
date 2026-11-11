@@ -1,5 +1,7 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {requirePaymentFlow,squareConfig,squareRequest,squareSiteUrl,assertUsd,type SquareOrder} from '@/lib/square-client';
+import { createPosReturnState } from '@/lib/square-pos-return-token';
+import { linkedSquareFamilyCustomer } from '@/lib/square-family-customers';
 type SquarePayment={id:string;source_type?:string;tip_money?:{amount?:number;currency?:string};order_id?:string;location_id?:string;status?:string;amount_money?:{amount?:number;currency?:string};refunded_money?:{amount?:number;currency?:string};note?:string;created_at?:string;updated_at?:string};
 async function saveSquarePaymentReceipt(admin: SupabaseClient,payment: SquarePayment) {
   const config = squareConfig();
@@ -21,12 +23,19 @@ export async function startAdmissionPos(admin:SupabaseClient,checkinIds:string[]
  const siteUrl=squareSiteUrl();
  const {data,error}=await admin.rpc('prepare_admission_pos',{p_ids:checkinIds,p_user:userId,p_environment:config.environment,p_location:config.locationId});
  if(error)throw new Error(error.message);const sale=data as PosSale;
+ const visitors=await admin.from('checkins').select('person_id').in('id',checkinIds);
+ if(visitors.error)throw new Error('Unable to load this family’s Square connection');
+ const members=await admin.from('people').select('household_id').in('id',(visitors.data??[]).map(row=>row.person_id));
+ const familyIds=[...new Set<string>((members.data??[]).map(row=>row.household_id))];
+ if(members.error||familyIds.length!==1)throw new Error('Choose one visiting family');
+ const customer=await linkedSquareFamilyCustomer(admin,familyIds[0]);
  const {data:claimed,error:claimError}=await admin.from('admission_pos_sales').update({launched_at:new Date().toISOString()}).eq('id',sale.id).is('launched_at',null).select('id').maybeSingle();
  if(claimError)throw new Error(claimError.message);
  if(!claimed)return {id:sale.id,pending:true,url:null};
  return {id:sale.id,pending:false,url:`square-commerce-v1://payment/create?data=${encodeURIComponent(JSON.stringify({
-  amount_money:{amount:sale.amount_cents,currency_code:'USD'},callback_url:`${siteUrl}/staff/checkin`,client_id:appId,version:'1.3',location_id:config.locationId,state:sale.id,
+  amount_money:{amount:sale.amount_cents,currency_code:'USD'},callback_url:`${siteUrl}/staff/checkin`,client_id:appId,version:'1.3',location_id:config.locationId,state:createPosReturnState(sale.id),
   notes:`LW admission ${sale.id}`,options:{supported_tender_types:['CREDIT_CARD'],clear_default_fees:true,auto_return:true},
+  ...(customer?{customer_id:customer.id}:{}),
  }))}`};
 }
 export async function verifyAdmissionPos(admin:SupabaseClient,sale:PosSale,orderId:string){

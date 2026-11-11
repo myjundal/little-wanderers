@@ -36,3 +36,4 @@ begin
   update admission_pos_sales set status='paid',order_id=p_order where id=sale.id;
   update checkins set payment_status='paid',square_order_id=p_order,square_environment=sale.environment where id=any(sale.checkin_ids);
 end $$;
+create table square_customers(household_id uuid, square_customer_id text unique);

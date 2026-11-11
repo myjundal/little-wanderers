@@ -164,8 +164,8 @@ test('guest form validation accepts international contacts, preserves photo refu
  assert.equal(helper.guestProfileSchema.safeParse({...body,children:[{...profile.children[0],birthdate:'2099-01-01'}]}).success,false);
 });
 
-function apiFixture({verified=true,mailOk=true,beginOk=true,submitResult={ok:true,waiver_id:'saved',signed_at:'2026-11-01T12:00:00Z',expires_at:'2027-01-30T12:00:00Z'}}={}){
- const calls=[],mails=[],cookieWrites=[];let token='a'.repeat(64);
+function apiFixture({verified=true,mailOk=true,beginOk=true,linkFails=false,submitResult={ok:true,waiver_id:'saved',signed_at:'2026-11-01T12:00:00Z',expires_at:'2027-01-30T12:00:00Z'}}={}){
+ const calls=[],mails=[],cookieWrites=[],links=[];let token='a'.repeat(64);
  const ctx={verified,email,children:[{id:'child',first_name:'Sam',last_name:'Example',birthdate:'2023-01-01'}]};
  const admin={rpc:async(fn,args)=>{
   calls.push({fn,args});
@@ -181,11 +181,21 @@ function apiFixture({verified=true,mailOk=true,beginOk=true,submitResult={ok:tru
   'node:crypto':crypto,'next/headers':{cookies:async()=>({get:()=>token?{value:token}:undefined})},'next/server':{NextResponse:jsonResponse},
   '@/lib/supabase/admin':{createAdminSupabaseClient:()=>admin},'@/lib/email-campaigns':{sendResendEmail:async input=>{mails.push(input);return {ok:mailOk};}},
   '@/lib/open-play-reservations':{isUuid:value=>/^[a-f\d-]{36}$/.test(value)},'@/lib/guest-waivers':helper,'@/lib/waiver-content':content,
+  '@/lib/guest-family-reconciliation':{reconcileGuestWaiverFamily:async(_admin,id)=>{links.push(id);if(linkFails)throw Error('temporary database failure');return {status:'linked',household_id:'private-family'};}},
+  '@vercel/functions':{waitUntil:promise=>promise},
  },{process:{env:{NODE_ENV:'production'}}});
  const post=(payload,origin='https://example.test')=>api.POST(new Request('https://example.test/api/guest-waivers',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(payload)}));
  const body={mode:'sign',...profile,version,family_revision:helper.guestFamilyRevision(ctx.children),is_guardian:true,electronic_consent:true,agreements:Object.fromEntries(content.WAIVER_AGREEMENTS.map(item=>[item.id,true]))};
- return {api,calls,mails,cookieWrites,ctx,post,body,setToken:value=>{token=value;}};
+ return {api,calls,mails,cookieWrites,links,ctx,post,body,setToken:value=>{token=value;}};
 }
+
+test('public submit reconciles only the saved waiver and never reveals matching accounts; linking failure preserves the signed receipt',async()=>{
+ for(const linkFails of [false,true]){
+  const h=apiFixture({linkFails});const response=await h.post({...h.body,mode:'submit',submission_id:crypto.randomUUID(),email,household_id:'forged-family'});
+  const result=await response.json();assert.equal(response.status,200);assert.deepEqual(h.links,['saved']);
+  assert.equal(result.completed,true);assert.equal(result.household_id,undefined);assert.ok(!JSON.stringify(result).includes('private-family'));
+ }
+});
 
 test('public API sends only a verification email, keeps the token in a secure HttpOnly cookie, and never returns the code',async()=>{
  const h=apiFixture();const response=await h.post({mode:'request_code',email:' PARENT@EXAMPLE.TEST '});
