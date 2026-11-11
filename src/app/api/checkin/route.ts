@@ -1,3 +1,5 @@
+import { readInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
+import { squareEnvironment } from '@/lib/square-client';
 import { reconcileOpenPlayPayments } from '@/lib/soft-opening-payments';
 import { requireStaffContext } from '@/lib/authz';
 import { WAIVER_VERSION } from '@/lib/waiver-content';
@@ -22,6 +24,11 @@ export async function POST(req: Request) {
     if (saved.error) return Response.json({ok:false,error:'Check-in saved. Refresh before collecting payment.'},{status:503});
     data.price_cents = saved.data.price_cents;
     data.payment_status = saved.data.payment_status;
+    try {
+      const pricing = await readInfantSiblingAdmission(context.admin, [data.checkin_id], squareEnvironment());
+      const priced = pricing.priced.find(row => row.id === data.checkin_id);
+      if (priced?.infant_sibling_free) { data.price_cents = 0; data.payment_status = 'covered'; data.infant_sibling_free = true; }
+    } catch { return Response.json({ok:false,error:'Check-in saved. Refresh admission status before collecting payment.'},{status:503}); }
   }
   const status = data?.ok ? 200 : data?.code === 'not_found' ? 404 : data?.code === 'forbidden' ? 403 : 409;
   return Response.json(data, { status });

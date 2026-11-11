@@ -1,3 +1,4 @@
+import { projectInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
 import { requireStaffContext } from '@/lib/authz';
 import { paymentFlowEnabled, squareConfig, squareEnvironment } from '@/lib/square-client';
 import { startAdmissionPos, verifyAdmissionPos, recoverAdmissionPos, reconcileAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
@@ -20,12 +21,12 @@ export async function GET() {
   if (!c.ok) return c.response;
   const today = getPartyDateKey(new Date());
   const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
-  const { data, error } = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at')
+  const { data, error } = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment')
     .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0));
   if (error) return Response.json({ ok: false, error: 'Unable to load today’s admission payments.' }, { status: 503 });
   const ids = [...new Set((data ?? []).map(row => row.person_id))];
   const { data: people, error: peopleError } = ids.length
-    ? await c.admin.from('people').select('id,first_name,last_name,household_id').in('id', ids)
+    ? await c.admin.from('people').select('id,first_name,last_name,household_id,role,birthdate').in('id', ids)
     : { data: [], error: null };
   if (peopleError) return Response.json({ ok: false, error: 'Unable to load visitor names.' }, { status: 503 });
   const familyIds = [...new Set((people ?? []).map(person => person.household_id).filter(Boolean))];
@@ -36,15 +37,17 @@ export async function GET() {
   let checkouts: Map<string, string>;
   try { checkouts = await getAdmissionCheckouts(c.admin, data ?? []); }
   catch { return Response.json({ ok: false, error: 'Unable to load departures. Refresh admission status before continuing.' }, { status: 503 }); }
-  const visits = (data ?? []).map(row => {
+  const {data:pending,error:pendingError}=await c.admin.from('admission_pos_sales').select('id,checkin_ids,launched_at,created_by_user_id').eq('environment',squareEnvironment()).eq('status','open');
+  if(pendingError)return Response.json({ok:false,error:'Unable to load pending Square payments.'},{status:503});
+  const frozen = new Set<string>((pending ?? []).flatMap(sale => sale.checkin_ids ?? []));
+  const priced = projectInfantSiblingAdmission(data ?? [], people ?? [], squareEnvironment(), frozen);
+  const visits = priced.map(row => {
     const person = (people ?? []).find(person => person.id === row.person_id);
     return { ...row, checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });
-  const {data:pending,error:pendingError}=await c.admin.from('admission_pos_sales').select('id,checkin_ids,launched_at').eq('created_by_user_id',c.user.id).eq('environment',squareEnvironment()).eq('status','open');
-  if(pendingError)return Response.json({ok:false,error:'Unable to load pending Square payments.'},{status:503});
-  return Response.json({ ok: true, date: today, enabled: paymentFlowEnabled('admission_pos'), visits, pending_sales:pending??[] }, { headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ok: true, date: today, enabled: paymentFlowEnabled('admission_pos'), visits, pending_sales:(pending??[]).filter(sale=>sale.created_by_user_id===c.user.id) }, { headers: { 'cache-control': 'no-store' } });
 }
 
 export async function POST(req: Request) {

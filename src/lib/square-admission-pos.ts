@@ -1,3 +1,4 @@
+import { readInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {requirePaymentFlow,squareConfig,squareRequest,squareSiteUrl,assertUsd,type SquareOrder} from '@/lib/square-client';
 import { createPosReturnState } from '@/lib/square-pos-return-token';
@@ -21,17 +22,47 @@ export async function startAdmissionPos(admin:SupabaseClient,checkinIds:string[]
  const config=requirePaymentFlow('admission_pos');const appId=process.env.SQUARE_APPLICATION_ID;
  if(!appId||(config.environment==='production'&&!appId.startsWith('sq0idp-')))throw new Error('Square POS Application ID is not configured');
  const siteUrl=squareSiteUrl();
+ const pending = await admin.from('admission_pos_sales').select('id,checkin_ids,created_by_user_id,launched_at')
+   .eq('environment',config.environment).eq('status','open').limit(101);
+ if (pending.error || (pending.data?.length ?? 0) > 100) throw new Error('Unable to verify pending Square payments. Refresh first.');
+ const launched = (pending.data ?? []).find(sale => sale.launched_at && sale.checkin_ids?.some((id: string) => checkinIds.includes(id)));
+ if (launched) {
+   if (launched.created_by_user_id !== userId) throw new Error('A Square payment is already in progress for these check-ins');
+   return {id:launched.id,pending:true,url:null};
+ }
+ const pricing = await readInfantSiblingAdmission(admin, checkinIds, config.environment);
+ // UI excludes free infants. Freeze their underlying unpaid rows with the rest
+ // of the family so the installed full-family and single-operator guards apply.
+ const freeIds = new Set(pricing.priced.filter(row => row.infant_sibling_free).map(row => row.id));
+ checkinIds = [...new Set([...checkinIds, ...pricing.visits.filter(row => freeIds.has(row.id) && row.price_cents > 0).map(row => row.id)])];
+ const pricedTotal = pricing.priced.filter(row => checkinIds.includes(row.id)).reduce((total, row) => total + (row.payment_status === 'due' ? row.price_cents : 0), 0);
+ if (pricedTotal <= 0) throw new Error('No admission payment is due. Refresh admission status.');
  const {data,error}=await admin.rpc('prepare_admission_pos',{p_ids:checkinIds,p_user:userId,p_environment:config.environment,p_location:config.locationId});
  if(error)throw new Error(error.message);const sale=data as PosSale;
+ if (sale.launched_at) return {id:sale.id,pending:true,url:null};
  const visitors=await admin.from('checkins').select('person_id').in('id',checkinIds);
  if(visitors.error)throw new Error('Unable to load this family’s Square connection');
  const members=await admin.from('people').select('household_id').in('id',(visitors.data??[]).map(row=>row.person_id));
  const familyIds=[...new Set<string>((members.data??[]).map(row=>row.household_id))];
  if(members.error||familyIds.length!==1)throw new Error('Choose one visiting family');
  const customer=await linkedSquareFamilyCustomer(admin,familyIds[0]);
- const {data:claimed,error:claimError}=await admin.from('admission_pos_sales').update({launched_at:new Date().toISOString()}).eq('id',sale.id).is('launched_at',null).select('id').maybeSingle();
+ const billed = pricing.visits.filter(row => checkinIds.includes(row.id));
+ if (billed.length !== checkinIds.length || billed.some(row => row.payment_status !== 'due' || row.price_cents <= 0)
+   || billed.reduce((total, row) => total + row.price_cents, 0) !== sale.amount_cents) throw new Error('Family admission changed. Refresh before payment.');
+ // Claim and lower the frozen total in ONE database update. Only its winner can
+ // edit the included fee rows or receive a launch URL. Already launched sales
+ // and completed receipts retain their original amounts.
+ const {data:claimed,error:claimError}=await admin.from('admission_pos_sales').update({launched_at:new Date().toISOString(),amount_cents:pricedTotal})
+   .eq('id',sale.id).eq('status','open').eq('amount_cents',sale.amount_cents).is('launched_at',null).select('id').maybeSingle();
  if(claimError)throw new Error(claimError.message);
  if(!claimed)return {id:sale.id,pending:true,url:null};
+ for (const row of billed.filter(row => freeIds.has(row.id))) {
+   const corrected = await admin.from('checkins').update({price_cents:0,
+     notes:[row.notes, `Infant sibling admission included; original unpaid fee $${(row.price_cents/100).toFixed(2)}; POS ${sale.id}.`].filter(Boolean).join('\n')})
+     .eq('id',row.id).eq('payment_status','due').eq('price_cents',row.price_cents).select('id').maybeSingle();
+   if (corrected.error || !corrected.data) throw new Error('Admission discount needs review. No new Square launch was created. Refresh payment status.');
+ }
+ sale.amount_cents = pricedTotal;
  return {id:sale.id,pending:false,url:`square-commerce-v1://payment/create?data=${encodeURIComponent(JSON.stringify({
   amount_money:{amount:sale.amount_cents,currency_code:'USD'},callback_url:`${siteUrl}/staff/checkin`,client_id:appId,version:'1.3',location_id:config.locationId,state:createPosReturnState(sale.id),
   notes:`LW admission ${sale.id}`,options:{supported_tender_types:['CREDIT_CARD'],clear_default_fees:true,auto_return:true},
