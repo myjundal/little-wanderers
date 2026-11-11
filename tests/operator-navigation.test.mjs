@@ -71,11 +71,13 @@ test('personal login immediately renders the shared operator dashboard before cu
 test('PIN dashboard uses the same dashboard component and identity', async () => {
   const Page = loadModule('src/app/staff/dashboard/page.tsx', {
     '@/lib/authz': { getCurrentUserRole: async () => ({ role: 'staff', roles: ['staff'], isKiosk: true }) },
+    '@/lib/revenue-access': { canViewRevenue: () => false },
     '@/components/staff/OperatorDashboard': Dashboard,
   }, { React }).default;
   const page = await Page();
   assert.equal(page.type, Dashboard);
   assert.equal(page.props.isKiosk, true);
+  assert.equal(page.props.canViewPrivateRevenue, false);
 });
 
 test('hamburger closes on navigation and includes personal bookings for a personal operator login', () => {
