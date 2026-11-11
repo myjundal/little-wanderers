@@ -105,6 +105,7 @@ function celebrationLines(item: Pick<PartyBookingItem, 'birthday_child_name' | '
 }
 
 function partyStatusLabel(item: PartyBookingItem, now: number) {
+  if (hasCancellationRequest(item)) return 'Cancellation requested';
   if (isCompletedParty(item, now)) return 'Completed';
   if (item.status === 'early_access_hold') return 'Confirmed';
   return item.status;
@@ -465,7 +466,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
   };
 
   const partyGroups = useMemo(() => groupPartyBookings(partyBookings, partyNow), [partyBookings, partyNow]);
-  const defaultPartyBooking = partyGroups.requests[0] ?? partyGroups.confirmed[0] ?? partyGroups.cancellationRequests[0]
+  const defaultPartyBooking = partyGroups.cancellationRequests[0] ?? partyGroups.requests[0] ?? partyGroups.confirmed[0]
     ?? partyGroups.completed[0] ?? partyGroups.cancelled[0] ?? null;
   const selectedBooking = partyBookings.find((item) => item.id === selectedBookingId) ?? defaultPartyBooking;
 
@@ -1319,13 +1320,16 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
         <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Party booking management</p>
         <h2 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Review and manage scheduled party bookings</h2>
         <p style={{ margin: 0, color: '#6d6480' }}>Parties move to Completed parties after their scheduled end time. Booking details and attendance stay available.</p>
+        {partyGroups.cancellationRequests.length > 0 && <p role="status" style={{ padding: 14, borderRadius: 12, background: '#fff0fb', color: '#8a3f6b', fontWeight: 700 }}>
+          {partyGroups.cancellationRequests.length} cancellation request{partyGroups.cancellationRequests.length === 1 ? '' : 's'} awaiting review. These times remain booked on the public calendar until you cancel the booking.
+        </p>}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, marginTop: 18 }}>
           <div style={{ display: 'grid', gap: 14 }}>
             {[
+              { title: 'Cancellation requests', items: partyGroups.cancellationRequests, empty: 'No cancellation requests.', defaultOpen: true, tone: 'attention' as const },
               { title: 'Party requests', items: partyGroups.requests, empty: 'No new party requests.', defaultOpen: true, tone: 'active' as const },
               { title: 'Confirmed parties', items: partyGroups.confirmed, empty: 'No confirmed parties yet.', defaultOpen: true, tone: 'active' as const },
-              { title: 'Cancellation requests', items: partyGroups.cancellationRequests, empty: 'No cancellation requests.', defaultOpen: true, tone: 'attention' as const },
               { title: 'Completed parties', items: partyGroups.completed, empty: 'No completed parties yet.', defaultOpen: false, tone: 'archive' as const },
               { title: 'Cancelled parties', items: partyGroups.cancelled, empty: 'No cancelled parties.', defaultOpen: false, tone: 'archive' as const },
             ].map((group) => (
