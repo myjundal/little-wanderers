@@ -122,7 +122,7 @@ test('search and direct family lookup include confirmed alternate-profile bookin
   assert.equal((await apiHarness({ reservationRows: Array.from({ length: 501 }, () => booking) }).get('?q=Family')).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending' } = {}) {
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
   let cursor = 0, tree, visits = [], timers = [], refreshes = 0, saleOpen = false, holdRead = false;
   const storage = new Map(), intervals = [], heldReads = [];
@@ -149,7 +149,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     if (url === '/api/checkin') {
       if (checkinCode) return Response.json({ ok: false, code: checkinCode, error: 'The family waiver must be renewed.' }, { status: 409 });
       if (body.person_id === failPerson) return Response.json({ ok: false, error: 'Birthday required' }, { status: 409 });
-      visits.push({ id: `visit-${body.person_id}`, person_id: body.person_id, household_id: family.id, household_name: family.name, name: body.person_id, checked_in_at: '2026-11-11T15:00:00Z', checked_out_at: null, price_cents: !covered && body.person_id === 'child' ? 1600 : 0, payment_status: !covered && body.person_id === 'child' ? 'due' : 'covered' });
+      visits.push({ id: `visit-${body.person_id}`, person_id: body.person_id, household_id: family.id, household_name: family.name, name: body.person_id, checked_in_at: '2026-11-11T15:00:00Z', checked_out_at: null, price_cents: !covered && !prepaid && body.person_id === 'child' ? 1600 : 0, payment_status: prepaid && body.person_id === 'child' ? 'prepaid' : !covered && body.person_id === 'child' ? 'due' : 'covered' });
       return Response.json({ ok: true });
     }
     if (body?.mode === 'verify') return Response.json({ ok: !verifyFailure, error: verifyFailure ? 'Receipt pending' : undefined }, { status: verifyFailure ? 409 : 200 });
@@ -165,10 +165,10 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     return Response.json(snapshot);
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
-  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-pos-ui': logic }, {
+  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic }, {
     React, fetch, AbortController,
     document: { visibilityState: 'visible', addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; } },
-    navigator: { userAgent: 'iPad' },
+    navigator: { userAgent: 'iPad', standalone: homeScreen },
     window: { addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; }, location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); }, replace(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {}, sessionStorage: { setItem(key, value) { storage.set(key, value); }, getItem(key) { return storage.get(key) ?? (key === 'admission-family' ? family.id : null); }, removeItem(key) { storage.delete(key); } } },
   }).default;
   const render = () => { cursor = 0; tree = page(); return tree; };
@@ -479,4 +479,26 @@ test('pending receipt is retried and an older read cannot restore the unpaid sta
   assert.ok(!h.button('Pay $16.00'));
   assert.equal(h.nodes().find(node => node.props?.id === 'family-search').props.disabled, false);
   assert.equal(h.requests.filter(request => request.body?.checkin_ids).length, 1);
+});
+
+
+test('prepaid visitors display paid in advance and only an explicit checkout reveals recorded stay times', async () => {
+  const h = uiHarness({ prepaid: true }); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  assert.ok(h.text().includes('Paid in advance'));
+  assert.equal(h.button('Pay $16.00'), undefined);
+  assert.ok(!h.text().includes(' · In 10:00 AM'));
+  await h.button('Done').props.onClick(); await h.flush();
+  await h.button('Check out family (2)').props.onClick(); await h.flush();
+  assert.ok(h.text().includes(' · In 10:00 AM'));
+  assert.ok(h.text().includes('Out 12:00 PM'));
+  assert.ok(h.text().includes('2 hrs'));
+});
+
+test('iPad staff screen distinguishes the Safari-created Home Screen app from a browser tab', async () => {
+  const home = uiHarness({ homeScreen: true }); await home.flush();
+  assert.ok(home.text().includes('Staff screen: Home Screen app'));
+  const tab = uiHarness(); await tab.flush();
+  assert.ok(tab.text().includes('Staff screen: browser tab'));
 });

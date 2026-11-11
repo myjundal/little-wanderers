@@ -3,11 +3,13 @@ import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { isUuid } from '@/lib/open-play-reservations';
 import { getWaiverStatus, WAIVER_STATUS_SELECT } from '@/lib/waivers';
 import { getStaffFamilySearchAliases } from '@/lib/staff-family-search';
+import { getReservationAdmissionStatuses } from '@/lib/reservation-admission-status';
+import { squareEnvironment } from '@/lib/square-client';
 
 export const dynamic = 'force-dynamic';
 const familySelect = 'id,name,email,phone';
 const personSelect = 'id,household_id,first_name,last_name,role,birthdate';
-const reservationSelect = 'id,household_id,child_count,adult_count,slot:open_play_reservation_slots!inner(label,starts_at,ends_at)';
+const reservationSelect = 'id,household_id,child_count,adult_count,child_ids,payment_status,payment_choice,payment_environment,amount_cents,slot:open_play_reservation_slots!inner(label,starts_at,ends_at)';
 
 export async function GET(req: Request) {
   const c = await requireStaffContext();
@@ -75,12 +77,13 @@ export async function GET(req: Request) {
       reservations = (bookings.data ?? []).map(row => ({ ...row, slot: Array.isArray(row.slot) ? row.slot[0] : row.slot })) as typeof reservations;
     }
     reservations.sort((a, b) => Date.parse(a.slot.starts_at) - Date.parse(b.slot.starts_at));
+    const admission = await getReservationAdmissionStatuses(c.admin, reservations, squareEnvironment());
     if ((people.data?.length ?? 0) >= 1000 || (waivers.data?.length ?? 0) >= 1000) throw new Error('Too many matching records. Please search with a more specific name or email.');
     const foundItems = (households.data ?? []).filter(household => ids.includes(household.id)).map(household => {
       const members = (people.data ?? []).filter(person => person.household_id === household.id);
       return { ...household, people: members,
         waiver_status: getWaiverStatus((waivers.data ?? []).filter(row => row.household_id === household.id), new Date(), members.filter(person => person.role === 'child').map(person => person.id)).status,
-        reservations: reservations.filter(row => canonicalId(row.household_id) === household.id),
+        reservations: reservations.filter(row => canonicalId(row.household_id) === household.id).map(row => ({ ...row, admission_status: admission.get(row.id) })),
       };
     }).filter(item => {
       const related = (households.data ?? []).filter(row => canonicalId(row.id) === item.id);

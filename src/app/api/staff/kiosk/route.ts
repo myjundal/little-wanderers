@@ -15,7 +15,9 @@ export async function GET() {
   if (error) return fail('Unable to load staff login. Run the staff timeclock migration.', 503);
   const { data: { user } } = await (await createServerSupabaseClient()).auth.getUser();
   const identity = await getCurrentUserRole();
-  return NextResponse.json({ ok: true, paired: true, device_name: device.name, personal_session: Boolean(user), signed_in: identity.isKiosk, has_shift_session: Boolean((await cookies()).get(KIOSK_SESSION_COOKIE)?.value), staff: (data ?? []).map(row => ({ id: row.user_id, name: row.display_name })) }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ ok: true, paired: true, device_name: device.name, personal_session: Boolean(user), signed_in: identity.isKiosk,
+    next: identity.isKiosk ? (['staff', 'owner', 'admin'].includes(identity.role ?? '') ? '/staff/dashboard' : '/teaching') : null,
+    has_shift_session: Boolean((await cookies()).get(KIOSK_SESSION_COOKIE)?.value), staff: (data ?? []).map(row => ({ id: row.user_id, name: row.display_name })) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return fail('Invalid request origin.', 403);

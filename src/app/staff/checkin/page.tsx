@@ -4,13 +4,14 @@ import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import StaffDashboard from '@/components/staff/StaffDashboard';
 import { admissionTime, stayLabel, stayMinutes } from '@/lib/admission-stays';
+import { admissionPaymentLabel, reservationAdmissionLabel, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
 import { admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
 type DeskPerson = { id: string; first_name: string | null; last_name: string | null; role: string; birthdate: string | null };
 type DeskFamily = { id: string; name: string | null; email: string | null; phone: string | null; people: DeskPerson[]; waiver_status: string;
-  reservations: Array<{ id: string; child_count: number; adult_count: number; slot: { label: string; starts_at: string; ends_at: string } }> };
+  reservations: Array<{ id: string; child_count: number; adult_count: number; amount_cents?: number; admission_status?: ReservationAdmissionStatus; slot: { label: string; starts_at: string; ends_at: string } }> };
 const personName = (person: DeskPerson) => [person.first_name, person.last_name].filter(Boolean).join(' ') || 'Unnamed visitor';
 const timeLabel = (value: string) => new Date(value).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
 const dateLabel = (value: string) => new Date(value).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
@@ -40,6 +41,7 @@ export default function StaffCheckinPage() {
   const [checkingOut, setCheckingOut] = useState('');
   const [squareCustomerMessage, setSquareCustomerMessage] = useState('');
   const [connectingCustomer, setConnectingCustomer] = useState(false);
+  const [staffMode, setStaffMode] = useState<'home-screen' | 'browser' | null>(null);
   const checkoutBusy = useRef(false);
   const [launchUrl, setLaunchUrl] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
@@ -56,6 +58,12 @@ export default function StaffCheckinPage() {
   const groups = admissionGroups(visits);
   const selected = groups.find(group => group.id === activeFamily);
   const pendingSale=selected&&pendingSales.find(sale=>sale.checkin_ids.some(id=>selected.visits.some(visit=>visit.id===id)));
+
+  useEffect(() => {
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+      setStaffMode((navigator as Navigator & { standalone?: boolean }).standalone || window.matchMedia?.('(display-mode: standalone)').matches ? 'home-screen' : 'browser');
+    }
+  }, []);
 
   async function refreshPayments() {
     const request = ++paymentRequest.current;
@@ -404,10 +412,12 @@ export default function StaffCheckinPage() {
               <h3 style={{ margin: 0 }}>{item.name || personName(item.people.find(person => person.role === 'adult') || item.people[0] || { id: '', first_name: 'Family', last_name: null, role: '', birthdate: null })}</h3>
               <p>{item.people.map(personName).join(', ') || 'No family members added'}</p>
               <p style={{ overflowWrap: 'anywhere' }}>{[item.email, item.phone].filter(Boolean).join(' · ')}</p>
-              {item.reservations.map(reservation => <p key={reservation.id} style={{ color: '#222' }}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults</p>)}
+              {item.reservations.map(reservation => <p key={reservation.id} style={{ color: '#222' }}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults
+                {reservation.admission_status && <><br /><strong>{reservationAdmissionLabel(reservation.admission_status, reservation.amount_cents)}</strong></>}
+              </p>)}
               {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
               <p><strong>{present.length ? `Checked in · ${present.length} guests here` : departed ? 'Checked out' : 'Not checked in'}</strong> · {item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
-              {todayVisits.map(visit => <p key={visit.id}>{visit.name}{visit.checked_in_at && <> · In {admissionTime(visit.checked_in_at)}{visit.checked_out_at && <> · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</>}</p>)}
+              {todayVisits.map(visit => <p key={visit.id}>{visit.name} · {admissionPaymentLabel(visit)}{visit.checked_in_at && visit.checked_out_at && <> · In {admissionTime(visit.checked_in_at)} · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</p>)}
               {present.length > 0 && <button className={styles.checkoutButton} disabled={locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Recording departure…' : `Check out family (${present.length})`}</button>}
               <button style={{ ...button, width: '100%' }} disabled={locked} onClick={() => void openFamily(item.id)}>{todayVisits.length ? 'Open family / payment' : 'Choose family'}</button>
             </article>;
@@ -430,7 +440,7 @@ export default function StaffCheckinPage() {
           const visit = familyVisits.find(visit => visit.person_id === person.id);
           return <label key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: visit ? '#f0f7ef' : '#f7f3fc', borderRadius: 12 }}>
             <input type="checkbox" style={{ width: 24, height: 24 }} checked={!!visit || peopleIds.includes(person.id)} disabled={!!visit || entriesLocked} onChange={event => setPeopleIds(previous => event.target.checked ? [...previous, person.id] : previous.filter(id => id !== person.id))} />
-            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · {visit.checked_out_at ? 'Checked out' : 'Checked in'} — {visit.payment_status === 'paid' ? 'Paid' : visit.price_cents === 0 ? 'Included / member / prepaid' : `${money(visit.price_cents)} due`}</span>}</span>
+            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · {visit.checked_out_at ? 'Checked out' : 'Checked in'} — {admissionPaymentLabel(visit)}</span>}</span>
           </label>;
         })}
       </div>
@@ -447,6 +457,7 @@ export default function StaffCheckinPage() {
     </section>}
     <section style={panel} aria-label="Family payment">
       <h2>Family payment</h2>
+      {staffMode && <p>Staff screen: <strong>{staffMode === 'home-screen' ? 'Home Screen app' : 'browser tab'}</strong>.{staffMode === 'home-screen' && ' Square returns to Safari. Reopen this icon to refresh, or start from a Safari tab for return to the same browser.'}</p>}
       {!enabled && !loading && <p>Square handoff is currently closed. Collect admission at the counter in the Square app.</p>}
       <label>Unpaid family <select value={selected ? activeFamily : ''} disabled={locked} onChange={event => { if (event.target.value) void openFamily(event.target.value); }} style={{ padding: 12, maxWidth: '100%' }}>
         <option value="">Choose an unpaid family</option>

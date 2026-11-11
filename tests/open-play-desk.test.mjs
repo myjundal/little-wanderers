@@ -14,7 +14,7 @@ function harness({ canManage = false, failMutation = false } = {}) {
   };
   class TestDate extends Date { constructor(...args) { if (args.length) super(...args); else super('2026-10-29T16:00:00Z'); } }
   const component = loadModule('src/components/staff/OpenPlayReservationsAdmin.tsx', { react,
-    '@/lib/open-play-reservations': { SOFT_OPENING_START_DATE: '2026-10-28' }, '@/components/calendar/AvailabilityCalendar': 'calendar',
+    '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/open-play-reservations': { SOFT_OPENING_START_DATE: '2026-10-28' }, '@/components/calendar/AvailabilityCalendar': 'calendar',
   }, { React, Date: TestDate, fetch: async (url, options = {}) => {
     requests.push({ url, method: options.method || 'GET', body: options.body && JSON.parse(options.body) });
     if (options.method) { if (failMutation) throw new Error('Connection lost'); return Response.json({ ok: true, updated_count: 1 }); }
