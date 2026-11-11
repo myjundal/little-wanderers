@@ -1,0 +1,20 @@
+# Private service-day revenue
+
+The owner's personal account can open `/staff/revenue` from the owner dashboard. Both the server page and `/api/admin/revenue` require the verified owner Auth user ID **and** the operator `owner` role, with no kiosk session. Admins, other owners, staff, instructors, customers and unauthenticated visitors cannot access the report. No financial data is sent to an unauthorized browser. API responses are private/no-store, including permission failures.
+
+The report reads current production Supabase records and retrieves their linked Square orders and completed payments, including refunds. It never invokes fulfillment/reconciliation or writes to Supabase or Square. Each source is paginated; failed/truncated sources and unmatched receipts are explicitly reported as incomplete, never treated as a verified zero. Only relevant orders for the selected service date are fetched, while allocations include all linked sessions so shared receipts conserve their amounts.
+
+Rules:
+
+- A reservation uses its latest slot's Eastern calendar date. Walk-ins use their actual Eastern check-in date. Parties use their current start time; classes use each session's date.
+- A named child's matching reservation/check-in is one service. More than one matching booking or check-in requires review. A shared order is allocated using its exact recorded service charges; the sum must match the provider's service total. Receipt IDs and amounts are validated. An unexplained mismatch is excluded from confirmed totals.
+- The paid, after-discount class-series amount is allocated equally across its explicitly registered session IDs, in chronological order. Remainder cents go to earlier sessions. A canceled session keeps its original allocation for review; no silent redistribution to other dates occurs.
+- Deposits and later balances belong to the service date. Prepayment, same-day payment and later payment are components of that date's net received amount, not additional sales. Unpaid quotes are listed separately. Unpaid interest registrations are not sales.
+- Refunds reduce the original service date, not the refund date. They do not create a new customer debt. Cancellation payments are excluded and flagged for fee/refund review. Refunds containing tax/tips and partially paid tax invoices require review because their allocation is ambiguous.
+- Tax and tips are separate from service revenue. Fees are not deducted. Membership-covered admissions have no additional admission revenue. Membership/pass sales are not assigned invented daily values.
+- Attendance-confirmed and attendance-unconfirmed amounts are separate. Future dates show money already received for that future service; they are not represented as completed visits. Payment dates come from provider receipts rather than booking creation or reconciliation timestamps.
+- Unknown payment links, no-shows, legacy paid records without a provider order, missing allocation and invalid dates/amounts require review and are excluded from the confirmed total.
+
+Run the same report with `node --env-file=.env.local scripts/daily-revenue.mjs 2026-11-11`. Omitting the date uses today in New York; `--summary` suppresses ordinary detail rows. The normal run uses an in-memory personal owner sign-in session to read the deployed private API, keeping the production Square credential on the server. No login email is sent and the reporting session is signed out afterward. `--local` uses the local loader directly with the explicitly configured Square environment. Exit code 2 means the output is a partial report with explicit review items; do not present it as a final total. No secret keys, customer contact details or raw provider responses are printed.
+
+The daily thread automation runs at 8:30 PM America/New_York and uses this script and the same rules. The page refreshes from live data on each date change or Refresh. There is no nightly mutation of payment dates or accounting records. Historical totals are restated when a reservation changes date or a later refund/payment appears.
