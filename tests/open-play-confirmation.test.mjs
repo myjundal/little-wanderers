@@ -119,3 +119,32 @@ test('morning sending refuses an early run or an expired duplicate-protection wi
     ], { encoding: 'utf8', stdio: 'pipe' }), error => /Outside the approved delivery window/.test(error.stderr));
   }
 });
+
+test('morning delivery stops when database reads cross the deadline without contacting the mail provider', () => {
+  const now = Date.now();
+  const deadline = now + 3600000;
+  const fixture = `
+    globalThis.fetch = async (url) => {
+      const parsed = new URL(url);
+      if (parsed.hostname !== 'database.example.test') throw new Error('Unexpected external request');
+      if (parsed.pathname.endsWith('/people')) {
+        Date.now = () => ${deadline + 1};
+        return Response.json([{id:'parent',role:'adult',first_name:'Parent',last_name:'Family'}]);
+      }
+      if (!parsed.searchParams.has('id')) return Response.json([{id:'visit'}]);
+      return Response.json({id:'visit',status:'reserved',household_id:'family',contact_email:'parent@example.test',
+        child_ids:[],child_count:1,adult_count:1,amount_cents:1600,payment_status:'due',payment_choice:'counter',
+        slot:{starts_at:'2099-11-11T14:00:00Z',ends_at:'2099-11-11T15:00:00Z'},household:{name:'Family'}});
+    };
+  `;
+  const result = execFileSync(process.execPath, [
+    `--import=data:text/javascript,${encodeURIComponent(fixture)}`,
+    'scripts/send-open-play-confirmations.mjs', '--send',
+    `--created-before=${new Date(now).toISOString()}`, `--not-before=${new Date(now - 1000).toISOString()}`,
+    `--expires-at=${new Date(deadline).toISOString()}`, '--site-url=https://www.thelittlewanderers.com',
+  ], { encoding: 'utf8', env: { ...process.env, NEXT_PUBLIC_SUPABASE_URL: 'https://database.example.test', SUPABASE_SERVICE_ROLE_KEY: 'test-key', RESEND_API_KEY: 'test-key' } });
+  const summary = JSON.parse(result);
+  assert.equal(summary.stoppedAtDeadline, true);
+  assert.equal(summary.accepted, 0);
+  assert.equal(summary.failed, 0);
+});

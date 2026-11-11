@@ -14,6 +14,7 @@ const createdBefore = arg('created-before');
 const notBefore = arg('not-before');
 const expiresAt = arg('expires-at');
 const now = Date.now();
+const deliveryWindowOpen = () => Date.now() >= Date.parse(notBefore) && Date.now() < Date.parse(expiresAt);
 if (!createdBefore || !Number.isFinite(Date.parse(createdBefore))) throw new Error('--created-before is required.');
 if (send && (!notBefore || !expiresAt || !Number.isFinite(Date.parse(notBefore)) || !Number.isFinite(Date.parse(expiresAt)))) throw new Error('Explicit delivery window is required.');
 if (send && (now < Date.parse(notBefore) || now >= Date.parse(expiresAt))) throw new Error('Outside the approved delivery window; no email sent.');
@@ -32,7 +33,13 @@ function load(relativePath) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   vm.runInNewContext(code, { exports, process, URL, Date, Error, Intl, Number, Set,
-    fetch, AbortSignal, setTimeout, clearTimeout,
+    fetch: (url, options) => {
+      // Transport retries must also stop at the deadline, even if a previous attempt stalled.
+      if (send && String(url).startsWith('https://api.resend.com/') && !deliveryWindowOpen()) {
+        throw new Error('Outside the approved delivery window; no email sent.');
+      }
+      return fetch(url, options);
+    }, AbortSignal, setTimeout, clearTimeout,
     require(name) {
       if (!name.startsWith('@/lib/')) throw new Error(`Unexpected runtime dependency: ${name}`);
       return load(`src/${name.slice(2)}.ts`);
@@ -54,15 +61,16 @@ const save = () => {
   fs.writeFileSync(temporary, JSON.stringify(ledger, null, 2), { mode: 0o600 });
   fs.renameSync(temporary, ledgerPath);
 };
-const summary = { mode: send ? 'send' : 'dry-run', candidates: 0, eligible: 0, accepted: 0, alreadySent: 0, skipped: 0, missingEmail: 0, failed: 0, dates: {} };
+const summary = { mode: send ? 'send' : 'dry-run', candidates: 0, eligible: 0, accepted: 0, alreadySent: 0, skipped: 0, missingEmail: 0, failed: 0, stoppedAtDeadline: false, dates: {} };
 let offset = 0;
-for (;;) {
+scan: for (;;) {
   const batch = await admin.from('open_play_reservations')
     .select('id,slot:open_play_reservation_slots!inner(starts_at)')
     .eq('status', 'reserved').lte('created_at', createdBefore)
     .gt('slot.starts_at', new Date().toISOString()).order('id').range(offset, offset + 99);
   if (batch.error) throw new Error('Unable to read upcoming reservations.');
   for (const row of batch.data || []) {
+    if (send && !deliveryWindowOpen()) { summary.stoppedAtDeadline = true; break scan; }
     summary.candidates++;
     if (ledger[row.id]?.sentAt) { summary.alreadySent++; continue; }
     try {
@@ -72,6 +80,7 @@ for (;;) {
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(input.startTime));
       summary.dates[date] = (summary.dates[date] || 0) + 1;
       if (!send) continue;
+      if (!deliveryWindowOpen()) { summary.stoppedAtDeadline = true; break scan; }
       // Persist identical content before sending, so uncertain responses can be retried safely.
       ledger[row.id] ??= { input };
       save();
