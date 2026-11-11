@@ -103,23 +103,26 @@ export default function PeoplePage() {
     addInFlight.current = true;
     setAddingPerson(true);
     try {
-      const { data: person, error } = await supabase.from('people').insert({
-        household_id: householdId,
-        role: form.role as 'adult' | 'child',
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim() || null,
-        gender: form.gender || null,
-        birthdate,
-      }).select('id,role,first_name,last_name,gender,birthdate').single();
-
-      if (error || !person) throw new Error('Unable to save family member.');
+      const response = await fetch('/api/family/people', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          role: form.role,
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim() || null,
+          gender: form.gender || null,
+          birthdate,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !result.person) throw new Error(result.error || 'Unable to add your family member. Please try again.');
+      const person = result.person as Person;
 
       ++loadVersion.current;
       setPeople(current => [...current, person as Person]);
       setForm({ role: form.role, first_name: '', last_name: '', gender: '', birthdate: '' });
       setUiMessage('Family member added.');
-    } catch {
-      setUiError('Something went wrong while saving your family member. Please try again.');
+    } catch (cause) {
+      setUiError(cause instanceof Error ? cause.message : 'Unable to add your family member right now. Your entries are still here. Please try again.');
     } finally {
       addInFlight.current = false;
       setAddingPerson(false);
