@@ -4,6 +4,8 @@ The owner's personal account can open `/staff/revenue` from the owner dashboard.
 
 The report reads current production Supabase records and retrieves their linked Square orders and completed payments, including refunds. It never invokes fulfillment/reconciliation or writes to Supabase or Square. Each source is paginated; failed/truncated sources and unmatched receipts are explicitly reported as incomplete, never treated as a verified zero. Only relevant orders for the selected service date are fetched, while allocations include all linked sessions so shared receipts conserve their amounts.
 
+`20261111_private_revenue_party_payment_columns.sql` records the party invoice columns already verified in production, for fresh database setups. Legacy parties without a production order require review even if their quote is known: a missing payment link is not evidence that the customer owes the whole quote. This feature does not backfill or infer those payments.
+
 Rules:
 
 - A reservation uses its latest slot's Eastern calendar date. Walk-ins use their actual Eastern check-in date. Parties use their current start time; classes use each session's date.

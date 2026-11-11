@@ -62,6 +62,7 @@ export function revenueServices(data: RevenueSources) {
       label: `Open Play · ${row.child_count} children · ${row.id.slice(0, 8)}`, expected_cents: row.amount_cents, attendance: matches.length ? 'visited' : 'reserved',
       cancelled: row.status === 'cancelled', charges: [], issues: [] });
     if (row.payment_status === 'review') service.issues.push('Reservation payment is marked for review.');
+    if (row.status === 'no_show') service.issues.push('No-show reservation requires revenue review.');
     if (paid(row.payment_status) && (!row.square_order_id || row.payment_environment !== 'production')) service.issues.push('Paid reservation has no linked production order.');
     if (row.square_order_id && row.payment_environment !== 'production') service.issues.push('The payment environment is not verified.');
     if (service.cancelled) {
@@ -104,7 +105,7 @@ export function revenueServices(data: RevenueSources) {
     if (row.status === 'pending') service.issues.push('Party booking is not confirmed.');
     if (row.price_quote_cents == null || row.payment_review_required) service.issues.push('Party amount or payment needs review.');
     if (row.square_order_id && row.square_environment === 'production') service.charges.push({ order_id: row.square_order_id, amount_cents: service.expected_cents });
-    else if ((row.deposit_paid_cents ?? 0) + (row.balance_paid_cents ?? 0) > 0) service.issues.push('Recorded party payments have no linked production order.');
+    else if (row.status !== 'cancelled') service.issues.push('Party payments have no linked production order.');
   }
   const classMap = new Map(data.classes.map(row => [row.id, row]));
   const linkedRegistrations = new Set<string>();
