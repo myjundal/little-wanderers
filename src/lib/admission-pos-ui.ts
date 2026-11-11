@@ -6,6 +6,8 @@ export type AdmissionVisit = {
   name: string;
   price_cents: number;
   payment_status: string;
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
 };
 
 export function admissionGroups(visits: AdmissionVisit[]) {
