@@ -7,6 +7,7 @@ import { getStaffFamilySearchAliases } from '@/lib/staff-family-search';
 export const dynamic = 'force-dynamic';
 const familySelect = 'id,name,email,phone';
 const personSelect = 'id,household_id,first_name,last_name,role,birthdate';
+const reservationSelect = 'id,household_id,child_count,adult_count,slot:open_play_reservation_slots!inner(label,starts_at,ends_at)';
 
 export async function GET(req: Request) {
   const c = await requireStaffContext();
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
       ids = [...new Set([...(households.data ?? []).map(row => row.id), ...(people.data ?? []).map(row => row.household_id)].filter(Boolean))];
     } else {
       const result = await c.admin.from('open_play_reservations')
-        .select('id,household_id,child_count,adult_count,slot:open_play_reservation_slots!inner(label,starts_at,ends_at)')
+        .select(reservationSelect)
         .neq('status', 'cancelled').gte('slot.starts_at', toPartyDateTimeIso(today, 0))
         .lt('slot.starts_at', toPartyDateTimeIso(tomorrow, 0)).order('created_at').limit(501);
       if (result.error) throw new Error('Unable to load today’s Open Play reservations.');
@@ -51,12 +52,22 @@ export async function GET(req: Request) {
     const matchedIds = ids;
     ids = [...new Set(ids.map(canonicalId))];
     const lookupIds = [...new Set([...matchedIds, ...ids, ...[...aliases.keys()].filter(id => ids.includes(canonicalId(id)))])];
-    const [households, people, waivers] = await Promise.all([
+    const [households, people, waivers, bookings] = await Promise.all([
       c.admin.from('households').select(familySelect).in('id', lookupIds).order('name').limit(1000),
       c.admin.from('people').select(personSelect).in('household_id', lookupIds).order('created_at').limit(1000),
       c.admin.from('waivers').select(`household_id,${WAIVER_STATUS_SELECT}`).in('household_id', ids).order('signed_at', { ascending: false }).limit(1000),
+      family || tokens.length
+        ? c.admin.from('open_play_reservations').select(reservationSelect)
+          .in('household_id', lookupIds).neq('status', 'cancelled').order('created_at').limit(501)
+        : Promise.resolve(null),
     ]);
     if (households.error || people.error || waivers.error) throw new Error('Unable to load family details.');
+    if (bookings) {
+      if (bookings.error) throw new Error('Unable to load family Open Play reservations.');
+      if ((bookings.data?.length ?? 0) > 500) throw new Error('Too many matching reservations. Please search with a more specific name or email.');
+      reservations = (bookings.data ?? []).map(row => ({ ...row, slot: Array.isArray(row.slot) ? row.slot[0] : row.slot })) as typeof reservations;
+    }
+    reservations.sort((a, b) => Date.parse(a.slot.starts_at) - Date.parse(b.slot.starts_at));
     if ((people.data?.length ?? 0) >= 1000 || (waivers.data?.length ?? 0) >= 1000) throw new Error('Too many matching records. Please search with a more specific name or email.');
     const items = (households.data ?? []).filter(household => ids.includes(household.id)).map(household => {
       const members = (people.data ?? []).filter(person => person.household_id === household.id);

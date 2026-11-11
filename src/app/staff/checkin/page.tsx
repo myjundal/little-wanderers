@@ -11,6 +11,7 @@ type DeskFamily = { id: string; name: string | null; email: string | null; phone
   reservations: Array<{ id: string; child_count: number; adult_count: number; slot: { label: string; starts_at: string; ends_at: string } }> };
 const personName = (person: DeskPerson) => [person.first_name, person.last_name].filter(Boolean).join(' ') || 'Unnamed visitor';
 const timeLabel = (value: string) => new Date(value).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+const dateLabel = (value: string) => new Date(value).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const panel: React.CSSProperties = { marginTop: 20, padding: 20, border: '1px solid #d9c8f7', borderRadius: 16, background: '#fffdf9' };
 const button: React.CSSProperties = { padding: '14px 20px', borderRadius: 12, border: 0, background: '#65449b', color: '#fff', fontSize: 17, fontWeight: 700, cursor: 'pointer' };
@@ -276,7 +277,8 @@ export default function StaffCheckinPage() {
               <h3 style={{ margin: 0 }}>{item.name || personName(item.people.find(person => person.role === 'adult') || item.people[0] || { id: '', first_name: 'Family', last_name: null, role: '', birthdate: null })}</h3>
               <p>{item.people.map(personName).join(', ') || 'No family members added'}</p>
               <p style={{ overflowWrap: 'anywhere' }}>{[item.email, item.phone].filter(Boolean).join(' · ')}</p>
-              {item.reservations.map(reservation => <p key={reservation.id}>{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} · {reservation.child_count} children / {reservation.adult_count} adults</p>)}
+              {item.reservations.map(reservation => <p key={reservation.id} style={{ color: '#2f7a47' }}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults</p>)}
+              {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
               <p>{checked ? `${checked} checked in today` : 'Not checked in'} · {item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
               <button style={{ ...button, width: '100%' }} disabled={locked} onClick={() => void openFamily(item.id)}>Choose family</button>
             </article>;
