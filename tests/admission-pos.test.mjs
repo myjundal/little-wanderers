@@ -78,7 +78,7 @@ test('completed Square receipt can be retried after a database failure without a
 
 test('POS API requires staff and verification looks up the signed-in operator’s stored sale',async()=>{
  let expected;
- const base={'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
+ const base={'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
  const denied=loadModule('src/app/api/admin/admission/pos/route.ts',{...base,'@/lib/authz':{requireStaffContext:async()=>({ok:false,response:Response.json({}, {status:403})})}});
  assert.equal((await denied.POST({json:async()=>({})})).status,403);
  const query={select(){return this},eq(key,value){expected??={};expected[key]=value;return this},async maybeSingle(){return {data:null,error:null}}};

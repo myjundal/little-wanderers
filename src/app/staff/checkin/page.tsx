@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import StaffDashboard from '@/components/staff/StaffDashboard';
+import AdmissionVisits from '@/components/staff/AdmissionVisits';
+import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
 import { admissionGroups, squarePosCallback, type AdmissionVisit } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
@@ -35,6 +37,8 @@ export default function StaffCheckinPage() {
   const [paymentsReady, setPaymentsReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [checkingOut, setCheckingOut] = useState('');
+  const checkoutBusy = useRef(false);
   const [launchUrl, setLaunchUrl] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
   const [pendingSales,setPendingSales]=useState<Array<{id:string;checkin_ids:string[]}>>([]);
@@ -115,6 +119,16 @@ export default function StaffCheckinPage() {
     return () => { window.removeEventListener('pageshow', resume); window.removeEventListener('focus', resume); };
     // Refresh saved visits and counts when returning from the Square app.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (checkinBusy.current || checkoutBusy.current || paymentPending.current) return;
+      void refreshPayments().catch(error => setMessage(error.message));
+      setDeskRefresh(value => value + 1);
+    }, 60000);
+    return () => window.clearInterval(timer);
+    // Keep other operators' arrivals and departures current on the shared desk.
   }, []);
 
   useEffect(() => {
@@ -224,6 +238,27 @@ export default function StaffCheckinPage() {
     finally { setBusy(false); }
   }
 
+  async function checkOutFamily(householdId: string, ids: string[]) {
+    if (locked || !paymentsReady || loading || checkoutBusy.current || paymentPending.current) return;
+    checkoutBusy.current = true;
+    setCheckingOut(householdId);
+    let recorded = false;
+    try {
+      const response = await fetch('/api/admin/admission/checkout', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ household_id: householdId, checkin_ids: ids }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to check out family.');
+      recorded = true;
+      const departures = new Map<string, string>((result.checkouts ?? []).map((row: { id: string; checked_out_at: string }) => [row.id, row.checked_out_at]));
+      setVisits(previous => previous.map(visit => departures.has(visit.id) ? { ...visit, checked_out_at: departures.get(visit.id) } : visit));
+      setDeskRefresh(value => value + 1);
+      await refreshPayments();
+      setMessage('Family checked out. Departure times and crowd count are saved.');
+    } catch (error) {
+      setMessage(`${recorded ? 'Checkout is saved. ' : ''}${error instanceof Error ? error.message : 'Unable to check out family.'}`);
+    } finally { checkoutBusy.current = false; setCheckingOut(''); }
+  }
+
 
   async function recoverPayment(){
     if(!pendingSale||!recoveryConfirmed)return;
@@ -240,7 +275,7 @@ export default function StaffCheckinPage() {
     finally{setBusy(false);}
   }
 
-  const locked = busy || checkingIn || !!launchUrl || needsVerification || !!completion;
+  const locked = busy || checkingIn || !!checkingOut || !!launchUrl || needsVerification || !!completion;
   const entriesLocked = locked || loading || !paymentsReady || !!pendingSale;
   const waiverBlocked = !!family && family.waiver_status !== 'completed';
   const checkinDisabled = entriesLocked || !peopleIds.length || waiverBlocked;
@@ -252,6 +287,7 @@ export default function StaffCheckinPage() {
     : !peopleIds.length ? 'Select the children and adults who are visiting.' : '';
   const familyVisits = visits.filter(visit => visit.household_id === activeFamily);
   const notCheckedIn = family?.people.filter(person => !familyVisits.some(visit => visit.person_id === person.id)) ?? [];
+  const waitingFamilies = families.filter(item => !visits.some(visit => visit.household_id === item.id));
 
   return <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
     <StaffToolNav active="checkin" />
@@ -270,17 +306,16 @@ export default function StaffCheckinPage() {
       {deskError && <p role="alert">{deskError}</p>}
       {deskLoading ? <p role="status">Loading families…</p> : <>
         {truncated && <p>Many matches found. Enter a more specific name or email to narrow the list.</p>}
-        {!families.length && !deskError && <p>{query.trim() ? 'No families found. Try another name, email, or phone.' : 'No Open Play reservations today. Search by name to check in a walk-in.'}</p>}
+        {!waitingFamilies.length && !deskError && <p>{families.length ? 'Families who have visited today are in the checked-in / checked-out lists below.' : query.trim() ? 'No families found. Try another name, email, or phone.' : 'No Open Play reservations today. Search by name to check in a walk-in.'}</p>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 12, maxHeight: 440, overflowY: 'auto' }}>
-          {families.map(item => {
-            const checked = visits.filter(visit => visit.household_id === item.id).length;
+          {waitingFamilies.map(item => {
             return <article key={item.id} style={{ border: `2px solid ${activeFamily === item.id ? '#8a61b9' : '#eee5f8'}`, borderRadius: 12, padding: 16 }}>
               <h3 style={{ margin: 0 }}>{item.name || personName(item.people.find(person => person.role === 'adult') || item.people[0] || { id: '', first_name: 'Family', last_name: null, role: '', birthdate: null })}</h3>
               <p>{item.people.map(personName).join(', ') || 'No family members added'}</p>
               <p style={{ overflowWrap: 'anywhere' }}>{[item.email, item.phone].filter(Boolean).join(' · ')}</p>
-              {item.reservations.map(reservation => <p key={reservation.id} style={{ color: '#2f7a47' }}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults</p>)}
+              {item.reservations.map(reservation => <p key={reservation.id} style={{ color: '#222' }}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults</p>)}
               {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
-              <p>{checked ? `${checked} checked in today` : 'Not checked in'} · {item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
+              <p>Not checked in · {item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
               <button style={{ ...button, width: '100%' }} disabled={locked} onClick={() => void openFamily(item.id)}>Choose family</button>
             </article>;
           })}
@@ -290,6 +325,9 @@ export default function StaffCheckinPage() {
     <section style={panel} aria-live="polite"><strong>{message}</strong>
       {needsVerification && <p><button style={button} disabled={busy} onClick={() => void verifyReturn()}>Retry payment verification</button></p>}
     </section>
+    <AdmissionVisits visits={visits} ready={paymentsReady} locked={locked || loading} checkingOut={checkingOut}
+      onCheckout={(id, ids) => void checkOutFamily(id, ids)} onOpenFamily={id => void openFamily(id)}
+      onRefresh={() => void refreshPayments().catch(error => setMessage(error.message))} />
     {family && <section style={panel} aria-label="Visiting family members">
       <h2>{family.name || 'Selected family'}</h2>
       <p><Link href={`/staff/families/${family.id}`}>Open family details / edit people</Link> · <Link href="/waiver" target="_blank">Family waiver</Link></p>
@@ -300,7 +338,7 @@ export default function StaffCheckinPage() {
           const visit = familyVisits.find(visit => visit.person_id === person.id);
           return <label key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: visit ? '#f0f7ef' : '#f7f3fc', borderRadius: 12 }}>
             <input type="checkbox" style={{ width: 24, height: 24 }} checked={!!visit || peopleIds.includes(person.id)} disabled={!!visit || entriesLocked} onChange={event => setPeopleIds(previous => event.target.checked ? [...previous, person.id] : previous.filter(id => id !== person.id))} />
-            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · Checked in — {visit.payment_status === 'paid' ? 'Paid' : visit.price_cents === 0 ? 'Included / member / prepaid' : `${money(visit.price_cents)} due`}</span>}</span>
+            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · {visit.checked_out_at ? 'Checked out' : 'Checked in'} — {visit.payment_status === 'paid' ? 'Paid' : visit.price_cents === 0 ? 'Included / member / prepaid' : `${money(visit.price_cents)} due`}</span>}</span>
           </label>;
         })}
       </div>
@@ -333,9 +371,10 @@ export default function StaffCheckinPage() {
       <p><button disabled={busy || checkingIn} onClick={() => void refreshPayments().catch(error => setMessage(error.message))}>Refresh payment status</button></p>
     </section>
     </div><aside className={styles.occupancy} aria-label="Live occupancy management">
-      <p>Check-ins update occupancy automatically. Use the controls below for departures or other count corrections.</p>
+      <p>Use family check-out to record departures and update occupancy. The controls below are for other count corrections.</p>
       <StaffDashboard view="occupancy" refreshKey={deskRefresh} />
     </aside></div>
+    <AdmissionStayStatistics refreshKey={deskRefresh} />
     {completion && <dialog ref={completionDialog} className={styles.completionDialog} aria-labelledby="checkin-complete-title" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setCompletion(null)}>
       <h2 id="checkin-complete-title">Check-in complete</h2>
       <p><strong>{completion.familyName}</strong></p>

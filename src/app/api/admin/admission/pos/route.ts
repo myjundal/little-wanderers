@@ -3,6 +3,7 @@ import { paymentFlowEnabled, squareConfig, squareEnvironment } from '@/lib/squar
 import { startAdmissionPos, verifyAdmissionPos, recoverAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { isUuid } from '@/lib/open-play-reservations';
+import { getAdmissionCheckouts } from '@/lib/admission-checkout';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
@@ -10,7 +11,7 @@ export async function GET() {
   if (!c.ok) return c.response;
   const today = getPartyDateKey(new Date());
   const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
-  const { data, error } = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status')
+  const { data, error } = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at')
     .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0));
   if (error) return Response.json({ ok: false, error: 'Unable to load today’s admission payments.' }, { status: 503 });
   const ids = [...new Set((data ?? []).map(row => row.person_id))];
@@ -23,15 +24,18 @@ export async function GET() {
     ? await c.admin.from('households').select('id,name').in('id', familyIds)
     : { data: [], error: null };
   if (familyError) return Response.json({ ok: false, error: 'Unable to load visiting families.' }, { status: 503 });
+  let checkouts: Map<string, string>;
+  try { checkouts = await getAdmissionCheckouts(c.admin, data ?? []); }
+  catch { return Response.json({ ok: false, error: 'Unable to load departures. Refresh admission status before continuing.' }, { status: 503 }); }
   const visits = (data ?? []).map(row => {
     const person = (people ?? []).find(person => person.id === row.person_id);
-    return { ...row, household_id: person?.household_id ?? null,
+    return { ...row, checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });
   const {data:pending,error:pendingError}=await c.admin.from('admission_pos_sales').select('id,checkin_ids,launched_at').eq('created_by_user_id',c.user.id).eq('environment',squareEnvironment()).eq('status','open');
   if(pendingError)return Response.json({ok:false,error:'Unable to load pending Square payments.'},{status:503});
-  return Response.json({ ok: true, enabled: paymentFlowEnabled('admission_pos'), visits, pending_sales:pending??[] });
+  return Response.json({ ok: true, date: today, enabled: paymentFlowEnabled('admission_pos'), visits, pending_sales:pending??[] }, { headers: { 'cache-control': 'no-store' } });
 }
 
 export async function POST(req: Request) {
