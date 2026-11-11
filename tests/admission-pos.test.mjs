@@ -120,3 +120,47 @@ test('recovery refuses to release when Square history cannot be completely check
  const pos=modules(async()=>Response.json({payments:[],cursor:'another-page'})).load('src/lib/square-admission-pos.ts');
  await assert.rejects(pos.recoverAdmissionPos(admin,sale,ids.user,true),/Too many transactions/);
 });
+
+test('automatic resume reconciles a completed provider receipt without a callback, cancellation or another charge', async t => {
+ const {db,admin}=await database(t);
+ const sale=(await prepare(admin)).data;
+ await db.query('update admission_pos_sales set launched_at=now() where id=$1',[sale.id]);
+ sale.launched_at=date;
+ const payment={id:'resume-payment',source_type:'CARD',order_id:'resume-order',location_id:'test-location',status:'COMPLETED',amount_money:{amount:2600,currency:'USD'},note:`LW admission ${sale.id}`,created_at:date,updated_at:date};
+ const order={id:'resume-order',location_id:'test-location',state:'COMPLETED',total_money:{amount:2600,currency:'USD'},tenders:[{payment_id:payment.id}]};
+ const calls=[];
+ const pos=modules(async(url,options)=>{calls.push(options.method);const path=new URL(url).pathname;return Response.json(path==='/v2/payments'?{payments:[payment]}:path.includes('/orders/')?{order}:{payment});}).load('src/lib/square-admission-pos.ts');
+ assert.equal((await pos.reconcileAdmissionPos(admin,sale)).status,'paid');
+ assert.equal((await db.query("select count(*)::int n from checkins where payment_status='paid'")).rows[0].n,2);
+ assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,1);
+ assert.ok(calls.every(method=>method==='GET'));
+});
+
+test('automatic resume keeps missing or pending receipts open and never releases a checkout', async t => {
+ const {db,admin}=await database(t);const sale=(await prepare(admin)).data;sale.launched_at=date;
+ let payments=[];
+ const pos=modules(async()=>Response.json({payments})).load('src/lib/square-admission-pos.ts');
+ assert.equal((await pos.reconcileAdmissionPos(admin,sale)).status,'pending');
+ payments=[{id:'pending',status:'APPROVED',note:`LW admission ${sale.id}`}];
+ assert.equal((await pos.reconcileAdmissionPos(admin,sale)).status,'pending');
+ assert.equal((await db.query('select status from admission_pos_sales where id=$1',[sale.id])).rows[0].status,'open');
+ assert.equal((await db.query("select count(*)::int n from checkins where payment_status='paid'")).rows[0].n,0);
+});
+
+test('staff sync is bound to its stored sale and a transaction callback can resolve the provider order', async () => {
+ const selected={}, calls=[];
+ const sale={id:checkin,status:'open',environment:'production',created_by_user_id:ids.user};
+ const query={select(){return this},eq(key,value){selected[key]=value;return this},async maybeSingle(){return {data:sale,error:null}}};
+ const api=loadModule('src/app/api/admin/admission/pos/route.ts',{
+  '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:ids.user},admin:{from:()=>query}})},
+  '@/lib/square-client':{squareConfig:()=>({environment:'production'})},'@/lib/admission-checkout':{},
+  '@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)},
+  '@/lib/square-admission-pos':{verifyAdmissionPos:async()=>{calls.push('direct');throw Error('transaction is not an order')},reconcileAdmissionPos:async()=>{calls.push('provider');return {status:'paid'}}},
+ });
+ const request=body=>new Request('https://example.test',{method:'POST',body:JSON.stringify(body)});
+ const result=await (await api.POST(request({mode:'verify',state:checkin,transaction_id:'native-transaction'}))).json();
+ assert.equal(result.status,'paid');assert.deepEqual(calls,['direct','provider']);
+ calls.length=0;
+ assert.equal((await (await api.POST(request({mode:'sync',state:checkin,created_by_user_id:ids.other}))).json()).status,'paid');
+ assert.deepEqual(calls,['provider']);assert.equal(selected.created_by_user_id,ids.user);assert.equal(selected.environment,'production');
+});

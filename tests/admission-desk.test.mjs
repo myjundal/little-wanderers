@@ -104,9 +104,10 @@ test('search and direct family lookup include confirmed alternate-profile bookin
   assert.equal((await apiHarness({ reservationRows: Array.from({ length: 501 }, () => booking) }).get('?q=Family')).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false } = {}) {
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending' } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
-  let cursor = 0, tree, visits = [], timers = [], refreshes = 0;
+  let cursor = 0, tree, visits = [], timers = [], refreshes = 0, saleOpen = false, holdRead = false;
+  const storage = new Map(), intervals = [], heldReads = [];
   const memo = (factory, deps) => {
     const i = cursor++;
     if (!hooks[i] || !deps || deps.some((value, n) => !Object.is(value, hooks[i].deps?.[n]))) hooks[i] = { value: factory(), deps };
@@ -134,16 +135,23 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
       return Response.json({ ok: true });
     }
     if (body?.mode === 'verify') return Response.json({ ok: !verifyFailure, error: verifyFailure ? 'Receipt pending' : undefined }, { status: verifyFailure ? 409 : 200 });
-    if (body) return Response.json({ ok: true, id: 'sale', url: 'square-commerce-v1://payment/create?fixture' });
+    if (body?.mode === 'sync') {
+      if (syncStatus === 'paid') { visits = visits.map(visit => ({ ...visit, payment_status: visit.price_cents > 0 ? 'paid' : visit.payment_status })); saleOpen = false; }
+      return Response.json({ ok: true, status: syncStatus });
+    }
+    if (body) { saleOpen = true; return Response.json({ ok: true, id: 'sale', url: 'square-commerce-v1://payment/create?fixture' }); }
     refreshes++;
     if (failRefresh && refreshes > 2) return Response.json({ ok: false, error: 'Connection lost' }, { status: 503 });
-    return Response.json({ ok: true, visits, enabled: squareEnabled, pending_sales: pending && visits.length ? [{ id: 'sale', checkin_ids: visits.map(visit => visit.id) }] : [] });
+    const snapshot = JSON.parse(JSON.stringify({ ok: true, visits, enabled: squareEnabled, pending_sales: (pending || saleOpen) && visits.some(visit => visit.payment_status === 'due') ? [{ id: 'sale', checkin_ids: visits.map(visit => visit.id), launched_at: new Date().toISOString() }] : [] }));
+    if (holdRead) { holdRead = false; await new Promise(resolve => heldReads.push(resolve)); }
+    return Response.json(snapshot);
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
   const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-pos-ui': logic }, {
     React, fetch, AbortController,
+    document: { visibilityState: 'visible', addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; } },
     navigator: { userAgent: 'iPad' },
-    window: { addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; }, location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); }, replace(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, setInterval() { return 1; }, clearInterval() {}, sessionStorage: { setItem() {}, getItem() { return family.id; } } },
+    window: { addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; }, location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); }, replace(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {}, sessionStorage: { setItem(key, value) { storage.set(key, value); }, getItem(key) { return storage.get(key) ?? (key === 'admission-family' ? family.id : null); }, removeItem(key) { storage.delete(key); } } },
   }).default;
   const render = () => { cursor = 0; tree = page(); return tree; };
   async function flush() {
@@ -158,7 +166,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const nodes = () => { const all = []; const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; all.push(node); walk(node.props?.children); }; walk(tree); return all; };
   const label = node => { if (Array.isArray(node)) return node.map(label).join(''); if (node == null || typeof node === 'boolean') return ''; if (typeof node !== 'object') return String(node); return label(node.props?.children); };
   const button = text => nodes().find(node => node.type === 'button' && label(node).includes(text));
-  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, resume: () => listeners.focus(), setWaiver: value => { waiver = value; } };
+  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, resume: () => listeners.focus(), visible: () => listeners.visibilitychange(), poll: () => intervals.find(timer => timer.ms === 5000)?.fn(), holdNextRead: () => { holdRead = true; }, releaseReads: () => { for (const resolve of heldReads.splice(0)) resolve(); }, setSyncStatus: value => { syncStatus = value; }, setWaiver: value => { waiver = value; } };
 }
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
@@ -417,4 +425,38 @@ test('failed checkout keeps the active visitors and displays an actionable error
   await h.flush();
   assert.ok(h.nodes().find(node => node.type === 'admission-visits').props.visits.every(visit => !visit.checked_out_at));
   assert.ok(h.text().includes('Unable to record checkout'));
+});
+
+test('Home Screen app verifies a payment without a callback, refreshes on visibility and releases the payment lock', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  await h.button('Continue to Square').props.onClick(); await h.flush();
+  assert.equal(h.navigations.length, 1);
+  h.setSyncStatus('paid');
+  h.visible(); await h.flush();
+  assert.ok(h.requests.some(request => request.body?.mode === 'sync' && request.body.state === 'sale'));
+  assert.ok(h.text().includes('Payment verified'));
+  assert.ok(!h.button('Pay $16.00'));
+  assert.equal(h.nodes().find(node => node.props?.id === 'family-search').props.disabled, false);
+  assert.equal(h.requests.filter(request => request.body?.checkin_ids).length, 1);
+  assert.equal(h.requests.filter(request => request.url === '/api/checkin').length, 2);
+});
+
+test('pending receipt is retried and an older read cannot restore the unpaid state after verification', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  await h.button('Continue to Square').props.onClick(); await h.flush();
+  h.visible(); await h.flush();
+  assert.ok(!h.text().includes('Payment verified'));
+  h.holdNextRead();
+  h.nodes().find(node => node.type === 'admission-visits').props.onRefresh();
+  await h.flush();
+  h.setSyncStatus('paid'); h.poll(); await h.flush();
+  assert.ok(h.text().includes('Payment verified'));
+  h.releaseReads(); await h.flush();
+  assert.ok(!h.button('Pay $16.00'));
+  assert.equal(h.nodes().find(node => node.props?.id === 'family-search').props.disabled, false);
+  assert.equal(h.requests.filter(request => request.body?.checkin_ids).length, 1);
 });

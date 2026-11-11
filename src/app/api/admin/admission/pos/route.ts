@@ -1,10 +1,19 @@
 import { requireStaffContext } from '@/lib/authz';
 import { paymentFlowEnabled, squareConfig, squareEnvironment } from '@/lib/square-client';
-import { startAdmissionPos, verifyAdmissionPos, recoverAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
+import { startAdmissionPos, verifyAdmissionPos, recoverAdmissionPos, reconcileAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { isUuid } from '@/lib/open-play-reservations';
 import { getAdmissionCheckouts } from '@/lib/admission-checkout';
 export const dynamic = 'force-dynamic';
+
+async function saleFamily(admin: Awaited<ReturnType<typeof requireStaffContext>> & { ok: true }, sale: PosSale) {
+  if (!sale.checkin_ids?.length) return null;
+  const { data } = await admin.admin.from('checkins').select('household_id,person_id').in('id', sale.checkin_ids).limit(1).maybeSingle();
+  if (data?.household_id) return data.household_id as string;
+  if (!data?.person_id) return null;
+  const person = await admin.admin.from('people').select('household_id').eq('id', data.person_id).maybeSingle();
+  return person.data?.household_id ?? null;
+}
 
 export async function GET() {
   const c = await requireStaffContext();
@@ -44,14 +53,25 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   try {
     // Receipt verification stays available even if new POS launches are disabled.
-    if (body.mode === 'verify' || body.mode === 'recover') {
+    if (body.mode === 'verify' || body.mode === 'recover' || body.mode === 'sync') {
       if (!isUuid(String(body.state ?? '')) || (body.mode==='verify'&&(typeof body.transaction_id !== 'string' || !body.transaction_id || body.transaction_id.length > 200)))
         throw new Error('Invalid Square callback');
       const { data, error } = await c.admin.from('admission_pos_sales').select('*').eq('id', body.state)
         .eq('created_by_user_id', c.user.id).eq('environment', squareConfig().environment).maybeSingle();
       if (error || !data) throw new Error('POS sale not found');
       if(body.mode==='recover')return Response.json({ok:true,...await recoverAdmissionPos(c.admin,data as PosSale,c.user.id,body.confirm_no_payment===true)});
-      return Response.json({ ok: true, ...await verifyAdmissionPos(c.admin, data as PosSale, body.transaction_id) });
+      let result;
+      if (body.mode === 'sync') result = await reconcileAdmissionPos(c.admin, data as PosSale);
+      else {
+        try { result = await verifyAdmissionPos(c.admin, data as PosSale, body.transaction_id); }
+        catch (verificationError) {
+          // iOS returns a transaction ID, which is not always its Orders API ID.
+          // Resolve only a provider-verified receipt bound to this frozen sale.
+          result = await reconcileAdmissionPos(c.admin, data as PosSale);
+          if (result.status !== 'paid') throw verificationError;
+        }
+      }
+      return Response.json({ ok: true, ...result, household_id: await saleFamily(c, data as PosSale) }, { headers: { 'cache-control': 'no-store' } });
     }
     const ids = Array.isArray(body.checkin_ids) ? body.checkin_ids : [];
     if (!ids.length || ids.length > 30 || ids.some((id: unknown) => typeof id !== 'string' || !isUuid(id)))

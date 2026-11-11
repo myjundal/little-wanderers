@@ -14,7 +14,7 @@ async function saveSquarePaymentReceipt(admin: SupabaseClient,payment: SquarePay
   if (error) throw new Error(error.message);
 }
 
-export type PosSale={id:string;environment:string;location_id:string;created_by_user_id:string;amount_cents:number;status:string;order_id:string|null;created_at:string;launched_at?:string|null};
+export type PosSale={id:string;environment:string;location_id:string;created_by_user_id:string;amount_cents:number;status:string;order_id:string|null;created_at:string;launched_at?:string|null;checkin_ids?:string[]};
 export async function startAdmissionPos(admin:SupabaseClient,checkinIds:string[],userId:string){
  const config=requirePaymentFlow('admission_pos');const appId=process.env.SQUARE_APPLICATION_ID;
  if(!appId||(config.environment==='production'&&!appId.startsWith('sq0idp-')))throw new Error('Square POS Application ID is not configured');
@@ -65,6 +65,23 @@ export async function recoverAdmissionPos(admin:SupabaseClient,sale:PosSale,user
  const config=squareConfig();
  if(sale.environment!==config.environment||sale.location_id!==config.locationId)throw new Error('POS environment mismatch');
  if(!sale.launched_at||Date.now()-Date.parse(sale.launched_at)<60000)throw new Error('Wait one minute after the launch, then check Square before resetting.');
+ const matching=await matchingAdmissionPayments(sale);
+ if(matching.some(payment=>!['COMPLETED','FAILED','CANCELED'].includes(payment.status??'')))throw new Error('Square still has a pending payment. Finish or cancel it in Square first.');
+ const completed=matching.filter(payment=>payment.status==='COMPLETED');
+ if(completed.length){
+  const orderIds=[...new Set(completed.map(payment=>payment.order_id))];
+  if(orderIds.length!==1||!orderIds[0])throw new Error('Multiple or unclear Square payments require owner review. Do not charge again.');
+  await verifyAdmissionPos(admin,sale,orderIds[0]);
+  return {status:'paid'};
+ }
+ const {error}=await admin.rpc('cancel_admission_pos_after_review',{p_id:sale.id,p_user:userId});
+ if(error)throw new Error(error.message);
+ return {status:'cancelled'};
+}
+
+async function matchingAdmissionPayments(sale:PosSale){
+ const config=squareConfig();
+ if(sale.environment!==config.environment||sale.location_id!==config.locationId)throw new Error('POS environment mismatch');
  const query=new URLSearchParams({location_id:config.locationId,begin_time:new Date(Date.parse(sale.created_at)-60000).toISOString(),end_time:new Date().toISOString(),sort_order:'ASC',limit:'100'});
  const matching:SquarePayment[]=[];let cursor:string|undefined;
  const orders=new Map<string,SquareOrder>();
@@ -82,15 +99,21 @@ export async function recoverAdmissionPos(admin:SupabaseClient,sale:PosSale,user
   cursor=result.cursor;if(!cursor)break;
  }
  if(cursor)throw new Error('Too many transactions to verify safely. Contact the owner before retrying.');
- if(matching.some(payment=>!['COMPLETED','FAILED','CANCELED'].includes(payment.status??'')))throw new Error('Square still has a pending payment. Finish or cancel it in Square first.');
+ return matching;
+}
+
+/** Provider-only reconciliation. Never cancels a launch or starts another charge. */
+export async function reconcileAdmissionPos(admin:SupabaseClient,sale:PosSale){
+ if(sale.status==='paid')return {status:'paid' as const};
+ if(sale.status==='cancelled')return {status:'cancelled' as const};
+ if(sale.status!=='open')throw new Error('This payment requires owner review');
+ if(!sale.launched_at)return {status:'pending' as const};
+ const matching=await matchingAdmissionPayments(sale);
+ if(matching.some(payment=>!['COMPLETED','FAILED','CANCELED'].includes(payment.status??'')))return {status:'pending' as const};
  const completed=matching.filter(payment=>payment.status==='COMPLETED');
- if(completed.length){
-  const orderIds=[...new Set(completed.map(payment=>payment.order_id))];
-  if(orderIds.length!==1||!orderIds[0])throw new Error('Multiple or unclear Square payments require owner review. Do not charge again.');
-  await verifyAdmissionPos(admin,sale,orderIds[0]);
-  return {status:'paid'};
- }
- const {error}=await admin.rpc('cancel_admission_pos_after_review',{p_id:sale.id,p_user:userId});
- if(error)throw new Error(error.message);
- return {status:'cancelled'};
+ if(!completed.length)return {status:'pending' as const};
+ const orderIds=[...new Set(completed.map(payment=>payment.order_id))];
+ if(orderIds.length!==1||!orderIds[0])throw new Error('Multiple or unclear Square payments require owner review. Do not charge again.');
+ await verifyAdmissionPos(admin,sale,orderIds[0]);
+ return {status:'paid' as const};
 }
