@@ -20,7 +20,7 @@ export default async function StaffPartiesPage() {
       </div>
 
       <PartyManagement canEditSchedule={role === 'owner' || role === 'admin'} />
-      {(role === 'owner' || role === 'admin') && <details style={{ marginTop: 32 }}>
+      {(role === 'owner' || role === 'admin') && <details open style={{ marginTop: 32 }}>
         <summary style={{ padding: 16, cursor: 'pointer', color: '#5f3da4', fontWeight: 700 }}>All bookings &amp; requests</summary>
         <StaffDashboard view="parties" />
       </details>}

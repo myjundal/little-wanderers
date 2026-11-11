@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { loadModule } from './helpers/class-preregistration-harness.mjs';
 
 const grouping = loadModule('src/lib/party-booking-groups.ts');
@@ -12,6 +13,21 @@ const party = (id, patch = {}) => ({
   current_child_count: 5, current_adult_count: 12, attendance_finalized_at: null,
   final_child_count: null, final_adult_count: null, final_total_count: null,
   ...patch,
+});
+
+test('owners and admins see all bookings expanded on arrival; staff keep the attendance view', async () => {
+  for (const role of ['owner', 'admin', 'staff']) {
+    const Page = loadModule('src/app/staff/parties/page.tsx', {
+      '@/lib/authz': { getCurrentUserRole: async () => ({ role }) },
+      '@/components/staff/StaffDashboard': () => React.createElement('p', null, 'Upcoming bookings'),
+      '@/components/staff/StaffToolNav': () => null,
+      '@/components/staff/PartyManagement': () => React.createElement('p', null, 'Today’s parties'),
+    }, { React }).default;
+    const html = renderToStaticMarkup(await Page());
+    assert.ok(html.includes('Today’s parties'));
+    if (role === 'staff') assert.ok(!html.includes('Upcoming bookings'));
+    else assert.match(html, /<details open=""[^>]*>.*Upcoming bookings/s);
+  }
 });
 
 test('only ended confirmed parties move to completed, newest first, with records intact', () => {
@@ -66,7 +82,8 @@ test('dashboard moves parties while open, labels completed details and keeps att
     useMemo: memo, useCallback: (fn, deps) => memo(() => fn, deps),
     useEffect: (fn, deps) => memo(() => { effects.push(fn); }, deps),
   };
-  const items = [party('today'), party('future', { start_time: '2026-11-07T10:00:00-05:00', end_time: '2026-11-07T13:00:00-05:00' })];
+  const items = [party('today'), party('future', { start_time: '2026-11-07T10:00:00-05:00', end_time: '2026-11-07T13:00:00-05:00' }),
+    party('cancellation', { start_time: '2026-11-13T15:00:00-05:00', end_time: '2026-11-13T18:00:00-05:00', notes: '[Cancellation requested at 2026-11-01]' })];
   const { default: Dashboard } = loadModule('src/components/staff/StaffDashboard.tsx', {
     react, 'next/link': 'a', '@/lib/party-booking-groups': grouping,
     '@/lib/party-config': { PARTY_TIME_ZONE: 'America/New_York' },
@@ -94,6 +111,12 @@ test('dashboard moves parties while open, labels completed details and keeps att
   };
   const group = title => all(node => node.props.title === title)[0].props;
   render(); await new Promise(resolve => setImmediate(resolve)); render();
+  assert.equal(all(node => node.props.title)[0].props.title, 'Cancellation requests');
+  assert.equal(group('Cancellation requests').count, 1);
+  assert.equal(group('Cancellation requests').defaultOpen, true);
+  assert.ok(all(node => node.props.role === 'status').some(node => JSON.stringify(node.props.children).includes('remain booked on the public calendar')));
+  assert.ok(all(node => node.type === 'h3' && node.props.children === 'cancellation Family').length);
+  assert.ok(all(node => node.type === 'span' && node.props.children === 'Cancellation requested').length >= 2);
   assert.equal(group('Confirmed parties').count, 2);
   assert.equal(group('Completed parties').count, 0);
   clock = Date.parse('2026-11-01T23:00:00Z'); tick(); render();
@@ -132,4 +155,19 @@ test('public party calendar excludes cancelled bookings and uses no-store', asyn
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).items.map(item => item.id), ['booked']);
   assert.match(response.headers.get('cache-control'), /no-store/);
+});
+
+test('a cancellation request keeps its public calendar slot reserved until cancellation is approved', async () => {
+  const item = party('requested', { start_time: '2099-11-13T20:00:00Z', notes: '[Cancellation requested at 2099-11-11]' });
+  const query = {
+    select() { return this; }, gt() { return this; },
+    neq(key, value) { assert.equal(key, 'status'); assert.equal(value, 'cancelled'); return this; },
+    order: async () => ({ data: [item], error: null }),
+  };
+  const { GET } = loadModule('src/app/api/party-bookings/calendar/route.ts', {
+    '@supabase/supabase-js': { createClient: () => ({ from: () => query }) },
+    '@/lib/party-config': { isVisiblePartyCalendarSlot: () => true },
+  }, { process: { env: {} } });
+  assert.deepEqual((await (await GET()).json()).items.map(row => row.id), ['requested']);
+  assert.equal(item.status, 'confirmed');
 });
