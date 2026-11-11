@@ -1,7 +1,8 @@
+import { getAdmissionPrepayments } from '@/lib/admission-prepayments';
 import { projectInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
 import { requireStaffContext } from '@/lib/authz';
 import { paymentFlowEnabled, squareConfig, squareEnvironment } from '@/lib/square-client';
-import { startAdmissionPos, verifyAdmissionPos, recoverAdmissionPos, reconcileAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
+import { startAdmissionPos, verifyAdmissionPos, recoverAdmissionPos, reconcileAdmissionPos, refreshAdmissionPosSales, type PosSale } from '@/lib/square-admission-pos';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { isUuid } from '@/lib/open-play-reservations';
 import { getAdmissionCheckouts } from '@/lib/admission-checkout';
@@ -37,17 +38,36 @@ export async function GET() {
   let checkouts: Map<string, string>;
   try { checkouts = await getAdmissionCheckouts(c.admin, data ?? []); }
   catch { return Response.json({ ok: false, error: 'Unable to load departures. Refresh admission status before continuing.' }, { status: 503 }); }
-  const {data:pending,error:pendingError}=await c.admin.from('admission_pos_sales').select('id,checkin_ids,launched_at,created_by_user_id').eq('environment',squareEnvironment()).eq('status','open');
-  if(pendingError)return Response.json({ok:false,error:'Unable to load pending Square payments.'},{status:503});
-  const frozen = new Set<string>((pending ?? []).flatMap(sale => sale.checkin_ids ?? []));
-  const priced = projectInfantSiblingAdmission(data ?? [], people ?? [], squareEnvironment(), frozen);
+  const {data:pending,error:pendingError}=await c.admin.from('admission_pos_sales').select('*').eq('environment',squareEnvironment()).eq('status','open').limit(101);
+  if(pendingError || (pending?.length ?? 0)>100)return Response.json({ok:false,error:'Unable to load pending Square payments.'},{status:503});
+  const todayIds = new Set((data ?? []).map(row=>row.id));
+  const relevant = (pending ?? []).filter(sale=>sale.checkin_ids?.some((id:string)=>todayIds.has(id)));
+  const settled = await refreshAdmissionPosSales(c.admin,relevant as PosSale[]);
+  let recorded = data ?? [];
+  if ([...settled.values()].includes('paid')) {
+    const latest = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment')
+      .in('id',recorded.map(row=>row.id));
+    if (latest.error || latest.data?.length !== recorded.length) return Response.json({ok:false,error:'Payment recorded. Refresh admission status before continuing.'},{status:503});
+    recorded = latest.data;
+  }
+  const openSales = relevant.filter(sale=>sale.launched_at && settled.get(sale.id)!=='paid');
+  const frozen = new Set<string>(openSales.flatMap(sale=>sale.checkin_ids ?? []));
+  const withFamilies = recorded.map(row=>({...row,household_id:(people ?? []).find(person=>person.id===row.person_id)?.household_id ?? null}));
+  let prepaid;
+  try { prepaid = await getAdmissionPrepayments(c.admin,withFamilies,squareEnvironment()); }
+  catch { return Response.json({ok:false,error:'Unable to verify prepaid admission. Refresh before collecting payment.'},{status:503}); }
+  const included = projectInfantSiblingAdmission(prepaid,people ?? [],squareEnvironment(),frozen);
+  const priced = included.map(row=>{
+    const sale = openSales.find(sale=>sale.checkin_ids?.includes(row.id));
+    return sale && row.payment_status==='due' && row.price_cents>0 ? {...row,payment_status:settled.get(sale.id)==='review'?'review':'pending'} : row;
+  });
   const visits = priced.map(row => {
     const person = (people ?? []).find(person => person.id === row.person_id);
     return { ...row, checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });
-  return Response.json({ ok: true, date: today, enabled: paymentFlowEnabled('admission_pos'), visits, pending_sales:(pending??[]).filter(sale=>sale.created_by_user_id===c.user.id) }, { headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ok: true, date: today, enabled: paymentFlowEnabled('admission_pos'), visits, settled_count:[...settled.values()].filter(status=>status==='paid').length, pending_sales:(openSales??[]).filter(sale=>sale.created_by_user_id===c.user.id) }, { headers: { 'cache-control': 'no-store' } });
 }
 
 export async function POST(req: Request) {

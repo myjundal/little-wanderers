@@ -98,6 +98,10 @@ export async function GET(req: Request) {
     const items = foundItems.filter(item => family || item.name !== 'My Household' || item.people.length || item.reservations.length
       || !foundItems.some(other => other.id !== item.id && other.people.length && (households.data ?? []).some(contact => canonicalId(contact.id) === other.id
         && ((contactKey(item.email) && contactKey(item.email) === contactKey(contact.email)) || (phoneKey(item.phone) && phoneKey(item.phone) === phoneKey(contact.phone))))));
+    if (!family && !tokens.length) {
+      const arrival = (item: typeof items[number]) => Math.min(...item.reservations.map(row=>Date.parse(row.slot.starts_at)));
+      items.sort((a,b)=>arrival(a)-arrival(b) || (a.name ?? '').localeCompare(b.name ?? '') || a.id.localeCompare(b.id));
+    }
     return Response.json({ ok: true, date: today, items, truncated });
   } catch (error) {
     return Response.json({ ok: false, error: error instanceof Error ? error.message : 'Unable to load check-in desk.' }, { status: 503 });

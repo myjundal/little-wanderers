@@ -28,3 +28,29 @@
 .desk { min-width: 0; }
 .occupancy { min-width: 0; position: sticky; top: 120px; padding-top: 8px; scroll-margin-top: 150px; }
 @media (max-width: 900px) { .workspace { grid-template-columns: minmax(0, 1fr); } .occupancy { position: static; } }
+
+.familyList { display: grid; gap: 8px; max-height: 620px; overflow-y: auto; padding: 2px; }
+.familyRow { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; column-gap: 14px; align-items: center; border: 1px solid #e2dce8; border-radius: 10px; padding: 12px 14px; }
+.selectedFamily { border-color: #80619f; box-shadow: 0 0 0 1px #80619f; }
+.arrivalTime { display: grid; gap: 3px; align-self: start; padding-top: 3px; font-size: 14px; }
+.arrivalTime strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+.arrivalTime span { font-size: 12px; color: #666; }
+.familySummary { min-width: 0; }
+.familySummary h3 { margin: 0; font-size: 17px; line-height: 1.35; }
+.childNames { margin: 3px 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.familyStatus { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; line-height: 1.5; }
+.waiverNeeded { color: #8a4b0f; font-weight: 700; }
+.familyActions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; }
+.familyActions button { min-height: 44px; padding: 8px 12px; border-radius: 9px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.familyActions button:disabled { opacity: .55; cursor: not-allowed; }
+.rowOpen { background: #fff; color: #503975; border: 1px solid #bcadc9; }
+.rowCheckout { background: #286443; color: #fff; border: 1px solid #286443; }
+.familyDetails { grid-column: 2 / -1; margin-top: 5px; font-size: 13px; }
+.familyDetails summary { width: fit-content; padding: 3px 0; cursor: pointer; color: #665475; }
+.familyDetails p { margin: 8px 0; line-height: 1.5; }
+@media (max-width: 600px) {
+ .familyRow { grid-template-columns: 76px minmax(0, 1fr); gap: 8px 10px; padding: 12px; }
+ .arrivalTime strong { font-size: 14px; }
+ .familyActions { grid-column: 2; justify-content: start; }
+ .familyDetails { grid-column: 2; }
+}

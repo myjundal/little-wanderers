@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import StaffDashboard from '@/components/staff/StaffDashboard';
-import { admissionTime, stayLabel, stayMinutes } from '@/lib/admission-stays';
+import { admissionDate, admissionTime, stayLabel, stayMinutes } from '@/lib/admission-stays';
 import { admissionPaymentLabel, reservationAdmissionLabel, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
 import { admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
@@ -57,7 +57,8 @@ export default function StaffCheckinPage() {
   const [pendingPosId, setPendingPosId] = useState('');
   const groups = admissionGroups(visits);
   const selected = groups.find(group => group.id === activeFamily);
-  const pendingSale=selected&&pendingSales.find(sale=>sale.checkin_ids.some(id=>selected.visits.some(visit=>visit.id===id)));
+  const pendingSale=pendingSales.find(sale=>sale.checkin_ids.some(id=>visits.some(visit=>visit.id===id && visit.household_id===activeFamily)));
+  const paymentUnverified = visits.some(visit=>visit.household_id===activeFamily && ['pending','review'].includes(visit.payment_status));
 
   useEffect(() => {
     if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
@@ -76,6 +77,7 @@ export default function StaffCheckinPage() {
       const currentVisits = (result.visits ?? []) as AdmissionVisit[];
       if (request !== paymentRequest.current) return currentVisits;
       setVisits(currentVisits);
+      if (result.settled_count > 0) setDeskRefresh(value=>value+1);
       setPeopleIds(previous => previous.filter(id => !currentVisits.some(visit => visit.person_id === id)));
       setPendingSales(result.pending_sales??[]);
       setEnabled(result.enabled === true);
@@ -387,10 +389,10 @@ export default function StaffCheckinPage() {
 
   return <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
     <StaffToolNav active="checkin" />
-    <h1 style={{ color: '#4f3f82', marginBottom: 8 }}>Check-in &amp; occupancy management</h1>
+    <h1 style={{ color: '#4f3f82', marginBottom: 8 }}>Family check-in</h1>
     <nav aria-label="Check-in workspace" style={{ display: 'flex', gap: 16, margin: '16px 0' }}><Link href="/staff/open-play-reservations">Open Play reservations</Link><a href="#occupancy-management">Adjust occupancy ↓</a></nav>
     <div className={styles.workspace}><div className={styles.desk}>
-    <p>Find a family or choose today’s Open Play reservation. Select the people who are here, record their visit, then take one family payment in Square.</p>
+    <p>Choose a reservation or search for a family.</p>
     <section style={panel}>
       <label htmlFor="family-search" style={{ fontWeight: 700 }}>Search families</label>
       <input id="family-search" type="search" value={query} disabled={locked} onChange={event => setQuery(event.target.value)} placeholder="Parent or child name, email, or phone" style={{ display: 'block', boxSizing: 'border-box', width: '100%', padding: 16, marginTop: 8, border: '1px solid #d9c8f7', borderRadius: 12, fontSize: 17 }} />
@@ -403,23 +405,47 @@ export default function StaffCheckinPage() {
       {deskLoading ? <p role="status">Loading families…</p> : <>
         {truncated && <p>Many matches found. Enter a more specific name or email to narrow the list.</p>}
         {!families.length && !deskError && <p>{query.trim() ? 'No families found. Try another name, email, or phone.' : 'No reservations or visitors today. Search by name to check in a walk-in.'}</p>}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 12, maxHeight: 440, overflowY: 'auto' }}>
+        <div className={styles.familyList}>
           {families.map(item => {
             const todayVisits = visits.filter(visit => visit.household_id === item.id);
             const present = todayVisits.filter(visit => !visit.checked_out_at);
             const departed = todayVisits.length > 0 && !present.length;
-            return <article key={item.id} className={present.length ? styles.checkedIn : departed ? styles.checkedOut : styles.waiting} style={{ border: `2px solid ${activeFamily === item.id ? '#8a61b9' : present.length ? '#6c9c7d' : '#eee5f8'}`, borderRadius: 12, padding: 16 }}>
-              <h3 style={{ margin: 0 }}>{item.name || personName(item.people.find(person => person.role === 'adult') || item.people[0] || { id: '', first_name: 'Family', last_name: null, role: '', birthdate: null })}</h3>
-              <p>{item.people.map(personName).join(', ') || 'No family members added'}</p>
-              <p style={{ overflowWrap: 'anywhere' }}>{[item.email, item.phone].filter(Boolean).join(' · ')}</p>
-              {item.reservations.map(reservation => <p key={reservation.id} style={{ color: '#222' }}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults
-                {reservation.admission_status && <><br /><strong>{reservationAdmissionLabel(reservation.admission_status, reservation.amount_cents)}</strong></>}
-              </p>)}
-              {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
-              <p><strong>{present.length ? `Checked in · ${present.length} guests here` : departed ? 'Checked out' : 'Not checked in'}</strong> · {item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
-              {todayVisits.map(visit => <p key={visit.id}>{visit.name} · {admissionPaymentLabel(visit)}{visit.checked_in_at && visit.checked_out_at && <> · In {admissionTime(visit.checked_in_at)} · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</p>)}
-              {present.length > 0 && <button className={styles.checkoutButton} disabled={locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Recording departure…' : `Check out family (${present.length})`}</button>}
-              <button style={{ ...button, width: '100%' }} disabled={locked} onClick={() => void openFamily(item.id)}>{todayVisits.length ? 'Open family / payment' : 'Choose family'}</button>
+            const booked = item.reservations.find(reservation=>admissionDate(reservation.slot.starts_at)===admissionDate(new Date().toISOString()))
+              ?? item.reservations.find(reservation=>Date.parse(reservation.slot.ends_at)>Date.now()) ?? item.reservations.at(-1);
+            const review = todayVisits.some(visit => visit.payment_status === 'review');
+            const pending = todayVisits.some(visit => visit.payment_status === 'pending');
+            const due = todayVisits.filter(visit => visit.payment_status === 'due').reduce((total, visit) => total + visit.price_cents, 0);
+            const settled = todayVisits.length > 0 && todayVisits.every(visit => ['paid','prepaid','walkin_paid','terminal_paid','covered','included','membership'].includes(visit.payment_status));
+            const reservationPaid = booked && ['paid_online','paid_counter','paid_or_included'].includes(booked.admission_status ?? '');
+            const payment = review ? 'Check Square receipt' : pending ? 'Checking payment' : due > 0 ? `${money(due)} due`
+              : reservationPaid || (settled && todayVisits.some(visit=>['paid','prepaid','walkin_paid','terminal_paid'].includes(visit.payment_status))) ? 'Paid'
+              : booked?.admission_status === 'included' || (settled && !booked) ? 'Included'
+              : booked?.admission_status === 'review' ? 'Check payment' : booked?.admission_status === 'pending' ? 'Checking payment'
+              : booked?.admission_status === 'due' ? 'Pay at desk' : '';
+            const children = item.people.filter(person => person.role === 'child').map(personName).join(', ');
+            return <article key={item.id} data-family-id={item.id} className={`${styles.familyRow} ${present.length ? styles.checkedIn : departed ? styles.checkedOut : styles.waiting} ${activeFamily === item.id ? styles.selectedFamily : ''}`}>
+              <div className={styles.arrivalTime}>{booked ? <><strong>{timeLabel(booked.slot.starts_at)}</strong>{query.trim() && <span>{new Date(booked.slot.starts_at).toLocaleDateString('en-US', {timeZone:'America/New_York',month:'short',day:'numeric'})}</span>}</> : <span>Walk-in</span>}</div>
+              <div className={styles.familySummary}>
+                <h3>{item.name || personName(item.people.find(person => person.role === 'adult') || item.people[0] || { id: '', first_name: 'Family', last_name: null, role: '', birthdate: null })}</h3>
+                {children && <p className={styles.childNames}>{children}</p>}
+                <div className={styles.familyStatus}><span>{present.length ? `Checked in · ${present.length} guests here` : departed ? 'Checked out' : 'Not checked in'}</span>
+                  {payment && <span>{payment}</span>}{item.waiver_status !== 'completed' && <span className={styles.waiverNeeded}>Waiver needed</span>}
+                </div>
+              </div>
+              <div className={styles.familyActions}>
+                {present.length > 0 && <button className={styles.rowCheckout} aria-label={`Check out family (${present.length})`} disabled={locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Saving…' : 'Check out'}</button>}
+                <button className={styles.rowOpen} aria-label={todayVisits.length ? 'Open family / payment' : 'Choose family'} disabled={locked} onClick={() => void openFamily(item.id)}>Open</button>
+              </div>
+              <details className={styles.familyDetails}><summary>Details</summary>
+                <p>{item.people.map(personName).join(', ') || 'No family members added'}</p>
+                <p style={{ overflowWrap: 'anywhere' }}>{[item.email, item.phone].filter(Boolean).join(' · ')}</p>
+                {item.reservations.map(reservation => <p key={reservation.id}><strong>Open Play reservation · {dateLabel(reservation.slot.starts_at)}</strong><br />{timeLabel(reservation.slot.starts_at)}–{timeLabel(reservation.slot.ends_at)} ET · {reservation.child_count} children / {reservation.adult_count} adults
+                  {reservation.admission_status && <><br />{reservationAdmissionLabel(reservation.admission_status, reservation.amount_cents)}</>}
+                </p>)}
+                {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
+                <p>{item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
+                {todayVisits.map(visit => <p key={visit.id}>{visit.name} · {admissionPaymentLabel(visit)}{visit.checked_in_at && visit.checked_out_at && <> · In {admissionTime(visit.checked_in_at)} · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</p>)}
+              </details>
             </article>;
           })}
         </div>
@@ -468,7 +494,7 @@ export default function StaffCheckinPage() {
         <p>Check in everyone visiting before payment. Membership, prepaid admission, and included adults are already applied.</p>
         {!!peopleIds.length && <p>Check in the selected visitors first to include them in this payment.</p>}
         <button style={button} disabled={!enabled || entriesLocked || !!peopleIds.length} onClick={() => void takePayment()}>{busy ? 'Checking with Square…' : `Pay ${money(selected.total)} in Square`}</button>
-      </> : !loading && <p>{familyVisits.length ? 'No admission payment due for this family. Paid visits, members and prepaid visitors are already accounted for.' : 'Check in a family to see their total here.'}</p>}
+      </> : !loading && <p>{paymentUnverified ? 'Square payment needs verification. Do not collect again; refresh payment status or check its receipt.' : familyVisits.length ? 'No admission payment due for this family. Paid visits, members and prepaid visitors are already accounted for.' : 'Check in a family to see their total here.'}</p>}
       {pendingSale && <aside style={{ marginTop: 20, padding: 16, background: '#fff1d8', borderRadius: 12 }}><h3>Square checkout needs review</h3><p>If Square was cancelled, did not open, or did not return a receipt, check Transactions on this iPad first. Wait at least one minute after the launch. Never reset while a payment is pending or saved offline.</p><label><input type="checkbox" checked={recoveryConfirmed} disabled={busy} onChange={event => setRecoveryConfirmed(event.target.checked)} /> I checked Square: this checkout is closed, with no completed, pending or offline payment.</label><p><button disabled={busy || !recoveryConfirmed} onClick={() => void recoverPayment()}>Reconcile Square and reset unpaid checkout</button></p><p>The server checks Square too. If it finds a completed matching payment, it records payment instead of starting another charge.</p></aside>}
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
       <p><button disabled={busy || checkingIn} onClick={() => void resumePayments()}>Refresh payment status</button></p>
@@ -477,7 +503,7 @@ export default function StaffCheckinPage() {
       <p>Use family check-out to record departures and update occupancy. The controls below are for other count corrections.</p>
       <StaffDashboard view="occupancy" refreshKey={deskRefresh} />
     </aside></div>
-    <AdmissionStayStatistics refreshKey={deskRefresh} />
+    <details style={{ marginTop: 24 }}><summary style={{ cursor: 'pointer', fontWeight: 700 }}>Visit reports</summary><AdmissionStayStatistics refreshKey={deskRefresh} /></details>
     {completion && <dialog ref={completionDialog} className={styles.completionDialog} aria-labelledby="checkin-complete-title" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setCompletion(null)}>
       <h2 id="checkin-complete-title">Check-in complete</h2>
       <p><strong>{completion.familyName}</strong></p>
@@ -488,7 +514,7 @@ export default function StaffCheckinPage() {
         <p>Continue to Square on this iPad to collect this family’s payment.</p>
         {!enabled && <p>Square handoff is currently closed. Admission is saved; collect payment at the counter.</p>}
         <button type="button" style={button} disabled={!enabled || busy || loading || !paymentsReady || !!pendingSale || !!launchUrl || needsVerification} onClick={() => void takePayment()}>Continue to Square — {money(selected.total)}</button>
-      </> : <p><strong>No admission payment due.</strong> Membership, included or prepaid admission has been applied.</p>}
+      </> : paymentUnverified ? <p><strong>Checking Square payment.</strong> Do not collect again. Refresh payment status to verify the receipt.</p> : <p><strong>No admission payment due.</strong> Membership, included or prepaid admission has been applied.</p>}
       <p role="status" aria-live="polite">{message}</p>
       <p><button type="button" disabled={busy} onClick={() => setCompletion(null)}>{selected ? 'Back to desk' : 'Done'}</button></p>
     </dialog>}

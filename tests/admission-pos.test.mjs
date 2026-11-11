@@ -15,7 +15,7 @@ async function database(t){
  await db.query("insert into checkins(id,person_id,price_cents,payment_status) values($1,$2,1600,'due'),($3,$3,1000,'due'),($4,$5,1600,'due')",[checkin,ids.person,sibling,other,ids.otherPerson]);
  return {db,admin:localSquareAdmin(db)};
 }
-function modules(fetch,env={}){return loadSquareModules({env:{ADMISSION_POS_PAYMENTS_ENABLED:'true',ADMISSION_PAYMENTS_ENABLED:'false',SQUARE_APPLICATION_ID:'test-app',...env},fetch});}
+function modules(fetch,env={},mocks={}){return loadSquareModules({mocks,env:{ADMISSION_POS_PAYMENTS_ENABLED:'true',ADMISSION_PAYMENTS_ENABLED:'false',SQUARE_APPLICATION_ID:'test-app',...env},fetch});}
 const prepare=(admin,selection=[checkin,sibling],user=ids.user)=>admin.rpc('prepare_admission_pos',{p_ids:selection,p_user:user,p_environment:'sandbox',p_location:'test-location'});
 
 test('POS family grouping automatically totals the scanned family and excludes paid and covered visitors',()=>{
@@ -79,7 +79,7 @@ test('completed Square receipt can be retried after a database failure without a
 
 test('POS API requires staff and verification looks up the signed-in operator’s stored sale',async()=>{
  let expected;
- const base={'@/lib/infant-sibling-admission':{},'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
+ const base={'@/lib/admission-prepayments':{},'@/lib/infant-sibling-admission':{},'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
  const denied=loadModule('src/app/api/admin/admission/pos/route.ts',{...base,'@/lib/authz':{requireStaffContext:async()=>({ok:false,response:Response.json({}, {status:403})})}});
  assert.equal((await denied.POST({json:async()=>({})})).status,403);
  const query={select(){return this},eq(key,value){expected??={};expected[key]=value;return this},async maybeSingle(){return {data:null,error:null}}};
@@ -153,7 +153,7 @@ test('staff sync is bound to its stored sale and a transaction callback can reso
  const sale={id:checkin,status:'open',environment:'production',created_by_user_id:ids.user};
  const query={select(){return this},eq(key,value){selected[key]=value;return this},async maybeSingle(){return {data:sale,error:null}}};
  const api=loadModule('src/app/api/admin/admission/pos/route.ts',{
-  '@/lib/infant-sibling-admission':{},
+  '@/lib/admission-prepayments':{}, '@/lib/infant-sibling-admission':{},
   '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:ids.user},admin:{from:()=>query}})},
   '@/lib/square-client':{squareConfig:()=>({environment:'production'})},'@/lib/admission-checkout':{},
   '@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)},
@@ -218,4 +218,47 @@ test('simultaneous operators cannot each launch the same discounted sale',async 
  assert.equal(launched.length,1);
  assert.equal(JSON.parse(new URL(launched[0].value.url).searchParams.get('data')).amount_money.amount,1600);
  assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,1);
+});
+
+test('shared desk refresh settles exact receipts from every operator using one provider history read',async t=>{
+ const {db,admin}=await database(t);
+ const first=(await prepare(admin)).data;
+ const second=(await prepare(admin,[other],ids.other)).data;
+ for(const sale of [first,second]) { await db.query('update admission_pos_sales set launched_at=now() where id=$1',[sale.id]);sale.launched_at=date; }
+ const sales=[first,second];const calls=[];
+ const payments=sales.map((sale,i)=>({id:`batch-payment-${i}`,source_type:'CARD',order_id:`batch-order-${i}`,location_id:'test-location',status:'COMPLETED',amount_money:{amount:sale.amount_cents,currency:'USD'},created_at:date,updated_at:date,...(i===0?{note:`LW admission ${sale.id}`}:{})}));
+ const orders=sales.map((sale,i)=>({id:`batch-order-${i}`,location_id:'test-location',state:'COMPLETED',total_money:{amount:sale.amount_cents,currency:'USD'},tenders:[{payment_id:`batch-payment-${i}`}],line_items:[{note:`LW admission ${sale.id}`}]}));
+ const mod=modules(async(url,options)=>{const p=new URL(url).pathname;calls.push({p,method:options.method});return Response.json(p==='/v2/payments'?{payments}:p.includes('/orders/')?{order:orders.find(order=>p.endsWith(order.id))}:{payment:payments.find(payment=>p.endsWith(payment.id))});},{},{
+  '@/lib/authz':{requireStaffContext:async()=>({ok:true,admin,user:{id:ids.otherPerson}})},
+  '@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},
+ });
+ const response=await mod.load('src/app/api/admin/admission/pos/route.ts').GET();
+ const shown=await response.json();assert.equal(shown.ok,true);assert.equal(shown.settled_count,2);
+ assert.equal(shown.visits.length,3);assert.ok(shown.visits.every(visit=>visit.payment_status==='paid'));
+ assert.equal(shown.pending_sales.length,0);
+ assert.equal(calls.filter(call=>call.p==='/v2/payments').length,1);
+ assert.ok(calls.every(call=>call.method==='GET'));
+ assert.equal((await db.query("select count(*)::int n from checkins where payment_status='paid'")).rows[0].n,3);
+ assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,2);
+});
+
+test('unmatched equal-value receipts and provider failures never become paid or start another checkout',async t=>{
+ const {db,admin}=await database(t);const sale=(await prepare(admin)).data;sale.launched_at=date;
+ const {refreshAdmissionPosSales}=modules(async url=>Response.json(new URL(url).pathname==='/v2/payments'?{payments:[{id:'other-payment',order_id:'other-order',status:'COMPLETED',amount_money:{amount:2600,currency:'USD'}}]}:{order:{id:'other-order',line_items:[{note:'Unrelated purchase'}]}})).load('src/lib/square-admission-pos.ts');
+ assert.equal((await refreshAdmissionPosSales(admin,[sale])).get(sale.id),'pending');
+ const fail=modules(async()=>{throw Error('Provider temporarily unavailable')}).load('src/lib/square-admission-pos.ts');
+ assert.equal((await fail.refreshAdmissionPosSales(admin,[sale])).get(sale.id),'review');
+ assert.equal((await db.query("select count(*)::int n from checkins where payment_status='paid'")).rows[0].n,0);
+ assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,1);
+});
+
+test('a settled online reservation suppresses a stale due check-in and blocks a new POS charge',async t=>{
+ const {db,admin}=await database(t);
+ await db.query('insert into open_play_reservation_slots(id,starts_at) values($1,now())',[ids.klass]);
+ await db.query("insert into open_play_reservations(id,household_id,child_ids,payment_status,payment_environment,status,slot_id) values($1,$2,$3,'paid','sandbox','reserved',$4)",[ids.klass,ids.household,[ids.person,sibling],ids.klass]);
+ const mod=modules();const {getAdmissionPrepayments}=mod.load('src/lib/admission-prepayments.ts');
+ const visits=JSON.parse(JSON.stringify((await db.query('select * from checkins where person_id=$1 or person_id=$2',[ids.person,sibling])).rows)).map(row=>({...row,household_id:ids.household}));
+ const shown=await getAdmissionPrepayments(admin,visits,'sandbox');assert.ok(shown.every(row=>row.payment_status==='prepaid'&&row.price_cents===0));
+ await assert.rejects(mod.load('src/lib/square-admission-pos.ts').startAdmissionPos(admin,[checkin,sibling],ids.user),/already prepaid/);
+ assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,0);
 });

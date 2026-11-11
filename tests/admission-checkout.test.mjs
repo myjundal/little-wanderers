@@ -16,6 +16,8 @@ async function fixture(t) {
   await db.exec(`create table checkins(id uuid primary key,person_id uuid,household_id uuid,checked_in_at timestamptz,price_cents int default 1600,payment_status text default 'due',square_environment text);
     create table people(id uuid primary key,household_id uuid,first_name text default 'Test',last_name text default 'Guest',role text default 'child',birthdate text);
     create table households(id uuid primary key,name text);
+    create table open_play_reservations(household_id uuid,child_ids uuid[],payment_status text,payment_environment text,status text,slot_id uuid);
+    create table open_play_reservation_slots(id uuid,starts_at timestamptz);
     create table admission_pos_sales(id uuid,checkin_ids uuid[],launched_at timestamptz,created_by_user_id uuid,environment text,status text);
     create table occupancy_events(id uuid primary key,created_at timestamptz default now(),effective_date date default current_date,
       event_type text check(event_type in ('checkin_increment','manual_increment','manual_decrement','reset')),delta int,created_by uuid,notes text,metadata jsonb);

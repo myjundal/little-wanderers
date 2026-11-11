@@ -37,3 +37,6 @@ begin
   update checkins set payment_status='paid',square_order_id=p_order,square_environment=sale.environment where id=any(sale.checkin_ids);
 end $$;
 create table square_customers(household_id uuid, square_customer_id text unique);
+
+create table open_play_reservations(id uuid,household_id uuid,child_ids uuid[],payment_status text,payment_environment text,status text,slot_id uuid);
+create table open_play_reservation_slots(id uuid,starts_at timestamptz);
