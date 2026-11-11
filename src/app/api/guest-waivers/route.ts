@@ -6,8 +6,14 @@ import { sendResendEmail } from '@/lib/email-campaigns';
 import { isUuid } from '@/lib/open-play-reservations';
 import { GUEST_WAIVER_COOKIE, guestEmailSchema, guestProfileSchema, guestTokenHash, guestSecretHash, guestFamilyRevision, type GuestWaiverContext } from '@/lib/guest-waivers';
 import { WAIVER_VERSION, WAIVER_TITLE, WAIVER_PARAGRAPHS, WAIVER_AGREEMENTS, WAIVER_SIGNATURE_TEXT } from '@/lib/waiver-content';
+import { reconcileGuestWaiverFamily } from '@/lib/guest-family-reconciliation';
+import { waitUntil } from '@vercel/functions';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+const reconcileSavedWaiver = (admin: ReturnType<typeof createAdminSupabaseClient>, id: string) => waitUntil(
+  reconcileGuestWaiverFamily(admin, id).catch(() => { console.error('Guest waiver family reconciliation pending'); })
+);
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const sessionToken = async () => (await cookies()).get(GUEST_WAIVER_COOKIE)?.value ?? '';
 
@@ -41,6 +47,7 @@ export async function POST(req: Request) {
         if (error) throw error;
         if (!data || (data.party_booking_id || null) !== (body.party_id || null)) return json({ ok: true, completed: false });
         const waiver = Array.isArray(data.waiver) ? data.waiver[0] : data.waiver;
+        if (waiver) reconcileSavedWaiver(admin, waiver.id);
         return json({ ok: true, completed: Boolean(waiver), waiver_id: waiver?.id, signed_at: waiver?.signed_at, expires_at: waiver?.waiver_expires_at });
       }
       if (body.version !== WAIVER_VERSION) return json({ ok: false, error: 'The waiver changed. Reload before signing.' }, 409);
@@ -60,6 +67,9 @@ export async function POST(req: Request) {
       });
       if (error) return json({ ok: false, error: 'Unable to save your waiver. Please check the details and try again, or ask the front desk.' }, 409);
       if (!data?.ok) return json({ ok: false, error: data?.code === 'party_unavailable' ? 'This party link is no longer available. Please ask the front desk.' : data?.code === 'rate_limited' ? 'Too many submissions. Please wait or ask the front desk.' : 'This waiver was already submitted. Clear this screen to start a new waiver.' }, data?.code === 'rate_limited' ? 429 : 409);
+      // Never expose matching accounts, their people, or the reconciliation result.
+      // A saved legal waiver remains successful even if directory linking needs a retry.
+      reconcileSavedWaiver(admin, data.waiver_id);
       return json({ ...data, completed: true });
     }
     if (body.mode === 'end_session') {

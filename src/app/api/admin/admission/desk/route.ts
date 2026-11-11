@@ -36,14 +36,19 @@ export async function GET(req: Request) {
       truncated = (households.data?.length ?? 0) > 100 || (people.data?.length ?? 0) > 300;
       ids = [...new Set([...(households.data ?? []).map(row => row.id), ...(people.data ?? []).map(row => row.household_id)].filter(Boolean))];
     } else {
-      const result = await c.admin.from('open_play_reservations')
+      const [result, arrivals] = await Promise.all([c.admin.from('open_play_reservations')
         .select(reservationSelect)
         .neq('status', 'cancelled').gte('slot.starts_at', toPartyDateTimeIso(today, 0))
-        .lt('slot.starts_at', toPartyDateTimeIso(tomorrow, 0)).order('created_at').limit(501);
-      if (result.error) throw new Error('Unable to load today’s Open Play reservations.');
-      truncated = (result.data?.length ?? 0) > 500;
+        .lt('slot.starts_at', toPartyDateTimeIso(tomorrow, 0)).order('created_at').limit(501),
+      c.admin.from('checkins').select('person:people!inner(household_id)')
+        .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0)).limit(501)]);
+      if (result.error || arrivals.error) throw new Error('Unable to load today’s reservations and visitors.');
+      truncated = (result.data?.length ?? 0) > 500 || (arrivals.data?.length ?? 0) > 500;
       reservations = (result.data ?? []).slice(0, 500).map(row => ({ ...row, slot: Array.isArray(row.slot) ? row.slot[0] : row.slot })) as typeof reservations;
-      ids = [...new Set(reservations.map(row => row.household_id).filter(Boolean))];
+      ids = [...new Set([...reservations.map(row => row.household_id), ...(arrivals.data ?? []).slice(0, 500).map(row => {
+        const person = Array.isArray(row.person) ? row.person[0] : row.person;
+        return person?.household_id as string;
+      })].filter(Boolean))];
     }
     if (!ids.length) return Response.json({ ok: true, date: today, items: [], truncated });
     const aliases = await getStaffFamilySearchAliases(c.admin);
@@ -69,7 +74,7 @@ export async function GET(req: Request) {
     }
     reservations.sort((a, b) => Date.parse(a.slot.starts_at) - Date.parse(b.slot.starts_at));
     if ((people.data?.length ?? 0) >= 1000 || (waivers.data?.length ?? 0) >= 1000) throw new Error('Too many matching records. Please search with a more specific name or email.');
-    const items = (households.data ?? []).filter(household => ids.includes(household.id)).map(household => {
+    const foundItems = (households.data ?? []).filter(household => ids.includes(household.id)).map(household => {
       const members = (people.data ?? []).filter(person => person.household_id === household.id);
       return { ...household, people: members,
         waiver_status: getWaiverStatus((waivers.data ?? []).filter(row => row.household_id === household.id), new Date(), members.filter(person => person.role === 'child').map(person => person.id)).status,
@@ -81,6 +86,13 @@ export async function GET(req: Request) {
         ...(people.data ?? []).filter(person => canonicalId(person.household_id) === item.id).map(person => `${person.first_name ?? ''} ${person.last_name ?? ''}`)].join(' ').toLowerCase();
       return tokens.every(token => searchText.includes(token));
     });
+    // Keep empty signup placeholders accessible by direct link. In search, show
+    // the populated family sharing their contact instead; no account is changed.
+    const contactKey = (value: string | null) => (value ?? '').trim().toLowerCase();
+    const phoneKey = (value: string | null) => { const digits = (value ?? '').replace(/\D/g, ''); return digits.length === 10 ? `1${digits}` : digits; };
+    const items = foundItems.filter(item => family || item.name !== 'My Household' || item.people.length || item.reservations.length
+      || !foundItems.some(other => other.id !== item.id && other.people.length && (households.data ?? []).some(contact => canonicalId(contact.id) === other.id
+        && ((contactKey(item.email) && contactKey(item.email) === contactKey(contact.email)) || (phoneKey(item.phone) && phoneKey(item.phone) === phoneKey(contact.phone))))));
     return Response.json({ ok: true, date: today, items, truncated });
   } catch (error) {
     return Response.json({ ok: false, error: error instanceof Error ? error.message : 'Unable to load check-in desk.' }, { status: 503 });

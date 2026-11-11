@@ -14,6 +14,7 @@ export const ids = {
 export function loadSquareModules({ env = {}, fetch: fetchImpl = globalThis.fetch, mocks = {} } = {}) {
   const cache = new Map();
   const processMock = { env: { SQUARE_ENVIRONMENT:'sandbox',SQUARE_ACCESS_TOKEN:'sandbox-test-token',SQUARE_LOCATION_ID:'test-location',
+    SUPABASE_SERVICE_ROLE_KEY:'test-only-return-signing-key',
     NEXT_PUBLIC_SITE_URL:'http://localhost:3000', ...env } };
   function load(file) {
     file = path.resolve(file);
