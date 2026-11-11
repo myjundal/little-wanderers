@@ -1,4 +1,4 @@
-import { earliestClassTime } from '@/lib/class-config';
+import { earliestClassTime, CLASS_TERM_END_AT } from '@/lib/class-config';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -44,6 +44,7 @@ async function selectClasses(limit: number) {
     .from('classes')
     .select(CLASS_SELECT)
     .gte('start_time', earliestClassTime())
+    .lt('start_time', CLASS_TERM_END_AT)
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
     .limit(limit);
@@ -54,6 +55,7 @@ async function selectClasses(limit: number) {
       .from('classes')
       .select(CLASS_SELECT_BASE)
       .gte('start_time', earliestClassTime())
+      .lt('start_time', CLASS_TERM_END_AT)
       .eq('status', 'scheduled')
       .order('start_time', { ascending: true })
       .limit(limit);
@@ -77,10 +79,11 @@ export async function GET(req: NextRequest) {
     const registrationsByPerson = new Map<string, Set<string>>();
 
     if (ids.length > 0) {
-      const { data: regs } = await supa
+      const { data: regs, error: regError } = await supa
         .from('class_registrations')
         .select('class_id,person_id,status,waitlist_offer_expires_at')
         .in('class_id', ids);
+      if (regError) throw new Error('Unable to check class availability. Please refresh.');
       const nowIso = new Date().toISOString();
 
       countsByClass = (regs ?? []).reduce((map, row) => {
@@ -161,7 +164,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return Response.json({ ok: true, items }, { headers: NO_STORE_HEADERS });
+    return Response.json({ ok: true, items, payments_enabled: true }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });

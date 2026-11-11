@@ -80,6 +80,7 @@ export async function classPageHarness({
     '@/components/ui/ActionToast': toast,
     '@/components/classes/PreRegistrationNotice': function Notice() {},
     '@/components/classes/ClassSeriesPaymentChoice': function PaymentChoice() {},
+    '@/components/classes/ClassDateBooking': function DateBooking() {},
   }, {
     React: react,
     document: { getElementById: id => ({ scrollIntoView() {}, focus() { focused = id; } }) },

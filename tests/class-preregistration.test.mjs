@@ -119,7 +119,7 @@ test('confirmation email uses pre-registration and payment terms for interest an
   }
 });
 
-function registrationApi({ existing = null, klass = fixtureClass, email = async () => ({ ok: true, id: 'email' }) } = {}) {
+function registrationApi({ existing = null, klass = { ...fixtureClass, start_time: '2026-11-12T22:00:00Z', end_time: '2026-11-12T22:45:00Z' }, email = async () => ({ ok: true, id: 'email' }) } = {}) {
   const inserts = [];
   const updates = [];
   const emails = [];
@@ -166,7 +166,7 @@ function registrationApi({ existing = null, klass = fixtureClass, email = async 
 
 test('pre-registration saves interest regardless of capacity, seat offers, or waitlist priority', async () => {
   for (const capacity of [0, 1, 7, null]) {
-    const api = registrationApi({ klass: { ...fixtureClass, capacity } });
+    const api = registrationApi({ klass: { ...fixtureClass, start_time: '2026-11-12T22:00:00Z', end_time: '2026-11-12T22:45:00Z', capacity } });
     const response = await api.post();
     assert.equal(response.status, 200);
     assert.equal((await response.json()).status, 'preregistered');

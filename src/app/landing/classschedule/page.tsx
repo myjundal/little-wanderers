@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import ActionToast from '@/components/ui/ActionToast';
+import ClassDateBooking from '@/components/classes/ClassDateBooking';
 import ClassSeriesPaymentChoice from '@/components/classes/ClassSeriesPaymentChoice';
 import PreRegistrationNotice from '@/components/classes/PreRegistrationNotice';
 import ClassDescription from '@/components/classes/ClassDescription';
@@ -900,8 +901,12 @@ export default function ClassSchedulePage() {
         )}
       </section>
 
+      {!loading && <ClassDateBooking classes={classes} registrations={myItems} selectedChildId={selectedPersonId}
+        authenticated={isAuthenticated} onRestoreChild={setSelectedPersonId} onPaid={() => void load(false)}
+        resolveChild={async () => { const guardian = guardianPayload(); const child = await ensureSelectedChild(); return { id: child.id, ...guardian }; }} />}
+
       <section style={{ marginTop: 18 }}>
-        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>✨ Upcoming classes</h2>
+        <h2 style={{ fontSize: 22, margin: '0 0 10px', color: '#4f3f82' }}>Class details & registration options</h2>
         {loading ? (
           <p>Loading…</p>
         ) : classes.length === 0 ? (

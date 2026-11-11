@@ -33,7 +33,7 @@ export default async function ClassesPage() {
           Little Wanderers Classes & Events
         </h1>
         <p style={{ maxWidth: 740, margin: '14px 0 0', color: '#6f628d', fontSize: '1.05rem', lineHeight: 1.75 }}>
-          Playful small-group programs for curious kids and families. Browse what is opening first, then use My Little Wanderers to share your interest or pay to confirm an available seat. Spaces are limited.
+          Playful small-group programs for curious kids and families. Choose the classes and dates that work for your family, then pay once to confirm your seats. Registration is open to everyone. Spaces are limited.
         </p>
         <p style={{ color: '#6f628d', fontWeight: 700 }}>{CLASS_START_NOTE}</p>
         <PreRegistrationNotice />

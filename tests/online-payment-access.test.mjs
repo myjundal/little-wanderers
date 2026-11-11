@@ -8,7 +8,7 @@ function load(file, paymentAccess) {
 }
 const access=load('src/lib/online-payment-access.ts');
 test('dormant payment routes refuse to charge or fulfill without server verification',async()=>{
- for(const file of ['membership','membership/pause','membership/resume','checkout/subscribe','classes/checkout']){
+ for(const file of ['membership','membership/pause','membership/resume','checkout/subscribe']){
   const api=load(`src/app/api/${file}/route.ts`,access);
   const result=await api.POST({json:async()=>({mode:'finalize'})});assert.equal(result.status,503,file);
  }

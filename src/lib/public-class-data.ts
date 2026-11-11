@@ -1,6 +1,6 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
-import { earliestClassTime } from '@/lib/class-config';
+import { earliestClassTime, CLASS_TERM_END_AT } from '@/lib/class-config';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import type { PublicClassItem } from '@/lib/public-classes';
 
@@ -19,6 +19,7 @@ async function selectClasses(limit: number) {
     .from('classes')
     .select(CLASS_SELECT)
     .gte('start_time', earliestClassTime())
+    .lt('start_time', CLASS_TERM_END_AT)
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
     .limit(limit)
@@ -31,6 +32,7 @@ async function selectClasses(limit: number) {
     .from('classes')
     .select(CLASS_SELECT_BASE)
     .gte('start_time', earliestClassTime())
+    .lt('start_time', CLASS_TERM_END_AT)
     .eq('status', 'scheduled')
     .order('start_time', { ascending: true })
     .limit(limit)

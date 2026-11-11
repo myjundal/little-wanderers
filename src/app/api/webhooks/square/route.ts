@@ -14,6 +14,7 @@ import { waitUntil } from '@vercel/functions';
 import { sendDueMembershipNotifications } from '@/lib/membership-notifications';
 import { verifyAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
 import { squareRequest, type SquareOrder } from '@/lib/square-client';
+import { reconcileClassCheckout, type ClassCheckout } from '@/lib/class-checkout';
 
 const SUPA = () =>
   createClient(
@@ -70,6 +71,15 @@ export async function POST(req: NextRequest) {
   if (['payment.created', 'payment.updated', 'invoice.payment_made'].includes(eventType)) {
     const eventOrder = payload?.data?.object?.payment?.order_id ?? payload?.data?.object?.invoice?.order_id;
     if (eventOrder) {
+      const { data: checkout, error: checkoutError } = await supa.from('square_checkout_attempts').select('*')
+        .eq('kind', 'class').eq('environment', squareEnvironment()).eq('order_id', eventOrder).maybeSingle();
+      if (checkoutError) return new Response('Class checkout lookup pending', { status: 503 });
+      if (checkout) {
+        try {
+          await reconcileClassCheckout(supa, checkout as ClassCheckout);
+          return new Response('Class checkout verified', { status: 200 });
+        } catch { return new Response('Class checkout verification pending', { status: 503 }); }
+      }
       const {data: visit, error: visitError} = await supa.from('open_play_reservations').select('*').eq('payment_environment',squareEnvironment()).eq('square_order_id',eventOrder).maybeSingle();
       if (visitError) return new Response('Reservation payment lookup pending',{status:503});
       if (visit) { try { await verifyOpenPlayPayment(supa,visit as OpenPlayPayment); return new Response('Reservation payment verified',{status:200}); } catch { return new Response('Reservation payment verification pending',{status:503}); } }
