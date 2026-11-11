@@ -9,8 +9,9 @@ import { loadSquareModules } from './helpers/admission-pos-harness.mjs';
 const family = { id: '10000000-0000-4000-8000-000000000001', name: 'Older Family', email: 'parent@example.test', phone: '5551234567' };
 const people = [{ id: 'child', household_id: family.id, first_name: 'Sam', last_name: 'Family', role: 'child' }, { id: 'parent', household_id: family.id, first_name: 'Alex', last_name: 'Family', role: 'adult' }];
 const deskFamily = { ...family, people, waiver_status: 'completed', reservations: [] };
+const booking = { id: 'booking', household_id: family.id, status: 'reserved', child_count: 1, adult_count: 1, slot: [{ label: 'Open Play', starts_at: '2026-10-29T14:00:00Z', ends_at: '2026-10-29T16:00:00Z' }] };
 
-function apiHarness({ allowed = true, failTable = '', many = false, aliases = [], householdRows = [family], peopleRows = people } = {}) {
+function apiHarness({ allowed = true, failTable = '', many = false, aliases = [], householdRows = [family], peopleRows = people, reservationRows = [booking] } = {}) {
   const calls = [];
   const admin = { from(table) {
     const filters = [];
@@ -19,8 +20,9 @@ function apiHarness({ allowed = true, failTable = '', many = false, aliases = []
       select(value) { fields = value; return q; },
       then(resolve) {
         calls.push({ table, fields, filters });
-        let data = table === 'staff_family_search_aliases' ? aliases : table === 'households' ? householdRows : table === 'people' ? peopleRows : table === 'waivers' ? [] : [{ id: 'booking', household_id: family.id, child_count: 1, adult_count: 1, slot: [{ label: 'Open Play', starts_at: '2026-10-29T14:00:00Z', ends_at: '2026-10-29T16:00:00Z' }] }];
+        let data = table === 'staff_family_search_aliases' ? aliases : table === 'households' ? householdRows : table === 'people' ? peopleRows : table === 'waivers' ? [] : reservationRows;
         for (const [op, key, values] of filters) if (op === 'in') data = data.filter(row => values.includes(row[key]));
+        for (const [op, key, value] of filters) if (op === 'neq') data = data.filter(row => row[key] !== value);
         if (many && table === 'households' && fields === 'id') data = Array.from({ length: 101 }, () => family);
         resolve({ data, error: table === failTable ? { message: 'Database offline' } : null });
       },
@@ -74,7 +76,35 @@ test('desk rejects invalid family ids, strips filter operators, and reports fail
   assert.equal((await apiHarness({ failTable: 'waivers' }).get(`?family=${family.id}`)).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false } = {}) {
+test('surname search attaches dated bookings only to the booked family, across dates and excluding cancellations', async () => {
+  const alondra = { ...family, name: 'Alondra Gardner' };
+  const other = { ...family, id: '10000000-0000-4000-8000-000000000002', name: 'Other Gardner' };
+  const future = { ...booking, id: 'future', slot: { label: 'Open Play', starts_at: '2026-11-12T00:30:00Z', ends_at: '2026-11-12T02:00:00Z' } };
+  const h = apiHarness({ householdRows: [alondra, other], peopleRows: [], reservationRows: [future, { ...booking, id: 'cancelled', household_id: other.id, status: 'cancelled' }, booking] });
+  const data = await (await h.get('?q=Gardner')).json();
+  assert.equal(data.items.length, 2);
+  assert.deepEqual(data.items.find(item => item.id === family.id).reservations.map(row => row.id), ['booking', 'future']);
+  assert.deepEqual(data.items.find(item => item.id === other.id).reservations, []);
+  const query = h.calls.find(call => call.table === 'open_play_reservations');
+  assert.ok(query.filters.some(([op, key, value]) => op === 'neq' && key === 'status' && value === 'cancelled'));
+  assert.ok(!query.filters.some(([op]) => op === 'gte' || op === 'lt'));
+  assert.equal(data.items[0].reservations[0].slot.starts_at, booking.slot[0].starts_at);
+});
+
+test('search and direct family lookup include confirmed alternate-profile bookings once and surface read failures', async () => {
+  const alternate = { ...family, id: '10000000-0000-4000-8000-000000000002' };
+  const options = { householdRows: [family, alternate], aliases: [{ alias_household_id: alternate.id, canonical_household_id: family.id }], reservationRows: [{ ...booking, household_id: alternate.id }] };
+  for (const query of ['?q=Family', `?family=${alternate.id}`]) {
+    const data = await (await apiHarness(options).get(query)).json();
+    assert.equal(data.items.length, 1);
+    assert.equal(data.items[0].id, family.id);
+    assert.equal(data.items[0].reservations.length, 1);
+  }
+  assert.equal((await apiHarness({ failTable: 'open_play_reservations' }).get('?q=Family')).status, 503);
+  assert.equal((await apiHarness({ reservationRows: Array.from({ length: 501 }, () => booking) }).get('?q=Family')).status, 503);
+});
+
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
   let cursor = 0, tree, visits = [], timers = [], refreshes = 0;
   const memo = (factory, deps) => {
@@ -90,7 +120,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const fetch = async (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : undefined;
     requests.push({ url, body });
-    if (url.includes('/desk')) return Response.json({ ok: true, items: [{ ...deskFamily, waiver_status: waiver }] });
+    if (url.includes('/desk')) return Response.json({ ok: true, items: deskItems ?? [{ ...deskFamily, waiver_status: waiver }] });
     if (url === '/api/checkin') {
       if (checkinCode) return Response.json({ ok: false, code: checkinCode, error: 'The family waiver must be renewed.' }, { status: 409 });
       if (body.person_id === failPerson) return Response.json({ ok: false, error: 'Birthday required' }, { status: 409 });
@@ -126,6 +156,21 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
 }
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
+
+test('family search cards show reservation date and time in Eastern time and identify families without bookings', async () => {
+  const h = uiHarness({ deskItems: [
+    { ...deskFamily, name: 'Alondra Gardner', reservations: [{ ...booking, slot: { label: 'Open Play', starts_at: '2026-11-12T00:30:00Z', ends_at: '2026-11-12T02:00:00Z' } }] },
+    { ...deskFamily, id: 'other', name: 'Other Gardner' },
+  ] });
+  await h.flush();
+  h.nodes().find(node => node.props?.id === 'family-search').props.onChange({ target: { value: 'Gardner' } });
+  await h.flush();
+  assert.ok(h.text().includes('Open Play reservation · Wed, Nov 11, 2026'));
+  assert.ok(h.text().includes('7:30 PM–9:00 PM ET'));
+  assert.equal(h.text().split('Open Play reservation ·').length - 1, 1);
+  assert.ok(h.text().includes('No Open Play reservations'));
+  assert.equal(h.requests.filter(request => request.url === '/api/checkin').length, 0);
+});
 
 test('live occupancy stays beside check-in and payment without losing selected visitors', async () => {
   const h = uiHarness(); await choose(h);
