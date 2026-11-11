@@ -65,6 +65,8 @@ test('paid no-shows and unlinked legacy parties require review instead of claime
   const noShow = report(input); assert.equal(noShow.net_cents, 0); assert.equal(noShow.complete, false); assert.match(noShow.rows[0].issues.join(' '), /No-show/);
   const legacy = report({ ...empty(), parties: [{ id: 'legacy', start_time: `${date}T15:00:00Z`, status: 'confirmed', price_quote_cents: 50000, square_environment: null, square_order_id: null, deposit_paid_cents: null, balance_paid_cents: null }] });
   assert.equal(legacy.net_cents, 0); assert.equal(legacy.due_cents, 0); assert.equal(legacy.complete, false);
+  const cancelled = report({ ...empty(), parties: [{ id: 'cancelled-legacy', start_time: `${date}T15:00:00Z`, status: 'cancelled', price_quote_cents: 50000, square_environment: null, square_order_id: null, deposit_paid_cents: 15000, balance_paid_cents: 0 }] });
+  assert.equal(cancelled.net_cents, 0); assert.equal(cancelled.complete, false); assert.equal(cancelled.review_count, 1);
 });
 test('duplicate named-child reservations and repeated visits fail visibly instead of double counting', () => {
   const input = data(); input.bookings.push({ ...booking, id: 'duplicate' }); input.visits.push(visit);

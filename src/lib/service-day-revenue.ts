@@ -105,7 +105,7 @@ export function revenueServices(data: RevenueSources) {
     if (row.status === 'pending') service.issues.push('Party booking is not confirmed.');
     if (row.price_quote_cents == null || row.payment_review_required) service.issues.push('Party amount or payment needs review.');
     if (row.square_order_id && row.square_environment === 'production') service.charges.push({ order_id: row.square_order_id, amount_cents: service.expected_cents });
-    else if (row.status !== 'cancelled') service.issues.push('Party payments have no linked production order.');
+    else if (row.status !== 'cancelled' || (row.deposit_paid_cents ?? 0) + (row.balance_paid_cents ?? 0) > 0) service.issues.push('Party payments have no linked production order.');
   }
   const classMap = new Map(data.classes.map(row => [row.id, row]));
   const linkedRegistrations = new Set<string>();
