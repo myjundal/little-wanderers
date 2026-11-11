@@ -6,6 +6,7 @@ import { getStaffFamilySearchAliases } from '@/lib/staff-family-search';
 type Customer = { id: string; given_name?: string; family_name?: string; email_address?: string; phone_number?: string; reference_id?: string };
 const emailKey = (value?: string | null) => (value ?? '').trim().toLowerCase();
 const phoneKey = (value?: string | null) => { const digits = (value ?? '').replace(/\D/g, ''); return digits.length === 10 ? `1${digits}` : digits; };
+const nameKey = (value?: string | null) => (value ?? '').normalize('NFKD').replace(/\p{M}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase();
 const checked = <T>(result: { data: T; error: unknown }) => { if (result.error) throw new Error('Unable to load the Square family connection.'); return result.data as NonNullable<T>; };
 
 async function retrieve(id: string) {
@@ -58,7 +59,11 @@ export async function connectSquareFamilyCustomer(admin: SupabaseClient, househo
       if (result.cursor) throw new Error('Too many Square customer matches. Please review the customer directory.');
       for (const item of result.customers ?? []) {
         const referenceMatches = item.reference_id === reference || item.reference_id === householdId;
-        const contactMatches = !!email && emailKey(item.email_address) === email && !!phone && phoneKey(item.phone_number) === phone;
+        const sameEmail = !!email && emailKey(item.email_address) === email;
+        const samePhone = !!phone && phoneKey(item.phone_number) === phone;
+        const conflict = (email && item.email_address && !sameEmail) || (phone && item.phone_number && !samePhone);
+        const sameGuardian = people.some(person => nameKey(person.first_name) === nameKey(item.given_name) && !!nameKey(person.last_name) && nameKey(person.last_name) === nameKey(item.family_name));
+        const contactMatches = !conflict && ((sameEmail && samePhone) || ((sameEmail || samePhone) && sameGuardian));
         if (referenceMatches || contactMatches) matches.set(item.id, item);
       }
       // A partial contact match must be reviewed rather than creating another

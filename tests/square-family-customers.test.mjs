@@ -46,3 +46,12 @@ test('legacy mapping is usable only if it exists in the current Square environme
   const h = fixture({ mapping: [{ household_id: family, square_customer_id: 'sandbox-stale' }] });
   assert.equal(await h.api.linkedSquareFamilyCustomer(h.admin, family), null);
 });
+
+test('a customer with one matching contact and the exact caregiver name can connect without creating another profile', async () => {
+  const h = fixture({ search: [{ id: 'customer', given_name: 'Alex', family_name: 'Example', phone_number: '+18605551234' }] });
+  h.admin.tables.households[0].email = null;
+  assert.equal((await h.api.connectSquareFamilyCustomer(h.admin, family)).created, false);
+  assert.ok(h.calls.every(call => call.path !== '/v2/customers'));
+  const conflict = fixture({ search: [{ id: 'customer', given_name: 'Alex', family_name: 'Example', phone_number: '+18605551234', email_address: 'different@example.test' }] });
+  await assert.rejects(conflict.api.connectSquareFamilyCustomer(conflict.admin, family), /needs review/);
+});
