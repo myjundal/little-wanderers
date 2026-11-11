@@ -1,5 +1,6 @@
 import { waitUntil } from '@vercel/functions';
 import { sendOpenPlayReservationNotification } from '@/lib/admin-notifications';
+import { sendOpenPlayConfirmation } from '@/lib/open-play-confirmation';
 import { logger } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
@@ -238,6 +239,32 @@ export async function POST(req: Request) {
     }
 
     if (!reservation) throw new Error('Unable to save your reservation.');
+    // Send independently of the owner alert, after the reservation is committed.
+    waitUntil((async () => {
+      try {
+        let email = reservation.contact_email || context.user.email || '';
+        if (!email) {
+          const contact = await context.admin.from('households').select('email')
+            .eq('id', context.householdId).maybeSingle();
+          if (contact.error) throw new Error('Unable to read reservation contact.');
+          email = contact.data?.email || '';
+        }
+        const confirmation = await sendOpenPlayConfirmation({
+          reservationId: reservation.id,
+          email,
+          guardianName: family.guardianName,
+          childNames: family.children.map(child => child.name),
+          childCount, adultCount,
+          startTime: slot.starts_at, endTime: slot.ends_at,
+          amountCents: reservation.amount_cents,
+          paymentStatus: reservation.payment_status,
+          paymentChoice: reservation.payment_choice,
+        });
+        if (!confirmation.ok) logger.error({ action: 'open_play.customer_confirmation_failed', reservationId: reservation.id });
+      } catch {
+        logger.error({ action: 'open_play.customer_confirmation_failed', reservationId: reservation.id });
+      }
+    })());
     // A mail-provider outage must never make a saved reservation appear to fail.
     waitUntil((async () => {
       try {

@@ -255,6 +255,7 @@ export async function sendResendEmail(input: SendEmailInput) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     let retryable = false;
     let error = 'Failed to send email.';
+    let code: string | undefined;
     try {
       const res = await fetch('https://api.resend.com/emails', {
         ...request,
@@ -267,13 +268,14 @@ export async function sendResendEmail(input: SendEmailInput) {
       }
       if (res.ok) return { ok: true as const, id: parsed.id ?? null };
       error = parsed.message || parsed.error || text || error;
+      code = parsed.name;
       retryable = res.status === 429 || res.status >= 500 || (res.status === 409 && parsed.name === 'concurrent_idempotent_requests');
     } catch (cause) {
       if (!input.idempotencyKey) throw cause;
       error = cause instanceof Error ? cause.message : error;
       retryable = true;
     }
-    if (!retryable || attempt === attempts - 1) return { ok: false as const, error };
+    if (!retryable || attempt === attempts - 1) return { ok: false as const, error, code };
     await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
   }
   return { ok: false as const, error: 'Failed to send email.' };

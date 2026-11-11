@@ -22,6 +22,7 @@ test('customer and operator calendars both exclude all windows before November 1
    '@/lib/households':{getLatestHouseholdIdForUser:async()=> 'household'},
    '@/lib/soft-opening-family':{readSoftOpeningFamily:async()=>({guardian:null,children:[],memberships:[]})},
    '@vercel/functions':{}, '@/lib/admin-notifications':{}, '@/lib/logger':{},
+   '@/lib/open-play-confirmation':{},
    '@/lib/soft-opening-pricing':{},
    '@/lib/soft-opening-access':{getSoftOpeningAccessForUser:async()=>({allowed:true})},
   });
