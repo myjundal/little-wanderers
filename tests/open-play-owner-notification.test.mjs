@@ -10,7 +10,7 @@ test('owner email contains family, ages, Eastern arrival window and honest pendi
   const input = { reservationId: 'reservation', householdId: 'family', guardianName: 'Parent <Family>', email: 'parent@example.test', children: [{ name: 'Sam <Family>', ageLabel: '3 years' }], startTime: '2026-11-11T14:00:00Z', endTime: '2026-11-11T15:00:00Z', adultCount: 1, amountCents: 1600, paymentChoice: 'now', notes: '<script>bad</script>' };
   await api.sendOpenPlayReservationNotification(input);
   const mail = messages[0];
-  assert.equal(mail.to, 'owner@example.test');
+  assert.equal(mail.to, 'hello@thelittlewanderers.com');
   assert.equal(mail.idempotencyKey, 'open-play-reservation-owner/reservation');
   assert.match(mail.html, /Parent &lt;Family&gt;/);
   assert.match(mail.html, /Sam &lt;Family&gt; · 3 years/);
