@@ -60,6 +60,12 @@ test('cancelled paid bookings are excluded and retained payments require review'
   const input = data(); input.bookings[0].status = 'cancelled';
   const result = report(input); assert.equal(result.net_cents, 0); assert.equal(result.complete, false); assert.equal(result.due_cents, 0);
 });
+test('paid no-shows and unlinked legacy parties require review instead of claimed revenue or debt', () => {
+  const input = data(); input.bookings[0].status = 'no_show';
+  const noShow = report(input); assert.equal(noShow.net_cents, 0); assert.equal(noShow.complete, false); assert.match(noShow.rows[0].issues.join(' '), /No-show/);
+  const legacy = report({ ...empty(), parties: [{ id: 'legacy', start_time: `${date}T15:00:00Z`, status: 'confirmed', price_quote_cents: 50000, square_environment: null, square_order_id: null, deposit_paid_cents: null, balance_paid_cents: null }] });
+  assert.equal(legacy.net_cents, 0); assert.equal(legacy.due_cents, 0); assert.equal(legacy.complete, false);
+});
 test('duplicate named-child reservations and repeated visits fail visibly instead of double counting', () => {
   const input = data(); input.bookings.push({ ...booking, id: 'duplicate' }); input.visits.push(visit);
   const result = report(input); assert.equal(result.net_cents, 0); assert.equal(result.complete, false);
