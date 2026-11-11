@@ -1,3 +1,4 @@
+import { getAdmissionPrepayments } from '@/lib/admission-prepayments';
 import { readInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {requirePaymentFlow,squareConfig,squareRequest,squareSiteUrl,assertUsd,type SquareOrder} from '@/lib/square-client';
@@ -31,6 +32,8 @@ export async function startAdmissionPos(admin:SupabaseClient,checkinIds:string[]
    return {id:launched.id,pending:true,url:null};
  }
  const pricing = await readInfantSiblingAdmission(admin, checkinIds, config.environment);
+ const advance = await getAdmissionPrepayments(admin,pricing.visits.map(visit=>({...visit,household_id:pricing.householdId})),config.environment);
+ if (advance.some(visit=>checkinIds.includes(visit.id) && visit.payment_status==='prepaid')) throw new Error('Admission is already prepaid. Refresh before collecting payment.');
  // UI excludes free infants. Freeze their underlying unpaid rows with the rest
  // of the family so the installed full-family and single-operator guards apply.
  const freeIds = new Set(pricing.priced.filter(row => row.infant_sibling_free).map(row => row.id));
@@ -156,4 +159,54 @@ export async function reconcileAdmissionPos(admin:SupabaseClient,sale:PosSale){
  if(orderIds.length!==1||!orderIds[0])throw new Error('Multiple or unclear Square payments require owner review. Do not charge again.');
  await verifyAdmissionPos(admin,sale,orderIds[0]);
  return {status:'paid' as const};
+}
+
+/** Refresh the shared desk, including launches made by another staff session.
+ * Read one provider payment history and cache order lookups for the whole batch.
+ * This only verifies receipts; it never launches, cancels or refunds a payment.
+ */
+export async function refreshAdmissionPosSales(admin: SupabaseClient, sales: PosSale[]) {
+ const results = new Map<string, 'paid' | 'pending' | 'review'>();
+ const active = sales.filter(sale => sale.status === 'open' && sale.launched_at);
+ for (const sale of sales) results.set(sale.id, sale.status === 'paid' ? 'paid' : 'pending');
+ if (!active.length) return results;
+ try {
+  const config = squareConfig();
+  if (active.length > 30 || active.some(sale => sale.environment !== config.environment || sale.location_id !== config.locationId)) throw new Error('POS environment mismatch');
+  const earliest = Math.min(...active.map(sale => Date.parse(sale.created_at))) - 60000;
+  const query = new URLSearchParams({location_id:config.locationId,begin_time:new Date(earliest).toISOString(),end_time:new Date().toISOString(),sort_order:'ASC',limit:'100'});
+  const payments: SquarePayment[] = []; let cursor: string | undefined;
+  for (let page=0; page<10; page++) {
+   if (cursor) query.set('cursor',cursor);
+   const result = await squareRequest<{payments?:SquarePayment[];cursor?:string}>(`/v2/payments?${query}`);
+   payments.push(...(result.payments ?? [])); cursor=result.cursor; if (!cursor) break;
+  }
+  if (cursor) throw new Error('Payment history is incomplete');
+  const references = new Map(active.map(sale => [`LW admission ${sale.id}`, sale.id]));
+  const matching = new Map<string, SquarePayment[]>();
+  const orders = new Map<string, Promise<SquareOrder>>();
+  // Bound concurrent provider reads, sharing each order across every staff sale.
+  for (let offset=0; offset<payments.length; offset+=8) {
+   await Promise.all(payments.slice(offset,offset+8).map(async payment => {
+    let id = references.get(payment.note ?? '');
+    if (!id && payment.order_id) {
+     if (!orders.has(payment.order_id)) orders.set(payment.order_id,squareRequest<{order:SquareOrder}>(`/v2/orders/${encodeURIComponent(payment.order_id)}`).then(result=>result.order));
+     const order = await orders.get(payment.order_id)!;
+     id = order.line_items?.map(line=>references.get(line.note ?? '')).find(Boolean);
+    }
+    if (id) { const rows=matching.get(id) ?? []; rows.push(payment); matching.set(id,rows); }
+   }));
+  }
+  for (const sale of active) {
+   const receipts = matching.get(sale.id) ?? [];
+   if (receipts.some(payment=>!['COMPLETED','FAILED','CANCELED'].includes(payment.status ?? ''))) continue;
+   const complete = receipts.filter(payment=>payment.status==='COMPLETED');
+   if (!complete.length) continue;
+   const orderIds = [...new Set(complete.map(payment=>payment.order_id))];
+   if (orderIds.length!==1 || !orderIds[0]) { results.set(sale.id,'review'); continue; }
+   try { await verifyAdmissionPos(admin,sale,orderIds[0]); results.set(sale.id,'paid'); }
+   catch { results.set(sale.id,'review'); }
+  }
+ } catch { for (const sale of active) results.set(sale.id,'review'); }
+ return results;
 }

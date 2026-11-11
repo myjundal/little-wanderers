@@ -38,3 +38,9 @@ test('status lookup uses explicit person IDs and Eastern day boundaries without 
   assert.ok(calls[0].some(([op, field, value]) => op === 'gte' && field === 'checked_in_at' && Date.parse(value) === Date.parse('2026-11-11T05:00:00Z')));
   assert.ok(calls[0].some(([op, field, value]) => op === 'lt' && field === 'checked_in_at' && Date.parse(value) === Date.parse('2026-11-12T05:00:00Z')));
 });
+
+test('a frozen Square checkout is pending rather than another admission due',()=>{
+ assert.equal(reservationAdmissionStatus(reservation,[{...checkin,payment_status:'pending'}],'production'),'pending');
+ assert.equal(reservationAdmissionStatus(reservation,[{...checkin,payment_status:'review'}],'production'),'review');
+ for(const payment_status of ['pending','review'])assert.ok(!admissionPaymentLabel({payment_status,price_cents:1600}).includes('due'));
+});

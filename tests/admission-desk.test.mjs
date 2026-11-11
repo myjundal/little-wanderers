@@ -122,9 +122,9 @@ test('search and direct family lookup include confirmed alternate-profile bookin
   assert.equal((await apiHarness({ reservationRows: Array.from({ length: 501 }, () => booking) }).get('?q=Family')).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false } = {}) {
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false, initialVisits = [] } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
-  let cursor = 0, tree, visits = [], timers = [], refreshes = 0, saleOpen = false, holdRead = false;
+  let cursor = 0, tree, visits = initialVisits, timers = [], refreshes = 0, saleOpen = false, holdRead = false;
   const storage = new Map(), intervals = [], heldReads = [];
   const memo = (factory, deps) => {
     const i = cursor++;
@@ -183,7 +183,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   }
   const nodes = () => { const all = []; const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; all.push(node); walk(node.props?.children); }; walk(tree); return all; };
   const label = node => { if (Array.isArray(node)) return node.map(label).join(''); if (node == null || typeof node === 'boolean') return ''; if (typeof node !== 'object') return String(node); return label(node.props?.children); };
-  const button = text => nodes().find(node => node.type === 'button' && label(node).includes(text));
+  const button = text => nodes().find(node => node.type === 'button' && (node.props['aria-label'] ?? label(node)).includes(text));
   return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, resume: () => listeners.focus(), visible: () => listeners.visibilitychange(), poll: () => intervals.find(timer => timer.ms === 5000)?.fn(), holdNextRead: () => { holdRead = true; }, releaseReads: () => { for (const resolve of heldReads.splice(0)) resolve(); }, setSyncStatus: value => { syncStatus = value; }, setWaiver: value => { waiver = value; } };
 }
 
@@ -501,4 +501,29 @@ test('iPad staff screen distinguishes the Safari-created Home Screen app from a 
   assert.ok(home.text().includes('Staff screen: Home Screen app'));
   const tab = uiHarness(); await tab.flush();
   assert.ok(tab.text().includes('Staff screen: browser tab'));
+});
+
+test('today families sort by reservation time rather than surname, with walk-ins following reservations',async()=>{
+ const early={...family,id:'10000000-0000-4000-8000-000000000002',name:'Zeta Family'};
+ const late={...family,name:'Alpha Family'};
+ const walkin={...family,id:'10000000-0000-4000-8000-000000000003',name:'A Walk-in'};
+ const h=apiHarness({householdRows:[walkin,late,early],peopleRows:[...people,{...people[0],id:'walkin-child',household_id:walkin.id}],arrivalRows:[{person_id:'walkin-child'}],reservationRows:[{...booking,household_id:late.id,slot:{...booking.slot[0],starts_at:'2026-11-11T17:00:00Z'}},{...booking,id:'early',household_id:early.id,slot:{...booking.slot[0],starts_at:'2026-11-11T14:00:00Z'}}]});
+ const result=await(await h.get()).json();assert.deepEqual(result.items.map(row=>row.name),['Zeta Family','Alpha Family','A Walk-in']);
+});
+
+test('compact family rows keep contact and full visit history collapsed and retain accessible checkout',async()=>{
+ const h=uiHarness();await choose(h);h.button('Select everyone remaining').props.onClick();await h.flush();await h.button('Check in 2').props.onClick();await h.flush();
+ const row=h.nodes().find(node=>node.type==='article'&&node.props['data-family-id']===family.id);
+ assert.ok(row);const details=h.nodes().find(node=>node.type==='details'&&node.props.children?.[0]?.type==='summary');
+ assert.ok(details);assert.equal(details.props.open,undefined);
+ assert.ok(h.button('Check out family (2)'));assert.ok(h.button('Open family / payment'));
+});
+
+test('unverified Square receipts are not shown as unpaid or as settled in the compact desk',async()=>{
+ for(const payment_status of ['pending','review']) {
+  const h=uiHarness({initialVisits:[{id:'visit-child',person_id:'child',household_id:family.id,household_name:family.name,name:'Sam',price_cents:1600,payment_status,checked_in_at:'2026-11-11T15:00:00Z'}]});
+  await h.flush();await h.button('Open family / payment').props.onClick();await h.flush();
+  assert.ok(!h.text().includes('$16.00 due'));assert.ok(!h.button('Pay $16.00'));assert.ok(!h.text().includes('No admission payment due for this family'));
+  assert.ok(h.text().includes('Do not collect again'));
+ }
 });

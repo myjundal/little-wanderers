@@ -17,7 +17,8 @@ export function reservationAdmissionStatus(row: Reservation, checkins: Checkin[]
   if (slot && row.child_ids?.length) {
     const payments = row.child_ids.map(id => checkins.filter(visit => visit.person_id === id && visit.household_id === row.household_id
       && dayOf(visit.checked_in_at) === dayOf(slot.starts_at) && (visit.square_environment ?? 'production') === environment));
-    if (payments.some(rows => rows.length > 1)) return 'review';
+    if (payments.some(rows => rows.length > 1 || rows.some(visit=>visit.payment_status==='review'))) return 'review';
+    if (payments.some(rows => rows.some(visit=>visit.payment_status==='pending'))) return 'pending';
     if (payments.every(rows => rows.length === 1 && (admissionIsPaid(rows[0].payment_status) || admissionIsIncluded(rows[0].payment_status)))) {
       if (payments.every(rows => admissionIsIncluded(rows[0].payment_status))) return 'included';
       if (payments.every(rows => admissionIsPaid(rows[0].payment_status))) return 'paid_counter';
@@ -50,5 +51,13 @@ export async function getReservationAdmissionStatuses(admin: SupabaseClient, row
       }
     }
   }
-  return new Map(rows.map(row => [row.id, reservationAdmissionStatus(row, visits, environment)]));
+  let recorded = visits;
+  if (visits.some(visit=>visit.payment_status==='due')) {
+    const pending = await admin.from('admission_pos_sales').select('checkin_ids,launched_at').eq('environment',environment).eq('status','open').limit(101);
+    const frozen = new Set<string>((pending.data ?? []).filter(sale=>sale.launched_at).flatMap(sale=>sale.checkin_ids ?? []));
+    const lookupFailed = pending.error || (pending.data?.length ?? 0)>100;
+    recorded = visits.map(visit=>visit.payment_status==='due' && (lookupFailed || frozen.has(visit.id))
+      ? {...visit,payment_status:lookupFailed?'review':'pending'} : visit);
+  }
+  return new Map(rows.map(row => [row.id, reservationAdmissionStatus(row, recorded, environment)]));
 }
