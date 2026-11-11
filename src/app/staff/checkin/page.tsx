@@ -5,7 +5,7 @@ import StaffToolNav from '@/components/staff/StaffToolNav';
 import StaffDashboard from '@/components/staff/StaffDashboard';
 import AdmissionVisits from '@/components/staff/AdmissionVisits';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
-import { admissionGroups, squarePosCallback, type AdmissionVisit } from '@/lib/admission-pos-ui';
+import { admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
 type DeskPerson = { id: string; first_name: string | null; last_name: string | null; role: string; birthdate: string | null };
@@ -47,11 +47,16 @@ export default function StaffCheckinPage() {
   const familyRequest = useRef(0);
   const callbackBusy = useRef(false);
   const paymentPending = useRef(false);
+  const pendingLaunch = useRef<PendingAdmissionPos | null>(null);
+  const resumeBusy = useRef(false);
+  const paymentRequest = useRef(0);
+  const [pendingPosId, setPendingPosId] = useState('');
   const groups = admissionGroups(visits);
   const selected = groups.find(group => group.id === activeFamily);
   const pendingSale=selected&&pendingSales.find(sale=>sale.checkin_ids.some(id=>selected.visits.some(visit=>visit.id===id)));
 
   async function refreshPayments() {
+    const request = ++paymentRequest.current;
     setLoading(true);
     setPaymentsReady(false);
     try {
@@ -59,13 +64,38 @@ export default function StaffCheckinPage() {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to refresh admission payments.');
       const currentVisits = (result.visits ?? []) as AdmissionVisit[];
+      if (request !== paymentRequest.current) return currentVisits;
       setVisits(currentVisits);
       setPeopleIds(previous => previous.filter(id => !currentVisits.some(visit => visit.person_id === id)));
       setPendingSales(result.pending_sales??[]);
       setEnabled(result.enabled === true);
       setPaymentsReady(true);
+      // A Home Screen app may be restored without the Safari callback or its tab
+      // storage. Recover only this operator's already-launched, current-day sale.
+      if (!pendingLaunch.current) {
+        const launch = (result.pending_sales ?? []).filter((sale: { launched_at?: string; checkin_ids: string[] }) => sale.launched_at
+          && Date.now() - Date.parse(sale.launched_at) < 86400000
+          && sale.checkin_ids.some(id => currentVisits.some(visit => visit.id === id)))
+          .sort((a: { launched_at: string }, b: { launched_at: string }) => b.launched_at.localeCompare(a.launched_at))[0];
+        const visitor = launch && currentVisits.find(visit => launch.checkin_ids.includes(visit.id));
+        if (launch && visitor?.household_id) {
+          pendingLaunch.current = { id: launch.id, family_id: visitor.household_id, started_at: Date.parse(launch.launched_at) };
+          setPendingPosId(launch.id);
+        }
+      }
       return currentVisits;
-    } finally { setLoading(false); }
+    } finally { if (request === paymentRequest.current) setLoading(false); }
+  }
+
+  function clearPendingPos(id: string) {
+    pendingLaunch.current = null;
+    paymentPending.current = false;
+    setPendingPosId('');
+    setLaunchUrl('');
+    setNeedsVerification(false);
+    setRecoveryConfirmed(false);
+    setPendingSales(previous => previous.filter(sale => sale.id !== id));
+    try { window.sessionStorage.removeItem(PENDING_ADMISSION_POS_KEY); } catch { /* Server state is authoritative. */ }
   }
 
   async function verifyReturn() {
@@ -92,18 +122,44 @@ export default function StaffCheckinPage() {
       url.searchParams.delete('data');
       url.searchParams.delete('square_pos_return');
       window.history.replaceState({}, '', url.pathname + url.search);
-      setNeedsVerification(false);
-      setLaunchUrl('');
-      paymentPending.current = false;
+      clearPendingPos(callback.state);
       setMessage('Payment verified — this family’s admission is paid. Choose the next family when ready.');
     } catch (error) {
       setMessage(`${error instanceof Error ? error.message : 'Unable to verify payment.'} Do not charge again. Retry verification or refresh this page.`);
     } finally { callbackBusy.current = false; setBusy(false); }
   }
 
+  async function resumePayments() {
+    if (resumeBusy.current || checkinBusy.current || checkoutBusy.current) return;
+    resumeBusy.current = true;
+    try {
+      const callback = squarePosCallback(window.location.search);
+      if (callback?.status === 'ok') { await verifyReturn(); return; }
+      await refreshPayments();
+      const launch = pendingLaunch.current;
+      if (!launch) return;
+      const response = await fetch('/api/admin/admission/pos', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode: 'sync', state: launch.id }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Square payment verification is pending.');
+      if (result.status === 'paid' || result.status === 'cancelled') {
+        clearPendingPos(launch.id);
+        setCompletion(null);
+        await refreshPayments();
+        setDeskRefresh(value => value + 1);
+        setMessage(result.status === 'paid' ? 'Payment verified — this family’s admission is paid. Choose the next family when ready.' : 'Square checkout was closed after review. Admission status is refreshed.');
+      }
+    } catch (error) {
+      setMessage(`${error instanceof Error ? error.message : 'Unable to refresh Square payment.'} Do not charge again. Refresh payment status to retry.`);
+    } finally { resumeBusy.current = false; }
+  }
+
   useEffect(() => {
-    void refreshPayments().catch(error => setMessage(error.message));
-    void verifyReturn();
+    try {
+      const launch = readPendingAdmissionPos(window.sessionStorage.getItem(PENDING_ADMISSION_POS_KEY));
+      if (launch) { pendingLaunch.current = launch; setPendingPosId(launch.id); }
+    } catch { /* The server also restores this operator's current pending sale. */ }
+    void resumePayments();
     // Initial load and Square return are handled once; callbacks are idempotent on the server.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -111,25 +167,37 @@ export default function StaffCheckinPage() {
   useEffect(() => {
     const resume = () => {
       setDeskRefresh(value => value + 1);
-      void refreshPayments().catch(error => setMessage(error.message));
-      void verifyReturn();
+      void resumePayments();
     };
+    const visible = () => { if (document.visibilityState === 'visible') resume(); };
     window.addEventListener('pageshow', resume);
     window.addEventListener('focus', resume);
-    return () => { window.removeEventListener('pageshow', resume); window.removeEventListener('focus', resume); };
+    document.addEventListener('visibilitychange', visible);
+    return () => { window.removeEventListener('pageshow', resume); window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', visible); };
     // Refresh saved visits and counts when returning from the Square app.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (checkinBusy.current || checkoutBusy.current || paymentPending.current) return;
-      void refreshPayments().catch(error => setMessage(error.message));
+      if (document.visibilityState !== 'visible') return;
+      void resumePayments();
       setDeskRefresh(value => value + 1);
     }, 60000);
     return () => window.clearInterval(timer);
     // Keep other operators' arrivals and departures current on the shared desk.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!pendingPosId) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void resumePayments();
+    }, 5000);
+    return () => window.clearInterval(timer);
+    // Retry a newly completed receipt while Square finishes publishing it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPosId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -229,9 +297,11 @@ export default function StaffCheckinPage() {
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to open Square.');
       if (!result.url) {await refreshPayments();throw new Error('A Square payment is already in progress. Check Square, then use the recovery section below.');}
       setPendingSales(previous=>[...previous.filter(sale=>sale.id!==result.id),{id:result.id,checkin_ids:selected.visits.map(visit=>visit.id)}]);
+      pendingLaunch.current = { id: result.id, family_id: selected.id, started_at: Date.now() };
+      setPendingPosId(result.id);
       setLaunchUrl(result.url);
       setCompletion(null);
-      try { window.sessionStorage.setItem('admission-family', selected.id); } catch { /* Payment can continue without browser storage. */ }
+      try { window.sessionStorage.setItem('admission-family', selected.id); window.sessionStorage.setItem(PENDING_ADMISSION_POS_KEY, JSON.stringify(pendingLaunch.current)); } catch { /* Payment can continue without browser storage. */ }
       setMessage('Opening Square with this family’s total. If it does not open, use the Open Square link below.');
       window.location.assign(result.url);
     } catch (error) { paymentPending.current = false; setMessage(error instanceof Error ? error.message : 'Unable to open Square.'); await refreshPayments().catch(()=>{}); }
@@ -270,6 +340,7 @@ export default function StaffCheckinPage() {
       setDeskRefresh(value => value + 1);
       window.history.replaceState({},'',window.location.pathname);
       setNeedsVerification(false);setLaunchUrl('');setRecoveryConfirmed(false);paymentPending.current=false;
+      if (pendingLaunch.current) clearPendingPos(pendingLaunch.current.id);
       setMessage(result.status==='paid'?'Square payment found and verified — admission is paid. Do not charge again.':'No active or successful payment found after your Square review. You can now prepare a fresh payment.');
     }catch(error){setMessage(error instanceof Error?error.message:'Unable to reconcile Square. Do not charge again.');}
     finally{setBusy(false);}
@@ -368,7 +439,7 @@ export default function StaffCheckinPage() {
       </> : !loading && <p>{familyVisits.length ? 'No admission payment due for this family. Paid visits, members and prepaid visitors are already accounted for.' : 'Check in a family to see their total here.'}</p>}
       {pendingSale && <aside style={{ marginTop: 20, padding: 16, background: '#fff1d8', borderRadius: 12 }}><h3>Square checkout needs review</h3><p>If Square was cancelled, did not open, or did not return a receipt, check Transactions on this iPad first. Wait at least one minute after the launch. Never reset while a payment is pending or saved offline.</p><label><input type="checkbox" checked={recoveryConfirmed} disabled={busy} onChange={event => setRecoveryConfirmed(event.target.checked)} /> I checked Square: this checkout is closed, with no completed, pending or offline payment.</label><p><button disabled={busy || !recoveryConfirmed} onClick={() => void recoverPayment()}>Reconcile Square and reset unpaid checkout</button></p><p>The server checks Square too. If it finds a completed matching payment, it records payment instead of starting another charge.</p></aside>}
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
-      <p><button disabled={busy || checkingIn} onClick={() => void refreshPayments().catch(error => setMessage(error.message))}>Refresh payment status</button></p>
+      <p><button disabled={busy || checkingIn} onClick={() => void resumePayments()}>Refresh payment status</button></p>
     </section>
     </div><aside className={styles.occupancy} aria-label="Live occupancy management">
       <p>Use family check-out to record departures and update occupancy. The controls below are for other count corrections.</p>

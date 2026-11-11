@@ -32,3 +32,17 @@ export function squarePosCallback(search: string) {
     return { status: 'ok' as const, transaction_id: data.transaction_id, state: data.state };
   } catch { return { status: 'error' as const }; }
 }
+
+export const PENDING_ADMISSION_POS_KEY = 'lw-admission-pos-pending';
+export type PendingAdmissionPos = { id: string; family_id: string; started_at: number };
+
+export function readPendingAdmissionPos(value: string | null, now = Date.now()): PendingAdmissionPos | null {
+  if (!value || value.length > 500) return null;
+  try {
+    const parsed = JSON.parse(value);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!parsed || typeof parsed.id !== 'string' || !uuid.test(parsed.id) || typeof parsed.family_id !== 'string' || !uuid.test(parsed.family_id)
+      || !Number.isFinite(parsed.started_at) || parsed.started_at > now || now - parsed.started_at > 86400000) return null;
+    return { id: parsed.id, family_id: parsed.family_id, started_at: parsed.started_at };
+  } catch { return null; }
+}
