@@ -17,7 +17,7 @@
 .metric span { font-size: 13px; color: #786a87; }
 .metric strong { font-size: clamp(24px,3vw,34px); font-variant-numeric: tabular-nums; letter-spacing: -.05em; }
 .metric small { font-size: 11px; color: #85768d; line-height: 1.65; }
-.featured { background: #5e437b; border-color: #5e437b; color: white; }
+.main .featured { background: #5e437b; border-color: #5e437b; color: white; }
 .featured span, .featured small { color: #e7d9f4; }
 .panel { border: 1px solid #e7deed; border-radius: 18px; padding: 22px; background: #fffdfb; margin: 20px 0; }
 .sectionHeading { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 20px; }
