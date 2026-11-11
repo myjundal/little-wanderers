@@ -13,6 +13,7 @@ test('customer and operator calendars both exclude all windows before November 1
  for(const operator of [false,true]){
   const filters=[];const admin={from(table){const q={select(){return q},eq(){return q},neq(){return q},lt(){return q},order(){return q},gte(key,value){filters.push([table,key,value]);return q},then(resolve){resolve({data:[],error:null})}};return q;}};
   const api=load(operator?'src/app/api/admin/open-play-reservations/route.ts':'src/app/api/open-play-reservations/route.ts',{
+   '@/lib/reservation-admission-status':{getReservationAdmissionStatuses:async()=>new Map()},'@/lib/square-client':{squareEnvironment:()=> 'production'},
    '@/lib/open-play-reservations':lib,
    '@/lib/party-config':load('src/lib/party-config.ts'),
    '@/lib/waivers':{getWaiverStatus:()=>({status:'required'}),WAIVER_STATUS_SELECT:'signed_at'},'@/lib/authz':{requireStaffContext:async()=>({ok:true,admin})},
@@ -39,6 +40,7 @@ test('owner bulk changes use Eastern calendar days and cannot reopen pre-opening
  ]){
   const filters=[];const admin={from(){const q={select(){return q},eq(){return q},gte(k,v){filters.push(['gte',k,v]);return q},lt(k,v){filters.push(['lt',k,v]);return q},then(resolve){resolve({data:[],error:null})}};return q;}};
   const api=load('src/app/api/admin/open-play-reservations/route.ts',{
+   '@/lib/reservation-admission-status':{getReservationAdmissionStatuses:async()=>new Map()},'@/lib/square-client':{squareEnvironment:()=> 'production'},
    '@/lib/open-play-reservations':lib,'@/lib/party-config':load('src/lib/party-config.ts'),
    '@/lib/waivers':{getWaiverStatus:()=>({status:'required'}),WAIVER_STATUS_SELECT:'signed_at'},'@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin})},
   });

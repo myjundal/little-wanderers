@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SOFT_OPENING_START_DATE } from '@/lib/open-play-reservations';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
+import { reservationAdmissionLabel, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
 
 type Slot = {
   id: string;
@@ -22,6 +23,7 @@ type Reservation = {
   contact_email: string | null;
   payment_status?: string;
   payment_choice?: string;
+  admission_status?: ReservationAdmissionStatus;
   amount_cents?: number;
   child_count: number;
   adult_count: number;
@@ -393,7 +395,7 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
               </div>
               <span style={{ color: statusColor(reservation.status), fontWeight: 900, textTransform: 'capitalize' }}>{reservation.status.replace('_', ' ')}</span>
             </div>
-            {reservation.payment_status && <p style={{margin:'8px 0',fontWeight:700,color:'#51406e'}}>{reservation.payment_status==='paid'?'Paid online — do not collect admission again':reservation.payment_status==='covered'?'Included with membership':`$${((reservation.amount_cents??0)/100).toFixed(2)} · ${reservation.payment_choice==='now'?'Online payment pending — verify before collecting':'Pay at the counter'}`}</p>}
+            {(reservation.admission_status || reservation.payment_status) && <p style={{margin:'8px 0',fontWeight:700,color:'#51406e'}}>{reservationAdmissionLabel(reservation.admission_status, reservation.amount_cents) || (reservation.payment_status==='paid'?'Paid online — do not collect admission again':reservation.payment_status==='covered'?'Included with membership':`$${((reservation.amount_cents??0)/100).toFixed(2)} · ${reservation.payment_choice==='now'?'Online payment pending — verify before collecting':'Pay at the counter'}`)}</p>}
             <p style={{ margin: '8px 0', fontWeight: 700, color: reservation.waiver_status === 'completed' ? '#2f7a47' : '#8a4b0f' }}>{reservation.waiver_status === 'completed' ? 'Waiver signed' : reservation.waiver_status === 'expired' ? 'Waiver expired — renewal needed' : 'Waiver required'}{reservation.waiver_signed_at ? ` · Signed ${new Date(reservation.waiver_signed_at).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}` : ''}</p>
             {reservation.people.length > 0 && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>People: {reservation.people.join(', ')}</p>}
             {reservation.notes && <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Notes: {reservation.notes}</p>}

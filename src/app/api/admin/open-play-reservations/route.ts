@@ -1,6 +1,8 @@
 import { getWaiverStatus, WAIVER_STATUS_SELECT } from '@/lib/waivers';
 import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
 import { toPartyDateTimeIso } from '@/lib/party-config';
+import { getReservationAdmissionStatuses } from '@/lib/reservation-admission-status';
+import { squareEnvironment } from '@/lib/square-client';
 import {
   SOFT_OPENING_START,
   formatOpenPlayReservationError,
@@ -118,11 +120,13 @@ export async function GET() {
       });
     }
 
+    const admission = await getReservationAdmissionStatuses(context.admin, reservationsRes.data ?? [], squareEnvironment());
     const reservations = (reservationsRes.data ?? []).map((reservation) => {
       const household = householdsById.get(reservation.household_id as string) ?? null;
       const waiver = getWaiverStatus(waiverRows.filter(w => w.household_id === reservation.household_id), new Date(), reservation.child_ids?.length ? reservation.child_ids : childIdsByHousehold.get(reservation.household_id) ?? []);
       return {
         ...reservation,
+        admission_status: admission.get(reservation.id),
         waiver_status: waiver.status, waiver_signed_at: waiver.signedAt, waiver_expires_at: waiver.expiresAt,
         household_name: household?.name ?? null,
         household_email: household?.email ?? null,
