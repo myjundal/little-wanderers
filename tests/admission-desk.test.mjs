@@ -190,13 +190,18 @@ test('occupancy links open the integrated workspace directly', async () => {
 });
 
 test('name-based UI checks in selected visitors manually, skips covered charges and sends one server-total family payment', async () => {
-  const h = uiHarness(); await choose(h);
+  const h = uiHarness(); await h.flush();
+  h.nodes().find(node => node.props?.id === 'family-search').props.onChange({ target: { value: 'Family' } });
+  await choose(h);
   h.button('Select everyone remaining').props.onClick(); await h.flush();
   assert.equal(h.button('Check in 2').props.disabled, false);
   await h.button('Check in 2').props.onClick(); await h.flush();
   const entries = h.requests.filter(request => request.url === '/api/checkin');
   assert.deepEqual(entries.map(request => request.body), [{ person_id: 'child', source: 'staff_manual' }, { person_id: 'parent', source: 'staff_manual' }]);
   assert.ok(h.text().includes('Total due: $16.00'));
+  assert.equal(h.nodes().find(node => node.props?.id === 'family-search').props.value, '');
+  assert.ok(h.text().includes('Today’s Open Play reservations'));
+  assert.ok(h.requests.some(request => request.url === '/api/admin/admission/desk?q='));
   assert.equal(h.nodes().filter(node => node.type === 'input' && node.props.type === 'checkbox' && node.props.disabled).length, 2);
   assert.ok(h.nodes().some(node => node.type === 'dialog'));
   assert.equal(h.navigations.length, 0);
@@ -325,9 +330,12 @@ test('covered visits show a completion dialog without creating or opening a Squa
 
 test('partial or unconfirmed check-ins never show a completion dialog or launch Square', async () => {
   for (const options of [{ failPerson: 'parent' }, { failRefresh: true }]) {
-    const h = uiHarness(options); await choose(h);
+    const h = uiHarness(options); await h.flush();
+    h.nodes().find(node => node.props?.id === 'family-search').props.onChange({ target: { value: 'Family' } });
+    await choose(h);
     h.button('Select everyone remaining').props.onClick(); await h.flush();
     await h.button('Check in 2').props.onClick(); await h.flush();
+    assert.equal(h.nodes().find(node => node.props?.id === 'family-search').props.value, 'Family');
     assert.ok(!h.nodes().some(node => node.type === 'dialog'));
     assert.equal(h.navigations.length, 0);
     assert.equal(h.requests.filter(request => request.body?.checkin_ids).length, 0);

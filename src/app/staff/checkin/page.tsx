@@ -194,6 +194,7 @@ export default function StaffCheckinPage() {
       refreshed = true;
       if (!peopleIds.every(id => currentVisits.some(visit => visit.person_id === id))) throw new Error('Unable to confirm every selected visitor. Refresh admission status before continuing.');
       setCompletion({ familyName: family.name || 'Selected family', visitors: family.people.filter(person => peopleIds.includes(person.id)).map(personName) });
+      setQuery('');
       setDeskRefresh(value => value + 1);
       setMessage('Check-in complete. Review the family total and continue to Square for payment.');
     } catch (error) { setMessage(`${error instanceof Error ? error.message : 'Unable to check in.'} Any entries already recorded are shown below. Select remaining visitors to retry.`); }
