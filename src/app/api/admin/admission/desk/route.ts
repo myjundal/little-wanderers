@@ -40,15 +40,17 @@ export async function GET(req: Request) {
         .select(reservationSelect)
         .neq('status', 'cancelled').gte('slot.starts_at', toPartyDateTimeIso(today, 0))
         .lt('slot.starts_at', toPartyDateTimeIso(tomorrow, 0)).order('created_at').limit(501),
-      c.admin.from('checkins').select('person:people!inner(household_id)')
+      c.admin.from('checkins').select('person_id')
         .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0)).limit(501)]);
       if (result.error || arrivals.error) throw new Error('Unable to load today’s reservations and visitors.');
       truncated = (result.data?.length ?? 0) > 500 || (arrivals.data?.length ?? 0) > 500;
       reservations = (result.data ?? []).slice(0, 500).map(row => ({ ...row, slot: Array.isArray(row.slot) ? row.slot[0] : row.slot })) as typeof reservations;
-      ids = [...new Set([...reservations.map(row => row.household_id), ...(arrivals.data ?? []).slice(0, 500).map(row => {
-        const person = Array.isArray(row.person) ? row.person[0] : row.person;
-        return person?.household_id as string;
-      })].filter(Boolean))];
+      const visitorIds = [...new Set((arrivals.data ?? []).slice(0, 500).map(row => row.person_id).filter(Boolean))];
+      // Legacy checkins have more than one relationship to people. Resolve the
+      // actual person_id explicitly instead of relying on an ambiguous embed.
+      const visitors = visitorIds.length ? await c.admin.from('people').select('household_id').in('id', visitorIds).limit(501) : { data: [], error: null };
+      if (visitors.error) throw new Error('Unable to load visiting family details.');
+      ids = [...new Set([...reservations.map(row => row.household_id), ...(visitors.data ?? []).map(row => row.household_id)].filter(Boolean))];
     }
     if (!ids.length) return Response.json({ ok: true, date: today, items: [], truncated });
     const aliases = await getStaffFamilySearchAliases(c.admin);

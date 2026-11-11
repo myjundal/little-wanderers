@@ -24,7 +24,7 @@ function apiHarness({ allowed = true, failTable = '', many = false, aliases = []
         for (const [op, key, values] of filters) if (op === 'in') data = data.filter(row => values.includes(row[key]));
         for (const [op, key, value] of filters) if (op === 'neq') data = data.filter(row => row[key] !== value);
         if (many && table === 'households' && fields === 'id') data = Array.from({ length: 101 }, () => family);
-        resolve({ data, error: table === failTable ? { message: 'Database offline' } : null });
+        resolve({ data, error: table === failTable ? { message: 'Database offline' } : table === 'checkins' && fields.includes('people') ? { code: 'PGRST201', message: 'Ambiguous people relationships: person_id and child_id' } : null });
       },
     };
     for (const method of ['eq', 'neq', 'gte', 'lt', 'or', 'order', 'in', 'limit']) q[method] = (...args) => { filters.push([method, ...args]); return q; };
@@ -57,10 +57,12 @@ test('today list uses Eastern midnight boundaries, excludes cancelled bookings a
 });
 
 test('today list also includes walk-in families without a reservation and a search keeps them in the same results', async () => {
-  const h = apiHarness({ reservationRows: [], arrivalRows: [{ person: { household_id: family.id } }] });
+  const h = apiHarness({ reservationRows: [], arrivalRows: [{ person_id: 'child' }] });
   assert.equal((await (await h.get()).json()).items[0].id, family.id);
   assert.equal((await (await h.get('?q=Sam')).json()).items[0].id, family.id);
   assert.equal((await (await h.get()).json()).items[0].reservations.length, 0);
+  assert.equal(h.calls.find(call => call.table === 'checkins').fields, 'person_id');
+  assert.ok(h.calls.some(call => call.table === 'people' && call.filters.some(([op, key, ids]) => op === 'in' && key === 'id' && ids.includes('child'))));
 });
 
 test('empty signup placeholders sharing a populated family contact do not duplicate search cards, and remain directly accessible', async () => {
