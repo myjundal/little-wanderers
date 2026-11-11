@@ -206,7 +206,7 @@ export async function POST(req: Request) {
     try { family = await saveSoftOpeningFamily(context.admin, context.householdId, context.user, body!); }
     catch (error) { return NextResponse.json({ok:false,error:error instanceof Error ? error.message : 'Complete your family details.'},{status:400}); }
     const visitDate = new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(slot.starts_at));
-    const amount = softOpeningAmount(family.childIds, family.memberships, visitDate);
+    const amount = softOpeningAmount(family.childIds, family.memberships, visitDate, family.children);
 
     const { data: reservation, error: reservationError } = await context.admin
       .from('open_play_reservations')

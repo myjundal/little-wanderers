@@ -14,10 +14,11 @@ const pos=loadSquareModules({env:config}).load('src/lib/square-admission-pos.ts'
 const db=new PGlite();
 try {
  await db.exec(fs.readFileSync('tests/fixtures/admission-pos-schema.sql','utf8'));
+ await db.exec("alter table people add column role text default 'child',add column birthdate text; alter table checkins add column notes text; alter table checkins alter column square_environment set default 'sandbox';");
  await db.exec(fs.readFileSync('db/migrations/20261029_qr_admission_pos_family.sql','utf8'));
  const one=crypto.randomUUID(),two=crypto.randomUUID();
  await db.query('insert into households values($1,$2)',[ids.household,'Sandbox Test Family']);
- await db.query("insert into people values($1,$2,'First','Sandbox'),($3,$2,'Sibling','Sandbox')",[one,ids.household,two]);
+ await db.query("insert into people(id,household_id,first_name,last_name) values($1,$2,'First','Sandbox'),($3,$2,'Sibling','Sandbox')",[one,ids.household,two]);
  await db.query("insert into checkins(id,person_id,price_cents,payment_status) values($1,$1,1600,'due'),($2,$2,1000,'due')",[one,two]);
  const admin=localSquareAdmin(db);
  const launch=await pos.startAdmissionPos(admin,[one,two],ids.user);

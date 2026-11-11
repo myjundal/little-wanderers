@@ -8,9 +8,10 @@ const checkin='50000000-0000-4000-8000-000000000001',sibling='50000000-0000-4000
 const date=new Date().toISOString();
 async function database(t){
  const db=new PGlite();t.after(()=>db.close());await db.exec(fs.readFileSync('tests/fixtures/admission-pos-schema.sql','utf8'));
+ await db.exec("alter table people add column role text default 'child',add column birthdate text; alter table checkins add column notes text; alter table checkins alter column square_environment set default 'sandbox';");
  await db.exec(fs.readFileSync('db/migrations/20261029_qr_admission_pos_family.sql','utf8'));
  await db.query('insert into households values($1,$2),($3,$4)',[ids.household,'Test Family',ids.other,'Other Family']);
- await db.query("insert into people values($1,$2,'First','Child'),($3,$2,'Sibling','Child'),($4,$5,'Other','Child')",[ids.person,ids.household,sibling,ids.otherPerson,ids.other]);
+ await db.query("insert into people(id,household_id,first_name,last_name) values($1,$2,'First','Child'),($3,$2,'Sibling','Child'),($4,$5,'Other','Child')",[ids.person,ids.household,sibling,ids.otherPerson,ids.other]);
  await db.query("insert into checkins(id,person_id,price_cents,payment_status) values($1,$2,1600,'due'),($3,$3,1000,'due'),($4,$5,1600,'due')",[checkin,ids.person,sibling,other,ids.otherPerson]);
  return {db,admin:localSquareAdmin(db)};
 }
@@ -78,7 +79,7 @@ test('completed Square receipt can be retried after a database failure without a
 
 test('POS API requires staff and verification looks up the signed-in operator’s stored sale',async()=>{
  let expected;
- const base={'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
+ const base={'@/lib/infant-sibling-admission':{},'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
  const denied=loadModule('src/app/api/admin/admission/pos/route.ts',{...base,'@/lib/authz':{requireStaffContext:async()=>({ok:false,response:Response.json({}, {status:403})})}});
  assert.equal((await denied.POST({json:async()=>({})})).status,403);
  const query={select(){return this},eq(key,value){expected??={};expected[key]=value;return this},async maybeSingle(){return {data:null,error:null}}};
@@ -152,6 +153,7 @@ test('staff sync is bound to its stored sale and a transaction callback can reso
  const sale={id:checkin,status:'open',environment:'production',created_by_user_id:ids.user};
  const query={select(){return this},eq(key,value){selected[key]=value;return this},async maybeSingle(){return {data:sale,error:null}}};
  const api=loadModule('src/app/api/admin/admission/pos/route.ts',{
+  '@/lib/infant-sibling-admission':{},
   '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:ids.user},admin:{from:()=>query}})},
   '@/lib/square-client':{squareConfig:()=>({environment:'production'})},'@/lib/admission-checkout':{},
   '@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)},
@@ -163,4 +165,57 @@ test('staff sync is bound to its stored sale and a transaction callback can reso
  calls.length=0;
  assert.equal((await (await api.POST(request({mode:'sync',state:checkin,created_by_user_id:ids.other}))).json()).status,'paid');
  assert.deepEqual(calls,['provider']);assert.equal(selected.created_by_user_id,ids.user);assert.equal(selected.environment,'production');
+});
+
+test('Square freezes $26 for two older children and an infant, including when infant was scanned first',async t=>{
+ const {db,admin}=await database(t);
+ const third='50000000-0000-4000-8000-000000000004';
+ const birthday=new Date();birthday.setUTCMonth(birthday.getUTCMonth()-1);
+ await db.query('update people set birthdate=$1 where id=$2',[birthday.toISOString().slice(0,10),sibling]);
+ await db.query("update checkins set checked_in_at=now()-interval '1 minute' where id=$1",[sibling]);
+ await db.query("insert into people(id,household_id,first_name,role,birthdate) values($1,$2,'Older sibling','child','2023-01-01')",[third,ids.household]);
+ await db.query("insert into checkins(id,person_id,price_cents,payment_status) values($1,$1,1000,'due')",[third]);
+ const pos=modules().load('src/lib/square-admission-pos.ts');
+ // Free infant is hidden from the list of payable visitors. The server adds its
+ // original fee row to the atomic full-family freeze before reducing the total.
+ const launch=await pos.startAdmissionPos(admin,[checkin,third],ids.user);
+ assert.equal(JSON.parse(new URL(launch.url).searchParams.get('data')).amount_money.amount,2600);
+ const sale=(await db.query('select * from admission_pos_sales where id=$1',[launch.id])).rows[0];
+ assert.equal(sale.amount_cents,2600);assert.equal(sale.checkin_ids.length,3);
+ const infant=(await db.query('select * from checkins where id=$1',[sibling])).rows[0];
+ assert.equal(infant.price_cents,0);assert.equal(infant.payment_status,'due');assert.match(infant.notes,/original unpaid fee \$10.00/);
+ const {projectInfantSiblingAdmission}=modules().load('src/lib/infant-sibling-admission.ts');
+ const rows=JSON.parse(JSON.stringify((await db.query('select * from checkins')).rows)),people=(await db.query('select * from people')).rows;
+ const shown=projectInfantSiblingAdmission(rows,people,'sandbox');assert.equal(shown.find(r=>r.id===sibling).payment_status,'covered');
+ assert.equal((await pos.startAdmissionPos(admin,[checkin,third],ids.user)).url,null);
+ const order={id:'discounted-order',location_id:'test-location',state:'COMPLETED',total_money:{amount:2600,currency:'USD'},tenders:[{payment_id:'discounted-payment'}]};
+ const payment={id:'discounted-payment',source_type:'CARD',order_id:order.id,location_id:'test-location',status:'COMPLETED',amount_money:{amount:2600,currency:'USD'},note:`LW admission ${sale.id}`,created_at:date,updated_at:date};
+ const verify=modules(async url=>Response.json(new URL(url).pathname.includes('/orders/')?{order}:{payment})).load('src/lib/square-admission-pos.ts');
+ await verify.verifyAdmissionPos(admin,sale,order.id);
+ assert.equal((await db.query("select count(*)::int n from checkins where payment_status='paid' and id=any($1)",[sale.checkin_ids])).rows[0].n,3);
+});
+
+test('age discount preserves completed receipts, prepaid children, other environments and frozen checkouts',()=>{
+ const {projectInfantSiblingAdmission}=modules().load('src/lib/infant-sibling-admission.ts');
+ const older={id:'older',household_id:'family',role:'child',birthdate:'2023-01-01'}, baby={id:'baby',household_id:'family',role:'child',birthdate:'2026-10-11'};
+ const visits=[{id:'first',person_id:'older',price_cents:1600,payment_status:'due',checked_in_at:'2026-11-11T15:00:00Z'},
+ {id:'infant',person_id:'baby',price_cents:1000,payment_status:'due',checked_in_at:'2026-11-11T15:00:01Z'}];
+ assert.equal(projectInfantSiblingAdmission(visits,[older,baby],'production')[1].price_cents,0);
+ for(const status of ['paid','prepaid','terminal_paid'])assert.equal(projectInfantSiblingAdmission([visits[0],{...visits[1],payment_status:status}],[older,baby],'production')[1].price_cents,1000);
+ assert.equal(projectInfantSiblingAdmission(visits,[older,baby],'sandbox')[1].price_cents,1000);
+ assert.equal(projectInfantSiblingAdmission(visits,[older,baby],'production',new Set(['infant']))[1].price_cents,1000);
+ assert.equal(projectInfantSiblingAdmission([visits[1]],[older,baby],'production')[0].price_cents,1000);
+ assert.equal(projectInfantSiblingAdmission([visits[0],{...visits[1],checked_in_at:'2026-11-12T15:00:01Z'}],[older,baby],'production')[1].price_cents,1000);
+});
+
+test('simultaneous operators cannot each launch the same discounted sale',async t=>{
+ const {db,admin}=await database(t);
+ const birthday=new Date();birthday.setUTCMonth(birthday.getUTCMonth()-1);
+ await db.query('update people set birthdate=$1 where id=$2',[birthday.toISOString().slice(0,10),sibling]);
+ const pos=modules().load('src/lib/square-admission-pos.ts');
+ const results=await Promise.allSettled([pos.startAdmissionPos(admin,[checkin],ids.user),pos.startAdmissionPos(admin,[checkin],ids.user)]);
+ const launched=results.filter(r=>r.status==='fulfilled'&&r.value.url);
+ assert.equal(launched.length,1);
+ assert.equal(JSON.parse(new URL(launched[0].value.url).searchParams.get('data')).amount_money.amount,1600);
+ assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,1);
 });

@@ -41,3 +41,24 @@ test('an abandoned online checkout blocks counter collection until it is reconci
  const flow=load('src/lib/soft-opening-payments.ts');const q={select(){return q;},eq(){return q;},in(){return q;},limit(){return q;},then(resolve){resolve({data:[r],error:null});}};
  await assert.rejects(flow.reconcileOpenPlayPayments({from:()=>q},'family'),/pending/);
 });
+
+test('infant siblings are included through six months; only attending siblings count',()=>{
+ const older={id:'older',birthdate:'2023-11-11'}, second={id:'second',birthdate:'2025-01-01'}, baby={id:'baby',birthdate:'2026-10-11'};
+ const price=(children,date='2026-11-11',members=[])=>softOpeningAmount(children.map(c=>c.id),members,date,children);
+ assert.equal(price([older,second,baby]),2600);
+ assert.equal(price([baby,older,second]),2600);
+ assert.equal(price([older,baby]),1600);
+ assert.equal(price([baby]),1600); // standalone reservation pricing is unchanged
+ assert.equal(softOpeningAmount(['older'],[],'2026-11-11',[older,baby]),1600);
+ assert.equal(price([older,{...baby,birthdate:'2026-04-12'}]),1600); // 6m 30d
+ assert.equal(price([older,{...baby,birthdate:'2026-04-11'}]),2600); // seven months
+ assert.equal(price([older,{...baby,birthdate:'2026-04-30'}],'2026-11-29'),1600);
+ assert.equal(price([older,{...baby,birthdate:'2026-04-30'}],'2026-11-30'),2600);
+ assert.equal(price([older,{...baby,birthdate:'2026-02-31'}]),2600);
+ assert.equal(price([older,{...baby,birthdate:'2026-12-01'}]),2600);
+ assert.equal(price([older,{...baby,birthdate:null}]),2600);
+ assert.equal(price([older,baby],undefined,[{child_ids:['older'],status:'pending'}]),0);
+ assert.equal(price([older,second,baby],undefined,[{child_ids:['older'],status:'pending'}]),1600);
+ assert.equal(price([baby,{id:'baby2',birthdate:'2026-10-01'}]),1600);
+ for (const babies of [[baby,{id:'baby2',birthdate:'2026-10-01'}],[{id:'baby2',birthdate:'2026-10-01'},baby]]) assert.equal(price(babies,undefined,[{child_ids:['baby2'],status:'pending'}]),0);
+});

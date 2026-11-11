@@ -1,7 +1,8 @@
-export type AdmissionPayment = { payment_status: string; price_cents: number };
+export type AdmissionPayment = { payment_status: string; price_cents: number; infant_sibling_free?: boolean };
 export const admissionIsPaid = (status: string) => ['paid', 'prepaid', 'walkin_paid', 'terminal_paid'].includes(status);
 export const admissionIsIncluded = (status: string) => ['covered', 'included', 'membership'].includes(status);
 export function admissionPaymentLabel(visit: AdmissionPayment) {
+  if (visit.infant_sibling_free) return 'Infant sibling included';
   if (visit.payment_status === 'prepaid') return 'Paid in advance';
   if (admissionIsPaid(visit.payment_status)) return 'Paid';
   if (admissionIsIncluded(visit.payment_status)) return 'Included';
