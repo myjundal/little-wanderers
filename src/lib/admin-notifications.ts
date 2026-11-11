@@ -1,6 +1,6 @@
 import { sendResendEmail } from '@/lib/email-campaigns';
 
-const DEFAULT_OWNER_EMAIL = 'myjundal11@gmail.com';
+const DEFAULT_WEBSITE_NOTIFICATION_EMAIL = 'hello@thelittlewanderers.com';
 
 function escapeHtml(input: string) {
   return input
@@ -65,13 +65,10 @@ function formatPrice(cents: number | null | undefined) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function getOwnerNotificationEmail() {
-  return (
-    process.env.OWNER_EMAIL?.trim() ||
-    process.env.ADMIN_NOTIFICATION_EMAIL?.trim() ||
-    process.env.OWNER_NOTIFICATION_EMAIL?.trim() ||
-    DEFAULT_OWNER_EMAIL
-  );
+function getWebsiteNotificationEmail() {
+  // Website activity has its own inbox, independent of the owner's admin account.
+  // Legacy owner/admin email settings must not redirect these alerts.
+  return process.env.WEBSITE_NOTIFICATION_EMAIL?.trim() || DEFAULT_WEBSITE_NOTIFICATION_EMAIL;
 }
 
 function renderOperationalNotification(input: {
@@ -108,7 +105,7 @@ export async function sendNewSignupNotification(input: {
   householdId?: string | null;
   claimedExistingWaitlistEntry?: boolean;
 } = {}) {
-  const to = getOwnerNotificationEmail();
+  const to = getWebsiteNotificationEmail();
 
   const html = renderOperationalNotification({
     title: 'New My Little Wanderers sign-in',
@@ -137,7 +134,7 @@ export async function sendMembershipSignupNotification(input: MembershipNotifica
   const label = input.tier === 'waitlist' ? 'Wanderlist founding' : input.tier === 'public' ? 'General founding' : 'Regular membership';
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').replace(/\/$/, '');
   return sendResendEmail({
-    to: getOwnerNotificationEmail(),
+    to: getWebsiteNotificationEmail(),
     subject: `New ${label}: ${input.familyName || input.email || 'Family'}`,
     html: renderOperationalNotification({
       title: 'New Little Wanderers membership',
@@ -169,7 +166,7 @@ export async function sendPartyBookingNotification(input: {
   occasionDetails?: string | null;
   notes?: string | null;
 }) {
-  const to = getOwnerNotificationEmail();
+  const to = getWebsiteNotificationEmail();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
   const partyTime = formatEasternRange(input.startTime, input.endTime);
   const html = renderOperationalNotification({
@@ -217,7 +214,7 @@ export async function sendClassRegistrationNotification(input: {
   instructorName?: string | null;
   priceCents?: number | null;
 }) {
-  const to = getOwnerNotificationEmail();
+  const to = getWebsiteNotificationEmail();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
   const childName = formatPersonName({ firstName: input.childFirstName, lastName: input.childLastName });
   const classTime = input.classStartTime && input.classEndTime ? formatEasternRange(input.classStartTime, input.classEndTime) : null;
@@ -270,7 +267,7 @@ export async function sendClassCancellationNotification(input: {
   instructorName?: string | null;
   priceCents?: number | null;
 }) {
-  const to = getOwnerNotificationEmail();
+  const to = getWebsiteNotificationEmail();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
   const childName = formatPersonName({ firstName: input.childFirstName, lastName: input.childLastName });
   const classTime = input.classStartTime && input.classEndTime ? formatEasternRange(input.classStartTime, input.classEndTime) : null;
@@ -318,7 +315,7 @@ export async function sendPartyCancellationNotification(input: {
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').replace(/\/$/, '');
   const partyTime = formatEasternRange(input.startTime, input.endTime);
   return sendResendEmail({
-    to: getOwnerNotificationEmail(),
+    to: getWebsiteNotificationEmail(),
     subject: `Party cancellation request: ${input.familyName || input.familyEmail || 'Family'} — ${partyTime}`,
     html: renderOperationalNotification({
       title: 'Party cancellation requested — review required',
@@ -348,7 +345,7 @@ export async function sendOpenPlayReservationNotification(input: {
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').replace(/\/$/, '');
   const visitTime = formatEasternRange(input.startTime, input.endTime);
   return sendResendEmail({
-    to: getOwnerNotificationEmail(),
+    to: getWebsiteNotificationEmail(),
     subject: `New Open Play reservation: ${visitTime}`,
     idempotencyKey: `open-play-reservation-owner/${input.reservationId}`,
     html: renderOperationalNotification({

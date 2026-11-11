@@ -4,7 +4,9 @@ import { isLikelyEmail, normalizeWaitlistEmail } from '@/lib/waitlist';
 
 export const CAMPAIGN_BATCH_SIZE = 100;
 export const DEFAULT_MARKETING_ADDRESS = "Little Wanderers, Bishop's Corner, West Hartford, CT";
-const ALWAYS_INCLUDED_CAMPAIGN_EMAILS = ['myjundal11@gmail.com'];
+const ALWAYS_INCLUDED_CAMPAIGN_EMAILS = ['hello@thelittlewanderers.com'];
+// Keep the personal operations/admin account out of website campaign mail.
+const ADMIN_ONLY_CAMPAIGN_EMAILS = new Set(['myjundal11@gmail.com']);
 
 export type CampaignRecipient = {
   id: string;
@@ -358,7 +360,7 @@ export async function getCampaignRecipients(
   const recipientMap = new Map(recipients.map((recipient) => [recipient.id, recipient]));
   const alwaysIncluded = await getAlwaysIncludedCampaignRecipients(admin);
   alwaysIncluded.forEach((recipient) => recipientMap.set(recipient.id, recipient));
-  recipients = [...recipientMap.values()];
+  recipients = [...recipientMap.values()].filter((recipient) => !ADMIN_ONLY_CAMPAIGN_EMAILS.has(normalizeContactEmail(recipient.email)));
   if (options.includeAlreadySent) return recipients;
 
   const { data: sends, error: sendsError } = await admin

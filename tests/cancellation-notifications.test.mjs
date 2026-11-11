@@ -19,8 +19,8 @@ function emailHarness(replies = [], env = {}) {
   return { email, calls, delays };
 }
 
-test('party cancellation emails use owner fallback, readable Eastern details, escaped text and a management link', async () => {
-  for (const env of [{}, { OWNER_EMAIL: '  owner@example.com ' }, { ADMIN_NOTIFICATION_EMAIL: 'admin@example.com' }, { OWNER_NOTIFICATION_EMAIL: 'notify@example.com' }]) {
+test('party cancellation emails use the website inbox, readable Eastern details, escaped text and a management link', async () => {
+  for (const env of [{}, { OWNER_EMAIL: '  owner@example.com ' }, { ADMIN_NOTIFICATION_EMAIL: 'admin@example.com' }, { OWNER_NOTIFICATION_EMAIL: 'notify@example.com' }, { WEBSITE_NOTIFICATION_EMAIL: '  website@example.com  ', OWNER_EMAIL: 'owner@example.com' }]) {
     const transport = emailHarness();
     const api = loadModule('src/lib/admin-notifications.ts', { '@/lib/email-campaigns': transport.email }, {
       process: { env: { NEXT_PUBLIC_SITE_URL: 'https://example.com/', ...env } },
@@ -32,7 +32,7 @@ test('party cancellation emails use owner fallback, readable Eastern details, es
     });
     assert.equal(result.ok, true);
     const sent = transport.calls[0];
-    assert.equal(sent.body.to[0], (env.OWNER_EMAIL || env.ADMIN_NOTIFICATION_EMAIL || env.OWNER_NOTIFICATION_EMAIL || 'myjundal11@gmail.com').trim());
+    assert.equal(sent.body.to[0], (env.WEBSITE_NOTIFICATION_EMAIL || 'hello@thelittlewanderers.com').trim());
     assert.match(sent.body.subject, /Party cancellation request/);
     assert.match(sent.body.html, /November 7, 2026, 10:00 AM-1:00 PM/);
     assert.match(sent.body.html, /parent@example.com/);
@@ -48,7 +48,7 @@ test('class owner alerts identify the family, child and cancelled class', async 
   const transport = emailHarness();
   const api = loadModule('src/lib/admin-notifications.ts', { '@/lib/email-campaigns': transport.email }, { process: { env: { OWNER_EMAIL: 'owner@example.com', NEXT_PUBLIC_SITE_URL: 'https://example.com' } } });
   await api.sendClassCancellationNotification({ registrationId: 'class-reg', cancelledAt: '2026-11-02T18:00:00Z', familyName: 'Family', familyEmail: 'parent@example.com', childFirstName: 'Sam', classTitle: 'Art', classStartTime: '2026-11-07T20:00:00Z', classEndTime: '2026-11-07T21:00:00Z' });
-  assert.equal(transport.calls[0].body.to[0], 'owner@example.com');
+  assert.equal(transport.calls[0].body.to[0], 'hello@thelittlewanderers.com');
   assert.equal(transport.calls[0].body.subject, 'Class cancellation: Art');
   for (const value of ['Sam', 'Family', 'parent@example.com', '3:00 PM-4:00 PM', '/staff/classes']) assert.ok(transport.calls[0].body.html.includes(value));
   assert.equal(transport.calls[0].headers['Idempotency-Key'], 'class-cancel-owner/class-reg/2026-11-02T18:00:00Z');
@@ -64,7 +64,7 @@ test('all membership tiers notify the owner with family contact and every childâ
       children: [{ firstName: '<Sam>', lastName: 'Family', birthdate: '2023-01-01' }, { firstName: 'Baby', birthdate: '2026-07-03' }],
     }, `event-${tier}`);
     const sent = transport.calls[0];
-    assert.equal(sent.body.to[0], 'owner@example.com');
+    assert.equal(sent.body.to[0], 'hello@thelittlewanderers.com');
     for (const value of ['&lt;Family&gt;', 'parent@example.com', '+18605550123', '&lt;Sam&gt;', 'Baby', '3 years 10 months', '4 months', 'Card saved; no payment taken']) assert.ok(sent.body.html.includes(value), value);
     assert.equal(sent.headers['Idempotency-Key'], `membership-owner/event-${tier}`);
     assert.doesNotMatch(sent.body.html, /<Sam>|square_card_id|source_id/);
