@@ -86,6 +86,8 @@ async function dashboardHarness(canManageClasses) {
     '@/lib/party-booking-groups': loadModule('src/lib/party-booking-groups.ts'),
     '@/lib/party-config': { PARTY_TIME_ZONE: 'America/New_York' },
     '@/lib/party-management': { PARTY_SCHEDULE_UPDATED_EVENT: 'party-schedule-updated' },
+    '@/components/staff/PartyPrivacyEditor': () => null,
+    '@/lib/private-party-open-play': { PARTY_PRIVACY_UPDATED_EVENT: 'party-privacy-updated' },
     '@/components/staff/PartyScheduleEditor': () => null,
     'next/link': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,

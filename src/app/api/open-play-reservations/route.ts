@@ -1,6 +1,8 @@
 import { waitUntil } from '@vercel/functions';
 import { sendOpenPlayReservationNotification } from '@/lib/admin-notifications';
 import { sendOpenPlayConfirmation } from '@/lib/open-play-confirmation';
+import { readPrivatePartyDays, overlapsPrivateParty } from '@/lib/private-party-open-play';
+import { getPartyDateKey } from '@/lib/party-config';
 import { logger } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
@@ -91,6 +93,10 @@ export async function GET(req: Request) {
     if (reservationsRes.error) throw new Error(reservationsRes.error.message);
 
     const reservations = reservationsRes.data ?? [];
+    const privatePartyDays = await readPrivatePartyDays(context.admin, [
+      ...(slotsRes.data ?? []),
+      ...reservations.flatMap(item => Array.isArray(item.slot) ? item.slot : item.slot ? [item.slot] : []),
+    ]);
     const activeReservations = reservations.filter((item) => item.status !== 'cancelled');
     const activeSlotIds = new Set(activeReservations.map((item) => item.slot_id as string));
 
@@ -130,13 +136,14 @@ export async function GET(req: Request) {
         occupancy,
         remaining_children: remainingChildren,
         remaining_total: remainingTotal,
-        is_closed: slot.status === 'closed',
+        is_closed: slot.status === 'closed' || overlapsPrivateParty(slot, privatePartyDays),
+        is_private_party_blocked: overlapsPrivateParty(slot, privatePartyDays),
         is_full: remainingChildren <= 0 || (remainingTotal != null && remainingTotal <= 0),
       };
     });
 
     const family = await readSoftOpeningFamily(context.admin, context.householdId);
-    return NextResponse.json({ ok: true, allowed: true, access: context.access, slots, reservations, family }, { headers: NO_STORE_HEADERS });
+    return NextResponse.json({ ok: true, allowed: true, access: context.access, slots, reservations, family, private_party_days: privatePartyDays }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const rawMessage = e instanceof Error ? e.message : 'unknown error';
     const status = isMissingOpenPlayReservationTable(rawMessage) ? 503 : 500;
@@ -200,6 +207,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'This soft opening visit time has already passed.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
 
+    const privatePartyDays = await readPrivatePartyDays(context.admin, [slot]);
+    if (overlapsPrivateParty(slot, privatePartyDays)) {
+      return NextResponse.json({ ok: false, error: 'Open Play is unavailable from 4–6 PM for a private party. Please choose another arrival window.', code: 'private_party' }, { status: 409, headers: NO_STORE_HEADERS });
+    }
+    const privateClosing = privatePartyDays.find(day => day.date === getPartyDateKey(slot.starts_at))?.starts_at;
+
     const occupancy = await getReservationOccupancy(context.admin, slotId);
     const nextChildren = occupancy.children + childCount;
     const nextTotal = occupancy.total + childCount + adultCount;
@@ -238,7 +251,7 @@ export async function POST(req: Request) {
 
     if (reservationError) {
       if (reservationError.code === '23514') {
-        return NextResponse.json({ ok: false, error: reservationError.message }, { status: 409, headers: NO_STORE_HEADERS });
+        return NextResponse.json({ ok: false, error: reservationError.message, code: /private party/i.test(reservationError.message) ? 'private_party' : undefined }, { status: 409, headers: NO_STORE_HEADERS });
       }
       if (reservationError.code === '23505') {
         return NextResponse.json({ ok: false, error: 'You already have a reservation for this visit time.' }, { status: 409, headers: NO_STORE_HEADERS });
@@ -265,6 +278,7 @@ export async function POST(req: Request) {
           childCount, adultCount,
           startTime: slot.starts_at, endTime: slot.ends_at,
           amountCents: reservation.amount_cents,
+          closingTime: privateClosing,
           paymentStatus: reservation.payment_status,
           paymentChoice: reservation.payment_choice,
         });

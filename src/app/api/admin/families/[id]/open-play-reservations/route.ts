@@ -1,3 +1,4 @@
+import { readPrivatePartyDays, overlapsPrivateParty } from '@/lib/private-party-open-play';
 import { requireOwnerContext, requireStaffContext } from '@/lib/authz';
 import { isUuid, OPEN_PLAY_SLOT_SELECT, OPEN_PLAY_RESERVATION_SELECT, SOFT_OPENING_END } from '@/lib/open-play-reservations';
 import { readSoftOpeningFamily } from '@/lib/soft-opening-family';
@@ -16,9 +17,11 @@ export async function GET(_req: Request, { params }: Params) {
       c.admin.from('open_play_reservations').select(`${OPEN_PLAY_RESERVATION_SELECT},slot:open_play_reservation_slots(${OPEN_PLAY_SLOT_SELECT})`).eq('household_id', id).order('created_at', { ascending: false }),
     ]);
     if (slots.error || reservations.error) throw new Error();
+    const privateDays = await readPrivatePartyDays(c.admin, slots.data ?? []);
+    const available = (slots.data ?? []).filter(slot => !overlapsPrivateParty(slot, privateDays));
     const occupancy = slots.data?.length ? await c.admin.from('open_play_reservations').select('slot_id,child_count,adult_count').in('slot_id', slots.data.map(s => s.id)).neq('status', 'cancelled') : { data: [], error: null };
     if (occupancy.error) throw new Error();
-    return Response.json({ ok: true, family, reservations: reservations.data, slots: slots.data.map(slot => {
+    return Response.json({ ok: true, family, reservations: reservations.data, slots: available.map(slot => {
       const rows = occupancy.data.filter(r => r.slot_id === slot.id);
       return { ...slot, remaining_children: Math.max(0, slot.capacity_children - rows.reduce((n, r) => n + r.child_count, 0)), remaining_total: slot.capacity_total == null ? null : Math.max(0, slot.capacity_total - rows.reduce((n, r) => n + r.child_count + r.adult_count, 0)) };
     }) }, { headers });

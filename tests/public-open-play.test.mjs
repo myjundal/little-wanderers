@@ -28,6 +28,8 @@ function harness({ startsAt = '2026-11-14T14:00:00Z', user = { id: 'new-user', e
     '@/lib/soft-opening-pricing': { softOpeningAmount: () => 1600 },
     '@/lib/admin-notifications': { sendOpenPlayReservationNotification: async () => ({ ok: true }) },
     '@/lib/open-play-confirmation': { sendOpenPlayConfirmation: async () => ({ ok: true }) },
+    '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], overlapsPrivateParty: () => false },
+    '@/lib/party-config': loadModule('src/lib/party-config.ts'),
     '@/lib/logger': { logger: { error() {}, warn() {} } },
   }, { Intl, Date: class extends Date { static now() { return Date.parse('2026-11-11T20:00:00Z'); } } });
   return { route, filters, writes, background };

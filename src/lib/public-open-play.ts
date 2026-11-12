@@ -1,7 +1,8 @@
+import { readPrivatePartyDays, overlapsPrivateParty } from '@/lib/private-party-open-play';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PUBLIC_OPEN_PLAY_START, SOFT_OPENING_END } from '@/lib/open-play-reservations';
 
-export type PublicOpenPlaySlot = { id: string; starts_at: string; ends_at: string; remaining_children: number; capacity_children: number; is_closed: boolean; is_full: boolean };
+export type PublicOpenPlaySlot = { id: string; starts_at: string; ends_at: string; remaining_children: number; capacity_children: number; is_closed: boolean; is_full: boolean; is_private_party_blocked: boolean; closing_at: string | null };
 
 // Public output contains availability only. Family contacts, notes and bookings stay private.
 export async function loadPublicOpenPlaySlots(admin: SupabaseClient): Promise<PublicOpenPlaySlot[]> {
@@ -10,6 +11,7 @@ export async function loadPublicOpenPlaySlots(admin: SupabaseClient): Promise<Pu
     .lt('starts_at', SOFT_OPENING_END).gt('ends_at', new Date().toISOString()).order('starts_at');
   if (slots.error) throw new Error('Unable to load arrival windows.');
   if (!slots.data?.length) return [];
+  const privateDays = await readPrivatePartyDays(admin, slots.data);
   const occupancy = new Map<string, { children: number; total: number }>();
   for (let offset = 0; ; offset += 500) {
     const reservations = await admin.from('open_play_reservations').select('slot_id,child_count,adult_count,slot:open_play_reservation_slots!inner(starts_at)')
@@ -25,6 +27,7 @@ export async function loadPublicOpenPlaySlots(admin: SupabaseClient): Promise<Pu
     const used = occupancy.get(slot.id) ?? { children: 0, total: 0 };
     const remaining = Math.max(0, slot.capacity_children - used.children);
     return { id: slot.id, starts_at: slot.starts_at, ends_at: slot.ends_at, remaining_children: remaining, capacity_children: slot.capacity_children,
-      is_closed: slot.status === 'closed', is_full: remaining === 0 || (slot.capacity_total != null && used.total >= slot.capacity_total) };
+      is_closed: slot.status === 'closed' || overlapsPrivateParty(slot, privateDays), is_private_party_blocked: overlapsPrivateParty(slot, privateDays),
+      closing_at: privateDays.find(day => new Date(slot.starts_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === day.date)?.starts_at ?? null, is_full: remaining === 0 || (slot.capacity_total != null && used.total >= slot.capacity_total) };
   });
 }
