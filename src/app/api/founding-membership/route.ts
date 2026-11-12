@@ -1,3 +1,4 @@
+import { COMPLIMENTARY_MEMBERSHIP_MESSAGE, readComplimentaryMembership } from '@/lib/complimentary-membership';
 import { NextResponse } from 'next/server';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
@@ -58,20 +59,21 @@ export async function GET() {
       return NextResponse.json({ ok: false, offer }, { status: 401, headers });
     }
     const { admin, householdId, user } = ctx;
-    const [household, people, membership] = await Promise.all([
+    const [household, people, membership, complimentary] = await Promise.all([
       admin.from('households').select('email,phone,city,state').eq('id', householdId).single(),
       admin.from('people').select('id,role,first_name,last_name,gender,birthdate,notes').eq('household_id', householdId).order('created_at'),
       admin.from('founding_memberships').select('*').eq('household_id', householdId).eq('environment', squareEnvironment()).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      readComplimentaryMembership(admin, householdId),
     ]);
     if (household.error || people.error || membership.error) throw new Error('Unable to load family information.');
     const offer = await getMembershipOffer(admin, user.id, householdId);
     let config = null;
     try {
       const cardConfig = foundingCardConfig(offer.card_enrollment_enabled);
-      if (offer.can_enroll) config = { applicationId: cardConfig.applicationId, locationId: cardConfig.locationId, environment: cardConfig.environment };
+      if (offer.can_enroll && !complimentary) config = { applicationId: cardConfig.applicationId, locationId: cardConfig.locationId, environment: cardConfig.environment };
     } catch { /* The page stays readable while card registration is disabled. */ }
     const phone = user.phone ? `+${user.phone.replace(/\D/g, '')}` : household.data.phone;
-    return NextResponse.json({ ok: true, account: { email: user.email || null, phone: user.phone ? phone : null }, household: { ...household.data, email: user.email || household.data.email, phone }, people: people.data, enrollment: publicEnrollment(membership.data), offer, config }, { headers });
+    return NextResponse.json({ ok: true, account: { email: user.email || null, phone: user.phone ? phone : null }, household: { ...household.data, email: user.email || household.data.email, phone }, people: people.data, enrollment: complimentary ? null : publicEnrollment(membership.data), complimentary: Boolean(complimentary), offer: complimentary ? { ...offer, can_enroll: false } : offer, config }, { headers });
   } catch {
     return NextResponse.json({ ok: false, error: 'Unable to load your membership. Please refresh and try again.' }, { status: 503, headers });
   }
@@ -81,6 +83,7 @@ export async function POST(req: Request) {
   try {
     const ctx = await context();
     if (ctx.response) return ctx.response;
+    if (await readComplimentaryMembership(ctx.admin, ctx.householdId)) return NextResponse.json({ ok: false, error: COMPLIMENTARY_MEMBERSHIP_MESSAGE }, { status: 409, headers });
     const input = schema.safeParse(await req.json().catch(() => null));
     if (!input.success) return NextResponse.json({ ok: false, error: 'Complete your contact details, each child’s name, gender and real birthday, and both confirmations before saving your card.' }, { status: 400, headers });
     const profile = input.data;

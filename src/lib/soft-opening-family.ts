@@ -1,17 +1,19 @@
+import { readComplimentaryMembership } from '@/lib/complimentary-membership';
 import { isUuid } from '@/lib/open-play-reservations';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrimaryGuardianProfile, ensureGuardianProfile } from '@/lib/family-profile';
 import { parseChildAge } from '@/lib/child-age';
 import { squareEnvironment } from '@/lib/square-client';
 export async function readSoftOpeningFamily(db: SupabaseClient, householdId: string) {
-    const [guardian, children, founding] = await Promise.all([
+    const [guardian, children, founding, complimentary] = await Promise.all([
         getPrimaryGuardianProfile(db, householdId),
         db.from('people').select('id,first_name,last_name,birthdate').eq('household_id', householdId).eq('role', 'child').order('created_at'),
         db.from('founding_memberships').select('child_ids,status,start_date,paid_through').eq('household_id', householdId).eq('environment', squareEnvironment()).in('status', ['pending', 'activating', 'scheduled', 'active', 'canceling', 'canceled']),
+        readComplimentaryMembership(db, householdId),
     ]);
     if (children.error || founding.error)
         throw new Error('Unable to load family details.');
-    return { guardian, children: children.data ?? [], memberships: founding.data ?? [] };
+    return { guardian, children: children.data ?? [], memberships: [...(founding.data ?? []), ...(complimentary ? [{ child_ids: complimentary.covered_person_ids!, status: 'complimentary', start_date: null, paid_through: null }] : [])] };
 }
 export type SoftOpeningPersonInput = {
     id?: string;

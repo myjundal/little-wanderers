@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+import { isComplimentaryMembership } from '@/lib/complimentary-membership';
+import { squareEnvironment } from '@/lib/square-client';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import StartSubscriptionButton from '@/components/membership/StartSubscriptionButton';
@@ -13,6 +15,11 @@ type Membership = {
   id: string;
   renews_at: string | null;
   household_id: string | null;
+  square_environment?: string;
+  square_subscription_id?: string | null;
+  square_customer_id?: string | null;
+  payment_review_required?: boolean;
+  covered_person_ids?: string[];
 };
 
 export default async function MembershipPage() {
@@ -46,7 +53,7 @@ export default async function MembershipPage() {
 
     const { data: membershipRow, error: membershipError } = await supabase
       .from('memberships')
-      .select('id,renews_at,household_id')
+      .select('*')
       .eq('household_id', householdId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -77,6 +84,7 @@ export default async function MembershipPage() {
       );
     }
 
+    const complimentary = isComplimentaryMembership(membershipRow, squareEnvironment());
     const nowISO = new Date().toISOString();
     const isActive = !membershipRow.renews_at || membershipRow.renews_at > nowISO;
 
@@ -98,7 +106,7 @@ export default async function MembershipPage() {
             </section>
           )}
 
-          {isActive && <span>Renews on {formatDate(membershipRow.renews_at)}</span>}
+          {isActive && <span>{complimentary ? 'Friends & Family · Lifetime complimentary Open Play. No monthly fees or automatic billing.' : `Renews on ${formatDate(membershipRow.renews_at)}`}</span>}
           {!isActive && membershipRow.renews_at && <span>Ends on {formatDate(membershipRow.renews_at)}</span>}
         </div>
 
