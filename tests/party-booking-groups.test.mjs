@@ -88,6 +88,8 @@ test('dashboard moves parties while open, labels completed details and keeps att
     react, 'next/link': 'a', '@/lib/party-booking-groups': grouping,
     '@/lib/party-config': { PARTY_TIME_ZONE: 'America/New_York' },
     '@/lib/party-management': { PARTY_SCHEDULE_UPDATED_EVENT: 'party-schedule-updated' },
+    '@/components/staff/PartyPrivacyEditor': () => null,
+    '@/lib/private-party-open-play': { PARTY_PRIVACY_UPDATED_EVENT: 'party-privacy-updated' },
     '@/components/staff/PartyScheduleEditor': () => null,
     '@/components/classes/ClassCheckIn': () => null,
     '@/components/staff/StaffFamilyRegistration': () => null,

@@ -1,4 +1,6 @@
 'use client';
+import PartyPrivacyEditor from '@/components/staff/PartyPrivacyEditor';
+import { PARTY_PRIVACY_UPDATED_EVENT } from '@/lib/private-party-open-play';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -16,6 +18,7 @@ type Party = {
   start_time: string;
   end_time: string;
   room: string | null;
+  is_private: boolean;
   headcount_expected: number | null;
   birthday_child_name: string | null;
   birthday_age: number | null;
@@ -79,7 +82,8 @@ export default function PartyManagement({ canEditSchedule = false }: { canEditSc
         .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time)));
     };
     window.addEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
-    return () => window.removeEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
+    window.addEventListener(PARTY_PRIVACY_UPDATED_EVENT, syncSchedule);
+    return () => { window.removeEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule); window.removeEventListener(PARTY_PRIVACY_UPDATED_EVENT, syncSchedule); };
   }, [date]);
 
   const selected = parties.find(item => item.id === selectedId) ?? parties[0];
@@ -132,6 +136,8 @@ export default function PartyManagement({ canEditSchedule = false }: { canEditSc
               setMessage(getPartyDateKey(item.start_time) === date ? 'Party date and time saved.' : 'Party moved to the new date. Find it under All bookings & requests.');
             }}
           />}
+          {canEditSchedule && new Date(selected.end_time).getTime() > Date.now() && <PartyPrivacyEditor key={`privacy:${selected.id}:${selected.start_time}`} booking={selected} disabled={busy} />}
+          {!canEditSchedule && selected.is_private && <p><strong>Private party · Open Play ends at 4pm</strong></p>}
           <dl className={styles.details}>
             <div><dt>Host family</dt><dd><Link href={`/staff/families/${selected.household_id}`}>{selected.household_name}</Link></dd></div>
             <div><dt>Parent email</dt><dd>{selected.household_email ? <a href={`mailto:${selected.household_email}`}>{selected.household_email}</a> : 'Not provided'}</dd></div>

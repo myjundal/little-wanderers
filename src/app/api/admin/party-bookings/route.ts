@@ -3,7 +3,7 @@ import { getTodayPartyRange } from '@/lib/party-management';
 
 export const dynamic = 'force-dynamic';
 
-const PARTY_SELECT = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at,current_child_count,current_adult_count,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,attendance_recorded_by,attendance_notes,birthday_child_name,birthday_age,occasion_details';
+const PARTY_SELECT = 'id,is_private,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at,current_child_count,current_adult_count,final_child_count,final_adult_count,final_total_count,attendance_finalized_at,attendance_recorded_by,attendance_notes,birthday_child_name,birthday_age,occasion_details';
 const PARTY_SELECT_FALLBACK = 'id,household_id,start_time,end_time,room,headcount_expected,price_quote_cents,notes,status,status_updated_at,created_at,updated_at';
 
 function isMissingColumnError(message: string) {
@@ -49,6 +49,7 @@ export async function GET(req: Request) {
         birthday_child_name: null,
         birthday_age: null,
         occasion_details: null,
+        is_private: false,
       }));
     }
 
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
       household_email: householdContacts.get(item.household_id)?.email ?? null,
     }));
 
-    return Response.json({ ok: true, items, date: today?.date, attendance_available: !primary.error }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ ok: true, items, date: today?.date, attendance_available: !primary.error, private_setting_available: !primary.error }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });

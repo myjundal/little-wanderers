@@ -13,6 +13,7 @@ type Slot = {
   capacity_children: number;
   capacity_total: number | null;
   status: 'open' | 'hidden' | 'closed';
+  is_private_party_blocked?: boolean;
   notes: string | null;
 };
 
@@ -366,7 +367,7 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
               <button key={slot.id} type="button" onClick={() => setSelectedSlotId(slot.id)} style={{ minHeight: 90, textAlign: 'left', border: selected ? '2px solid #A78BCB' : '1px solid #eadfff', borderRadius: 14, background: selected ? '#fff' : '#fffdf9', padding: 12, color: '#4f3f82' }}>
                 <strong style={{ display: 'block' }}>{formatWindow(slot.starts_at, slot.ends_at)}</strong>
                 <span style={{ display: 'block', marginTop: 6, color: slot.status === 'closed' ? '#8a3f6b' : '#6d6480' }}>
-                  {slot.status === 'closed' ? 'Closed' : `${children}/${slot.capacity_children} children`}
+                  {slot.is_private_party_blocked ? 'Private party · 4–6pm' : slot.status === 'closed' ? 'Closed' : `${children}/${slot.capacity_children} children`}
                 </span>
               </button>
             );

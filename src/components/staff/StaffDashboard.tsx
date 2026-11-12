@@ -1,4 +1,6 @@
 'use client';
+import PartyPrivacyEditor from '@/components/staff/PartyPrivacyEditor';
+import { PARTY_PRIVACY_UPDATED_EVENT } from '@/lib/private-party-open-play';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PartyGuestWaivers from '@/components/waivers/PartyGuestWaivers';
@@ -75,6 +77,7 @@ type PartyBookingItem = {
   start_time: string;
   end_time: string;
   room: string | null;
+  is_private: boolean;
   headcount_expected: number | null;
   price_quote_cents: number | null;
   notes: string | null;
@@ -442,7 +445,8 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
       setPartyBookings(previous => previous.map(party => party.id === item.id ? { ...party, ...item } : party));
     };
     window.addEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
-    return () => window.removeEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule);
+    window.addEventListener(PARTY_PRIVACY_UPDATED_EVENT, syncSchedule);
+    return () => { window.removeEventListener(PARTY_SCHEDULE_UPDATED_EVENT, syncSchedule); window.removeEventListener(PARTY_PRIVACY_UPDATED_EVENT, syncSchedule); };
   }, [view]);
   const rosterSessions = useMemo<RosterSession[]>(() => classes.map(item => ({
     id: item.id, title: item.title, startTime: item.start_time, endTime: item.end_time,
@@ -784,6 +788,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
         booking={selectedBooking}
         onSaved={() => setMessage('Party date and time saved.')}
       />}
+      {selectedBooking.status !== 'cancelled' && Date.parse(selectedBooking.end_time) > partyNow && <PartyPrivacyEditor key={`privacy:${selectedBooking.id}:${selectedBooking.start_time}`} booking={selectedBooking} />}
       <p style={{ color: '#6d6480' }}><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{partyStatusLabel(selectedBooking, partyNow)}</span></p>
       {hasCancellationRequest(selectedBooking) && (
         <p style={{ color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested by family</p>

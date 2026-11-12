@@ -47,6 +47,8 @@ function reservationHarness({ failInsert = false, failEmail = false, failConfirm
     '@/lib/soft-opening-access': { getSoftOpeningAccessForUser: async () => ({ allowed: true }) },
     '@/lib/admin-notifications': { sendOpenPlayReservationNotification: async input => { notifications.push(input); if (failEmail === 'throw') throw new Error('Mail down'); return { ok: !failEmail }; } },
     '@/lib/open-play-confirmation': { sendOpenPlayConfirmation: async input => { confirmations.push(input); if (failConfirmation === 'throw') throw new Error('Mail down'); return { ok: !failConfirmation }; } },
+    '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], overlapsPrivateParty: () => false },
+    '@/lib/party-config': loadModule('src/lib/party-config.ts'),
     '@/lib/logger': { logger: { error: value => logs.push(value) } },
   });
   return { background, notifications, confirmations, logs, writes, post: () => api.POST({ json: async () => ({ slot_id: slotId, children: [{ name: 'Sam' }], adult_count: 1, payment_choice: 'now' }) }) };

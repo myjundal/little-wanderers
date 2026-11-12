@@ -1,3 +1,4 @@
+import { readPrivatePartyDays, overlapsPrivateParty } from '@/lib/private-party-open-play';
 import { getWaiverStatus, WAIVER_STATUS_SELECT } from '@/lib/waivers';
 import { requireStaffContext, requireOwnerContext } from '@/lib/authz';
 import { toPartyDateTimeIso } from '@/lib/party-config';
@@ -86,6 +87,12 @@ export async function GET() {
     if (slotsRes.error) throw new Error(slotsRes.error.message);
     if (reservationsRes.error) throw new Error(reservationsRes.error.message);
 
+    const privatePartyDays = await readPrivatePartyDays(context.admin, slotsRes.data ?? []);
+    const effectiveSlots = (slotsRes.data ?? []).map(slot => ({ ...slot,
+      is_private_party_blocked: overlapsPrivateParty(slot, privatePartyDays),
+      status: overlapsPrivateParty(slot, privatePartyDays) ? 'closed' : slot.status,
+    }));
+
     const householdIds = [...new Set((reservationsRes.data ?? []).map((item) => item.household_id as string).filter(Boolean))];
     let waiverRows: Array<{ household_id: string; signed_at?: string | null; signed_date?: string | null; waiver_expires_at?: string | null; waiver_version?: string | null; covered_person_ids?: string[] | null }> = [];
     const childIdsByHousehold = new Map<string, string[]>();
@@ -136,7 +143,7 @@ export async function GET() {
       };
     });
 
-    return Response.json({ ok: true, slots: slotsRes.data ?? [], reservations }, { headers: NO_STORE_HEADERS });
+    return Response.json({ ok: true, slots: effectiveSlots, reservations }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const rawMessage = e instanceof Error ? e.message : 'unknown error';
     const status = isMissingOpenPlayReservationTable(rawMessage) ? 503 : 500;

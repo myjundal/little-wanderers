@@ -1,3 +1,4 @@
+import { readPrivatePartyDays, privatePartyWindow } from '@/lib/private-party-open-play';
 import { sendResendEmail, validateEmail } from '@/lib/email-campaigns';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -10,6 +11,7 @@ export type OpenPlayConfirmation = {
   adultCount: number;
   startTime: string;
   endTime: string;
+  closingTime?: string;
   amountCents: number;
   paymentStatus: string;
   paymentChoice: string;
@@ -48,6 +50,9 @@ export function renderOpenPlayConfirmation(input: OpenPlayConfirmation) {
     ['Guests', `${input.childCount} child${input.childCount === 1 ? '' : 'ren'} · ${input.adultCount} adult${input.adultCount === 1 ? '' : 's'}`],
     ['Admission total', price], ['Payment status', payment],
   ];
+  const closing = input.closingTime ? new Date(input.closingTime) : null;
+  if (closing && !Number.isFinite(closing.getTime())) throw new Error('Invalid closing time.');
+  if (closing) rows.push(['Open Play closes', `${timeFormat.format(closing)} (Eastern Time) for a private party`]);
   const subject = `Your Open Play reservation is confirmed — ${date}`;
   const html = `<!doctype html><html lang="en"><body style="margin:0;padding:24px;background:#faf7ff;color:#3f355a;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
     <main style="max-width:620px;margin:0 auto;padding:28px;background:#ffffff;border:1px solid #eadff3;border-radius:18px;">
@@ -56,6 +61,7 @@ export function renderOpenPlayConfirmation(input: OpenPlayConfirmation) {
       <p>Hi ${escapeHtml(name)},</p><p>We’re looking forward to welcoming your family. Here are your reservation details:</p>
       <table style="width:100%;border-collapse:collapse;font-size:15px;"><tbody>${rows.map(([label, value]) => `<tr><th scope="row" style="text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #eadff3;font-weight:400;color:#6d6480;">${escapeHtml(label)}</th><td style="padding:10px 8px;border-bottom:1px solid #eadff3;font-weight:600;">${escapeHtml(value)}</td></tr>`).join('')}</tbody></table>
       <p><strong>This is your arrival window, not a one-hour play limit.</strong> Aim to arrive within the window; once you’re here, you may stay until you’re ready to leave, up to closing.</p>
+      ${closing ? `<p><strong>Open Play ends at ${escapeHtml(timeFormat.format(closing))} on this date for a private party. Please finish your visit by then.</strong></p>` : ''}
       <p>Please complete your family’s waiver before your visit.</p>
       <p><a href="${escapeHtml(waiverUrl)}" style="color:#5f3da4;font-weight:700;">Complete your waiver</a> &nbsp;·&nbsp; <a href="${escapeHtml(manageUrl)}" style="color:#5f3da4;font-weight:700;">View your reservation</a></p>
       <p style="font-size:13px;color:#6d6480;">Payment status above reflects the time this confirmation was prepared. Check your reservation for current payment details. This confirmation is not a payment receipt.</p>
@@ -99,12 +105,14 @@ export async function loadOpenPlayConfirmation(admin: SupabaseClient, reservatio
     [person.first_name, person.last_name].filter(Boolean).join(' ').trim();
   const guardian = (people.data || []).find(person => person.role === 'adult');
   const childIds = new Set(row.child_ids || []);
+  const privateDays = await readPrivatePartyDays(admin, [{ id: row.id, starts_at: slot.starts_at, ends_at: slot.ends_at }]);
+  const closingTime = privateDays.find(day => day.date === privatePartyWindow(slot.starts_at).date)?.starts_at;
   return {
     reservationId: row.id, email,
     guardianName: guardian ? fullName(guardian) : household?.name || null,
     childNames: (people.data || []).filter(person => person.role === 'child' && childIds.has(person.id)).map(fullName),
     childCount: row.child_count, adultCount: row.adult_count,
-    startTime: slot.starts_at, endTime: slot.ends_at,
+    startTime: slot.starts_at, endTime: slot.ends_at, closingTime,
     amountCents: row.amount_cents, paymentStatus: row.payment_status, paymentChoice: row.payment_choice,
   } satisfies OpenPlayConfirmation;
 }

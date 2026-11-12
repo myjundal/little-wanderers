@@ -12,6 +12,7 @@ const input = {
 function harness() {
   const sent = [];
   const api = loadModule('src/lib/open-play-confirmation.ts', {
+    '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], privatePartyWindow: () => ({ date: 'fixture' }) },
     '@/lib/email-campaigns': {
       validateEmail: value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ? value.trim().toLowerCase() : null,
       sendResendEmail: async mail => { sent.push(mail); return { ok: true, id: 'provider-id' }; },
@@ -131,6 +132,7 @@ test('morning delivery stops when database reads cross the deadline without cont
         Date.now = () => ${deadline + 1};
         return Response.json([{id:'parent',role:'adult',first_name:'Parent',last_name:'Family'}]);
       }
+      if (parsed.pathname.endsWith('/party_bookings')) return Response.json([]);
       if (!parsed.searchParams.has('id')) return Response.json([{id:'visit'}]);
       return Response.json({id:'visit',status:'reserved',household_id:'family',contact_email:'parent@example.test',
         child_ids:[],child_count:1,adult_count:1,amount_cents:1600,payment_status:'due',payment_choice:'counter',
@@ -147,4 +149,14 @@ test('morning delivery stops when database reads cross the deadline without cont
   assert.equal(summary.stoppedAtDeadline, true);
   assert.equal(summary.accepted, 0);
   assert.equal(summary.failed, 0);
+});
+
+
+test('a private-party date confirmation states the actual 4pm closing without changing the arrival window or price', () => {
+  const h = harness();
+  const { html } = h.renderOpenPlayConfirmation({ ...input, closingTime: '2026-11-11T21:00:00Z' });
+  assert.match(html, /Open Play ends at 4:00 PM/);
+  assert.match(html, /Please finish your visit by then/);
+  assert.match(html, /9:00 AM–10:00 AM/);
+  assert.match(html, /\$16.00/);
 });

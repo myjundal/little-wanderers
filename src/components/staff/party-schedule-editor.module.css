@@ -11,3 +11,6 @@
 .editor .error { color: #903f29; }
 .editor .feedback { color: #356447; margin-bottom: 0; }
 .feedback:empty { display: none; }
+
+.privacyToggle { display: flex; align-items: center; gap: 12px; min-height: 48px; font-weight: 700; cursor: pointer; }
+.privacyToggle input { width: 22px; height: 22px; flex-shrink: 0; margin: 0; accent-color: #5f3da4; }
