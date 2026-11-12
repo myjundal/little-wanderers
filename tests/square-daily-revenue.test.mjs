@@ -18,6 +18,7 @@ test('all standalone Square sales count on purchase day, including café, gift c
  assert.equal(result.categories.find(c=>c.category==='gift_card').net_cents,5000);assert.equal(result.categories.find(c=>c.category==='cafe').net_cents,450);
  assert.equal(report([],receipts,'2026-11-12').net_cents,0);
  assert.equal(squareSaleCategory('Birthday surprise','GIFT_CARD'),'gift_card');
+ for(const name of ['Caramel Macchiato','Americano','Matcha Latte','Lavender Cloud Milk'])assert.equal(squareSaleCategory(name),'cafe');
 });
 
 test('a mixed admission and café receipt counts the café on payment day and admission once on visit day',()=>{
