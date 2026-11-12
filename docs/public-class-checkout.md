@@ -14,6 +14,8 @@ Preparing a checkout atomically checks capacity and creates a temporary checkout
 
 The signed Square webhook uses the same verifier, independently of the browser. A registration conflict after verified payment records `needs_review` and tells the family to contact staff rather than pay again. Records and receipts remain available in Square and the checkout table for reconciliation.
 
+The private service-day revenue report includes completed class baskets. It allocates the shared Square receipt using each selected date's captured price, so a $30 music date and a $25 yoga date remain $30 and $25 on their respective service dates. It does not count the promoted registrations again, and review payments remain visibly unconfirmed.
+
 Pending checkout pages can be resumed or closed. Before releasing a hold, the server closes the Square link and rechecks the order's canceled state and absence of receipts. A payment completed during cancellation is fulfilled instead. Expired checkout cleanup is triggered by the customer checkout API; provider ambiguity retains the hold. Failed link creation is recovered using the exact saved provider request.
 
 ## Schedule changes
@@ -22,4 +24,4 @@ The owner-approved production update canceled eleven empty occurrences (November
 
 ## Validation
 
-Run `node --test tests/class-checkout.test.mjs` for PostgreSQL-backed capacity, pricing, participant, paid fulfillment, preregistration identity, cancellation, retry, API ownership, and webhook checks. Existing class preregistration, series payment, presentation, webhook, and dormant-route regressions are also required. Run the production build and lint before release. Production smoke validation may create and cancel an unpaid checkout for the owner's family, and must not charge a real card.
+Run `node --test tests/class-checkout.test.mjs` for PostgreSQL-backed capacity, pricing, participant, paid fulfillment, preregistration identity, cancellation, retry, API ownership, and webhook checks. Existing class preregistration, series payment, presentation, webhook, and dormant-route regressions are also required. Run the production build and lint before release. `scripts/test-public-class-sandbox.mjs --wait-for-payment` creates a fictional hosted checkout against an isolated PostgreSQL database. Complete Square’s Sandbox Testing Panel to verify paid fulfillment, then the script checks duplicate reconciliation and provider-confirmed unpaid cancellation. The release smoke verified a $55 basket for two dates and preserved the original interest ID; it did not use production data or charge a real card. Production smoke validation may create and cancel an unpaid checkout for the owner's family, and must not charge a real card.

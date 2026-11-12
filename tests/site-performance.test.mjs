@@ -28,7 +28,7 @@ test('public class metadata is cached for a minute and never reads registrations
   const admin = { from(table) {
     tables.push(table);
     assert.equal(table, 'classes');
-    const query = { select() { return query; }, gte() { return query; }, eq() { return query; }, order() { return query; },
+    const query = { select() { return query; }, gte() { return query; }, lt(_field, value) { assert.equal(value, classConfig.CLASS_TERM_END_AT); return query; }, eq() { return query; }, order() { return query; },
       limit() { return query; }, abortSignal: async () => ({ data: [{ id: 'painting', title: fixtureClass.title, start_time: fixtureClass.start_time, end_time: fixtureClass.end_time, capacity: 7, price_cents: 15000 }], error: null }),
     };
     return query;
@@ -56,8 +56,8 @@ test('class cards are included in server HTML without a follow-up API request', 
   }, { React });
   const markup = renderToStaticMarkup(React.createElement(Classes, { classes: [fixtureClass] }));
   assert.match(markup, /Little Hands, Big Canvases/);
-  assert.match(markup, /View registration options/);
-  assert.match(markup, /href="\/login\?mode=new&amp;next=%2Flanding%2Fclassschedule"/);
+  assert.match(markup, /Choose dates &amp; pay/);
+  assert.match(markup, /href="\/landing\/classschedule"/);
   assert.match(markup, /Class size: 7 kids/);
   assert.doesNotMatch(markup, /Waitlist|seats left/);
 });

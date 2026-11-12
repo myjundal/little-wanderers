@@ -65,3 +65,9 @@
 .confirmation { color: #23613b; background: #eaf6ee; padding: 12px; border-radius: 10px; font-weight: 700; }
 .error { color: #8a3f6b; background: #fff1f5; padding: 12px; border-radius: 10px; }
 @media(max-width:600px) { .dateChoice { flex: 1 0 120px; } .cart > .payButton { width: 100%; box-sizing: border-box; text-align: center; } }
+@media(max-width:600px) {
+  .booking { padding: 14px; }
+  .dateGroup { padding: 12px 10px; }
+  .dateChoice { flex: 1 0 calc(50% - 8px); min-width: 0; box-sizing: border-box; padding: 10px 8px; gap: 6px; align-items: flex-start; }
+  .dateChoice input { flex-shrink: 0; }
+}

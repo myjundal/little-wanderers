@@ -152,7 +152,7 @@ test('server checkout requires authentication, isolates households, and verifies
 
 test('signed class payment webhook routes to persisted checkout and retries verification failures before logging',async t=>{
  const h=await fixture(t),a=await h.start();h.pay(a);let fail=false,called=0;
- const runtime=loadSquareModules({fetch:async url=>Response.json({order:h.orders.get(a.order_id)}),mocks:{
+ const runtime=loadSquareModules({fetch:async()=>Response.json({order:h.orders.get(a.order_id)}),mocks:{
   'next/server':{},'@supabase/supabase-js':{createClient:()=>h.admin},
   '@/lib/square-webhook':{verifySquareWebhook:()=>true},
   '@/lib/soft-opening-payments':{},'@/lib/class-series-payments':{},'@/lib/households':{},'@/lib/founding-square':{},
