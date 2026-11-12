@@ -19,8 +19,9 @@ export default function Page() {
       <p className={styles.accountNote}>New here? Create your free account at sign-in.</p>
 
       <dl className={styles.facts}>
-        <div><dt>Soft opening <span>Nov 11–15</span></dt><dd>9am–2pm</dd></div>
-        <div><dt>Tentative Grand &amp; Regular opening</dt><dd>Nov 15</dd></div>
+        <div><dt>Soft opening <span>Nov 11–13 · Wanderlist families only</span></dt><dd>9am–3pm</dd></div>
+        <div><dt>Open to everyone <span>From Nov 14</span></dt><dd>9am–3pm</dd></div>
+        <div><dt>Extended hours <span>From Monday, Nov 16</span></dt><dd>9am–6pm</dd></div>
         <div><dt>Open play</dt><dd>$16 first child<br /><span>$10 each additional child</span></dd></div>
       </dl>
       <p className={styles.memberNote}>Founding members play free. <Link href="/pricing">View pricing</Link></p>

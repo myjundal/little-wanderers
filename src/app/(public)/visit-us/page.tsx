@@ -14,7 +14,7 @@ export default function VisitUsPage() {
         <p style={{ lineHeight: 1.7, marginBottom: 16 }}>
           We’re welcoming our first families to Bishop’s Corner in West Hartford, CT. All families are welcome to reserve Open Play visits from Saturday, November 14. Explore our new play studio and cafe at your own pace. Our grand opening date is coming soon.
         </p>
-        <p style={{lineHeight:1.7}}>Soft opening: November 11–15, 9am–2pm. Regular opening from November 16: 9am–5pm (Eastern). Service may be slower while our team learns and finds its rhythm.</p>
+        <p style={{lineHeight:1.7}}>Soft opening: November 11–13, Wanderlist families only, 9am–3pm. Open to everyone from November 14: 9am–3pm. From Monday, November 16: 9am–6pm (Eastern). Service may be slower while our team learns and finds its rhythm.</p>
         <p><Link href="/open-play">Reserve Open Play →</Link></p>
         <p style={{ marginBottom: 16 }}><strong>Location:</strong> Bishop&apos;s Corner, West Hartford, CT</p>
         <p style={{ lineHeight: 1.7, marginBottom: 16 }}>

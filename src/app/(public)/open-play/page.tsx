@@ -15,8 +15,9 @@ export default function Page() {
     <SoftOpeningSignInButton destination="/landing/open-play">Reserve Open Play →</SoftOpeningSignInButton>
     <p className={styles.accountNote}>Sign in or create your free account. No invitation or membership needed.</p>
     <dl className={styles.facts}>
-      <div><dt>Soft opening <span>Nov 14–15</span></dt><dd>9am–2pm</dd></div>
-      <div><dt>Regular hours <span>From Nov 16</span></dt><dd>9am–5pm</dd></div>
+      <div><dt>Soft opening <span>Nov 11–13 · Wanderlist families only</span></dt><dd>9am–3pm</dd></div>
+      <div><dt>Open to everyone <span>From Nov 14</span></dt><dd>9am–3pm</dd></div>
+      <div><dt>Extended hours <span>From Monday, Nov 16</span></dt><dd>9am–6pm</dd></div>
       <div><dt>Open play</dt><dd>$16 first child<br /><span>$10 each additional child</span></dd></div>
     </dl>
     <p className={styles.memberNote}>Founding admission is included for enrolled children. <Link href="/pricing">View pricing</Link></p>
