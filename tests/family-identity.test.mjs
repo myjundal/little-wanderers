@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadSquareModules } from './helpers/admission-pos-harness.mjs';
 import { memoryAdmin } from './helpers/family-memory-admin.mjs';
-const { matchGuestFamily, reconcileGuestWaiverFamily } = loadSquareModules().load('src/lib/guest-family-reconciliation.ts');
+const { matchGuestFamily, reconcileGuestWaiverFamily, reconcileWalkInRegistration } = loadSquareModules().load('src/lib/guest-family-reconciliation.ts');
 const source = 'source', target = 'target';
 const adult = { id: 'adult', household_id: target, first_name: 'Alex', last_name: 'Example', role: 'adult' };
 const child = { id: 'child', household_id: target, first_name: 'Martín ', last_name: null, birthdate: '2023-01-01', role: 'child' };
@@ -70,4 +70,63 @@ test('established source accounts, live visits and ambiguous targets stay separa
   db.households.push({ ...family, id: 'other' }); db.people.push({ ...adult, household_id: 'other' }, { ...child, id: 'other-child', household_id: 'other' });
   db.household_members.push({ household_id: 'other', user_id: 'user', role: 'caregiver' });
   assert.equal((await reconcileGuestWaiverFamily(admin, 'waiver')).status, 'review'); assert.equal(admin.writes.length, 0);
+});
+
+function walkInFixture(order = 'register_first') {
+  const f = fixture();
+  for (const table of Object.keys(f.db)) f.db[table] = structuredClone(f.db[table]);
+  Object.assign(f.db.households[0], { name: 'Example', email: null, phone: null, created_at: order === 'register_first' ? '2026-11-12T16:07:00Z' : '2026-11-12T16:09:00Z' });
+  f.db.households[1].created_at = '2026-11-12T16:08:00Z';
+  f.db.people[0].last_name = null;
+  f.db.people[1].birthdate = null;
+  f.db.household_members = f.db.people.filter(p => p.household_id === target).map(p => ({
+    household_id: target, user_id: null, role: 'member', full_name: `${p.first_name} ${p.last_name ?? ''}`.trim(), member_role: p.role,
+  }));
+  Object.assign(f.db.waivers[0], { signed_at: '2026-11-12T16:08:00Z', parent_name: 'Alex Example' });
+  return f;
+}
+
+test('same-day register intake links missing surnames/birthdays in either order, preserving evidence and visits', async () => {
+  for (const order of ['register_first', 'waiver_first']) {
+    const { db, admin, snapshot } = walkInFixture(order);
+    db.checkins.push({ id: 'visit', person_id: 'child', checked_in_at: '2026-11-12T16:09:00Z' });
+    const peopleBefore = structuredClone(db.people), membersBefore = structuredClone(db.household_members), visitsBefore = structuredClone(db.checkins);
+    if (order === 'register_first') assert.equal((await reconcileGuestWaiverFamily(admin, 'waiver')).status, 'linked');
+    else await reconcileWalkInRegistration(admin, target);
+    assert.equal(db.waivers[0].household_id, target);
+    assert.deepEqual(db.waivers[0].covered_person_ids, ['child']);
+    assert.equal(db.waivers[0].agreement_snapshot.family_reconciliation.match_basis, 'same_day_staff_walkin');
+    assert.deepEqual(db.waivers[0].agreement_snapshot.children, snapshot.children);
+    assert.deepEqual(db.people, peopleBefore); assert.deepEqual(db.household_members, membersBefore); assert.deepEqual(db.checkins, visitsBefore);
+    assert.equal((await reconcileGuestWaiverFamily(admin, 'waiver')).status, 'linked');
+    assert.equal(db.staff_family_search_aliases.length, 1);
+  }
+});
+
+test('walk-in fallback rejects accounts, guest-only rows, prior days, conflicting names/birthdays and incomplete rosters', async () => {
+  const cases = [
+    f => { f.db.household_members[0].user_id = 'user'; },
+    f => { f.db.household_members = []; },
+    f => { f.db.households[0].created_at = '2026-11-11T16:08:00Z'; },
+    f => { f.db.households[0].name = 'Someone Else'; },
+    f => { f.db.households[0].email = 'other@example.test'; },
+    f => { f.db.people[0].last_name = 'Other'; },
+    f => { f.db.people[1].birthdate = '2024-01-01'; },
+    f => { f.db.people.push({ ...child, id: 'extra', household_id: target }); },
+    f => { f.db.household_members.pop(); },
+  ];
+  for (const change of cases) {
+    const f = walkInFixture(); change(f);
+    assert.equal((await reconcileGuestWaiverFamily(f.admin, 'waiver')).status, 'review');
+    assert.equal(f.admin.writes.length, 0);
+  }
+});
+
+test('multiple matching staff intakes remain separate and registration never reconciles another family', async () => {
+  const { db, admin } = walkInFixture('waiver_first');
+  db.households.push({ ...db.households[0], id: 'other' });
+  db.people.push(...db.people.filter(p => p.household_id === target).map(p => ({ ...p, id: `other-${p.id}`, household_id: 'other' })));
+  db.household_members.push(...db.household_members.map(m => ({ ...m, household_id: 'other' })));
+  await reconcileWalkInRegistration(admin, target);
+  assert.equal(db.waivers[0].household_id, source); assert.equal(admin.writes.length, 0);
 });
