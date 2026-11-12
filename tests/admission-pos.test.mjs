@@ -262,3 +262,15 @@ test('a settled online reservation suppresses a stale due check-in and blocks a 
  await assert.rejects(mod.load('src/lib/square-admission-pos.ts').startAdmissionPos(admin,[checkin,sibling],ids.user),/already prepaid/);
  assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,0);
 });
+test('Square POS charges $10 for a baby alone and preserves a completed receipt',async t=>{
+ const {db,admin}=await database(t);await db.query('delete from checkins where id=$1',[sibling]);
+ const birthday=new Date();birthday.setUTCMonth(birthday.getUTCMonth()-6);
+ await db.query('update people set birthdate=$1 where id=$2',[birthday.toISOString().slice(0,10),ids.person]);
+ const m=modules();const launch=await m.load('src/lib/square-admission-pos.ts').startAdmissionPos(admin,[checkin],ids.user);
+ assert.equal(JSON.parse(new URL(launch.url).searchParams.get('data')).amount_money.amount,1000);
+ assert.equal((await db.query('select price_cents from checkins where id=$1',[checkin])).rows[0].price_cents,1000);
+ assert.equal((await db.query('select amount_cents from admission_pos_sales where id=$1',[launch.id])).rows[0].amount_cents,1000);
+ const {projectInfantSiblingAdmission}=m.load('src/lib/infant-sibling-admission.ts');
+ const visit={id:checkin,person_id:ids.person,price_cents:1600,payment_status:'paid',checked_in_at:new Date().toISOString(),square_environment:'sandbox'};
+ assert.equal(projectInfantSiblingAdmission([visit],[{id:ids.person,household_id:ids.household,role:'child',birthdate:birthday.toISOString().slice(0,10)}],'sandbox')[0].price_cents,1600);
+});

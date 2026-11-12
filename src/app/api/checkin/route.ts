@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     try {
       const pricing = await readInfantSiblingAdmission(context.admin, [data.checkin_id], squareEnvironment());
       const priced = pricing.priced.find(row => row.id === data.checkin_id);
-      if (priced?.infant_sibling_free) { data.price_cents = 0; data.payment_status = 'covered'; data.infant_sibling_free = true; }
+      if (priced) { data.price_cents = priced.price_cents; data.payment_status = priced.payment_status; data.infant_sibling_free = priced.infant_sibling_free; }
     } catch { return Response.json({ok:false,error:'Check-in saved. Refresh admission status before collecting payment.'},{status:503}); }
   }
   const status = data?.ok ? 200 : data?.code === 'not_found' ? 404 : data?.code === 'forbidden' ? 403 : 409;

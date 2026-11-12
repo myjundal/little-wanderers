@@ -1,6 +1,6 @@
 import { admissionIsPaid, admissionIsIncluded } from '@/lib/admission-payment-status';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { freeInfantSiblingIds } from '@/lib/infant-sibling-pricing';
+import { freeInfantSiblingIds, isInfantSibling } from '@/lib/infant-sibling-pricing';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 
 type Person = { id: string; household_id: string; role?: string; birthdate?: string | null };
@@ -19,15 +19,20 @@ export function projectInfantSiblingAdmission<T extends Visit>(visits: T[], peop
     const group = groups.get(key) ?? []; group.push(visit); groups.set(key, group);
   }
   const freeVisits = new Set<string>();
+  const infantRateVisits = new Set<string>();
   for (const group of groups.values()) {
     const date = getPartyDateKey(new Date(group[0].checked_in_at));
     const included = new Set(group.filter(visit => admissionIsPaid(visit.payment_status) || admissionIsIncluded(visit.payment_status)).map(visit => visit.person_id));
     const free = freeInfantSiblingIds(group.map(visit => peopleById.get(visit.person_id)!), date, included);
-    for (const visit of group) if (free.has(visit.person_id) && visit.payment_status === 'due' && (!frozen.has(visit.id) || visit.price_cents === 0)) freeVisits.add(visit.id);
+    for (const visit of group) {
+      if (visit.payment_status !== 'due') continue;
+      if (free.has(visit.person_id) && (!frozen.has(visit.id) || visit.price_cents === 0)) freeVisits.add(visit.id);
+      else if (!frozen.has(visit.id) && visit.price_cents > 1000 && isInfantSibling(peopleById.get(visit.person_id)?.birthdate, date)) infantRateVisits.add(visit.id);
+    }
   }
   return visits.map(visit => freeVisits.has(visit.id)
     ? { ...visit, price_cents: 0, payment_status: 'covered', infant_sibling_free: true }
-    : { ...visit, infant_sibling_free: false });
+    : infantRateVisits.has(visit.id) ? { ...visit, price_cents: 1000, infant_sibling_free: false } : { ...visit, infant_sibling_free: false });
 }
 
 export async function readInfantSiblingAdmission(admin: SupabaseClient, checkinIds: string[], environment: string) {

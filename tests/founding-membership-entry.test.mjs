@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { loadModule } from './helpers/class-preregistration-harness.mjs';
 
 const birthdate = loadModule('src/lib/birthdate.ts');
-const membership = loadModule('src/lib/founding-membership.ts', { '@/lib/birthdate': birthdate });
+const membership = loadModule('src/lib/founding-membership.ts', { '@/lib/birthdate': birthdate, '@/lib/infant-sibling-pricing': loadModule('src/lib/infant-sibling-pricing.ts') });
 const waitlistOffer = { phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 };
 async function entry(audience, { signedIn = false, offer = waitlistOffer, enrollment = null, phoneOnly = false, config = null } = {}) {
   const signOutCalls = []; const navigations = [];
