@@ -38,3 +38,15 @@ test('membership lookup failure prevents paid activation',async()=>{
  const m=modules();const admin={from:()=>({select(){return this;},eq(){return Promise.resolve({data:null,error:{message:'DB unavailable'}});}})};
  await assert.rejects(m.load('src/lib/complimentary-membership.ts').readComplimentaryMembership(admin,ids.household),/Unable to confirm/);
 });
+test('customer enrollment rejects complimentary households before reading card input',async t=>{
+ const {admin}=await setup(t);let cardInputRead=false,providerCalls=0;
+ const membershipAdmin={...admin,from:table=>table==='household_members'?{select(){return this;},eq(){return this;},single:async()=>({data:{role:'primary_caregiver'},error:null})}:admin.from(table)};
+ const m=loadSquareModules({env:{SQUARE_ENVIRONMENT:'production'},fetch:async()=>{providerCalls++;throw Error('Forbidden');},mocks:{
+  '@/lib/supabase/admin':{createAdminSupabaseClient:()=>membershipAdmin},
+  '@/lib/supabase/server':{createServerSupabaseClient:async()=>({auth:{getUser:async()=>({data:{user:{id:ids.user,email:'parent@example.test'}}})}})},
+  '@/lib/households':{getLatestHouseholdIdForUser:async()=>ids.household},
+ }});
+ const response=await m.load('src/app/api/founding-membership/route.ts').POST({json:async()=>{cardInputRead=true;return {};}});
+ assert.equal(response.status,409);assert.match((await response.json()).error,/lifetime Friends & Family/);
+ assert.equal(cardInputRead,false);assert.equal(providerCalls,0);
+});
