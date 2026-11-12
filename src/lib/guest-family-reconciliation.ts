@@ -8,7 +8,8 @@ const phoneKey = (value: string | null | undefined) => {
   return digits.length === 10 ? `1${digits}` : digits;
 };
 type Person = { id: string; household_id: string; role: string; first_name: string; last_name: string | null; birthdate: string | null };
-type Family = { id: string; email: string | null; phone: string | null; created_at: string };
+type Family = { id: string; name?: string | null; email: string | null; phone: string | null; created_at: string };
+type FamilyMember = { household_id: string; user_id: string | null; role: string; full_name?: string | null; member_role?: string | null };
 type Profile = { first_name: string; last_name: string; phone: string; children: Array<{ id?: string; first_name: string; last_name: string | null; birthdate: string | null }> };
 
 /** Contact is corroboration for a signed waiver, never permission to read/claim an account. */
@@ -30,6 +31,37 @@ export function matchGuestFamily(profile: Profile, email: string, family: Family
     ids.push(matches[0].id);
   }
   return ids.length ? ids : null;
+}
+
+/** The register stores staff-entered names in both people and anonymous member rows.
+ * Only that same-day, contactless intake can use the family surname to complete
+ * partial names. This never matches an Auth account or another guest submission.
+ */
+export function matchWalkInFamily(profile: Profile, source: Family, family: Family, people: Person[], members: FamilyMember[]) {
+  const day = (date: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(date));
+  if (!Number.isFinite(Date.parse(source.created_at)) || !Number.isFinite(Date.parse(family.created_at))
+    || day(source.created_at) !== day(family.created_at) || family.email || family.phone
+    || !members.length || members.some(member => member.user_id || member.role !== 'member')) return null;
+  const adults = people.filter(person => person.role === 'adult');
+  const children = people.filter(person => person.role === 'child');
+  if (adults.length !== 1 || children.length !== profile.children.length || !children.length || people.length !== members.length) return null;
+  if (!people.every(person => members.filter(member => member.member_role === person.role
+    && identityName(member.full_name) === identityName(`${person.first_name} ${person.last_name ?? ''}`)).length === 1)) return null;
+  const guardian = adults[0];
+  const surname = identityName(profile.last_name);
+  const familyName = identityName(family.name).replace(/ family$/, '');
+  if (!surname || identityName(guardian.first_name) !== identityName(profile.first_name)) return null;
+  if (identityName(guardian.last_name) ? identityName(guardian.last_name) !== surname
+    : ![surname, identityName(`${profile.first_name} ${profile.last_name}`)].includes(familyName)) return null;
+  const ids: string[] = [];
+  for (const child of profile.children) {
+    const matches = children.filter(person => identityName(person.first_name) === identityName(child.first_name)
+      && identityName(child.last_name) === (identityName(person.last_name) || surname)
+      && !!child.birthdate && (!person.birthdate || person.birthdate === child.birthdate));
+    if (matches.length !== 1 || ids.includes(matches[0].id)) return null;
+    ids.push(matches[0].id);
+  }
+  return ids;
 }
 
 const checked = <T>(result: { data: T; error: unknown }) => {
@@ -80,17 +112,18 @@ export async function reconcileGuestWaiverFamily(admin: SupabaseClient, waiverId
   const adultRows = checked(await admin.from('people').select('id,household_id,role,first_name,last_name,birthdate').eq('role', 'adult').limit(2001)) as Person[];
   if (adultRows.length > 2000) throw new Error('Family directory requires a narrower review.');
   const candidateIds = [...new Set(adultRows.filter(person => person.household_id !== sourceId && !aliases.has(person.household_id)
-    && identityName(person.first_name) === identityName(adults[0].first_name) && identityName(person.last_name) === identityName(adults[0].last_name)).map(person => person.household_id))];
+    && identityName(person.first_name) === identityName(adults[0].first_name)
+    && (!identityName(person.last_name) || identityName(person.last_name) === identityName(adults[0].last_name))).map(person => person.household_id))];
   if (!candidateIds.length || candidateIds.length > 30) return { status: 'review' };
   const [families, people, members] = await Promise.all([
-    admin.from('households').select('id,email,phone,created_at').in('id', candidateIds),
+    admin.from('households').select('id,name,email,phone,created_at').in('id', candidateIds),
     admin.from('people').select('id,household_id,role,first_name,last_name,birthdate').in('household_id', candidateIds).limit(1001),
-    admin.from('household_members').select('household_id,user_id,role').in('household_id', candidateIds).limit(101),
+    admin.from('household_members').select('household_id,user_id,role,full_name,member_role').in('household_id', candidateIds).limit(101),
   ]);
   const familyRows = checked(families) as Family[], personRows = checked(people) as Person[], memberRows = checked(members);
   if (personRows.length > 1000 || memberRows.length > 100) return { status: 'review' };
   const users = new Map<string, string>();
-  for (const userId of new Set<string>(memberRows.filter(row => ['primary_caregiver', 'caregiver', 'owner', 'admin'].includes(row.role)).map(row => row.user_id))) {
+  for (const userId of new Set<string>(memberRows.filter(row => row.user_id && ['primary_caregiver', 'caregiver', 'owner', 'admin'].includes(row.role)).map(row => row.user_id))) {
     const result = await admin.auth.admin.getUserById(userId);
     if (result.error) throw new Error('Unable to verify existing family contact.');
     if (result.data.user?.email_confirmed_at && result.data.user.email) users.set(userId, result.data.user.email);
@@ -98,11 +131,14 @@ export async function reconcileGuestWaiverFamily(admin: SupabaseClient, waiverId
   const profile = { ...adults[0], last_name: adults[0].last_name ?? '', phone: waiver.phone || source.phone || '', children };
   const matches = familyRows.flatMap(family => {
     // Prefer an established account. Two guest-only submissions choose the oldest root.
-    const hasAccount = memberRows.some(member => member.household_id === family.id);
-    if (!hasAccount && (family.created_at > source.created_at || (family.created_at === source.created_at && family.id > sourceId))) return [];
-    const targetIds = matchGuestFamily(profile, waiver.email || source.email || '', family, personRows.filter(person => person.household_id === family.id),
-      memberRows.filter(member => member.household_id === family.id).map(member => users.get(member.user_id) || '').filter(Boolean));
-    return targetIds ? [{ family, targetIds, hasAccount }] : [];
+    const familyMembers = memberRows.filter(member => member.household_id === family.id);
+    const familyPeople = personRows.filter(person => person.household_id === family.id);
+    const hasAccount = familyMembers.some(member => !!member.user_id);
+    const walkInIds = matchWalkInFamily(profile, source, family, familyPeople, familyMembers);
+    if (!walkInIds && !hasAccount && (family.created_at > source.created_at || (family.created_at === source.created_at && family.id > sourceId))) return [];
+    const targetIds = matchGuestFamily(profile, waiver.email || source.email || '', family, familyPeople,
+      familyMembers.map(member => users.get(member.user_id) || '').filter(Boolean)) || walkInIds;
+    return targetIds ? [{ family, targetIds, hasAccount, walkIn: !!walkInIds }] : [];
   });
   const established = matches.filter(match => match.hasAccount);
   const candidates = established.length ? established : matches;
@@ -113,12 +149,34 @@ export async function reconcileGuestWaiverFamily(admin: SupabaseClient, waiverId
   for (const row of sourceWaivers) {
     checked(await admin.from('waivers').update({ household_id: target.family.id, covered_person_ids: row.covered_person_ids.map((id: string) => idMap.get(id)!),
       agreement_snapshot: { ...row.agreement_snapshot, family_reconciliation: { source_household_id: sourceId, target_household_id: target.family.id,
-        original_covered_person_ids: row.covered_person_ids, person_ids: Object.fromEntries(idMap), linked_at: new Date().toISOString() } } })
+        original_covered_person_ids: row.covered_person_ids, person_ids: Object.fromEntries(idMap), linked_at: new Date().toISOString(),
+        match_basis: target.walkIn ? 'same_day_staff_walkin' : 'guardian_contact_children' } } })
       .eq('id', row.id).eq('household_id', sourceId));
     checked(await admin.from('party_guest_waivers').update({ household_id: target.family.id }).eq('waiver_id', row.id).eq('household_id', sourceId));
   }
   // No identity/access or personal details are changed. Preserve the signed child snapshot.
   checked(await admin.from('staff_family_search_aliases').upsert({ alias_household_id: sourceId, canonical_household_id: target.family.id,
-    reason: 'Guest waiver reconciled: guardian name, contact and child identity matched; original records and signed evidence retained.' }, { onConflict: 'alias_household_id', ignoreDuplicates: true }));
+    reason: target.walkIn ? 'Same-day staff walk-in and guest waiver matched by guardian, family surname and all children; original signed evidence retained.'
+      : 'Guest waiver reconciled: guardian name, contact and child identity matched; original records and signed evidence retained.' }, { onConflict: 'alias_household_id', ignoreDuplicates: true }));
   return { status: 'linked', source_id: sourceId, household_id: target.family.id, waiver_ids: sourceWaivers.map(row => row.id) };
+}
+
+/** Covers the reverse order: a guest signs just before staff saves New family. */
+export async function reconcileWalkInRegistration(admin: SupabaseClient, householdId: string) {
+  const family = checked(await admin.from('households').select('id,created_at').eq('id', householdId).single());
+  const people = checked(await admin.from('people').select('first_name,role').eq('household_id', householdId));
+  const names = people.filter(person => person.role === 'adult').map(person => identityName(person.first_name));
+  const since = new Date(Date.parse(family.created_at) - 86400000).toISOString();
+  const waivers = checked(await admin.from('waivers').select('id,household_id').eq('source', 'guest_website').gte('signed_at', since).limit(101));
+  if (!waivers.length || waivers.length > 100) return;
+  // parent_name is the independently typed legal signature (e.g. "R. Hodges"),
+  // so filter by the actual guardian identity, just like receipt reconciliation.
+  const guardians = checked(await admin.from('people').select('household_id,first_name').eq('role', 'adult')
+    .in('household_id', [...new Set(waivers.map(waiver => waiver.household_id))]).limit(1001));
+  if (guardians.length > 1000) return;
+  for (const waiver of waivers) {
+    if (!guardians.some(guardian => guardian.household_id === waiver.household_id && names.includes(identityName(guardian.first_name)))) continue;
+    const plan = await reconcileGuestWaiverFamily(admin, waiver.id, false);
+    if (plan.status === 'match' && plan.household_id === householdId) await reconcileGuestWaiverFamily(admin, waiver.id);
+  }
 }

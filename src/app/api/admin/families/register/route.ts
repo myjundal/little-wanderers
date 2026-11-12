@@ -1,6 +1,9 @@
 import { requireStaffContext } from '@/lib/authz';
 import { FAMILY_PRIMARY_CAREGIVER_ROLE } from '@/lib/family-roles';
 import { logger } from '@/lib/logger';
+import { reconcileWalkInRegistration } from '@/lib/guest-family-reconciliation';
+
+export const maxDuration = 60;
 
 type MemberInput = {
   full_name?: string;
@@ -123,5 +126,9 @@ export async function POST(req: Request) {
     );
   }
 
+  // Await linking so the next desk lookup already sees the signed waiver.
+  // A directory failure must never turn a saved family into a failed registration.
+  try { await reconcileWalkInRegistration(admin, household.id); }
+  catch { logger.error({ action: 'staff.family_registration.waiver_link_pending', householdId: household.id }); }
   return Response.json({ ok: true, household_id: household.id, household_name: household.name });
 }
