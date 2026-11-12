@@ -10,12 +10,13 @@ const fields = {
   series: ['class_series_sales', 'id,class_ids,child_ids,status,environment,amount_cents,square_order_id'],
   classes: ['classes', 'id,title,start_time,status'],
   registrations: ['class_registrations', 'id,class_id,person_id,status,attendance_status'],
+  classCheckouts: ['square_checkout_attempts', 'id,kind,status,environment,order_id,expected_amount_cents,payload'],
 } as const;
 
 /** Keyset paging avoids silently dropping records after PostgREST's row cap.
  * A failed source remains an explicit report warning, never a zero balance. */
 export async function loadRevenueSources(admin: SupabaseClient) {
-  const sources = { bookings: [], slots: [], visits: [], parties: [], series: [], classes: [], registrations: [] } as RevenueSources;
+  const sources = { bookings: [], slots: [], visits: [], parties: [], series: [], classes: [], registrations: [], classCheckouts: [] } as RevenueSources;
   const issues: string[] = [];
   await Promise.all((Object.keys(fields) as Array<keyof typeof fields>).map(async key => {
     const [table, select] = fields[key];
@@ -24,6 +25,7 @@ export async function loadRevenueSources(admin: SupabaseClient) {
     try {
       for (;;) {
         let query = admin.from(table).select(select).order('id').limit(500);
+        if (key === 'classCheckouts') query = query.eq('kind', 'class').eq('environment', 'production').in('status', ['completed', 'needs_review']);
         if (cursor) query = query.gt('id', cursor);
         const { data, error } = await query;
         if (error || !data) throw new Error('Source query failed.');

@@ -119,9 +119,23 @@ test('live provider reads validate order binding, amounts, tips and ambiguous re
 test('source loader follows every full page and does not keep a deceptively complete prefix after failure', async () => {
   const { loadRevenueSources } = modules.load('src/lib/service-day-revenue-data.ts');
   let pages = 0;
-  const admin = { from(table) { let cursor = ''; const q = { select() { return q; }, order() { return q; }, limit() { return q; }, gt(_field, value) { cursor = value; return q; }, then(resolve) {
+  const admin = { from(table) { let cursor = ''; const q = { select() { return q; }, order() { return q; }, limit() { return q; }, eq() { return q; }, in() { return q; }, gt(_field, value) { cursor = value; return q; }, then(resolve) {
     if (table !== 'checkins') return resolve({ data: [], error: null }); pages++;
     return resolve(cursor ? { data: null, error: { message: 'offline' } } : { data: Array.from({ length: 500 }, (_, i) => ({ id: String(i).padStart(4, '0') })), error: null });
   } }; return q; } };
   const result = await loadRevenueSources(admin); assert.equal(pages, 2); assert.equal(result.sources.visits.length, 0); assert.equal(result.issues.length, 1);
+});
+
+test('a mixed class-date checkout uses its actual per-date prices and is not counted again as unlinked registrations', () => {
+  const input = empty();
+  input.classes = [{id:'music',title:'Music',start_time:'2026-11-17T15:00:00Z',status:'scheduled'},{id:'yoga',title:'Yoga',start_time:'2026-11-18T15:30:00Z',status:'scheduled'}];
+  input.registrations = input.classes.map(c=>({id:'r-'+c.id,class_id:c.id,person_id:'child',status:'scheduled',attendance_status:'unknown'}));
+  input.classCheckouts=[{id:'basket',kind:'class',status:'completed',environment:'production',order_id:'order',expected_amount_cents:5500,payload:{request:{person_id:'child',items:[{class_id:'music',quantity:1},{class_id:'yoga',quantity:1}]},line_items:[{quantity:'1',base_price_money:{amount:3000,currency:'USD'}},{quantity:'1',base_price_money:{amount:2500,currency:'USD'}}]}}];
+  const evidence=receipt({service_total_cents:5500,payments:[{id:'mixed-payment',amount_cents:5500,refunded_cents:0,paid_at:'2026-11-11T18:00:00Z'}]});
+  const music=report(input,'2026-11-17',evidence),yoga=report(input,'2026-11-18',evidence);
+  assert.equal(music.net_cents,3000);assert.equal(yoga.net_cents,2500);assert.equal(music.prepaid_cents,3000);assert.equal(yoga.rows.length,1);
+  assert.equal(music.complete,true);assert.equal(yoga.complete,true);
+  input.classCheckouts[0].status='needs_review';assert.equal(report(input,'2026-11-17',evidence).net_cents,0);
+  input.classCheckouts[0].status='completed';input.classCheckouts[0].payload.line_items[0].base_price_money.amount=2999;
+  assert.equal(report(input,'2026-11-17',evidence).complete,false);
 });

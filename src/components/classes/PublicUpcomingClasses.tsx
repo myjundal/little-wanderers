@@ -298,7 +298,7 @@ export default function PublicUpcomingClasses({ classes }: { classes: PublicClas
               <strong style={{ color: '#7b6aa8' }}>{formatPrice(item.price_cents)}</strong>
             </div>
             <Link
-              href="/login?mode=new&next=%2Flanding%2Fclassschedule"
+              href="/landing/classschedule"
               style={{
                 display: 'inline-flex',
                 justifyContent: 'center',
@@ -313,7 +313,7 @@ export default function PublicUpcomingClasses({ classes }: { classes: PublicClas
                 textDecoration: 'none',
               }}
             >
-              View registration options
+              Choose dates & pay
             </Link>
           </article>
           );

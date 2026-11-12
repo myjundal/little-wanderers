@@ -16,9 +16,12 @@ export type RevenueParty = { id: string; start_time: string; status: string; pri
 export type RevenueSeries = { id: string; class_ids: string[]; child_ids: string[]; status: string; environment: string; amount_cents: number; square_order_id: string | null };
 export type RevenueClass = { id: string; title: string; start_time: string; status: string };
 export type RevenueRegistration = { id: string; class_id: string; person_id: string; status: string; attendance_status: string };
+export type RevenueClassCheckout = { id: string; kind: string; status: string; environment: string; order_id: string | null; expected_amount_cents: number;
+  payload: { request?: { person_id?: string; items?: { class_id: string; quantity?: number }[] }; line_items?: { base_price_money?: { amount?: number; currency?: string }; quantity?: string }[] } };
 export type RevenueSources = {
   bookings: RevenueBooking[]; slots: { id: string; starts_at: string }[]; visits: RevenueVisit[]; parties: RevenueParty[];
   series: RevenueSeries[]; classes: RevenueClass[]; registrations: RevenueRegistration[];
+  classCheckouts?: RevenueClassCheckout[];
 };
 export type RevenueCharge = { order_id: string; amount_cents: number };
 export type RevenueService = {
@@ -109,6 +112,26 @@ export function revenueServices(data: RevenueSources) {
   }
   const classMap = new Map(data.classes.map(row => [row.id, row]));
   const linkedRegistrations = new Set<string>();
+  for (const sale of (data.classCheckouts ?? []).filter(row => row.kind === 'class' && row.environment === 'production' && ['completed', 'needs_review'].includes(row.status))) {
+    const items = sale.payload.request?.items ?? [];
+    const lines = sale.payload.line_items ?? [];
+    const amounts = lines.map(line => line.base_price_money?.currency === 'USD' && cents(line.base_price_money.amount) ? line.base_price_money.amount * Number(line.quantity ?? 1) : -1);
+    const allocationValid = items.length > 0 && items.length === lines.length && new Set(items.map(item => item.class_id)).size === items.length
+      && items.every(item => item.quantity === 1) && amounts.every(cents) && amounts.reduce((sum, amount) => sum + amount, 0) === sale.expected_amount_cents;
+    if (!items.length) newService({ id: `class-checkout:${sale.id}`, date: '', category: 'class', label: 'Class checkout with no dates', expected_cents: 0, attendance: 'unknown', cancelled: false, charges: [], issues: ['Class checkout allocation needs review.'] });
+    for (const [index, item] of items.entries()) {
+      const session = classMap.get(item.class_id);
+      const registrations = data.registrations.filter(row => row.class_id === item.class_id && row.person_id === sale.payload.request?.person_id);
+      registrations.forEach(row => linkedRegistrations.add(row.id));
+      const amount = cents(amounts[index]) ? amounts[index] : 0;
+      const service = newService({ id: `class-checkout:${sale.id}:${item.class_id}`, date: day(session?.start_time), category: 'class', label: `${session?.title ?? 'Class'} · ${sale.id.slice(0, 8)}`,
+        expected_cents: amount, attendance: registrations.some(row => row.attendance_status === 'attended') ? 'visited' : 'reserved',
+        cancelled: session?.status === 'cancelled', charges: sale.order_id ? [{ order_id: sale.order_id, amount_cents: amount }] : [], issues: [] });
+      if (!allocationValid || !session || !sale.order_id || !sale.payload.request?.person_id) service.issues.push('Class checkout allocation needs review.');
+      if (sale.status === 'needs_review') service.issues.push('Class payment is marked for review.');
+      if (registrations.some(row => row.status === 'cancelled' || row.attendance_status === 'no_show')) service.issues.push('Cancelled or no-show class participation needs review.');
+    }
+  }
   for (const sale of data.series.filter(row => row.environment === 'production')) {
     if (sale.status === 'draft' && !sale.square_order_id) continue;
     const ids = [...new Set(sale.class_ids)].sort((a, b) => (classMap.get(a)?.start_time ?? a).localeCompare(classMap.get(b)?.start_time ?? b));

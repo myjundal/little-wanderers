@@ -1,5 +1,5 @@
 import { isWanderlistSignupWindow } from '@/lib/signup-policy';
-import { CLASS_START_AT, CLASS_START_LABEL } from '@/lib/class-config';
+import { CLASS_START_AT, CLASS_START_LABEL, CLASS_TERM_END_AT, CLASS_HOLIDAY_DATE } from '@/lib/class-config';
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -178,6 +178,10 @@ export async function POST(req: Request) {
     }
 
     if (!klass) return Response.json({ ok: false, error: 'class not found' }, { status: 404 });
+    if (Date.parse(klass.start_time) <= Date.now() || Date.parse(klass.start_time) >= Date.parse(CLASS_TERM_END_AT)
+      || new Date(klass.start_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === CLASS_HOLIDAY_DATE) {
+      return Response.json({ ok: false, error: 'Please choose an upcoming class through December 17. No classes on Thanksgiving, November 26.' }, { status: 409 });
+    }
     if (new Date(klass.start_time).getTime() < new Date(CLASS_START_AT).getTime()) {
       return Response.json({ ok: false, error: `Classes begin ${CLASS_START_LABEL}. Please choose an upcoming date.` }, { status: 409 });
     }
