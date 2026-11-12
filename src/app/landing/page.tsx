@@ -283,6 +283,7 @@ export default function AppHome() {
 
       {!canUseOwnerDashboard && (
         <section aria-label="Little Wanderers quick links" className="quickGrid" style={{ marginTop: 16, marginBottom: 20 }}>
+          <Link href="/landing/open-play" className="quickCard">Reserve Open Play · Visits from November 14</Link>
           <Link href="/landing/people" className="quickCard">My Info/People</Link>
           <Link href="/landing/waiver" className="quickCard">Family Waiver{waiverLoaded && !waiverError && waiver.status === 'completed' ? ' · Completed' : ''}</Link>
         </section>

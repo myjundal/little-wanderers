@@ -89,26 +89,26 @@ export default async function HomeComingSoon() {
         <div className={styles.left}>
           <p className={styles.eyebrow}>West Hartford · Play studio &amp; cafe · Ages 0–6</p>
           <h1>A little play.<br /><span>A little pause.</span></h1>
-          <p className={styles.openingBadge}>Soft opening starts November 11</p>
+          <p className={styles.openingBadge}>Everyone welcome from Saturday, November 14</p>
           <p>A thoughtful indoor play space for curious little ones, and a cozy cafe for their grown-ups. We’re ready for our first little adventures together.</p>
-          <div className={styles.heroActions}><PastelButton href="/pricing">View pricing →</PastelButton><Link href="/classes">Explore classes</Link></div>
+          <div className={styles.heroActions}><PastelButton href="/open-play">Reserve Open Play →</PastelButton><Link href="/classes">Explore classes</Link></div>
           <p className={styles.heroFootnote}>Bishop’s Corner, West Hartford · Grand opening coming soon</p>
         </div>
         <div className={styles.right}><PastelCard><div className={styles.heroImageFrame}><Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" /></div></PastelCard><p className={styles.photoCaption}>Room to explore. Space to take a breath.</p></div>
       </section>
       <section className={styles.openingNote} aria-label="Soft opening details"><div><span className={styles.eyebrow}>Our first chapter</span><h2>A warm welcome, with a little extra grace.</h2><p>During soft opening, service may be a little slower as our team learns and finds its rhythm. Thank you for your patience and encouragement. Our grand opening date is coming soon.</p></div><div className={styles.quickFacts}><p><strong>Soft opening · Nov 11–15</strong><span>9am–2pm</span></p><p><strong>Regular opening · From Nov 16</strong><span>9am–5pm</span></p><p><strong>5 children</strong><span>per arrival window · soft opening only</span></p></div></section>
-      <section className={styles.explore} aria-label="Ways to wander"><Link href="/pricing#open-play"><span className={styles.eyebrow}>Drop in, settle in</span><h2>Open play</h2><p>$16 for your first child.<br />$10 for each additional child.</p><strong>See visit pricing →</strong></Link><Link href="/pricing#memberships"><span className={styles.eyebrow}>Make it your little ritual</span><h2>Founding membership</h2><p>$50/month for your first child.<br />+$20/month per eligible sibling.</p><strong>Explore lifetime rates →</strong></Link><Link href="/gift-cards"><span className={styles.eyebrow}>Give a little wonder</span><h2>Gift cards</h2><p>A thoughtful gift for a little explorer<br />and their favorite grown-up.</p><strong>Find a gift card →</strong></Link></section>
+      <section className={styles.explore} aria-label="Ways to wander"><Link href="/open-play"><span className={styles.eyebrow}>Drop in, settle in</span><h2>Open play</h2><p>$16 for your first child.<br />$10 for each additional child.</p><strong>Reserve your visit →</strong></Link><Link href="/pricing#memberships"><span className={styles.eyebrow}>Make it your little ritual</span><h2>Founding membership</h2><p>$50/month for your first child.<br />+$20/month per eligible sibling.</p><strong>Explore lifetime rates →</strong></Link><Link href="/gift-cards"><span className={styles.eyebrow}>Give a little wonder</span><h2>Gift cards</h2><p>A thoughtful gift for a little explorer<br />and their favorite grown-up.</p><strong>Find a gift card →</strong></Link></section>
 
       <section className={`${styles.partyFeature} ${styles.classFeature}`}>
         <div className={styles.classFeatureCopy}>
-          <p className={styles.partyEyebrow}>Class pre-registration</p>
+          <p className={styles.partyEyebrow}>Class registration</p>
           <h2>Find your next class</h2>
           <p>{CLASS_START_NOTE}</p>
           <p>
-            Browse our small-group classes. Sign in, add your child, and choose free interest-only registration or Pay now for an available paid class.
+            Choose your class dates, sign in, and pay securely to confirm your child’s place. All families are welcome.
           </p>
           <p><strong>{CLASS_PRE_REGISTRATION_NOTE}</strong></p>
-          <p className={styles.accessNote}>Magic link sign-in will bring you back to class pre-registration.</p>
+          <p className={styles.accessNote}>Sign-in brings you back to choose dates and complete registration.</p>
         </div>
         <div className={styles.classPreviewPanel} aria-label="Weekly class schedule preview">
           <div className={styles.classPreviewHeader}>
@@ -122,7 +122,7 @@ export default async function HomeComingSoon() {
         <div className={styles.classFeatureAction}>
           <PastelButton href="/classes">
             <span>View classes</span>
-            <small>Choose a class from your account</small>
+            <small>Choose dates and reserve your place</small>
           </PastelButton>
         </div>
       </section>

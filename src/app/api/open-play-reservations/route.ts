@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import {
   SOFT_OPENING_START,
+  PUBLIC_OPEN_PLAY_START,
   SOFT_OPENING_END,
   formatOpenPlayReservationError,
   getReservationOccupancy,
@@ -27,6 +28,7 @@ const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 type ReservationPayload = {
   slot_id?: string;
+  booking_source?: string;
   child_count?: number;
   adult_count?: number;
   notes?: string | null;
@@ -62,18 +64,19 @@ async function getCurrentReservationContext() {
   return { ok: true as const, admin, user, access, householdId };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const context = await getCurrentReservationContext();
     if (!context.ok) return context.response;
 
+    const start = req && new URL(req.url).searchParams.get('source') === 'public' ? PUBLIC_OPEN_PLAY_START : SOFT_OPENING_START;
     const [slotsRes, reservationsRes] = await Promise.all([
       context.admin
         .from('open_play_reservation_slots')
         .select(OPEN_PLAY_SLOT_SELECT)
         .eq('is_soft_opening', true)
         .neq('status', 'hidden')
-        .gte('starts_at', SOFT_OPENING_START)
+        .gte('starts_at', start)
         .lt('starts_at', SOFT_OPENING_END)
         .gte('ends_at', new Date().toISOString())
         .order('starts_at', { ascending: true }),
@@ -185,6 +188,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'This soft opening visit time is not open for reservations.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
     const slotStartMs = new Date(slot.starts_at as string).getTime();
+    if (body?.booking_source === 'public' && slotStartMs < new Date(PUBLIC_OPEN_PLAY_START).getTime()) {
+      return NextResponse.json({ ok: false, error: 'Public Open Play visits begin Saturday, November 14. Please choose November 14 or later.' }, { status: 409, headers: NO_STORE_HEADERS });
+    }
     if (slotStartMs < new Date(SOFT_OPENING_START).getTime() || slotStartMs >= new Date(SOFT_OPENING_END).getTime()) {
       return NextResponse.json({ ok: false, error: 'This visit time is outside the soft opening reservation window.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
