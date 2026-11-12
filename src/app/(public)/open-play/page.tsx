@@ -23,7 +23,7 @@ export default function Page() {
     <details className={styles.details}>
       <summary>A few visit details</summary>
       <ul>
-        <li>During soft opening: 5 children per hourly arrival window. All times Eastern.</li>
+        <li>November 14–16: 7 children per hourly arrival window. Other dates: 5 children per window. All times Eastern.</li>
         <li>Arrive within your window and stay until you’re ready to leave, up to closing.</li>
         <li>Pay online or at the counter. Up to two accompanying adults included.</li>
         <li>Include every child attending. Siblings 6 months and under have no additional admission charge.</li>
