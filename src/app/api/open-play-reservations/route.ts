@@ -102,23 +102,25 @@ export async function GET(req: Request) {
 
     const occupancyBySlot = new Map<string, { children: number; adults: number; total: number }>();
     if ((slotsRes.data ?? []).length > 0) {
-      const slotIds = (slotsRes.data ?? []).map((slot) => slot.id as string);
-      const { data: occupancyRows, error: occupancyError } = await context.admin
-        .from('open_play_reservations')
-        .select('slot_id,child_count,adult_count,status')
-        .in('slot_id', slotIds)
-        .neq('status', 'cancelled');
+      for (let offset = 0; ; offset += 500) {
+        const { data: occupancyRows, error: occupancyError } = await context.admin
+          .from('open_play_reservations')
+          .select('slot_id,child_count,adult_count,status,slot:open_play_reservation_slots!inner(starts_at)')
+          .gte('slot.starts_at', start).lt('slot.starts_at', SOFT_OPENING_END)
+          .neq('status', 'cancelled').order('id').range(offset, offset + 499);
 
-      if (occupancyError) throw new Error(occupancyError.message);
+        if (occupancyError) throw new Error(occupancyError.message);
 
-      (occupancyRows ?? []).forEach((row) => {
-        const slotId = row.slot_id as string;
-        const current = occupancyBySlot.get(slotId) ?? { children: 0, adults: 0, total: 0 };
-        current.children += Number(row.child_count ?? 0);
-        current.adults += Number(row.adult_count ?? 0);
-        current.total += Number(row.child_count ?? 0) + Number(row.adult_count ?? 0);
-        occupancyBySlot.set(slotId, current);
-      });
+        (occupancyRows ?? []).forEach((row) => {
+          const slotId = row.slot_id as string;
+          const current = occupancyBySlot.get(slotId) ?? { children: 0, adults: 0, total: 0 };
+          current.children += Number(row.child_count ?? 0);
+          current.adults += Number(row.adult_count ?? 0);
+          current.total += Number(row.child_count ?? 0) + Number(row.adult_count ?? 0);
+          occupancyBySlot.set(slotId, current);
+        });
+        if ((occupancyRows?.length ?? 0) < 500) break;
+      }
     }
 
     const slots = (slotsRes.data ?? []).map((slot) => {

@@ -23,6 +23,6 @@ export async function createStaffOpenPlayReservation(db: SupabaseClient, househo
   const amount = softOpeningAmount(ids, family.memberships, getPartyDateKey(new Date(slot.data.starts_at)), family.children);
   const saved = await db.from('open_play_reservations').insert({ household_id: householdId, slot_id: input.slot_id, created_by_user_id: staffId, contact_email: household.data.email, child_ids: ids, child_count: ids.length, adult_count: input.adult_count, amount_cents: amount, payment_choice: amount === 0 ? 'membership' : 'counter', payment_status: amount === 0 ? 'covered' : 'due', status: 'reserved', notes: typeof input.notes === 'string' ? input.notes.trim().slice(0, 500) || null : null }).select(OPEN_PLAY_RESERVATION_SELECT).single();
   // The database serializes reservations per slot and enforces actual remaining capacity.
-  if (saved.error || !saved.data) throw new Error(saved.error?.code === '23514' || saved.error?.code === '23505' ? 'This window is full or the family already has a reservation. Refresh and choose another time.' : 'Unable to save the reservation. Refresh before retrying.');
+  if (saved.error || !saved.data) throw new Error(/private party/i.test(saved.error?.message ?? '') ? 'Open Play is unavailable from 4–6 PM for a private party. Please choose another arrival window.' : saved.error?.code === '23514' || saved.error?.code === '23505' ? 'This window is full or the family already has a reservation. Refresh and choose another time.' : 'Unable to save the reservation. Refresh before retrying.');
   return saved.data;
 }

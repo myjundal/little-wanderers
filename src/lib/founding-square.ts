@@ -1,3 +1,4 @@
+import { COMPLIMENTARY_MEMBERSHIP_MESSAGE, readComplimentaryMembership } from '@/lib/complimentary-membership';
 import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareEnvironment, squareRequest } from '@/lib/square-client';
@@ -75,6 +76,7 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
   if (enrollment.environment !== config.environment || !enrollment.square_card_id || !enrollment.square_customer_id) throw new Error('A saved card in the current Square environment is required.');
   if (['scheduled', 'active'].includes(enrollment.status)) return enrollment;
   if (!['pending', 'activating'].includes(enrollment.status)) throw new Error('Only reserved memberships can be started.');
+  if (await readComplimentaryMembership(admin, enrollment.household_id)) throw new Error(COMPLIMENTARY_MEMBERSHIP_MESSAGE);
   if (enrollment.status === 'pending') {
     // Freeze the start date before any external subscription call; retries cannot move it.
     enrollment = await claim(admin, enrollment, 'activating', startDate);

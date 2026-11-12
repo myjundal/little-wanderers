@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import StaffToolNav from '@/components/staff/StaffToolNav';
+import { useOperatorAccess } from '@/lib/use-owner-dashboard-access';
 
 type FamilyItem = {
   household_id: string;
@@ -25,6 +26,7 @@ function waiverLabel(status: string) {
 }
 
 export default function StaffFamiliesPage() {
+  const { role } = useOperatorAccess();
   const [counts, setCounts] = useState<{ linked: number; children: number } | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [query, setQuery] = useState('');
@@ -53,7 +55,7 @@ export default function StaffFamiliesPage() {
           <p>Family records: {total ?? '—'} · Linked to a login: {counts?.linked ?? '—'} · With child profiles: {counts?.children ?? '—'}</p><p style={{ color: '#6d6480', fontSize: 13 }}>Records include automatically created and manually registered families; this is not a count of completed family profiles.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <StaffToolNav active="families" />
+          <StaffToolNav active="families" includeMembershipManagement={role === 'owner' || role === 'admin'} />
           <Link href="/staff/families/new" style={{ borderRadius: 12, border: '1px solid #d9c8f7', padding: '10px 14px', color: '#5f3da4', textDecoration: 'none', fontWeight: 700 }}>
             + New family
           </Link>

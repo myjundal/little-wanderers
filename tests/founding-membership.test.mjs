@@ -47,11 +47,11 @@ function modules(fetchImpl, env = {}) {
 }
 const contact = { email: 'parent@example.test', firstName: 'Parent', lastName: 'Family', phone: '+18605550123' };
 
-test('founding prices are server-side: $50 base, $20 at six calendar months, no charge for baby siblings', () => {
+test('founding prices are server-side: $50 base, $20 from seven calendar months, no charge for baby siblings', () => {
   const lib = modules().load('src/lib/founding-membership.ts');
   assert.equal(lib.foundingMonthlyCents(['2023-01-01'], '2026-11-03'), 5000);
   assert.equal(lib.foundingMonthlyCents(['2026-06-01', '2023-01-01'], '2026-11-03'), 5000);
-  assert.equal(lib.foundingMonthlyCents(['2023-01-01', '2026-05-03'], '2026-11-03'), 7000);
+  assert.equal(lib.foundingMonthlyCents(['2023-01-01', '2026-05-03'], '2026-11-03'), 5000);
   assert.equal(lib.foundingMonthlyCents(['2023-01-01', '2026-05-04'], '2026-11-03'), 5000);
   assert.equal(lib.foundingMonthlyCents(['2023-01-01', '2024-05-03', '2026-06-01'], '2026-11-03'), 7000);
   assert.equal(lib.foundingMonthlyCents(['2026-10-01'], '2026-11-03'), 5000);
@@ -61,7 +61,7 @@ test('founding prices are server-side: $50 base, $20 at six calendar months, no 
   assert.throws(() => lib.foundingMonthlyCents(['2099-01-01'], '2026-11-03'));
   const phases = lib.foundingPhases(['2023-01-01', '2026-06-03'], '2026-11-03');
   assert.equal(phases[0].pricing.price_money.amount, 5000);
-  assert.equal(phases[0].periods, 1);
+  assert.equal(phases[0].periods, 2);
   assert.equal(phases[1].pricing.price_money.amount, 7000);
   assert.equal(phases[1].periods, undefined);
   const siblings = ['2023-01-01', '2024-01-01'];

@@ -93,7 +93,7 @@ test('availability reads only active private dates and fails closed on source fa
 test('customer and staff calendars derive a private closure, and customer POST refuses it before saving family data', async () => {
  const slot={id:'10000000-0000-4000-8000-000000000001',starts_at:iso('2099-11-16',16),ends_at:iso('2099-11-16',17),status:'open',capacity_children:10};
  const blocks=[availability.privatePartyWindow(iso('2099-11-16',15))];let writes=0,familySaves=0,failAvailability=false;
- const admin={from(table){const q={select(){return q;},eq(){return q;},in(){return q;},neq(){return q;},gte(){return q;},gt(){return q;},lt(){return q;},order(){return q;},limit(){return q;},insert(){writes++;return q;},async maybeSingle(){return {data:table==='open_play_reservation_slots'?slot:null,error:null};},then(resolve){resolve({data:table==='open_play_reservation_slots'?[slot]:[],error:null});}};return q;}};
+ const admin={from(table){const q={select(){return q;},eq(){return q;},in(){return q;},neq(){return q;},gte(){return q;},gt(){return q;},lt(){return q;},order(){return q;},limit(){return q;},range(){return q;},insert(){writes++;return q;},async maybeSingle(){return {data:table==='open_play_reservation_slots'?slot:null,error:null};},then(resolve){resolve({data:table==='open_play_reservation_slots'?[slot]:[],error:null});}};return q;}};
  const mocks={
   '@/lib/private-party-open-play':{...availability,readPrivatePartyDays:async()=>{if(failAvailability)throw Error('Unable to verify private-party availability.');return blocks;}},
   '@/lib/party-config':config,'@/lib/open-play-reservations':loadModule('src/lib/open-play-reservations.ts'),

@@ -30,6 +30,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [emailLocked, setEmailLocked] = useState(true);
   const [signedInAs, setSignedInAs] = useState('');
+  const [complimentary, setComplimentary] = useState(false);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [offer, setOffer] = useState<MembershipOffer>({ phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 });
   const [config, setConfig] = useState<Config | null>(null);
@@ -60,7 +61,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
       setProfile({ adultFirstName: adult?.first_name || '', adultLastName: adult?.last_name || '', adultGender: adult?.gender || '', email: data.household.email || '', phone: data.household.phone || '', city: data.household.city || '', state: data.household.state || 'CT', children: children.length ? children : [blankChild()] });
       setEmailLocked(Boolean(data.account?.email));
       setSignedInAs(data.account?.email || data.account?.phone || '');
-      setEnrollment(data.enrollment); setConfig(data.config); setAuth('signedIn');
+      setComplimentary(Boolean(data.complimentary)); setEnrollment(data.enrollment); setConfig(data.config); setAuth('signedIn');
     }).catch(() => { if (active) { setAuth('error'); setError('We could not load your family account. Please refresh to try again.'); } });
     return () => { active = false; };
   }, []);
@@ -159,6 +160,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
     finally { submitting.current = false; setBusy(false); }
   }
 
+  if (complimentary) return <main className={styles.page}><section className={styles.formCard}><h1>Friends &amp; Family</h1><p>Your family has lifetime complimentary Open Play. No monthly fees, expiration date, or automatic billing.</p><p>Reservations, available capacity, and a current waiver still apply.</p><Link href="/landing/open-play">Reserve Open Play →</Link></section></main>;
   return <main className={styles.page}>
     <div className={styles.layout}>
       <section className={`${styles.offer} ${auth === 'signedIn' ? styles.offerCompact : ''}`} aria-label="Membership offer">
@@ -167,15 +169,15 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
         <p className={styles.tagline}>Unlimited open play for your family.</p>
         <div className={styles.price}>{money(price.base_cents)}<span>/mo</span></div>
         <p className={styles.firstChild}>First child{founding && <> · regularly <s>$60/mo</s></>}</p>
-        <p className={styles.sibling}><strong>+{money(price.sibling_cents)}/mo</strong> per sibling, 6 months or older</p>
-        <p className={styles.small}>Baby siblings under 6 months are free.</p>
+        <p className={styles.sibling}><strong>+{money(price.sibling_cents)}/mo</strong> per sibling, 7 months or older</p>
+        <p className={styles.small}>Baby siblings 6 months and under are free.</p>
         <p className={styles.rateNote}>{founding ? 'Lifetime rates while active.' : 'Regular monthly pricing.'} Cancel anytime.</p>
         <div className={styles.today}><strong>Pay $0 today.</strong><span>Monthly billing starts on your first membership visit, including during soft opening.</span></div>
         <details className={styles.offerDetails}>
           <summary>What’s included & membership details</summary>
           <ul><li>Unlimited open play, with up to two accompanying adults.</li><li>Visits throughout our soft opening period are included, with no separate admission charge. Reservations, capacity limits, and a signed waiver apply.</li><li>Priority registration for select classes and events.</li></ul>
-          {founding && <p>Two children, both 6mo+: {money(price.base_cents + price.sibling_cents)}/mo · {price.two_child_discount}% off regular pricing.</p>}
-          <p>No commitment. {founding && 'Both first-child and sibling rates stay locked in while your membership stays active.'} If you cancel and rejoin, regular $60 + $20 pricing applies. Sibling charges begin with the billing cycle after a baby turns 6 months.</p>
+          {founding && <p>Two children, both 7mo+: {money(price.base_cents + price.sibling_cents)}/mo · {price.two_child_discount}% off regular pricing.</p>}
+          <p>No commitment. {founding && 'Both first-child and sibling rates stay locked in while your membership stays active.'} If you cancel and rejoin, regular $60 + $20 pricing applies. Sibling charges begin with the first billing cycle on or after a baby turns 7 months.</p>
         </details>
       </section>
 
@@ -201,7 +203,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
         {auth === 'signedIn' && locked && <div id="founding-status" tabIndex={-1} className={styles.status}>
           <span className={styles.eyebrow}>{enrollment.status === 'canceled' ? 'Membership canceled' : accountPrice.label}</span>
           <h3>{enrollment.status === 'canceled' ? 'Your cancellation is confirmed.' : enrollment.status === 'pending' ? 'You’re in. We can’t wait to meet you.' : 'Your founding membership'}</h3>
-          {enrollment.status !== 'canceled' && <><p>Card saved: {enrollment.card_brand} ending in {enrollment.card_last4}.</p><p>{enrollment.start_date ? `Monthly billing starts ${enrollment.start_date}.` : 'No payment has been taken for your reservation. Your first monthly payment begins on your first membership visit, including during soft opening, when we activate your membership at the studio. Your billing start date is not set yet.'}</p><p><strong>{money(enrollment.base_cents)}/month</strong> for the first child + {money(enrollment.sibling_cents)}/month per sibling age 6 months or older.{enrollment.pricing_tier !== 'regular' && ' Both rates stay locked in while your membership stays active.'}</p><p>Your visits throughout the soft opening period are included with your membership, with no separate admission charge. Choose an available arrival window and complete your family waiver.</p></>}
+          {enrollment.status !== 'canceled' && <><p>Card saved: {enrollment.card_brand} ending in {enrollment.card_last4}.</p><p>{enrollment.start_date ? `Monthly billing starts ${enrollment.start_date}.` : 'No payment has been taken for your reservation. Your first monthly payment begins on your first membership visit, including during soft opening, when we activate your membership at the studio. Your billing start date is not set yet.'}</p><p><strong>{money(enrollment.base_cents)}/month</strong> for the first child + {money(enrollment.sibling_cents)}/month per sibling age 7 months or older.{enrollment.pricing_tier !== 'regular' && ' Both rates stay locked in while your membership stays active.'}</p><p>Your visits throughout the soft opening period are included with your membership, with no separate admission charge. Choose an available arrival window and complete your family waiver.</p></>}
           {enrollment.status === 'canceled' && <p>Your founding rates have ended. Rejoining is $60/month for the first child + $20/month per eligible sibling.{enrollment.paid_through ? ` Any paid access continues through ${enrollment.paid_through}.` : ' No further monthly billing is scheduled.'}</p>}
           {enrollment.status === 'canceled' && (waitlistUnavailable ? <Link className={styles.primary} href="/founding-membership">Rejoin at regular $60 + $20 pricing</Link> : <button type="button" className={styles.primary} onClick={() => { setEnrollment(null); setStep(0); setConsent(false); setBirthdaysConfirmed(false); }}>Rejoin at regular $60 + $20 pricing</button>)}
           {['pending', 'activating', 'scheduled', 'active'].includes(enrollment.status) && <Link className={styles.primary} href="/landing/soft-opening">Reserve a visit →</Link>}

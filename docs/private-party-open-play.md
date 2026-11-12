@@ -13,7 +13,7 @@ Existing Open Play reservations are never cancelled. The checkbox returns the ov
 3. Deploy the application change only after the schema is verified. Without the new availability source, new reservation requests fail closed rather than bypass the private-party check.
 4. Mark existing private parties explicitly. In particular, the already identified December 11, 2026 party needs its checkbox enabled. Its previously manually closed 4–6pm slots remain closed; after the private flag is saved, the owner may explicitly change their configured slot status back to open while the derived private block remains active. This lets a later uncheck release them without reopening unrelated manual closures.
 
-Production activation is pending: the Mac was locked and the database management browser could not connect; the owner said unlocking is unavailable for now. No production schema, flag, booking, or slot status was changed by this feature's implementation/validation. The separately approved opening-hours/capacity changes remain live.
+Production schema was applied and verified on November 12, 2026 after the owner unlocked the Mac. The required boolean column, two guard triggers, service-only availability function and anonymous access denial were verified. The existing 64 parties and 54 Open Play reservations were preserved. The application also integrates the newer public guest calendar and family booking tools; manual slot statuses remain separate from derived private-party blocks.
 
 ## Concurrency and access
 

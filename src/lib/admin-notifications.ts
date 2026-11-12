@@ -142,7 +142,7 @@ export async function sendMembershipSignupNotification(input: MembershipNotifica
         ['Membership', label], ['Event', input.event], ['Family', input.familyName],
         ['Parent/caregiver', input.guardianName], ['Email', input.email], ['Phone', input.phone],
         ...input.children.map((child, i): [string, string] => [`Child ${i + 1}`, `${formatPersonName(child) || '-'} · ${formatAgeFromBirthdate(child.birthdate, new Date(input.occurredAt)) || 'Age not provided'} · Birthday: ${child.birthdate || '-'}`]),
-        ['First child/month', formatPrice(input.baseCents)], ['Sibling 6mo+/month', formatPrice(input.siblingCents)],
+        ['First child/month', formatPrice(input.baseCents)], ['Sibling 7mo+/month', formatPrice(input.siblingCents)],
         ['Monthly total at signup', formatPrice(input.amountCents)], ['When (Eastern)', new Date(input.occurredAt).toLocaleString('en-US', { timeZone: 'America/New_York' })],
       ],
       ctaHref: `${siteUrl}${input.event === 'Membership started' ? '/staff/families' : '/staff/founding-memberships'}`, ctaLabel: 'Open membership management',

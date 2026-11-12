@@ -54,3 +54,29 @@
  .familyActions { grid-column: 2; justify-content: start; }
  .familyDetails { grid-column: 2; }
 }
+
+.arrivalBoard { scroll-margin-top: 120px; display: grid; gap: 22px; min-width: 0; }
+.boardNote { margin: 0; color: #75677e; font-size: 12px; line-height: 1.6; }
+.arrivalWindow { min-width: 0; border-top: 1px solid #e8e0ed; padding-top: 16px; }
+.windowHeading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; margin-bottom: 10px; }
+.windowHeading h3 { margin: 0; font-size: 18px; color: #503975; }
+.windowHeading > span { font-size: 12px; color: #76677f; }
+.ageSummary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 12px; font-size: 12px; }
+.ageSummary strong { margin-right: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #76677f; }
+.ageSummary span { background: #eee8f5; border: 1px solid #e1d6ec; color: #60467b; border-radius: 20px; padding: 5px 9px; white-space: nowrap; }
+.arrivalCards { display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; padding: 3px 3px 12px; min-width: 0; }
+.arrivalCards:focus-visible { outline: 2px solid #9471ae; outline-offset: 2px; border-radius: 12px; }
+.familyRow.familyCard { display: flex; flex: 0 0 252px; flex-direction: column; align-items: stretch; gap: 10px; scroll-snap-align: start; padding: 16px; border-radius: 16px; box-sizing: border-box; min-width: 0; }
+.familyCard.checkedIn { border-color: #8db89a; background: #edf8ef; }
+.cardArrivalTime { font-size: 12px; color: #75677e; }
+.cardArrivalTime strong { font-size: 12px; font-weight: 500; }
+.familyCard .familySummary { flex: 1; }
+.familyCard .familySummary h3 { font-size: 17px; }
+.familyCard .childNames { white-space: normal; overflow-wrap: anywhere; margin-top: 6px; }
+.familyCard .familyStatus { display: grid; gap: 4px; }
+.familyCard .familyActions { justify-content: start; }
+.familyCard .familyActions button { flex: 1; }
+.familyCard .familyDetails { margin-top: 0; }
+@media(max-width:600px) { .familyRow.familyCard { flex-basis: min(252px, 85vw); } .windowHeading h3 { font-size: 16px; } }
+
+.dateNavigation{display:flex;align-items:center;gap:8px;margin:4px 0 16px}.dateNavigation button{width:34px;min-height:36px;border:1px solid #d9c8f7;border-radius:10px;background:white;color:#65449b;font-size:24px;cursor:pointer}.dateNavigation label{display:grid;gap:3px;min-width:0}.dateCaption{font-size:11px;color:#6d6480}.dateNavigation input{font:inherit;max-width:100%;box-sizing:border-box;border:1px solid #d9c8f7;border-radius:10px;padding:8px;color:#4f3f82;background:white}.dateNavigation :is(button,input):focus-visible{outline:2px solid #8555c2;outline-offset:2px}
