@@ -5,6 +5,7 @@ import { getReservationAdmissionStatuses } from '@/lib/reservation-admission-sta
 import { squareEnvironment } from '@/lib/square-client';
 import {
   SOFT_OPENING_START,
+  defaultOpenPlayCapacity,
   formatOpenPlayReservationError,
   isMissingOpenPlayReservationTable,
   OPEN_PLAY_RESERVATION_SELECT,
@@ -163,7 +164,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'Open Play reservations begin November 11.' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
-    const capacityChildren = sanitizeReservationCount(body?.capacity_children, 5, 200);
+    const capacityChildren = sanitizeReservationCount(body?.capacity_children, defaultOpenPlayCapacity(start), 200);
     const capacityTotal = body?.capacity_total == null ? null : sanitizeReservationCount(body.capacity_total, capacityChildren * 2, 400);
     const notes = typeof body?.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 500) : null;
 

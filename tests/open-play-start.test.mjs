@@ -50,3 +50,25 @@ test('owner bulk changes use Eastern calendar days and cannot reopen pre-opening
   assert.equal((await api.POST({json:async()=>({starts_at:'2026-10-27T09:00:00-04:00',ends_at:'2026-10-27T11:00:00-04:00'})})).status,400);
  }
 });
+
+test('new arrival windows default to seven on the weekend and ten from Monday Eastern onward', async () => {
+ const lib=load('src/lib/open-play-reservations.ts');
+ for(const [starts_at,capacity_children,expected] of [
+  ['2026-11-13T14:00:00Z',undefined,5],
+  ['2026-11-14T14:00:00Z',undefined,7],
+  ['2026-11-16T04:00:00Z',undefined,7],
+  ['2026-11-16T05:00:00Z',undefined,10],
+  ['2027-01-05T14:00:00Z',undefined,10],
+  ['2026-11-16T14:00:00Z',12,12],
+ ]) {
+  let inserted;
+  const admin={from(){const q={insert(row){inserted=row;return q;},select(){return q;},async maybeSingle(){return {data:{id:'slot',...inserted},error:null};}};return q;}};
+  const api=load('src/app/api/admin/open-play-reservations/route.ts',{
+   '@/lib/reservation-admission-status':{},'@/lib/square-client':{},'@/lib/open-play-reservations':lib,
+   '@/lib/party-config':load('src/lib/party-config.ts'),'@/lib/waivers':{},
+   '@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin,user:{id:'owner'}})},
+  });
+  const response=await api.POST({json:async()=>({starts_at,ends_at:new Date(Date.parse(starts_at)+3600000).toISOString(),capacity_children})});
+  assert.equal(response.status,200);assert.equal(inserted.capacity_children,expected);
+ }
+});

@@ -8,6 +8,13 @@ export const SOFT_OPENING_START = `${SOFT_OPENING_START_DATE}T00:00:00-05:00`;
 
 export const SOFT_OPENING_END = '2027-01-01T00:00:00-05:00';
 
+export function defaultOpenPlayCapacity(startsAt: string | Date) {
+  const start = typeof startsAt === 'string' ? Date.parse(startsAt) : startsAt.getTime();
+  if (start >= Date.parse('2026-11-16T00:00:00-05:00')) return 10;
+  if (start >= Date.parse('2026-11-14T00:00:00-05:00')) return 7;
+  return 5;
+}
+
 export const OPEN_PLAY_SLOT_SELECT = 'id,label,starts_at,ends_at,capacity_children,capacity_total,status,notes,is_soft_opening,created_at';
 export const OPEN_PLAY_RESERVATION_SELECT = 'id,slot_id,household_id,created_by_user_id,contact_email,child_count,adult_count,notes,status,cancelled_at,status_updated_at,created_at,child_ids,payment_choice,payment_status,amount_cents,square_order_id,square_payment_link_id,payment_url,payment_environment';
 
