@@ -30,6 +30,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [emailLocked, setEmailLocked] = useState(true);
   const [signedInAs, setSignedInAs] = useState('');
+  const [complimentary, setComplimentary] = useState(false);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [offer, setOffer] = useState<MembershipOffer>({ phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 });
   const [config, setConfig] = useState<Config | null>(null);
@@ -60,7 +61,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
       setProfile({ adultFirstName: adult?.first_name || '', adultLastName: adult?.last_name || '', adultGender: adult?.gender || '', email: data.household.email || '', phone: data.household.phone || '', city: data.household.city || '', state: data.household.state || 'CT', children: children.length ? children : [blankChild()] });
       setEmailLocked(Boolean(data.account?.email));
       setSignedInAs(data.account?.email || data.account?.phone || '');
-      setEnrollment(data.enrollment); setConfig(data.config); setAuth('signedIn');
+      setComplimentary(Boolean(data.complimentary)); setEnrollment(data.enrollment); setConfig(data.config); setAuth('signedIn');
     }).catch(() => { if (active) { setAuth('error'); setError('We could not load your family account. Please refresh to try again.'); } });
     return () => { active = false; };
   }, []);
@@ -159,6 +160,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
     finally { submitting.current = false; setBusy(false); }
   }
 
+  if (complimentary) return <main className={styles.page}><section className={styles.formCard}><h1>Friends &amp; Family</h1><p>Your family has lifetime complimentary Open Play. No monthly fees, expiration date, or automatic billing.</p><p>Reservations, available capacity, and a current waiver still apply.</p><Link href="/landing/open-play">Reserve Open Play →</Link></section></main>;
   return <main className={styles.page}>
     <div className={styles.layout}>
       <section className={`${styles.offer} ${auth === 'signedIn' ? styles.offerCompact : ''}`} aria-label="Membership offer">

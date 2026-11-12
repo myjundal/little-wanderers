@@ -1,3 +1,4 @@
+import { COMPLIMENTARY_MEMBERSHIP_MESSAGE, readComplimentaryMembership } from '@/lib/complimentary-membership';
 import { squareEnvironment } from '@/lib/square-client';
 import { requireOwnerContext } from '@/lib/authz';
 import crypto from 'crypto';
@@ -28,6 +29,7 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
   if (!action) return Response.json({ ok: false, error: 'action is required' }, { status: 400 });
 
   const admin = context.admin;
+  if (await readComplimentaryMembership(admin, householdId)) return Response.json({ ok: false, error: COMPLIMENTARY_MEMBERSHIP_MESSAGE }, { status: 409 });
 
   const insertEvent = async (membershipId: string | null, eventAction: string, notes?: string) => {
     await admin.from('membership_events').insert({
