@@ -84,3 +84,28 @@ test('a latest cancellation supersedes historical active rows and legacy entitle
  ],[],'production',now);
  assert.equal(result.total.memberships,1);assert.equal(result.regular.memberships,1);assert.equal(result.public.memberships,0);
 });
+
+
+test('paid totals exclude complimentary families and their children without excluding ordinary provider memberships', () => {
+ const free = household_id => ({id:`free-${household_id}`,household_id,renews_at:null,square_environment:'production',square_customer_id:null,square_subscription_id:null,payment_review_required:false,covered_person_ids:[`${household_id}-child`]});
+ const result=summarizeMemberships([
+   enrollment('wander','waitlist','pending',['a','b']),enrollment('public','public','active',['c']),
+   enrollment('gift','public','pending',['gift-child']),
+ ],[
+   free('gift'),free('friend'),{...free('gift'),id:'old-paid',square_customer_id:'old-square-customer'},
+   {...free('paid'),square_customer_id:'square-customer',square_subscription_id:'square-subscription'},
+ ],[
+   {id:'gift-child',household_id:'gift',role:'child'},{id:'friend-child',household_id:'friend',role:'child'},
+   {id:'paid-child',household_id:'paid',role:'child'},
+ ],'production',now);
+ assert.equal(result.total.memberships,3);assert.equal(result.total.children,4);
+ assert.equal(result.waitlist.memberships,1);assert.equal(result.public.memberships,1);assert.equal(result.regular.memberships,1);
+});
+
+test('summary loader leaves complimentary entitlements intact and omits them from child lookups and totals',async()=>{
+ const calls=[];const gift={id:'free',household_id:'gift',renews_at:null,square_environment:'production',square_customer_id:null,square_subscription_id:null,payment_review_required:false,covered_person_ids:['child']};
+ const admin={from(table){calls.push(table);const q={select(){return q},order(){return q},eq(){return q},async range(){return {data:table==='memberships'?[gift]:[],error:null}}};return q}};
+ const result=await loadMembershipSummary(admin,'production');
+ assert.equal(result.total.memberships,0);assert.equal(result.total.children,0);assert.equal(calls.includes('people'),false);
+ assert.equal(gift.covered_person_ids[0],'child');assert.equal(gift.renews_at,null);
+});
