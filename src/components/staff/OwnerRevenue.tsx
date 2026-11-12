@@ -27,7 +27,7 @@ export default function OwnerRevenue({ initialDate }: { initialDate: string }) {
   const shiftDate = (days: number) => setDate(new Date(Date.parse(`${date}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10));
   return <main className={styles.main}>
     <header className={styles.header}>
-      <div><p className={styles.eyebrow}>PRIVATE · OWNER ONLY</p><h1>전체 매출</h1><p className={styles.subtitle}>예약 서비스는 방문일, 카페·기프트카드·멤버십 등 기타 판매는 결제일에 반영합니다.</p></div>
+      <div><p className={styles.eyebrow}>PRIVATE · OWNER ONLY</p><h1>전체 매출</h1><p className={styles.subtitle}>클래스는 각 수업일, 예약 서비스는 방문일, 카페 등 기타 판매는 결제일에 반영합니다.</p></div>
       <Link className={styles.back} href="/staff/dashboard">← 대시보드</Link>
     </header>
     <section className={styles.toolbar} aria-label="집계 날짜 선택">
@@ -45,17 +45,18 @@ export default function OwnerRevenue({ initialDate }: { initialDate: string }) {
         <section className={styles.metric}><span>당일 받은 결제</span><strong>{usd(report.same_day_cents)}</strong><small>왼쪽 매출에 포함된 금액</small></section>
         <section className={styles.metric}><span>미수금</span><strong>{usd(report.due_cents)}</strong><small>아직 받지 않은 금액</small></section>
       </div>
+      <section className={styles.panel} aria-label="클래스 매출 집계"><div className={styles.sectionHeading}><h2>수업일 기준 클래스 매출</h2><strong>{usd(report.class_cents)}</strong></div><p>선택한 날짜의 수업에 해당하는 금액만 포함합니다. 예: 5회 수업을 $150에 결제하면 각 수업일에 $30씩 반영합니다.</p>{report.unallocated_class_cents > 0 && <p className={styles.warning}>미배분 클래스 선결제 <strong>{usd(report.unallocated_class_cents)}</strong> · 결제는 확인되었지만 수업일 연결이 필요해 매출 합계에 넣지 않았습니다.</p>}</section>
       <section className={styles.panel}><div className={styles.sectionHeading}><h2>항목별 매출</h2><span>USD · 세금과 팁 제외</span></div><div className={styles.categories}>{report.categories.map(item => <div key={item.category}><span>{item.label}</span><strong>{usd(item.net_cents)}</strong><small>{item.count}건 · 미수 {usd(item.due_cents)}</small></div>)}</div></section>
       <div className={styles.reconciliation}><span>환불 차감 <strong>{usd(report.refunded_cents)}</strong></span><span>방문일 이후 받은 결제 <strong>{usd(report.later_paid_cents)}</strong></span><span>확인 필요 <strong>{report.review_count}건</strong></span><span>기프트카드 사용 · 중복 제외 <strong>{usd(report.redeemed_cents)}</strong></span></div>
       <section className={styles.panel}><div className={styles.sectionHeading}><h2>전체 매출 상세</h2><span>{report.rows.length}건</span></div>
         {!report.rows.length ? <p className={styles.empty}>선택한 날짜의 예약·방문·판매 내역이 없습니다.</p> : <div className={styles.scroll}><table className={styles.table}><thead><tr><th>내역</th><th>상태</th><th>매출</th><th>선결제 포함</th><th>미수금</th></tr></thead><tbody>{report.rows.map(row => <tr key={row.id}>
           <td><strong>{row.label}</strong>{row.issues.map(issue => <small className={styles.issue} key={issue}>{issue}</small>)}{row.refunded_cents > 0 && <small>환불 {usd(row.refunded_cents)}</small>}{(row.tax_cents > 0 || row.tip_cents > 0) && <small>별도 세금 {usd(row.tax_cents)} · 팁 {usd(row.tip_cents)}</small>}</td>
-          <td><span className={row.issues.length ? styles.review : styles.badge}>{row.issues.length ? '확인 필요' : row.cancelled ? '취소' : row.attendance === 'sale' ? '결제일 판매' : row.attendance === 'visited' ? '방문 확인' : '방문 미확인'}</span></td>
-          <td>{row.issues.length ? '집계 제외' : usd(row.net_cents)}</td><td>{usd(row.prepaid_cents)}</td><td>{row.issues.length ? '확인 필요' : usd(row.due_cents)}</td>
+          <td><span className={row.issues.length ? styles.review : styles.badge}>{row.recognition === 'unallocated_class' ? '미배분 선결제' : row.issues.length ? '확인 필요' : row.cancelled ? '취소' : row.attendance === 'sale' ? '결제일 판매' : row.attendance === 'visited' ? '방문 확인' : '방문 미확인'}</span></td>
+          <td>{row.recognition === 'unallocated_class' ? `${usd(row.received_cents - row.refunded_cents - row.redeemed_cents)} · 배분 대기` : row.issues.length ? '집계 제외' : usd(row.net_cents)}</td><td>{usd(row.prepaid_cents)}</td><td>{row.issues.length ? '확인 필요' : usd(row.due_cents)}</td>
         </tr>)}</tbody></table></div>}
       </section>
       {!!report.issues.length && <section className={styles.warning}><h2>자료 확인 필요</h2><ul>{report.issues.map(issue => <li key={issue}>{issue}</li>)}</ul></section>}
-      <details className={styles.method}><summary>계산 기준</summary><p>선결제는 최신 예약 방문일에 귀속합니다. 예약과 체크인에 같은 결제가 연결되어 있어도 한 번만 합산합니다. 방문 확인 전 금액은 따로 표시하며, 미래 날짜의 금액은 방문 예정일 기준 수납액입니다.</p><p>수업 시리즈 결제는 등록된 전체 회차에 균등 배분합니다. 나누어떨어지지 않는 센트는 날짜가 빠른 회차부터 배분합니다. 환불은 원래 서비스 날짜의 매출에서 차감하고, 미수금을 새로 만들지 않습니다.</p><p>멤버십으로 포함된 입장료는 추가 매출로 계산하지 않습니다. 결제가 연결되지 않은 예약, 취소 후 남은 결제, 세금·팁이 섞인 환불은 자동 추정하지 않습니다. 확인 필요 항목은 합계에서 제외합니다.</p><p>Square 전체 결제를 조회해 카페·기프트카드·멤버십·다회권·기타 판매를 결제일에 포함합니다. 기프트카드는 구매일에 매출로 계산하고, 사용한 금액은 다시 매출에 더하지 않습니다. 현금도 Square에 기록된 결제에 포함되며, 세금과 팁은 매출에서 제외합니다.</p><p>실시간으로 조회한 현재 상태입니다. 늦은 결제·환불·예약일 변경에 따라 지난 날짜의 합계도 달라질 수 있습니다.</p></details>
+      <details className={styles.method}><summary>계산 기준</summary><p>선결제는 최신 예약 방문일에 귀속합니다. 예약과 체크인에 같은 결제가 연결되어 있어도 한 번만 합산합니다. 방문 확인 전 금액은 따로 표시하며, 미래 날짜의 금액은 방문 예정일 기준 수납액입니다.</p><p>일반 클래스는 결제 때 선택한 수업일별 금액으로 반영합니다. 수업 시리즈 결제는 할인 후 실제 금액을 등록된 전체 회차에 균등 배분합니다. 현장 시리즈 결제도 상품의 고유 ID로 프로그램이 확인되면 같은 기준을 적용합니다. 수업일을 알 수 없는 클래스 결제는 결제일 매출 대신 미배분 선결제로 표시합니다. 나누어떨어지지 않는 센트는 날짜가 빠른 회차부터 배분합니다. 환불은 원래 수업일의 금액에서 차감하고 미수금을 새로 만들지 않습니다.</p><p>멤버십으로 포함된 입장료는 추가 매출로 계산하지 않습니다. 결제가 연결되지 않은 예약, 취소 후 남은 결제, 세금·팁이 섞인 환불은 자동 추정하지 않습니다. 확인 필요 항목은 합계에서 제외합니다.</p><p>Square 전체 결제를 조회해 카페·기프트카드·멤버십·다회권·기타 판매를 결제일에 포함합니다. 기프트카드는 구매일에 매출로 계산하고, 사용한 금액은 다시 매출에 더하지 않습니다. 현금도 Square에 기록된 결제에 포함되며, 세금과 팁은 매출에서 제외합니다.</p><p>실시간으로 조회한 현재 상태입니다. 늦은 결제·환불·예약일 변경에 따라 지난 날짜의 합계도 달라질 수 있습니다.</p></details>
       <p className={styles.updated}>마지막 확인: {new Date(report.generated_at).toLocaleString('ko-KR', { timeZone: 'America/New_York' })} (뉴욕)</p>
     </>}
   </main>;

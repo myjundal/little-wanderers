@@ -15,6 +15,8 @@ export type RevenueVisit = { id: string; person_id: string; household_id: string
 export type RevenueParty = { id: string; start_time: string; status: string; price_quote_cents: number | null; square_environment: string | null; square_order_id: string | null; deposit_paid_cents: number | null; balance_paid_cents: number | null; payment_review_required: boolean | null; attendance_finalized_at: string | null };
 export type RevenueSeries = { id: string; class_ids: string[]; child_ids: string[]; status: string; environment: string; amount_cents: number; square_order_id: string | null };
 export type RevenueClass = { id: string; title: string; start_time: string; status: string };
+export type RevenueClassProgram = { id: string; title: string; class_ids: string[] };
+export type RevenueClassMapping = { entity_key: string; variation_id: string; program_key: string | null };
 export type RevenueRegistration = { id: string; class_id: string; person_id: string; status: string; attendance_status: string };
 export type RevenueClassCheckout = { id: string; kind: string; status: string; environment: string; order_id: string | null; expected_amount_cents: number;
   payload: { request?: { person_id?: string; items?: { class_id: string; quantity?: number }[] }; line_items?: { base_price_money?: { amount?: number; currency?: string }; quantity?: string }[] } };
@@ -22,15 +24,16 @@ export type RevenueSources = {
   bookings: RevenueBooking[]; slots: { id: string; starts_at: string }[]; visits: RevenueVisit[]; parties: RevenueParty[];
   series: RevenueSeries[]; classes: RevenueClass[]; registrations: RevenueRegistration[];
   classCheckouts?: RevenueClassCheckout[];
+  classPrograms?: RevenueClassProgram[]; classMappings?: RevenueClassMapping[];
 };
 export type RevenueCharge = { order_id: string; amount_cents: number };
 export type RevenueService = {
   id: string; date: string; category: RevenueCategory; label: string; expected_cents: number;
-  attendance: 'visited' | 'reserved' | 'unknown' | 'sale'; recognition?: 'payment'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
+  attendance: 'visited' | 'reserved' | 'unknown' | 'sale'; recognition?: 'payment' | 'unallocated_class' | 'class_service'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
 };
 export type RevenueEvidence = {
   order_id: string; service_total_cents: number; tax_cents: number; tip_cents: number;
-  items?: { label: string; category: RevenueCategory; amount_cents: number }[];
+  items?: { label: string; category: RevenueCategory; amount_cents: number; catalog_object_id?: string }[];
   payments: { id: string; amount_cents: number; refunded_cents: number; paid_at: string; gift_card?: boolean }[];
 };
 
@@ -181,7 +184,7 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
       const refunds = allocateRevenue(payment.refunded_cents, gross);
       units.forEach((unit, index) => {
         const paymentDay = day(payment.paid_at);
-        if (unit.row.recognition === 'payment' && paymentDay !== unit.row.date) return;
+        if (['payment', 'unallocated_class'].includes(unit.row.recognition ?? '') && paymentDay !== unit.row.date) return;
         const net = payment.gift_card ? 0 : gross[index] - refunds[index];
         if (payment.gift_card) unit.row.redeemed_cents += gross[index] - refunds[index];
         unit.row.received_cents += gross[index]; unit.row.refunded_cents += refunds[index];
@@ -192,13 +195,13 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
       });
     }
   }
-  const selected = rows.filter(row => row.date === date);
+  const selected = rows.filter(row => row.date === date && (row.recognition !== 'class_service' || row.received_cents > 0 || row.issues.length));
   for (const row of selected) {
     if (row.cancelled && row.received_cents > row.refunded_cents) row.issues.push('Cancelled service retains payment; review its refund or cancellation fee.');
     row.issues = [...new Set(row.issues)];
     row.net_cents = row.cancelled || row.issues.length ? 0 : row.received_cents - row.refunded_cents - row.redeemed_cents;
     // A refund reduces revenue; it does not reopen the customer's original bill.
-    row.due_cents = row.cancelled || row.issues.length || row.recognition === 'payment' ? 0 : Math.max(0, row.expected_cents - row.received_cents);
+    row.due_cents = row.cancelled || row.issues.length || row.recognition ? 0 : Math.max(0, row.expected_cents - row.received_cents);
     if (row.issues.length || row.cancelled) { row.prepaid_cents = 0; row.same_day_cents = 0; row.later_paid_cents = 0; }
   }
   const sum = (field: 'net_cents' | 'prepaid_cents' | 'same_day_cents' | 'later_paid_cents' | 'due_cents') => selected.reduce((total, row) => total + row[field], 0);
@@ -212,6 +215,8 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     visited_cents: selected.filter(row => row.attendance === 'visited').reduce((sum, row) => sum + row.net_cents, 0),
     reserved_cents: selected.filter(row => row.attendance === 'reserved' || row.attendance === 'unknown').reduce((sum, row) => sum + row.net_cents, 0),
     sales_cents: selected.filter(row => row.attendance === 'sale').reduce((sum, row) => sum + row.net_cents, 0),
+    class_cents: selected.filter(row => row.category === 'class').reduce((sum, row) => sum + row.net_cents, 0),
+    unallocated_class_cents: selected.filter(row => row.recognition === 'unallocated_class').reduce((sum, row) => sum + row.received_cents - row.refunded_cents - row.redeemed_cents, 0),
     redeemed_cents: selected.reduce((sum, row) => sum + row.redeemed_cents, 0),
     refunded_cents: selected.filter(row => !row.cancelled && !row.issues.length).reduce((sum, row) => sum + row.refunded_cents, 0),
     review_count: selected.filter(row => row.issues.length).length, generated_at: new Date().toISOString() };

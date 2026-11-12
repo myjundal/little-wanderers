@@ -1,6 +1,6 @@
 import { revenueDay, type RevenueCategory, type RevenueEvidence, type RevenueService } from '@/lib/service-day-revenue';
 
-/** Category affects presentation only; unmatched sales still enter the total. */
+/** Unlinked class payments require a service-date allocation before recognition. */
 export function squareSaleCategory(name: string, itemType?: string): RevenueCategory {
   if (itemType === 'GIFT_CARD' || /gift\s*card|e-?gift/i.test(name)) return 'gift_card';
   if (/membership|subscription|founding/i.test(name)) return 'membership';
@@ -37,15 +37,17 @@ export function supplementSquareRevenue(services: RevenueService[], evidence: Ma
       // or gift-card sale. Preserve those when they exactly explain the balance.
       const extras = items.filter(item => ['cafe', 'gift_card', 'membership', 'retail'].includes(item.category));
       items = extras.reduce((sum, item) => sum + item.amount_cents, 0) === remainder ? extras
-        : [{ label: linkedTotal ? 'Additional Square purchases' : 'Square sale', category: 'other', amount_cents: remainder }];
+        : [{ label: items.some(item => item.category === 'class') ? 'Class payment allocation needs review' : linkedTotal ? 'Additional Square purchases' : 'Square sale',
+          category: items.some(item => item.category === 'class') ? 'class' : 'other', amount_cents: remainder }];
     }
     const paidOnDate = receipt.payments.some(payment => revenueDay(payment.paid_at) === date);
     const saleDate = paidOnDate ? date : receipt.payments[0] ? revenueDay(receipt.payments[0].paid_at) : date;
     for (const [index, item] of items.entries()) result.push({
       id: `square:${receipt.order_id}:${index}`, date: saleDate, category: item.category,
       label: `${item.label} · ${receipt.order_id.slice(0, 8)}`, expected_cents: item.amount_cents,
-      attendance: 'sale', recognition: 'payment', cancelled: false,
-      charges: [{ order_id: receipt.order_id, amount_cents: item.amount_cents }], issues: [],
+      attendance: item.category === 'class' ? 'unknown' : 'sale', recognition: item.category === 'class' ? 'unallocated_class' : 'payment', cancelled: false,
+      charges: [{ order_id: receipt.order_id, amount_cents: item.amount_cents }],
+      issues: item.category === 'class' ? ['수업일 연결이 필요합니다. 미배분 선결제로 표시하며 매출 합계에서 제외합니다.'] : [],
     });
   }
   return result;

@@ -71,6 +71,7 @@ test('daily report reads every Square sale including orderless cash; failed disc
  const admin={from(){const q={select(){return q},order(){return q},limit(){return q},eq(){return q},in(){return q},then(resolve){return resolve({data:[],error:null})}};return q}};
  for(const fail of [false,true]){
   const loader=loadSquareModules({env:{SQUARE_ENVIRONMENT:'production'},fetch:async url=>{
+   if(new URL(url).pathname==='/v2/orders/search')return Response.json({orders:[]});
    assert(new URL(url).pathname==='/v2/payments');if(fail)throw Error('offline');return Response.json({payments:[{id:'cash',status:'COMPLETED',location_id:'test-location',amount_money:money(1234),created_at:`${date}T15:00:00Z`,source_type:'CASH'}]});
   }}).load('src/lib/service-day-revenue-data.ts');
   const result=await loader.getServiceDayRevenue(admin,date);assert.equal(result.net_cents,fail?0:1234);assert.equal(result.complete,!fail);assert.equal(result.issues.length,fail?1:0);
