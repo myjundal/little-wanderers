@@ -14,8 +14,8 @@ const Dashboard = loadModule('src/components/staff/OperatorDashboard.tsx', {
 }, { React }).default;
 const links = html => [...html.matchAll(/href="([^"]+)"[^>]*>([^<]+)</g)].map(match => [match[1], match[2]]);
 const expected = [
-  ['/staff/dashboard', 'My dashboard'], ['/staff/admin', 'Timecard &amp; admin'],
-  ['/', 'Main homepage'], ['/staff/checkin', 'Check-in &amp; occupancy management'],
+  ['/', 'Main homepage'], ['/staff/dashboard', 'My dashboard'],
+  ['/staff/admin', 'Timecard &amp; admin'], ['/staff/checkin', 'Check-in &amp; occupancy management'],
   ['/staff/open-play-reservations', 'Open Play reservations'],
   ['/staff/parties', 'Party management'], ['/staff/families', 'Family management'], ['/staff/classes', 'Class management'],
   ['/landing/party', 'My parties'], ['/landing/classschedule', 'My classes'],
@@ -161,5 +161,33 @@ test('public page account link also returns operators and instructors to My dash
     const result = await Page();
     assert.equal(result.props.accessLabel, 'My dashboard');
     assert.equal(result.props.dashboardHref, role === 'instructor' ? '/teaching' : '/staff/dashboard');
+  }
+});
+
+
+test('Open Play, Party, and Family management link owners and admins to membership management', async () => {
+  const react = { ...React, useState: initial => [initial, () => {}], useEffect() {} };
+  for (const role of ['owner', 'admin', 'staff']) {
+    for (const [source, active] of [
+      ['src/app/staff/open-play-reservations/page.tsx', 'open-play'],
+      ['src/app/staff/parties/page.tsx', 'parties'],
+      ['src/app/staff/families/page.tsx', 'families'],
+    ]) {
+      const Page = loadModule(source, {
+        react, 'next/link': 'a', 'next/navigation': { useRouter: () => ({ push() {} }) },
+        '@/lib/authz': { getCurrentUserRole: async () => ({ role }) },
+        '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) },
+        '@/components/staff/StaffToolNav': Nav,
+        '@/components/staff/OpenPlayReservationsAdmin': () => null,
+        '@/components/staff/PartyManagement': () => null,
+        '@/components/staff/StaffDashboard': () => null,
+      }, { React: react }).default;
+      const html = renderToStaticMarkup(await Page());
+      const menu = expected.slice(0, 8);
+      if (role !== 'staff') menu.push(['/staff/founding-memberships', 'Membership management']);
+      assert.deepEqual(links(html).slice(0, menu.length), menu, `${source}: ${role}`);
+      assert.equal(html.includes('Membership management'), role !== 'staff');
+      assert.match(html, new RegExp(`href="${navigation.operatorLinks.find(link => link.id === active).href}"[^>]+aria-current="page"`));
+    }
   }
 });

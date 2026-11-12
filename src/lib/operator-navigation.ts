@@ -1,7 +1,7 @@
 export const operatorLinks = [
+  { id: 'home', href: '/', label: 'Main homepage' },
   { id: 'dashboard', href: '/staff/dashboard', label: 'My dashboard' },
   { id: 'admin', href: '/staff/admin', label: 'Timecard & admin' },
-  { id: 'home', href: '/', label: 'Main homepage' },
   { id: 'checkin', href: '/staff/checkin', label: 'Check-in & occupancy management' },
   { id: 'open-play', href: '/staff/open-play-reservations', label: 'Open Play reservations' },
   { id: 'parties', href: '/staff/parties', label: 'Party management' },
@@ -12,7 +12,7 @@ export const operatorLinks = [
 export const membershipManagementLink = { id: 'memberships', href: '/staff/founding-memberships', label: 'Membership management' } as const;
 
 export const operatorQuickLinks = [
-  operatorLinks[0],
+  operatorLinks[1],
   { id: 'checkin', href: '/staff/checkin', label: 'Check-in' },
 ] as const;
 

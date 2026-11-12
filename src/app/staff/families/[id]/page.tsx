@@ -334,7 +334,7 @@ export default function StaffFamilyDetailPage() {
   return (
     <main style={{ padding: '16px clamp(12px, 4vw, 24px)', maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <StaffToolNav active="families" />
+        <StaffToolNav active="families" includeMembershipManagement={role === 'owner' || role === 'admin'} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <p style={{ margin: 0 }}><Link href="/staff/families">← Back to Family Management</Link></p>
         <p style={{ margin: 0 }}><Link href="/staff">← Back to tools</Link></p>
