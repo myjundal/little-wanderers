@@ -59,9 +59,10 @@ export async function startAdmissionPos(admin:SupabaseClient,checkinIds:string[]
    .eq('id',sale.id).eq('status','open').eq('amount_cents',sale.amount_cents).is('launched_at',null).select('id').maybeSingle();
  if(claimError)throw new Error(claimError.message);
  if(!claimed)return {id:sale.id,pending:true,url:null};
- for (const row of billed.filter(row => freeIds.has(row.id))) {
-   const corrected = await admin.from('checkins').update({price_cents:0,
-     notes:[row.notes, `Infant sibling admission included; original unpaid fee $${(row.price_cents/100).toFixed(2)}; POS ${sale.id}.`].filter(Boolean).join('\n')})
+ for (const row of billed.filter(row => (pricing.priced.find(priced => priced.id === row.id)?.price_cents ?? row.price_cents) < row.price_cents)) {
+   const amount = pricing.priced.find(priced => priced.id === row.id)!.price_cents;
+   const corrected = await admin.from('checkins').update({price_cents:amount,
+     notes:[row.notes, `${amount === 0 ? 'Infant sibling admission included' : 'Infant admission $10'}; original unpaid fee $${(row.price_cents/100).toFixed(2)}; POS ${sale.id}.`].filter(Boolean).join('\n')})
      .eq('id',row.id).eq('payment_status','due').eq('price_cents',row.price_cents).select('id').maybeSingle();
    if (corrected.error || !corrected.data) throw new Error('Admission discount needs review. No new Square launch was created. Refresh payment status.');
  }

@@ -48,7 +48,7 @@ test('infant siblings are included through six months; only attending siblings c
  assert.equal(price([older,second,baby]),2600);
  assert.equal(price([baby,older,second]),2600);
  assert.equal(price([older,baby]),1600);
- assert.equal(price([baby]),1600); // standalone reservation pricing is unchanged
+ assert.equal(price([baby]),1000); // a baby visiting alone has the infant admission rate
  assert.equal(softOpeningAmount(['older'],[],'2026-11-11',[older,baby]),1600);
  assert.equal(price([older,{...baby,birthdate:'2026-04-12'}]),1600); // 6m 30d
  assert.equal(price([older,{...baby,birthdate:'2026-04-11'}]),2600); // seven months
@@ -59,6 +59,16 @@ test('infant siblings are included through six months; only attending siblings c
  assert.equal(price([older,{...baby,birthdate:null}]),2600);
  assert.equal(price([older,baby],undefined,[{child_ids:['older'],status:'pending'}]),0);
  assert.equal(price([older,second,baby],undefined,[{child_ids:['older'],status:'pending'}]),1600);
- assert.equal(price([baby,{id:'baby2',birthdate:'2026-10-01'}]),1600);
+ assert.equal(price([baby,{id:'baby2',birthdate:'2026-10-01'}]),1000);
  for (const babies of [[baby,{id:'baby2',birthdate:'2026-10-01'}],[{id:'baby2',birthdate:'2026-10-01'},baby]]) assert.equal(price(babies,undefined,[{child_ids:['baby2'],status:'pending'}]),0);
+});
+test('Square online checkout charges the infant-only quote, not the older-child admission rate',async()=>{
+ const child={id:'baby',birthdate:'2026-05-12'}; // still six months on the visit date
+ const amount=softOpeningAmount([child.id],[],'2026-11-12',[child]);assert.equal(amount,1000);
+ const requests=[];const m=loadSquareModules({fetch:async(url,options)=>{requests.push(JSON.parse(options.body));return Response.json({payment_link:{id:'link',order_id:'order',url:'https://square.link/u/test'}});}});
+ const q={update(){return q;},eq(){return q;},select(){return q;},single:async()=>({data:{id:'booking'},error:null})};
+ await m.load('src/lib/soft-opening-payments.ts').startOpenPlayPayment({from:()=>q},{id:'booking',status:'reserved',amount_cents:amount,payment_status:'due'});
+ assert.equal(requests[0].order.line_items[0].base_price_money.amount,1000);
+ assert.equal(softOpeningAmount(['older',child.id],[],'2026-11-12',[{id:'older',birthdate:'2023-01-01'},child]),1600);
+ assert.equal(softOpeningAmount([child.id],[],'2026-12-12',[child]),1600);
 });
