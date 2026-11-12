@@ -139,7 +139,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const fetch = async (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : undefined;
     requests.push({ url, body });
-    if (url.includes('/desk')) return Response.json({ ok: true, items: deskItems ?? [{ ...deskFamily, waiver_status: waiver }] });
+    if (url.includes('/desk')) return Response.json({ ok: true, date: '2026-11-11', items: deskItems ?? [{ ...deskFamily, waiver_status: waiver }] });
     if (url === '/api/admin/admission/checkout') {
       if (failCheckout) return Response.json({ ok: false, error: 'Unable to record checkout' }, { status: 409 });
       const checkouts = body.checkin_ids.map(id => ({ id, checked_out_at: '2026-11-11T17:00:00Z' }));
@@ -165,7 +165,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     return Response.json(snapshot);
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
-  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic }, {
+  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic, '@/lib/admission-arrivals': loadSquareModules().load('src/lib/admission-arrivals.ts') }, {
     React, fetch, AbortController,
     document: { visibilityState: 'visible', addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; } },
     navigator: { userAgent: 'iPad', standalone: homeScreen },
@@ -526,4 +526,16 @@ test('unverified Square receipts are not shown as unpaid or as settled in the co
   assert.ok(!h.text().includes('$16.00 due'));assert.ok(!h.button('Pay $16.00'));assert.ok(!h.text().includes('No admission payment due for this family'));
   assert.ok(h.text().includes('Do not collect again'));
  }
+});
+test('arrival cards show per-window ages and a newly checked-in family turns green at the end',async()=>{
+ const reserved={...booking,child_ids:['child'],slot:{label:'Open Play',starts_at:'2026-11-11T15:00:00Z',ends_at:'2026-11-11T16:00:00Z'}};
+ const first={...deskFamily,people:people.map(p=>({...p,birthdate:p.role==='child'?'2026-05-01':null})),reservations:[reserved]};
+ const already={...deskFamily,id:'another',name:'Already Here',people:[{...people[0],id:'another-child',birthdate:'2024-05-01'}],reservations:[{...reserved,id:'other-booking',child_ids:['another-child']}]};
+ const h=uiHarness({deskItems:[first,already],initialVisits:[{id:'already-visit',person_id:'another-child',household_id:'another',name:'Other',household_name:'Already Here',checked_in_at:'2026-11-11T14:00:00Z',payment_status:'covered',price_cents:0}]});
+ await h.flush();assert.ok(h.text().includes('0yr old: 1'));assert.ok(h.text().includes('2yr old: 1'));
+ const cards=()=>h.nodes().filter(n=>n.type==='article'&&n.props['data-family-id']);
+ assert.deepEqual(cards().map(n=>n.props['data-family-id']),[family.id,'another']);
+ await h.button('Choose family').props.onClick();await h.flush();h.button('Select everyone remaining').props.onClick();await h.flush();await h.button('Check in 2').props.onClick();await h.flush();
+ assert.deepEqual(cards().map(n=>n.props['data-family-id']),['another',family.id]);assert.equal(cards().at(-1).props['data-arrival-state'],'checked-in');
+ assert.ok(h.text().includes('0yr old: 1'));assert.ok(h.text().includes('0 waiting'));
 });
