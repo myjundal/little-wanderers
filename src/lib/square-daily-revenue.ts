@@ -7,7 +7,7 @@ export function squareSaleCategory(name: string, itemType?: string): RevenueCate
   if (/open\s*play|admission|soft\s*opening|walk[ -]?in/i.test(name)) return 'open_play';
   if (/party|birthday/i.test(name)) return 'party';
   if (/class|yoga|music|art session/i.test(name)) return 'class';
-  if (/café|cafe|coffee|espresso|latte|cappuccino|tea\b|juice|snack|cookie|muffin|croissant|water|milk|cocoa|chocolate|drink|smoothie|bagel|pastry|sandwich/i.test(name)) return 'cafe';
+  if (/café|cafe|coffee|espresso|latte|cappuccino|americano|macchiato|mocha|matcha|tea\b|juice|snack|cookie|muffin|croissant|water|milk|cocoa|chocolate|drink|smoothie|bagel|pastry|sandwich/i.test(name)) return 'cafe';
   if (/pass|retail|merch|sock|toy|shirt/i.test(name)) return 'retail';
   return 'other';
 }
