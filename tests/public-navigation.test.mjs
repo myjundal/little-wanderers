@@ -5,10 +5,10 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {loadModule} from './helpers/class-preregistration-harness.mjs';
 const link=({children,...p})=>React.createElement('a',p,children);
 const mocks={'next/link':link,'../public-info.module.css':{}};
-test('public header leads to pricing, keeps invitation-only reservations unlisted, and retains account destinations',()=>{
+test('public header exposes Open Play reservations and retains account destinations',()=>{
  const {PastelHeader}=loadModule('src/components/pastel/PastelPrimitives.tsx',{'next/link':link,'next/image':()=>null,'./pastel.module.css':{},'./PublicMoreMenu':()=>null},{React});
  const guest=renderToStaticMarkup(PastelHeader({}));
- assert.match(guest,/href="\/pricing"/);assert.doesNotMatch(guest,/href="\/soft-opening"/);assert.match(guest,/>Sign in</);assert.doesNotMatch(guest,/Wanderlist families|Join\/Login|href="\/membership"/);
+ assert.match(guest,/href="\/open-play"/);assert.match(guest,/Reserve Open Play/);assert.match(guest,/href="\/pricing"/);assert.doesNotMatch(guest,/href="\/soft-opening"/);assert.match(guest,/>Sign in</);assert.doesNotMatch(guest,/Wanderlist families|Join\/Login|href="\/membership"/);
  const staff=renderToStaticMarkup(PastelHeader({isAuthenticated:true,dashboardHref:'/staff/dashboard',accessLabel:'Dashboard'}));assert.match(staff,/href="\/staff\/dashboard"/);
 });
 test('legacy membership URLs preserve a permanent destination to the new pricing section',()=>{

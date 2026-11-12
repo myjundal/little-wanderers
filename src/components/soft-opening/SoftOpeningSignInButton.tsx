@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-export default function SoftOpeningSignInButton({ children }: { children: ReactNode }) {
+export default function SoftOpeningSignInButton({ children, destination = '/landing/soft-opening' }: { children: ReactNode; destination?: string }) {
   return (
     <Link
-      href="/login?next=/landing/soft-opening"
+      href={`/login?next=${encodeURIComponent(destination)}`}
       onClick={() => {
-        sessionStorage.setItem('post_login_redirect', '/landing/soft-opening');
+        sessionStorage.setItem('post_login_redirect', destination);
       }}
       style={{
         display: 'inline-flex',

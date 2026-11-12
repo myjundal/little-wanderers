@@ -3,6 +3,7 @@ export default async function sitemap() {
   return [
     { url: `${base}/`, changeFrequency: 'weekly', priority: 1.0 },
     { url: `${base}/visit-us`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${base}/open-play`, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${base}/pricing`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${base}/party`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${base}/gift-cards`, changeFrequency: 'monthly', priority: 0.7 },

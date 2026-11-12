@@ -1,5 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+export const PUBLIC_OPEN_PLAY_START_DATE = '2026-11-14';
+export const PUBLIC_OPEN_PLAY_START = `${PUBLIC_OPEN_PLAY_START_DATE}T00:00:00-05:00`;
+
 export const SOFT_OPENING_START_DATE = '2026-11-11';
 export const SOFT_OPENING_START = `${SOFT_OPENING_START_DATE}T00:00:00-05:00`;
 

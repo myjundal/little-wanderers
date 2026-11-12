@@ -38,6 +38,7 @@ export default function LandingMoreMenu() {
           </>}
           {!canUseOwnerDashboard && !isInstructor && (
             <>
+              <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/open-play">Reserve Open Play</Link>
               <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/people">My Info/People</Link>
               {SHOW_CUSTOMER_MEMBERSHIP && (
                 <Link style={{ color: '#4f3f82', fontWeight: 600 }} onClick={() => setOpen(false)} href="/landing/membership">My Membership</Link>
