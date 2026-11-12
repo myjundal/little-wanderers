@@ -15,7 +15,7 @@ export default function OperatorDashboard({ role, isKiosk, displayName, canViewP
     {displayName && <p>Hello, {displayName}</p>}
     {isKiosk && <p>Your shift started when you entered your PIN. Use “Log out & clock out” when you finish.</p>}
     <section className={styles.card} aria-label="Dashboard menu"><StaffToolNav variant="dashboard" includePersonal={!isKiosk} includeMembershipManagement={isOwner} /></section>
-    {canViewPrivateRevenue && <section className={styles.card}><div className={styles.links}><Link href="/staff/revenue">Private revenue · 방문일 기준 매출</Link></div><p className={styles.subtle}>본인 전용 · 선결제도 방문일에 반영</p></section>}
+    {canViewPrivateRevenue && <section className={styles.card}><div className={styles.links}><Link href="/staff/revenue">Private revenue · 전체 매출</Link></div><p className={styles.subtle}>본인 전용 · 예약·카페·기프트카드 등 전체 매출</p></section>}
     {isOwner && <MembershipManagementSummary />}
   </main>;
 }

@@ -24,8 +24,8 @@ test('staff and owner tool navigation contains the current operational destinati
   }, { React }).default;
   const html = renderToStaticMarkup(React.createElement(Nav));
   assert.deepEqual([...html.matchAll(/href="([^"]+)"[^>]*>([^<]+)</g)].map(match => [match[1], match[2]]), [
-    ['/staff/dashboard', 'My dashboard'], ['/staff/admin', 'Timecard &amp; admin'],
-    ['/', 'Main homepage'], ['/staff/checkin', 'Check-in &amp; occupancy management'],
+    ['/', 'Main homepage'], ['/staff/dashboard', 'My dashboard'],
+    ['/staff/admin', 'Timecard &amp; admin'], ['/staff/checkin', 'Check-in &amp; occupancy management'],
     ['/staff/open-play-reservations', 'Open Play reservations'],
     ['/staff/parties', 'Party management'], ['/staff/families', 'Family management'], ['/staff/classes', 'Class management'],
   ]);

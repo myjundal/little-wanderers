@@ -4,6 +4,7 @@ import { isUuid } from '@/lib/open-play-reservations';
 import { getWaiverStatus, WAIVER_STATUS_SELECT } from '@/lib/waivers';
 import { getStaffFamilySearchAliases } from '@/lib/staff-family-search';
 import { getReservationAdmissionStatuses } from '@/lib/reservation-admission-status';
+import { validRevenueDate } from '@/lib/service-day-revenue';
 import { squareEnvironment } from '@/lib/square-client';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,8 @@ export async function GET(req: Request) {
   const family = params.get('family');
   // Strip PostgREST operators; each search token is a literal name/contact fragment.
   const tokens = (params.get('q') ?? '').slice(0, 120).toLowerCase().replace(/[^\p{L}\p{N}@+.' -]/gu, ' ').trim().split(/\s+/).filter(Boolean);
-  const today = getPartyDateKey(new Date());
+  const today = params.get('date') ?? getPartyDateKey(new Date());
+  if (!validRevenueDate(today)) return Response.json({ ok: false, error: 'Choose a valid date.' }, { status: 400 });
   const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
   try {
     let ids: string[] = [];
@@ -44,7 +46,7 @@ export async function GET(req: Request) {
         .lt('slot.starts_at', toPartyDateTimeIso(tomorrow, 0)).order('created_at').limit(501),
       c.admin.from('checkins').select('person_id')
         .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0)).limit(501)]);
-      if (result.error || arrivals.error) throw new Error('Unable to load today’s reservations and visitors.');
+      if (result.error || arrivals.error) throw new Error('Unable to load reservations and visitors for this date.');
       truncated = (result.data?.length ?? 0) > 500 || (arrivals.data?.length ?? 0) > 500;
       reservations = (result.data ?? []).slice(0, 500).map(row => ({ ...row, slot: Array.isArray(row.slot) ? row.slot[0] : row.slot })) as typeof reservations;
       const visitorIds = [...new Set((arrivals.data ?? []).slice(0, 500).map(row => row.person_id).filter(Boolean))];

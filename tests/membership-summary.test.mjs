@@ -23,13 +23,13 @@ test('legacy General memberships honor expiry and environment and never double-c
  ],[{id:'l1',household_id:'legacy'},{id:'l2',household_id:'legacy'}],'production',now);
  assert.equal(result.total.memberships,2);assert.equal(result.total.children,3);assert.equal(result.regular.memberships,1);assert.equal(result.regular.children,2);
 });
-test('canceling membership remains counted only through its paid term, and the newest current enrollment wins over old rows',()=>{
+test('canceled and canceling memberships are excluded immediately, and a later rejoin counts',()=>{
  const result=summarizeMemberships([
   {...enrollment('paid','public','canceling'),paid_through:'2026-11-10'},
   {...enrollment('expired','public','canceling'),paid_through:'2026-11-09'},
   {...enrollment('rejoined','waitlist','canceled'),created_at:'2026-10-01'},enrollment('rejoined','regular','active'),
  ],[],[],'production',now);
- assert.equal(result.total.memberships,2);assert.equal(result.public.memberships,1);assert.equal(result.regular.memberships,1);assert.equal(result.waitlist.memberships,0);
+ assert.equal(result.total.memberships,1);assert.equal(result.public.memberships,0);assert.equal(result.regular.memberships,1);assert.equal(result.waitlist.memberships,0);
 });
 test('summary loader paginates past the API row limit and scopes founding records to the configured environment',async()=>{
  const calls=[];const rows=Array.from({length:1101},(_,i)=>({...enrollment(`family-${i}`),environment:'production'}));rows.push({...enrollment('sandbox'),environment:'sandbox'});
@@ -71,4 +71,16 @@ test('summary loader resolves person memberships and loads only covered people',
  const result=await loadMembershipSummary(admin,'production');
  assert.equal(result.regular.memberships,1);assert.equal(result.regular.children,1);
  assert.deepEqual(JSON.parse(JSON.stringify(calls)),[{table:'people',field:'id',ids:['covered']}]);
+});
+
+
+test('a latest cancellation supersedes historical active rows and legacy entitlements, while a later new membership still counts', () => {
+ const result=summarizeMemberships([
+   {...enrollment('canceled','public','active'),created_at:'2026-10-01'}, {...enrollment('canceled','public','canceled'),created_at:'2026-11-01',canceled_at:'2026-11-05'},
+   {...enrollment('gift','public','canceled'),created_at:'2026-11-01'},
+ ],[
+   {household_id:'canceled',square_environment:'production',renews_at:null,created_at:'2026-11-03'},
+   {household_id:'gift',square_environment:'production',renews_at:null,created_at:'2026-11-02'},
+ ],[],'production',now);
+ assert.equal(result.total.memberships,1);assert.equal(result.regular.memberships,1);assert.equal(result.public.memberships,0);
 });

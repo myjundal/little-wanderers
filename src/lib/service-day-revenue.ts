@@ -1,5 +1,5 @@
-export type RevenueCategory = 'open_play' | 'walk_in' | 'party' | 'class';
-export const revenueCategories: Record<RevenueCategory, string> = { open_play: 'Open Play', walk_in: 'Walk-in admission', party: 'Parties', class: 'Classes' };
+export type RevenueCategory = 'open_play' | 'walk_in' | 'party' | 'class' | 'cafe' | 'gift_card' | 'membership' | 'retail' | 'other';
+export const revenueCategories: Record<RevenueCategory, string> = { open_play: 'Open Play', walk_in: 'Walk-in admission', party: 'Parties', class: 'Classes', cafe: 'Café', gift_card: 'Gift cards', membership: 'Memberships', retail: 'Retail & passes', other: 'Other Square sales' };
 export const revenueDay = (value: string | Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
 export function validRevenueDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
@@ -26,11 +26,12 @@ export type RevenueSources = {
 export type RevenueCharge = { order_id: string; amount_cents: number };
 export type RevenueService = {
   id: string; date: string; category: RevenueCategory; label: string; expected_cents: number;
-  attendance: 'visited' | 'reserved' | 'unknown'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
+  attendance: 'visited' | 'reserved' | 'unknown' | 'sale'; recognition?: 'payment'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
 };
 export type RevenueEvidence = {
   order_id: string; service_total_cents: number; tax_cents: number; tip_cents: number;
-  payments: { id: string; amount_cents: number; refunded_cents: number; paid_at: string }[];
+  items?: { label: string; category: RevenueCategory; amount_cents: number }[];
+  payments: { id: string; amount_cents: number; refunded_cents: number; paid_at: string; gift_card?: boolean }[];
 };
 
 /** Exact integer allocation. The chronological first sessions receive any
@@ -162,7 +163,7 @@ export function revenueServices(data: RevenueSources) {
 
 export function calculateRevenue(services: RevenueService[], evidence: Map<string, RevenueEvidence>, date: string, sourceIssues: string[] = []) {
   if (!validRevenueDate(date)) throw new Error('Choose a valid date.');
-  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0 }));
+  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0 }));
   const orderIds = new Set(rows.filter(row => row.date === date).flatMap(row => row.charges.map(charge => charge.order_id)));
   for (const id of orderIds) {
     const units = rows.flatMap(row => row.charges.filter(charge => charge.order_id === id).map(charge => ({ row, amount: charge.amount_cents })));
@@ -179,9 +180,11 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
       // Allocate refund using the already allocated gross to preserve net cents.
       const refunds = allocateRevenue(payment.refunded_cents, gross);
       units.forEach((unit, index) => {
-        const net = gross[index] - refunds[index];
-        unit.row.received_cents += gross[index]; unit.row.refunded_cents += refunds[index];
         const paymentDay = day(payment.paid_at);
+        if (unit.row.recognition === 'payment' && paymentDay !== unit.row.date) return;
+        const net = payment.gift_card ? 0 : gross[index] - refunds[index];
+        if (payment.gift_card) unit.row.redeemed_cents += gross[index] - refunds[index];
+        unit.row.received_cents += gross[index]; unit.row.refunded_cents += refunds[index];
         if (!paymentDay) unit.row.issues.push('The payment date is unavailable.');
         else if (paymentDay < unit.row.date) unit.row.prepaid_cents += net;
         else if (paymentDay === unit.row.date) unit.row.same_day_cents += net;
@@ -193,9 +196,9 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
   for (const row of selected) {
     if (row.cancelled && row.received_cents > row.refunded_cents) row.issues.push('Cancelled service retains payment; review its refund or cancellation fee.');
     row.issues = [...new Set(row.issues)];
-    row.net_cents = row.cancelled || row.issues.length ? 0 : row.received_cents - row.refunded_cents;
+    row.net_cents = row.cancelled || row.issues.length ? 0 : row.received_cents - row.refunded_cents - row.redeemed_cents;
     // A refund reduces revenue; it does not reopen the customer's original bill.
-    row.due_cents = row.cancelled || row.issues.length ? 0 : Math.max(0, row.expected_cents - row.received_cents);
+    row.due_cents = row.cancelled || row.issues.length || row.recognition === 'payment' ? 0 : Math.max(0, row.expected_cents - row.received_cents);
     if (row.issues.length || row.cancelled) { row.prepaid_cents = 0; row.same_day_cents = 0; row.later_paid_cents = 0; }
   }
   const sum = (field: 'net_cents' | 'prepaid_cents' | 'same_day_cents' | 'later_paid_cents' | 'due_cents') => selected.reduce((total, row) => total + row[field], 0);
@@ -207,7 +210,9 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
   return { date, timezone: 'America/New_York', complete: !issues.length && !selected.some(row => row.issues.length), issues, categories, rows: selected,
     net_cents: sum('net_cents'), prepaid_cents: sum('prepaid_cents'), same_day_cents: sum('same_day_cents'), later_paid_cents: sum('later_paid_cents'), due_cents: sum('due_cents'),
     visited_cents: selected.filter(row => row.attendance === 'visited').reduce((sum, row) => sum + row.net_cents, 0),
-    reserved_cents: selected.filter(row => row.attendance !== 'visited').reduce((sum, row) => sum + row.net_cents, 0),
+    reserved_cents: selected.filter(row => row.attendance === 'reserved' || row.attendance === 'unknown').reduce((sum, row) => sum + row.net_cents, 0),
+    sales_cents: selected.filter(row => row.attendance === 'sale').reduce((sum, row) => sum + row.net_cents, 0),
+    redeemed_cents: selected.reduce((sum, row) => sum + row.redeemed_cents, 0),
     refunded_cents: selected.filter(row => !row.cancelled && !row.issues.length).reduce((sum, row) => sum + row.refunded_cents, 0),
     review_count: selected.filter(row => row.issues.length).length, generated_at: new Date().toISOString() };
 }
