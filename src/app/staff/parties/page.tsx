@@ -16,7 +16,7 @@ export default async function StaffPartiesPage() {
           <h1 style={{ margin: '8px 0 0', color: '#4f3f82' }}>Party Management</h1>
           <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Signed in with role: <strong>{role ?? 'unknown'}</strong></p>
         </div>
-        <StaffToolNav active="parties" />
+        <StaffToolNav active="parties" includeMembershipManagement={role === 'owner' || role === 'admin'} />
       </div>
 
       <PartyManagement canEditSchedule={role === 'owner' || role === 'admin'} />

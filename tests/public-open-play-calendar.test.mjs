@@ -9,14 +9,14 @@ test('public availability exposes only calendar fields, honors closure and total
  const ranges=[];const admin={from(){const q={select(){return q;},eq(){return q;},neq(){return q;},gte(key,value){assert.equal(value,constants.PUBLIC_OPEN_PLAY_START);return q;},lt(){return q;},gt(){return q;},in(){return q;},order(){return q;},range(start,end){ranges.push([start,end]);return Promise.resolve({data:start===0?Array.from({length:500},()=>({slot_id:'full',child_count:0,adult_count:1,email:'PRIVATE'})):[{slot_id:'available',child_count:2,adult_count:2}],error:null});},then(resolve){resolve({data:[slot,{...slot,id:'closed',status:'closed'},{...slot,id:'full'}],error:null});}};return q;}};
  const {loadPublicOpenPlaySlots}=loadModule('src/lib/public-open-play.ts',{'@/lib/open-play-reservations':constants});
  const slots=await loadPublicOpenPlaySlots(admin);
- assert.deepEqual(Object.keys(slots[0]).sort(),['id','starts_at','ends_at','remaining_children','is_closed','is_full'].sort());
- assert.equal(slots[0].remaining_children,5);assert.equal(slots[1].is_closed,true);assert.equal(slots[2].is_full,true);
+ assert.deepEqual(Object.keys(slots[0]).sort(),['id','starts_at','ends_at','remaining_children','capacity_children','is_closed','is_full'].sort());
+ assert.equal(slots[0].remaining_children,5);assert.equal(slots[0].capacity_children,7);assert.equal(slots[1].is_closed,true);assert.equal(slots[2].is_full,true);
  assert.equal(JSON.stringify(slots).includes('PRIVATE'),false);assert.deepEqual(ranges,[[0,499],[500,999]]);
 });
 test('guests see dates and arrival times before any login link or family form',()=>{
  const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
  const html=renderToStaticMarkup(React.createElement(Calendar,{slots:[{...slot,remaining_children:5,is_closed:false,is_full:false}]}));
- assert.match(html,/November 2026/);assert.match(html,/9 AM/);assert.match(html,/5 child spots left/);assert.match(html,/unlimited play until closing/);assert.match(html,/Reservations are recommended/);
+ assert.match(html,/November 2026/);assert.match(html,/9 AM/);assert.match(html,/\(5\/7\) spots left/);assert.match(html,/unlimited play until closing/);assert.match(html,/Reservations are recommended/);
  assert.doesNotMatch(html,/href="\/login|Parent.*first name/);
 });
 test('calendar keeps a selected time through sign-in without making a reservation',()=>{
