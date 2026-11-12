@@ -167,10 +167,15 @@ export async function reconcileWalkInRegistration(admin: SupabaseClient, househo
   const people = checked(await admin.from('people').select('first_name,role').eq('household_id', householdId));
   const names = people.filter(person => person.role === 'adult').map(person => identityName(person.first_name));
   const since = new Date(Date.parse(family.created_at) - 86400000).toISOString();
-  const waivers = checked(await admin.from('waivers').select('id,parent_name').eq('source', 'guest_website').gte('signed_at', since).limit(101));
-  if (waivers.length > 100) return;
+  const waivers = checked(await admin.from('waivers').select('id,household_id').eq('source', 'guest_website').gte('signed_at', since).limit(101));
+  if (!waivers.length || waivers.length > 100) return;
+  // parent_name is the independently typed legal signature (e.g. "R. Hodges"),
+  // so filter by the actual guardian identity, just like receipt reconciliation.
+  const guardians = checked(await admin.from('people').select('household_id,first_name').eq('role', 'adult')
+    .in('household_id', [...new Set(waivers.map(waiver => waiver.household_id))]).limit(1001));
+  if (guardians.length > 1000) return;
   for (const waiver of waivers) {
-    if (!names.some(name => identityName(waiver.parent_name).startsWith(`${name} `))) continue;
+    if (!guardians.some(guardian => guardian.household_id === waiver.household_id && names.includes(identityName(guardian.first_name)))) continue;
     const plan = await reconcileGuestWaiverFamily(admin, waiver.id, false);
     if (plan.status === 'match' && plan.household_id === householdId) await reconcileGuestWaiverFamily(admin, waiver.id);
   }

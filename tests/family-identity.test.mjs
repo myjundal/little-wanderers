@@ -82,7 +82,7 @@ function walkInFixture(order = 'register_first') {
   f.db.household_members = f.db.people.filter(p => p.household_id === target).map(p => ({
     household_id: target, user_id: null, role: 'member', full_name: `${p.first_name} ${p.last_name ?? ''}`.trim(), member_role: p.role,
   }));
-  Object.assign(f.db.waivers[0], { signed_at: '2026-11-12T16:08:00Z', parent_name: 'Alex Example' });
+  Object.assign(f.db.waivers[0], { signed_at: '2026-11-12T16:08:00Z', parent_name: 'A. Example' });
   return f;
 }
 
