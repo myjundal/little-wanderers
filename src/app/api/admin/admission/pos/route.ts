@@ -1,3 +1,4 @@
+import { validRevenueDate } from '@/lib/service-day-revenue';
 import { getAdmissionPrepayments } from '@/lib/admission-prepayments';
 import { projectInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
 import { requireStaffContext } from '@/lib/authz';
@@ -17,10 +18,13 @@ async function saleFamily(admin: Awaited<ReturnType<typeof requireStaffContext>>
   return person.data?.household_id ?? null;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const c = await requireStaffContext();
   if (!c.ok) return c.response;
-  const today = getPartyDateKey(new Date());
+  const currentDate = getPartyDateKey(new Date());
+  const today = req ? new URL(req.url).searchParams.get('date') ?? currentDate : currentDate;
+  if (!validRevenueDate(today)) return Response.json({ ok: false, error: 'Choose a valid date.' }, { status: 400 });
+  const historical = today !== currentDate;
   const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
   const { data, error } = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment')
     .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0));
@@ -38,11 +42,11 @@ export async function GET() {
   let checkouts: Map<string, string>;
   try { checkouts = await getAdmissionCheckouts(c.admin, data ?? []); }
   catch { return Response.json({ ok: false, error: 'Unable to load departures. Refresh admission status before continuing.' }, { status: 503 }); }
-  const {data:pending,error:pendingError}=await c.admin.from('admission_pos_sales').select('*').eq('environment',squareEnvironment()).eq('status','open').limit(101);
+  const {data:pending,error:pendingError}=historical ? {data:[],error:null} : await c.admin.from('admission_pos_sales').select('*').eq('environment',squareEnvironment()).eq('status','open').limit(101);
   if(pendingError || (pending?.length ?? 0)>100)return Response.json({ok:false,error:'Unable to load pending Square payments.'},{status:503});
   const todayIds = new Set((data ?? []).map(row=>row.id));
   const relevant = (pending ?? []).filter(sale=>sale.checkin_ids?.some((id:string)=>todayIds.has(id)));
-  const settled = await refreshAdmissionPosSales(c.admin,relevant as PosSale[]);
+  const settled = historical ? new Map<string, string>() : await refreshAdmissionPosSales(c.admin,relevant as PosSale[]);
   let recorded = data ?? [];
   if ([...settled.values()].includes('paid')) {
     const latest = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment')
@@ -67,7 +71,7 @@ export async function GET() {
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });
-  return Response.json({ ok: true, date: today, enabled: paymentFlowEnabled('admission_pos'), visits, settled_count:[...settled.values()].filter(status=>status==='paid').length, pending_sales:(openSales??[]).filter(sale=>sale.created_by_user_id===c.user.id) }, { headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ok: true, date: today, enabled: !historical && paymentFlowEnabled('admission_pos'), visits, settled_count:[...settled.values()].filter(status=>status==='paid').length, pending_sales:(openSales??[]).filter(sale=>sale.created_by_user_id===c.user.id) }, { headers: { 'cache-control': 'no-store' } });
 }
 
 export async function POST(req: Request) {

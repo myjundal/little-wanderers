@@ -1,19 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { easternDate, type MembershipTier } from '@/lib/founding-membership';
+import { type MembershipTier } from '@/lib/founding-membership';
 
 export const MEMBERSHIP_MANAGEMENT_LABELS = { waitlist: 'Wanderlist Founding', public: 'General Founding', regular: 'General' } as const;
-type Enrollment = { household_id: string; pricing_tier: MembershipTier; status: string; child_ids: string[]; created_at: string; paid_through?: string | null };
-type GeneralMembership = { household_id: string | null; person_id?: string | null; renews_at: string | null; square_environment?: string | null };
+type Enrollment = { household_id: string; pricing_tier: MembershipTier; status: string; child_ids: string[]; created_at: string; paid_through?: string | null; canceled_at?: string | null; updated_at?: string };
+type GeneralMembership = { household_id: string | null; person_id?: string | null; renews_at: string | null; square_environment?: string | null; created_at?: string };
 type Child = { id: string; household_id: string; role?: string };
 export type MembershipSummary = Record<MembershipTier | 'total', { memberships: number; children: number }> & { unverifiedGeneral: number };
 
 /** Count family enrollments, not login accounts or historical membership rows. */
 export function summarizeMemberships(enrollments: Enrollment[], general: GeneralMembership[], children: Child[], environment: string, now = new Date()): MembershipSummary {
   const families = new Map<string, { tier: MembershipTier; children: Set<string> }>();
-  const date = easternDate(now);
+  const latest = new Map<string, Enrollment>();
   for (const row of [...enrollments].sort((a, b) => b.created_at.localeCompare(a.created_at))) {
-    const current = ['pending', 'activating', 'scheduled', 'active'].includes(row.status) || (row.status === 'canceling' && Boolean(row.paid_through && row.paid_through >= date));
-    if (!current || families.has(row.household_id)) continue;
+    if (latest.has(row.household_id) || !['pending', 'activating', 'scheduled', 'active', 'canceling', 'canceled'].includes(row.status)) continue;
+    latest.set(row.household_id, row);
+    if (!['pending', 'activating', 'scheduled', 'active'].includes(row.status)) continue;
     families.set(row.household_id, { tier: row.pricing_tier, children: new Set(row.child_ids) });
   }
   const currentGeneral = general.filter(row => !row.renews_at || new Date(row.renews_at) > now);
@@ -23,6 +24,8 @@ export function summarizeMemberships(enrollments: Enrollment[], general: General
     const person = row.person_id ? people.get(row.person_id) : undefined;
     const householdId = row.household_id || person?.household_id;
     if (!householdId) continue;
+    const enrollment = latest.get(householdId);
+    if (enrollment && ['canceling', 'canceled'].includes(enrollment.status) && (!row.created_at || Date.parse(row.created_at) <= Date.parse(enrollment.canceled_at || enrollment.updated_at || enrollment.created_at))) continue;
     const coveredChildren = row.household_id
       ? children.filter(p => p.household_id === householdId && (!p.role || p.role === 'child')).map(p => p.id)
       : person && (!person.role || person.role === 'child') ? [person.id] : [];
@@ -44,7 +47,7 @@ export async function loadMembershipSummary(admin: SupabaseClient, environment: 
   const now = new Date();
   // Page explicitly so totals do not silently stop at PostgREST's row limit.
   for (let offset = 0; ; offset += 500) {
-    const result = await admin.from('founding_memberships').select('id,household_id,pricing_tier,status,child_ids,created_at,paid_through').eq('environment', environment).order('id').range(offset, offset + 499);
+    const result = await admin.from('founding_memberships').select('id,household_id,pricing_tier,status,child_ids,created_at,paid_through,canceled_at,updated_at').eq('environment', environment).order('id').range(offset, offset + 499);
     if (result.error) throw new Error('Unable to count memberships.');
     enrollments.push(...result.data); if (result.data.length < 500) break;
   }

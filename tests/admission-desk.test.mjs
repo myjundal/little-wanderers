@@ -166,7 +166,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
   const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic, '@/lib/admission-arrivals': loadSquareModules().load('src/lib/admission-arrivals.ts') }, {
-    React, fetch, AbortController,
+    React, fetch, AbortController, Date: class extends Date { constructor(value) { super(value ?? '2026-11-11T15:00:00Z'); } static now() { return Date.parse('2026-11-11T15:00:00Z'); } },
     document: { visibilityState: 'visible', addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; } },
     navigator: { userAgent: 'iPad', standalone: homeScreen },
     window: { addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; }, location: { search: initialSearch, href: `https://example.test/staff/checkin${initialSearch}`, assign(url) { navigations.push(url); }, replace(url) { navigations.push(url); } }, history: { replaceState() {} }, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {}, sessionStorage: { setItem(key, value) { storage.set(key, value); }, getItem(key) { return storage.get(key) ?? (key === 'admission-family' ? family.id : null); }, removeItem(key) { storage.delete(key); } } },
@@ -233,7 +233,7 @@ test('name-based UI checks in selected visitors manually, skips covered charges 
   assert.ok(h.text().includes('Total due: $16.00'));
   assert.equal(h.nodes().find(node => node.props?.id === 'family-search').props.value, '');
   assert.ok(h.text().includes('Today’s reservations & visitors'));
-  assert.ok(h.requests.some(request => request.url === '/api/admin/admission/desk?q='));
+  assert.ok(h.requests.some(request => request.url === '/api/admin/admission/desk?q=&date=2026-11-11'));
   assert.equal(h.nodes().filter(node => node.type === 'input' && node.props.type === 'checkbox' && node.props.disabled).length, 2);
   assert.ok(h.nodes().some(node => node.type === 'dialog'));
   assert.equal(h.navigations.length, 0);
@@ -538,4 +538,35 @@ test('arrival cards show per-window ages and a newly checked-in family turns gre
  await h.button('Choose family').props.onClick();await h.flush();h.button('Select everyone remaining').props.onClick();await h.flush();await h.button('Check in 2').props.onClick();await h.flush();
  assert.deepEqual(cards().map(n=>n.props['data-family-id']),['another',family.id]);assert.equal(cards().at(-1).props['data-arrival-state'],'checked-in');
  assert.ok(h.text().includes('0yr old: 1'));assert.ok(h.text().includes('0 waiting'));
+});
+
+
+test('date arrows and calendar load the chosen day and keep historical check-in actions disabled', async () => {
+  const h = uiHarness({ initialVisits: [{ id: 'old-visit', person_id: 'child', household_id: family.id, household_name: family.name, name: 'Sam', checked_in_at: '2026-11-10T15:00:00Z', checked_out_at: '2026-11-10T16:00:00Z', price_cents: 0, payment_status: 'covered' }] });
+  await h.flush();
+  h.button('Previous day').props.onClick(); await h.flush();
+  assert.ok(h.requests.some(request => request.url.includes('/desk?q=&date=2026-11-10')));
+  assert.ok(h.requests.some(request => request.url === '/api/admin/admission/pos?date=2026-11-10'));
+  assert.ok(h.text().includes('Checked out'));
+  assert.equal(h.button('Open family / payment').props.disabled, true);
+  h.nodes().find(node => node.type === 'input' && node.props.type === 'date').props.onChange({ target: { value: '2026-11-15' } }); await h.flush();
+  assert.ok(h.requests.some(request => request.url.includes('date=2026-11-15')));
+  h.button('Show / refresh today').props.onClick(); await h.flush();
+  assert.equal(h.nodes().find(node => node.type === 'input' && node.props.type === 'date').props.value, '2026-11-11');
+  assert.equal(h.requests.filter(request => request.body).length, 0);
+});
+
+test('desk date validation and Eastern date boundaries handle daylight saving changes', async () => {
+  const h = apiHarness();
+  assert.equal((await h.get('?date=2026-02-30')).status, 400);
+  assert.equal(h.calls.length, 0);
+  for (const [date, hours] of [['2026-03-08', 23], ['2026-11-01', 25]]) {
+    const h = apiHarness(); const result = await (await h.get(`?date=${date}`)).json();
+    assert.equal(result.date, date);
+    for (const table of ['open_play_reservations', 'checkins']) {
+      const query = h.calls.find(call => call.table === table);
+      const start = query.filters.find(([op]) => op === 'gte')[2], end = query.filters.find(([op]) => op === 'lt')[2];
+      assert.equal((Date.parse(end) - Date.parse(start)) / 3600000, hours);
+    }
+  }
 });

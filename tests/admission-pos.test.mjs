@@ -79,7 +79,7 @@ test('completed Square receipt can be retried after a database failure without a
 
 test('POS API requires staff and verification looks up the signed-in operator’s stored sale',async()=>{
  let expected;
- const base={'@/lib/admission-prepayments':{},'@/lib/infant-sibling-admission':{},'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
+ const base={'@/lib/service-day-revenue':{validRevenueDate:()=>true},'@/lib/admission-prepayments':{},'@/lib/infant-sibling-admission':{},'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
  const denied=loadModule('src/app/api/admin/admission/pos/route.ts',{...base,'@/lib/authz':{requireStaffContext:async()=>({ok:false,response:Response.json({}, {status:403})})}});
  assert.equal((await denied.POST({json:async()=>({})})).status,403);
  const query={select(){return this},eq(key,value){expected??={};expected[key]=value;return this},async maybeSingle(){return {data:null,error:null}}};
@@ -153,7 +153,7 @@ test('staff sync is bound to its stored sale and a transaction callback can reso
  const sale={id:checkin,status:'open',environment:'production',created_by_user_id:ids.user};
  const query={select(){return this},eq(key,value){selected[key]=value;return this},async maybeSingle(){return {data:sale,error:null}}};
  const api=loadModule('src/app/api/admin/admission/pos/route.ts',{
-  '@/lib/admission-prepayments':{}, '@/lib/infant-sibling-admission':{},
+  '@/lib/service-day-revenue':{validRevenueDate:()=>true},'@/lib/admission-prepayments':{}, '@/lib/infant-sibling-admission':{},
   '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:ids.user},admin:{from:()=>query}})},
   '@/lib/square-client':{squareConfig:()=>({environment:'production'})},'@/lib/admission-checkout':{},
   '@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)},
@@ -273,4 +273,19 @@ test('Square POS charges $10 for a baby alone and preserves a completed receipt'
  const {projectInfantSiblingAdmission}=m.load('src/lib/infant-sibling-admission.ts');
  const visit={id:checkin,person_id:ids.person,price_cents:1600,payment_status:'paid',checked_in_at:new Date().toISOString(),square_environment:'sandbox'};
  assert.equal(projectInfantSiblingAdmission([visit],[{id:ids.person,household_id:ids.household,role:'child',birthdate:birthday.toISOString().slice(0,10)}],'sandbox')[0].price_cents,1600);
+});
+
+test('historical admission status is read-only and validates dates before database reads',async()=>{
+ let reads=0,reconciliations=0;
+ const admin={from(){reads++;const q={select(){return q},gte(){return q},lt(){return q},in(){return q},then(resolve){return resolve({data:[],error:null})}};return q}};
+ const api=loadSquareModules({mocks:{
+  '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:'operator'},admin})},
+  '@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},
+  '@/lib/admission-prepayments':{getAdmissionPrepayments:async(_admin,rows)=>rows},
+  '@/lib/infant-sibling-admission':{projectInfantSiblingAdmission:rows=>rows},
+  '@/lib/square-admission-pos':{refreshAdmissionPosSales(){reconciliations++;throw Error('History must not reconcile payments')}},
+ }}).load('src/app/api/admin/admission/pos/route.ts');
+ assert.equal((await api.GET(new Request('https://example.test?date=2026-02-30'))).status,400);assert.equal(reads,0);
+ const response=await api.GET(new Request('https://example.test?date=2026-11-01'));const result=await response.json();
+ assert.equal(result.date,'2026-11-01');assert.equal(result.enabled,false);assert.equal(reconciliations,0);assert.equal(result.pending_sales.length,0);assert.equal(response.status,200);
 });

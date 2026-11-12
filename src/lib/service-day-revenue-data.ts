@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareRequest } from '@/lib/square-client';
-import { calculateRevenue, revenueServices, type RevenueEvidence, type RevenueSources } from '@/lib/service-day-revenue';
+import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
+import { squareSaleCategory, supplementSquareRevenue } from '@/lib/square-daily-revenue';
+import { allocateRevenue, calculateRevenue, revenueServices, type RevenueEvidence, type RevenueSources } from '@/lib/service-day-revenue';
 
 const fields = {
   bookings: ['open_play_reservations', 'id,slot_id,household_id,child_ids,child_count,status,payment_status,payment_environment,amount_cents,square_order_id'],
@@ -43,8 +45,8 @@ export async function loadRevenueSources(admin: SupabaseClient) {
 }
 
 type Money = { amount?: number; currency?: string };
-type ProviderOrder = { id: string; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[] };
-type ProviderPayment = { id: string; order_id?: string; location_id?: string; status?: string; amount_money?: Money; refunded_money?: Money; tip_money?: Money; created_at?: string };
+type ProviderOrder = { id: string; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[]; line_items?: { name?: string; item_type?: string; total_money?: Money; total_tax_money?: Money }[] };
+type ProviderPayment = { id: string; order_id?: string; location_id?: string; status?: string; amount_money?: Money; refunded_money?: Money; tip_money?: Money; created_at?: string; source_type?: string; card_details?: { card?: { card_brand?: string } } };
 function money(value?: Money, optional = false) {
   if (!value && optional) return 0;
   if (value?.currency !== 'USD' || !Number.isSafeInteger(value.amount) || value.amount! < 0) throw new Error('Payment currency or amount needs review.');
@@ -69,27 +71,71 @@ export async function readRevenueEvidence(orderId: string): Promise<RevenueEvide
     if (payment.status !== 'COMPLETED' || !payment.created_at || !Number.isFinite(Date.parse(payment.created_at))) throw new Error('Payment is not settled.');
     const amount = money(payment.amount_money), refund = money(payment.refunded_money, true);
     if (refund > amount || ((tax || tip) && refund)) throw new Error('Refund with tax or tip needs a separate allocation.');
-    payments.push({ id: payment.id, amount_cents: amount, refunded_cents: refund, paid_at: payment.created_at, tip: money(payment.tip_money, true) });
+    payments.push({ id: payment.id, amount_cents: amount, refunded_cents: refund, paid_at: payment.created_at, gift_card: payment.source_type === 'GIFT_CARD' || payment.card_details?.card?.card_brand === 'SQUARE_GIFT_CARD', tip: money(payment.tip_money, true) });
   }
   const received = payments.reduce((sum, payment) => sum + payment.amount_cents, 0);
   if (total < tax + tip || received + tip > total || payments.reduce((sum, payment) => sum + payment.tip, 0) !== tip) throw new Error('Order amounts need review.');
   // Do not guess which portion of a partially paid invoice was tax.
-  if (tax && (received + tip !== total || payments.length !== 1)) throw new Error('Partial or split tax payment needs review.');
-  if (tax) payments[0].amount_cents -= tax;
-  return { order_id: orderId, service_total_cents: total - tax - tip, tax_cents: tax, tip_cents: tip, payments: payments.map(payment => ({ id: payment.id, amount_cents: payment.amount_cents, refunded_cents: payment.refunded_cents, paid_at: payment.paid_at })) };
+  if (tax && received + tip !== total) throw new Error('Partial or split tax payment needs review.');
+  const taxes = allocateRevenue(tax, payments.map(payment => payment.amount_cents));
+  payments.forEach((payment, index) => { payment.amount_cents -= taxes[index]; });
+  return { order_id: orderId, service_total_cents: total - tax - tip, tax_cents: tax, tip_cents: tip, items: (order.line_items ?? []).map(item => ({ label: (item.name || 'Square sale').slice(0, 200), category: squareSaleCategory(item.name || '', item.item_type), amount_cents: money(item.total_money) - money(item.total_tax_money, true) })), payments: payments.map(payment => ({ id: payment.id, amount_cents: payment.amount_cents, refunded_cents: payment.refunded_cents, paid_at: payment.paid_at, gift_card: payment.gift_card })) };
+}
+
+/** Scan all settled tenders, including cash and sales with no website booking.
+ * Cursor paging continues even when Square returns fewer than the requested limit. */
+export async function readDailySquarePayments(date: string) {
+  const config = squareConfig();
+  if (config.environment !== 'production') throw new Error('Production Square access is required.');
+  const next = new Date(Date.parse(`${date}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const base = { begin_time: toPartyDateTimeIso(date, 0), end_time: toPartyDateTimeIso(next, 0), location_id: config.locationId, limit: '100', sort_order: 'ASC' };
+  const payments = new Map<string, ProviderPayment>();
+  const cursors = new Set<string>();
+  let cursor = '';
+  for (;;) {
+    const query = new URLSearchParams({ ...base, ...(cursor ? { cursor } : {}) });
+    const result = await squareRequest<{ payments?: ProviderPayment[]; cursor?: string }>(`/v2/payments?${query}`);
+    for (const payment of result.payments ?? []) {
+      if (payment.location_id !== config.locationId) throw new Error('Payment location needs review.');
+      if (payment.status === 'COMPLETED') {
+        if (!payment.id || !payment.created_at || !Number.isFinite(Date.parse(payment.created_at))) throw new Error('Payment date needs review.');
+        if (getPartyDateKey(payment.created_at) === date) payments.set(payment.id, payment);
+      }
+    }
+    if (!result.cursor) break;
+    if (cursors.has(result.cursor) || cursors.size >= 100) throw new Error('Payment paging could not be completed.');
+    cursors.add(result.cursor); cursor = result.cursor;
+  }
+  return [...payments.values()];
+}
+
+function unlinkedPaymentEvidence(payment: ProviderPayment): RevenueEvidence {
+  const amount = money(payment.amount_money), refunded = money(payment.refunded_money, true);
+  if (refunded > amount || !payment.created_at) throw new Error('Payment refund needs review.');
+  return { order_id: `payment:${payment.id}`, service_total_cents: amount, tax_cents: 0, tip_cents: money(payment.tip_money, true),
+    items: [{ label: 'Other Square payment', category: 'other', amount_cents: amount }],
+    payments: [{ id: payment.id, amount_cents: amount, refunded_cents: refunded, paid_at: payment.created_at,
+      gift_card: payment.source_type === 'GIFT_CARD' || payment.card_details?.card?.card_brand === 'SQUARE_GIFT_CARD' }] };
 }
 
 export async function getServiceDayRevenue(admin: SupabaseClient, date: string) {
   const { sources, issues } = await loadRevenueSources(admin);
   const services = revenueServices(sources);
-  const ids = [...new Set(services.filter(row => row.date === date).flatMap(row => row.charges.map(charge => charge.order_id)))];
+  let payments: ProviderPayment[] = [];
+  try { payments = await readDailySquarePayments(date); }
+  catch { issues.push('Unable to load all Square sales. Café, gift cards, memberships and other counter sales may be missing.'); }
+  const ids = [...new Set([...services.filter(row => row.date === date).flatMap(row => row.charges.map(charge => charge.order_id)), ...payments.flatMap(payment => payment.order_id ? [payment.order_id] : [])])];
   if (ids.length > 300) throw new Error('Too many orders for one daily report.');
   const evidence = new Map<string, RevenueEvidence>();
+  for (const payment of payments.filter(payment => !payment.order_id)) {
+    try { const receipt = unlinkedPaymentEvidence(payment); evidence.set(receipt.order_id, receipt); }
+    catch { issues.push(`Unable to verify Square payment ${payment.id.slice(0, 8)}.`); }
+  }
   for (let offset = 0; offset < ids.length; offset += 6) {
     await Promise.all(ids.slice(offset, offset + 6).map(async id => {
       try { evidence.set(id, await readRevenueEvidence(id)); }
-      catch (error) { console.warn('revenue_receipt_unavailable', id, error instanceof Error ? error.message : 'Verification failed'); }
+      catch (error) { issues.push(`Unable to verify Square receipt ${id.slice(0, 8)}.`); console.warn('revenue_receipt_unavailable', id, error instanceof Error ? error.message : 'Verification failed'); }
     }));
   }
-  return calculateRevenue(services, evidence, date, issues);
+  return calculateRevenue(supplementSquareRevenue(services, evidence, date), evidence, date, issues);
 }
