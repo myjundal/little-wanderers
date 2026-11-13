@@ -197,3 +197,44 @@ validated account/family API. No family fields, required confirmations, prices,
 billing controls, or saved account identities are removed. Wanderlist sign-in
 starts with the original email; linked phone sign-in remains available with an
 explicit explanation. No opening date, subscription or charge is created.
+
+
+## Owner billing activation — November 13, 2026
+
+The owner explicitly requested enabling billing from the membership dashboard.
+The personal owner's server-managed auth app_metadata can now grant
+founding_billing_activation.production=true. The grant is environment-specific;
+customer-editable user_metadata is never consulted. Existing global environment
+enablement remains supported. Production activation stays disabled in preview
+deployments. Kiosk and staff sessions cannot enter the owner route. Enabling this
+capability itself creates no subscription and takes no payment.
+
+Review billing activation is a read-only action even when activation is disabled.
+It retrieves the enrolled child's first actual admission since the consent day,
+the saved card from Square, and all pages of that customer's existing subscriptions.
+Unvisited families, inactive cards, unresolved subscriptions and stale amounts
+cannot proceed. A separate recurring invoice created manually in Square must be
+resolved before starting a subscription; the owner confirms this on the review.
+
+The owner reviews the monthly amount, first visit, card last four and next renewal,
+checks the confirmation, types START MONTHLY BILLING and clicks the separate final
+button. GET/review cannot activate, and POST checks the exact reviewed amount/date
+again. Nothing in check-in or the email scheduler calls activation.
+
+Square rejects a past subscription start. For a delayed first activation within
+the initial billing period, preserve the actual first visit locally, freeze the
+provider's current start date in membership_events before any external write, and
+use the existing stable catalog/subscription keys. The initial Square subscription
+uses today's billing day to take the full first-month amount. After verifying the
+first invoice is fully paid for exactly the authorized amount, schedule the next
+renewal on the original first-visit day. The helper accepts the verified future
+anchor-change action returned by Square and reuses it after uncertain responses.
+Paid coverage is bounded by that scheduled renewal. A missed activation older
+than one whole billing period requires separate review. Retrying keeps the same
+frozen parameters and never creates a second independent subscription.
+
+Validated with a synthetic Square Sandbox card: a past start was rejected; a
+current start charged the full synthetic $1, and changing the renewal anchor
+scheduled December 11 after a November 11 visit / November 13 activation, with
+one invoice. The synthetic subscription was canceled. No production subscription
+or payment was created during verification.
