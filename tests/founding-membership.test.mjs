@@ -19,7 +19,9 @@ create table open_play_reservations(slot_id uuid,household_id uuid,status text);
 create table roles(id uuid,role text);create table user_roles(user_id uuid,role text);
 create table memberships(id uuid primary key default gen_random_uuid(),household_id uuid,person_id uuid,renews_at timestamptz,square_environment text);
 create table waivers(household_id uuid,waiver_version text,signed_at timestamptz,waiver_expires_at timestamptz,electronic_signature text,covered_person_ids uuid[]);
-create table checkins(id uuid primary key default gen_random_uuid(),person_id uuid,household_id uuid,child_id uuid,created_by_user_id uuid,created_by_role text,source text,price_cents integer,membership_applied boolean,checked_in_at timestamptz default now());
+create table checkins(id uuid primary key default gen_random_uuid(),person_id uuid,household_id uuid,child_id uuid,created_by_user_id uuid,created_by_role text,source text,price_cents integer,membership_applied boolean,square_environment text,checked_in_at timestamptz default now());
+create table staff_family_search_aliases(alias_household_id uuid,canonical_household_id uuid);
+create table membership_events(id uuid primary key,household_id uuid,action text,notes text,created_by_user_id uuid,created_by_role text);
 create table occupancy_events(event_type text,delta integer,created_by uuid);
 `;
 
@@ -43,7 +45,11 @@ async function prepare(admin, input = profile(), overrides = {}) {
   return result.data;
 }
 function modules(fetchImpl, env = {}) {
-  return loadSquareModules({ fetch: fetchImpl, env: { FOUNDING_CARD_ENROLLMENT_ENABLED: 'true', SQUARE_APPLICATION_ID: 'test-app', ...env } });
+  return loadSquareModules({ fetch: async (url, options) => {
+    if (new URL(url).pathname === '/v2/cards/card') return Response.json({ card: { id: 'card', customer_id: 'customer', enabled: true } });
+    if (new URL(url).pathname === '/v2/subscriptions/search') return Response.json({ subscriptions: [] });
+    return fetchImpl(url, options);
+  }, env: { FOUNDING_CARD_ENROLLMENT_ENABLED: 'true', SQUARE_APPLICATION_ID: 'test-app', ...env } });
 }
 const contact = { email: 'parent@example.test', firstName: 'Parent', lastName: 'Family', phone: '+18605550123' };
 
@@ -466,10 +472,12 @@ test('first-visit activation rejects old consent and gives each family an indepe
   await db.query("update founding_memberships set status='pending',square_card_id='card',square_customer_id=id::text");
   const enrolled = row => ({ ...row, status: 'pending', square_card_id: 'card', square_customer_id: row.id });
   const lib = modules().load('src/lib/founding-membership.ts');
-  let visitDate = '2026-11-04'; const subscriptions = [];
+  let visitDate = '2026-11-04'; let activeCustomer = first.id; const subscriptions = [];
   const service = loadSquareModules({ env: { FOUNDING_BILLING_ENABLED: 'true' },
     mocks: { '@/lib/founding-membership': { ...lib, easternDate: () => visitDate } },
     fetch: async (_url, options) => {
+      if (new URL(_url).pathname === '/v2/cards/card') return Response.json({ card: { id: 'card', customer_id: activeCustomer, enabled: true } });
+      if (new URL(_url).pathname === '/v2/subscriptions/search') return Response.json({ subscriptions: [] });
       const body = JSON.parse(options.body);
       if (body.object) return Response.json({ catalog_object: { id: body.object.type === 'SUBSCRIPTION_PLAN' ? 'plan' : 'variation' } });
       subscriptions.push(body);
@@ -480,7 +488,7 @@ test('first-visit activation rejects old consent and gives each family an indepe
   assert.equal(subscriptions.length, 0);
   await service.activateFounding(admin, enrolled(first), visitDate);
   assert.equal((await db.query('select start_date from founding_memberships where id=$1', [second.id])).rows[0].start_date, null);
-  visitDate = '2026-11-06';
+  visitDate = '2026-11-06'; activeCustomer = second.id;
   await service.activateFounding(admin, enrolled(second), visitDate);
   assert.deepEqual(subscriptions.map(row => [row.start_date, row.monthly_billing_anchor_date]), [['2026-11-04', 4], ['2026-11-06', 6]]);
   assert.equal((await db.query('select start_date::text from founding_memberships where id=$1', [first.id])).rows[0].start_date, '2026-11-04');
@@ -489,10 +497,11 @@ test('first-visit activation rejects old consent and gives each family an indepe
 test('owner activation requires an explicit first-visit confirmation before calling the billing service', async t => {
   const { admin } = await database(t); const enrollment = await prepare(admin); const calls = [];
   const api = loadSquareModules({ mocks: {
-    '@/lib/authz': { requireOwnerContext: async () => ({ ok: true, admin }) },
+    '@/lib/authz': { requireOwnerContext: async () => ({ ok: true, admin, user: { id: ids.user } }) },
     '@/lib/founding-square': { activateFounding: async (...args) => { calls.push(args); } },
+    '@/lib/founding-billing-activation': { ownerFoundingBillingEnabled: () => true, foundingBillingDetails: async () => ({ start_date: '2026-11-04', amount_cents: 5000, error: null }) },
   } }).load('src/app/api/admin/founding-memberships/route.ts');
-  const input = { id: enrollment.id, startDate: '2026-11-04', confirmation: 'START MONTHLY BILLING' };
+  const input = { id: enrollment.id, startDate: '2026-11-04', expectedAmountCents: 5000, confirmation: 'START MONTHLY BILLING' };
   const post = patch => api.POST({ json: async () => ({ ...input, ...patch }) });
   assert.equal((await post({})).status, 400);
   assert.equal((await post({ firstVisitConfirmed: false })).status, 400);
@@ -500,4 +509,94 @@ test('owner activation requires an explicit first-visit confirmation before call
   assert.equal((await post({ firstVisitConfirmed: true })).status, 200);
   assert.equal(calls.length, 1);
   assert.equal(calls[0][1].id, enrollment.id);
+});
+
+test('billing capability is a server-owned, environment-specific grant', () => {
+  const prod = loadSquareModules({ env: { SQUARE_ENVIRONMENT: 'production' } }).load('src/lib/founding-billing-activation.ts');
+  assert.equal(prod.ownerFoundingBillingEnabled(), false);
+  assert.equal(prod.ownerFoundingBillingEnabled({ user_metadata: { founding_billing_activation: { production: true } } }), false);
+  assert.equal(prod.ownerFoundingBillingEnabled({ app_metadata: { founding_billing_activation: { sandbox: true } } }), false);
+  assert.equal(prod.ownerFoundingBillingEnabled({ app_metadata: { founding_billing_activation: { production: true } } }), true);
+});
+
+test('historical activation freezes a current Square start, charges one full month, and recovers an uncertain renewal-date change', async t => {
+  const { db, admin } = await database(t); const row = await prepare(admin);
+  const dates = modules().load('src/lib/founding-membership.ts');
+  const today = dates.easternDate();
+  const visit = dates.easternDate(new Date(Date.now() - 2 * 86400000));
+  const consent = new Date(Date.now() - 3 * 86400000).toISOString();
+  await db.query("update founding_memberships set status='pending',square_customer_id='customer',square_card_id='card',consent_at=$1", [consent]);
+  await db.query("insert into checkins(person_id,household_id,checked_in_at,source,square_environment) values($1,$2,$3,'staff_manual','sandbox')", [childId,ids.household,visit+'T15:00:00Z']);
+  let scheduled = false; let anchorCalls = 0; const writes = [];
+  const action = { type: 'CHANGE_BILLING_ANCHOR_DATE', effective_date: dates.addMonths(visit,1), monthly_billing_anchor_date: Number(visit.slice(8)) };
+  const provider = async (url, options) => {
+    const path = new URL(url).pathname;
+    if (path === '/v2/cards/card') return Response.json({ card: { id: 'card', customer_id: 'customer', enabled: true } });
+    if (path === '/v2/subscriptions/search') return Response.json({ subscriptions: [] });
+    if (path === '/v2/subscriptions/sub' && options.method === 'GET') return Response.json({ subscription: { id: 'sub', invoice_ids: ['inv'], monthly_billing_anchor_date: Number(today.slice(8)) }, actions: scheduled ? [action] : [] });
+    if (path === '/v2/invoices/inv') return Response.json({ invoice: { subscription_id: 'sub', primary_recipient: { customer_id: 'customer' }, status: 'PAID', payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: 5000, currency: 'USD' } }] } });
+    const body = JSON.parse(options.body); writes.push({path,body});
+    if (body.object) return Response.json({ catalog_object: { id: body.object.type === 'SUBSCRIPTION_PLAN' ? 'plan' : 'variation' } });
+    if (path.endsWith('/billing-anchor')) { scheduled = true; anchorCalls++; return Response.json({ errors: [{ code: 'TEMPORARY_ERROR' }] }, { status: 503 }); }
+    if (path === '/v2/subscriptions') return Response.json({ subscription: { id: 'sub', customer_id: 'customer', start_date: body.start_date } });
+    throw Error('Unexpected endpoint '+path);
+  };
+  const service = loadSquareModules({ fetch: provider }).load('src/lib/founding-square.ts');
+  let enrollment = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
+  const options = { ownerAuthorized: true, ownerUserId: ids.user };
+  await assert.rejects(service.activateFounding(admin,enrollment,visit,options), /Square request/);
+  enrollment = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
+  assert.equal(enrollment.status,'activating'); assert.equal(enrollment.square_subscription_id,'sub');
+  await service.activateFounding(admin,enrollment,visit,options);
+  const saved = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
+  assert.equal(saved.status,'active'); assert.equal(saved.start_date,visit); assert.equal(saved.paid_through,dates.addMonths(visit,1));
+  const subscriptionCalls=writes.filter(w=>w.path==='/v2/subscriptions');
+  assert.equal(subscriptionCalls.length,2);
+  assert.deepEqual(subscriptionCalls[0].body,subscriptionCalls[1].body);
+  assert.equal(subscriptionCalls[0].body.start_date,today);
+  assert.equal(subscriptionCalls[0].body.monthly_billing_anchor_date,Number(today.slice(8)));
+  assert.equal(writes.find(w=>w.body.object?.type==='SUBSCRIPTION_PLAN_VARIATION').body.object.subscription_plan_variation_data.phases[0].pricing.price_money.amount,5000);
+  assert.equal(anchorCalls,1);
+  const record=JSON.parse((await db.query("select notes from membership_events where action='billing_activation_parameters'")).rows[0].notes);
+  assert.equal(record.first_visit_date,visit); assert.equal(record.square_start_date,today);
+});
+
+test('read-only review blocks disabled cards and any existing live subscription, including later pages', async () => {
+  const enrollment={status:'pending',environment:'sandbox',square_customer_id:'customer',square_card_id:'card'};
+  let writes=0; let pages=0;
+  const loader=loadSquareModules({fetch:async(url,options)=>{
+    const path=new URL(url).pathname;
+    if(path==='/v2/cards/card')return Response.json({card:{id:'card',customer_id:'customer',enabled:true}});
+    if(path==='/v2/subscriptions/search') { pages++; return Response.json(pages===1?{subscriptions:[],cursor:'next'}:{subscriptions:[{id:'existing',customer_id:'customer',location_id:'test-location',status:'ACTIVE'}]}); }
+    writes++;throw Error('Forbidden financial write');
+  }});
+  await assert.rejects(loader.load('src/lib/founding-billing-activation.ts').verifyFoundingBillingCard(enrollment),/existing Square subscription/);
+  assert.equal(pages,2);assert.equal(writes,0);
+  const disabled=loadSquareModules({fetch:async()=>Response.json({card:{id:'card',customer_id:'customer',enabled:false}})}).load('src/lib/founding-billing-activation.ts');
+  await assert.rejects(disabled.verifyFoundingBillingCard(enrollment),/saved card is unavailable/);
+});
+
+test('first-visit review excludes reservations, sandbox arrivals, and visits before consent', async t => {
+  const { db,admin }=await database(t);const row=await prepare(admin);
+  const today=modules().load('src/lib/founding-membership.ts').easternDate();
+  const insert=async(source,environment,date=today)=>db.query('insert into checkins(person_id,household_id,source,square_environment,checked_in_at) values($1,$2,$3,$4,$5)',[childId,ids.household,source,environment,date+'T12:00:00Z']);
+  row.environment='production';row.status='pending';row.square_customer_id='customer';row.square_card_id='card';
+  const lib=modules().load('src/lib/founding-billing-activation.ts');
+  await insert('reservation','production');await insert('staff_manual','sandbox');await insert('staff_manual','production','2020-01-01');
+  assert.equal(await lib.foundingFirstVisit(admin,row),null);
+  await insert('staff_manual','production');
+  assert.equal(await lib.foundingFirstVisit(admin,row),today);
+});
+
+test('owner POST rejects stale amount and missing capability before any activation', async () => {
+  let calls=0;let permitted=true;
+  const row={id:ids.household,status:'pending'};
+  const q={select(){return q;},eq(){return q;},single:async()=>({data:row,error:null})};
+  const api=loadSquareModules({mocks:{
+    '@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin:{from:()=>q},user:{id:ids.user}})},
+    '@/lib/founding-square':{activateFounding:async()=>{calls++;}},
+    '@/lib/founding-billing-activation':{ownerFoundingBillingEnabled:()=>permitted,foundingBillingDetails:async()=>({start_date:'2026-11-11',amount_cents:5000,error:null})},
+  }}).load('src/app/api/admin/founding-memberships/route.ts');
+  const post=amount=>api.POST(new Request('https://example.test/api/admin/founding-memberships',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:ids.household,startDate:'2026-11-11',expectedAmountCents:amount,firstVisitConfirmed:true,confirmation:'START MONTHLY BILLING'})}));
+  assert.equal((await post(6000)).status,409);permitted=false;assert.equal((await post(5000)).status,403);assert.equal(calls,0);
 });
