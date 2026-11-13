@@ -1,0 +1,47 @@
+name: First-visit membership billing emails
+
+on:
+  schedule:
+    - cron: '0 20 * * *'
+      timezone: America/New_York
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview eligible emails without sending
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: membership-billing-notices-production
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the protected website email job
+        env:
+          TRIGGER_TOKEN: ${{ secrets.MEMBERSHIP_NOTICE_TRIGGER_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          token = os.environ.get('TRIGGER_TOKEN', '')
+          if not token:
+              raise SystemExit('Membership email trigger credential is not configured.')
+          payload = json.dumps({'dry_run': os.environ['DRY_RUN'] == 'true'}).encode()
+          request = urllib.request.Request('https://www.thelittlewanderers.com/api/membership-billing-notices', data=payload, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, method='POST')
+          try:
+              with urllib.request.urlopen(request, timeout=90) as response:
+                  result = json.load(response)
+          except urllib.error.HTTPError as error:
+              raise SystemExit('Website membership email job returned HTTP ' + str(error.code))
+          allowed = ['ok', 'dry_run', 'checked_at', 'eligible', 'sent', 'already_sent', 'in_progress', 'review', 'failures', 'pending', 'charges_executed']
+          print(json.dumps({key: result.get(key) for key in allowed}, indent=2))
+          if not result.get('ok') or result.get('review') or result.get('failures') or result.get('pending'):
+              raise SystemExit(2)
+          PY
