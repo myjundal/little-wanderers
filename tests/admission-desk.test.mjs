@@ -124,7 +124,7 @@ test('search and direct family lookup include confirmed alternate-profile bookin
 
 function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false, initialVisits = [] } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
-  let cursor = 0, tree, visits = initialVisits, timers = [], refreshes = 0, saleOpen = false, holdRead = false;
+  let cursor = 0, tree, visits = initialVisits, timers = [], refreshes = 0, saleOpen = false, holdRead = false, holdSync = false;
   const storage = new Map(), intervals = [], heldReads = [];
   const memo = (factory, deps) => {
     const i = cursor++;
@@ -154,6 +154,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     }
     if (body?.mode === 'verify') return Response.json({ ok: !verifyFailure, error: verifyFailure ? 'Receipt pending' : undefined }, { status: verifyFailure ? 409 : 200 });
     if (body?.mode === 'sync') {
+      if (holdSync) { holdSync = false; await new Promise(resolve => heldReads.push(resolve)); }
       if (syncStatus === 'paid') { visits = visits.map(visit => ({ ...visit, payment_status: visit.price_cents > 0 ? 'paid' : visit.payment_status })); saleOpen = false; }
       return Response.json({ ok: true, status: syncStatus });
     }
@@ -184,7 +185,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const nodes = () => { const all = []; const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; all.push(node); walk(node.props?.children); }; walk(tree); return all; };
   const label = node => { if (Array.isArray(node)) return node.map(label).join(''); if (node == null || typeof node === 'boolean') return ''; if (typeof node !== 'object') return String(node); return label(node.props?.children); };
   const button = text => nodes().find(node => node.type === 'button' && (node.props['aria-label'] ?? label(node)).includes(text));
-  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, resume: () => listeners.focus(), visible: () => listeners.visibilitychange(), poll: () => intervals.find(timer => timer.ms === 5000)?.fn(), holdNextRead: () => { holdRead = true; }, releaseReads: () => { for (const resolve of heldReads.splice(0)) resolve(); }, setSyncStatus: value => { syncStatus = value; }, setWaiver: value => { waiver = value; } };
+  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, intervals, resume: () => listeners.focus(), visible: () => listeners.visibilitychange(), poll: () => intervals.find(timer => timer.ms === 15000)?.fn(), holdNextSync: () => { holdSync = true; }, holdNextRead: () => { holdRead = true; }, releaseReads: () => { for (const resolve of heldReads.splice(0)) resolve(); }, setSyncStatus: value => { syncStatus = value; }, setWaiver: value => { waiver = value; } };
 }
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
@@ -448,6 +449,31 @@ test('failed checkout keeps the active visitors and displays an actionable error
   await h.flush();
   assert.ok(h.visits().every(visit => !visit.checked_out_at));
   assert.ok(h.text().includes('Unable to record checkout'));
+});
+
+test('ordinary desk use has no automatic full refresh and returning without a Square sale preserves selection', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  const before = h.requests.length;
+  h.resume(); h.visible(); await h.flush();
+  assert.equal(h.requests.length, before);
+  assert.equal(h.intervals.length, 0);
+  assert.equal(h.button('Check in 2').props.disabled, false);
+});
+
+test('pending Square polling waits 15 seconds and leaves checkout enabled during a slow receipt check', async () => {
+  const initialVisits = people.map(person => ({ id: `visit-${person.id}`, person_id: person.id, household_id: family.id, name: person.first_name, checked_in_at: '2026-11-11T15:00:00Z', checked_out_at: null, price_cents: person.role === 'child' ? 1600 : 0, payment_status: person.role === 'child' ? 'due' : 'covered' }));
+  const h = uiHarness({ pending: true, initialVisits }); await h.flush();
+  assert.equal(h.button('Check out family (2)').props.disabled, false);
+  assert.ok(h.intervals.some(timer => timer.ms === 15000));
+  assert.ok(!h.intervals.some(timer => timer.ms === 5000 || timer.ms === 60000));
+  const before = h.requests.filter(request => !request.body).length;
+  h.holdNextSync(); h.poll(); await h.flush();
+  assert.equal(h.requests.filter(request => !request.body).length, before);
+  assert.equal(h.button('Check out family (2)').props.disabled, false);
+  assert.ok(!h.text().includes('Loading families'));
+  h.releaseReads(); await h.flush();
+  assert.equal(h.button('Check out family (2)').props.disabled, false);
 });
 
 test('Home Screen app verifies a payment without a callback, refreshes on visibility and releases the payment lock', async () => {

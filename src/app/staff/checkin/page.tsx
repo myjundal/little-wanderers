@@ -146,13 +146,13 @@ export default function StaffCheckinPage() {
     } finally { callbackBusy.current = false; setBusy(false); }
   }
 
-  async function resumePayments() {
+  async function resumePayments(pendingOnly = false) {
     if (resumeBusy.current || checkinBusy.current || checkoutBusy.current) return;
     resumeBusy.current = true;
     try {
       const callback = squarePosCallback(window.location.search);
       if (callback?.status === 'ok') { await verifyReturn(); return; }
-      await refreshPayments();
+      if (!pendingOnly) await refreshPayments();
       const launch = pendingLaunch.current;
       if (!launch) return;
       const response = await fetch('/api/admin/admission/pos', { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -183,6 +183,7 @@ export default function StaffCheckinPage() {
 
   useEffect(() => {
     const resume = () => {
+      if (!pendingLaunch.current && !squarePosCallback(window.location.search)) return;
       setDeskRefresh(value => value + 1);
       void resumePayments();
     };
@@ -196,23 +197,12 @@ export default function StaffCheckinPage() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      void resumePayments();
-      setDeskRefresh(value => value + 1);
-    }, 60000);
-    return () => window.clearInterval(timer);
-    // Keep other operators' arrivals and departures current on the shared desk.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     if (!pendingPosId) return;
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void resumePayments();
-    }, 5000);
+      if (document.visibilityState === 'visible') void resumePayments(true);
+    }, 15000);
     return () => window.clearInterval(timer);
-    // Retry a newly completed receipt while Square finishes publishing it.
+    // Check only the pending receipt; refresh the desk after a terminal result.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPosId]);
 
