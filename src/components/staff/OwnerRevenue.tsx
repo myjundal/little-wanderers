@@ -24,6 +24,7 @@ export default function OwnerRevenue({ initialDate }: { initialDate: string }) {
       .finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
   }, [date, refresh]);
+  const partyReviewCount = report?.rows.filter(row => row.category === 'party' && row.issues.length > 0).length ?? 0;
   const shiftDate = (days: number) => setDate(new Date(Date.parse(`${date}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10));
   return <main className={styles.main}>
     <header className={styles.header}>
@@ -47,6 +48,7 @@ export default function OwnerRevenue({ initialDate }: { initialDate: string }) {
       </div>
       <section className={styles.panel} aria-label="파티 매출 집계">
         <div className={styles.sectionHeading}><h2>파티일 기준 매출</h2><strong>{usd(report.party_cents)}</strong></div>
+        {partyReviewCount > 0 && <p role="status" className={styles.warning}>파티 {partyReviewCount}건의 결제 확인이 필요합니다. 파티 매출과 미수금은 확인된 내역의 부분 합계이며, 연결되지 않은 금액은 확인 전까지 합계에서 제외합니다.</p>}
         <p>선택한 날짜에 열리는 파티의 확인된 수납액입니다. 디파짓과 잔금을 합쳐 파티 날짜에 한 번만 반영합니다.</p>
         <div className={styles.reconciliation}><span>미리 받은 디파짓·선결제 <strong>{usd(report.party_prepaid_cents)}</strong></span><span>파티 미수금 <strong>{usd(report.party_due_cents)}</strong></span></div>
         <p><strong>선택한 날 받은 파티 결제 {usd(report.party_received_today_cents)}</strong> · 아래 결제 내역은 돈을 받은 날짜를 확인하는 용도이며 매출에 다시 더하지 않습니다. 세금·팁·기프트카드 사용액 제외, 환불 차감 전입니다.</p>
