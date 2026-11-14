@@ -97,10 +97,62 @@ test('same-day register intake links missing surnames/birthdays in either order,
     assert.deepEqual(db.waivers[0].covered_person_ids, ['child']);
     assert.equal(db.waivers[0].agreement_snapshot.family_reconciliation.match_basis, 'same_day_staff_walkin');
     assert.deepEqual(db.waivers[0].agreement_snapshot.children, snapshot.children);
-    assert.deepEqual(db.people, peopleBefore); assert.deepEqual(db.household_members, membersBefore); assert.deepEqual(db.checkins, visitsBefore);
+    const expectedPeople = peopleBefore.map(person => person.id === 'child' ? { ...person, birthdate: profile.children[0].birthdate } : person);
+    assert.deepEqual(db.people, expectedPeople); assert.deepEqual(db.household_members, membersBefore); assert.deepEqual(db.checkins, visitsBefore);
     assert.equal((await reconcileGuestWaiverFamily(admin, 'waiver')).status, 'linked');
     assert.equal(db.staff_family_search_aliases.length, 1);
   }
+});
+
+test('a linked walk-in receipt retry fills only missing birthdays from its original signed child mapping', async () => {
+  const { db, admin, snapshot } = walkInFixture();
+  await reconcileGuestWaiverFamily(admin, 'waiver');
+  db.people.find(person => person.id === 'child').birthdate = null;
+  const before = structuredClone(db.waivers[0]);
+  assert.equal((await reconcileGuestWaiverFamily(admin, 'waiver')).status, 'linked');
+  assert.equal(db.people.find(person => person.id === 'child').birthdate, profile.children[0].birthdate);
+  assert.deepEqual(db.waivers[0], before);
+  assert.deepEqual(db.waivers[0].agreement_snapshot.children, snapshot.children);
+  db.people.find(person => person.id === 'child').birthdate = '2024-02-02';
+  await reconcileGuestWaiverFamily(admin, 'waiver');
+  assert.equal(db.people.find(person => person.id === 'child').birthdate, '2024-02-02');
+});
+
+test('two walk-in children receive their own signed birthdays even when the snapshot order differs', async () => {
+  const { db, admin } = walkInFixture();
+  db.people.push({ ...db.people.find(p => p.id === 'child'), id: 'sibling', first_name: 'Taylor', birthdate: null },
+    { ...db.people.find(p => p.id === 'original-child'), id: 'original-sibling', first_name: 'Taylor', birthdate: '2024-08-30' });
+  db.household_members.push({ household_id: target, user_id: null, role: 'member', full_name: 'Taylor', member_role: 'child' });
+  const waiver = db.waivers[0];
+  waiver.covered_person_ids.push('original-sibling');
+  waiver.agreement_snapshot.children.unshift({ id: 'original-sibling', first_name: 'Taylor', last_name: 'Example', birthdate: '2024-08-30' });
+  const snapshotBefore = structuredClone(waiver.agreement_snapshot.children);
+  assert.equal((await reconcileGuestWaiverFamily(admin, 'waiver', false)).status, 'match');
+  assert.equal(admin.writes.length, 0);
+  await reconcileGuestWaiverFamily(admin, 'waiver');
+  assert.equal(db.people.find(p => p.id === 'child').birthdate, '2023-01-01');
+  assert.equal(db.people.find(p => p.id === 'sibling').birthdate, '2024-08-30');
+  assert.deepEqual(waiver.agreement_snapshot.children, snapshotBefore);
+});
+
+test('birthday completion retries after an interrupted write but never updates a newly claimed account', async () => {
+  const { db, admin } = walkInFixture();
+  const original = admin.from;
+  let failed = false;
+  admin.from = table => {
+    const query = original(table), update = query.update;
+    if (table === 'people') query.update = value => { if (!failed) { failed = true; admin.failNext(table); } return update(value); };
+    return query;
+  };
+  await assert.rejects(reconcileGuestWaiverFamily(admin, 'waiver'));
+  assert.equal(db.waivers[0].household_id, target);
+  assert.equal(db.people.find(person => person.id === 'child').birthdate, null);
+  await reconcileGuestWaiverFamily(admin, 'waiver');
+  assert.equal(db.people.find(person => person.id === 'child').birthdate, profile.children[0].birthdate);
+  db.people.find(person => person.id === 'child').birthdate = null;
+  db.household_members[0].user_id = 'new-user';
+  await reconcileGuestWaiverFamily(admin, 'waiver');
+  assert.equal(db.people.find(person => person.id === 'child').birthdate, null);
 });
 
 test('walk-in fallback rejects accounts, guest-only rows, prior days, conflicting names/birthdays and incomplete rosters', async () => {
