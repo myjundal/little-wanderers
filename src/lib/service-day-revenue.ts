@@ -12,7 +12,7 @@ const included = (status: string) => ['covered', 'included', 'membership'].inclu
 
 export type RevenueBooking = { id: string; slot_id: string; household_id: string; child_ids: string[]; child_count: number; status: string; payment_status: string; payment_environment: string | null; amount_cents: number; square_order_id: string | null };
 export type RevenueVisit = { id: string; person_id: string; household_id: string | null; checked_in_at: string; price_cents: number; payment_status: string; square_environment: string | null; square_order_id: string | null };
-export type RevenueParty = { id: string; start_time: string; status: string; price_quote_cents: number | null; square_environment: string | null; square_order_id: string | null; deposit_paid_cents: number | null; balance_paid_cents: number | null; payment_review_required: boolean | null; attendance_finalized_at: string | null };
+export type RevenueParty = { id: string; birthday_child_name?: string | null; start_time: string; status: string; price_quote_cents: number | null; square_environment: string | null; square_order_id: string | null; deposit_paid_cents: number | null; balance_paid_cents: number | null; payment_review_required: boolean | null; attendance_finalized_at: string | null };
 export type RevenueSeries = { id: string; class_ids: string[]; child_ids: string[]; status: string; environment: string; amount_cents: number; square_order_id: string | null };
 export type RevenueClass = { id: string; title: string; start_time: string; status: string };
 export type RevenueClassProgram = { id: string; title: string; class_ids: string[] };
@@ -29,10 +29,11 @@ export type RevenueSources = {
 export type RevenueCharge = { order_id: string; amount_cents: number };
 export type RevenueService = {
   id: string; date: string; category: RevenueCategory; label: string; expected_cents: number;
-  attendance: 'visited' | 'reserved' | 'unknown' | 'sale'; recognition?: 'payment' | 'unallocated_class' | 'class_service'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
+  attendance: 'visited' | 'reserved' | 'unknown' | 'sale'; recognition?: 'payment' | 'unallocated_class' | 'unallocated_party' | 'class_service'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
 };
 export type RevenueEvidence = {
   order_id: string; service_total_cents: number; tax_cents: number; tip_cents: number;
+  party_booking_id?: string;
   items?: { label: string; category: RevenueCategory; amount_cents: number; catalog_object_id?: string }[];
   payments: { id: string; amount_cents: number; refunded_cents: number; paid_at: string; gift_card?: boolean }[];
 };
@@ -107,7 +108,7 @@ export function revenueServices(data: RevenueSources) {
     addVisitCharge(service, visit);
   }
   for (const row of data.parties.filter(row => production(row.square_environment))) {
-    const service = newService({ id: `party:${row.id}`, date: day(row.start_time), category: 'party', label: `Party · ${row.id.slice(0, 8)}`,
+    const service = newService({ id: `party:${row.id}`, date: day(row.start_time), category: 'party', label: `Party · ${row.birthday_child_name || row.id.slice(0, 8)}`,
       expected_cents: row.price_quote_cents ?? 0, attendance: row.attendance_finalized_at ? 'visited' : 'reserved', cancelled: row.status === 'cancelled', charges: [], issues: [] });
     if (row.status === 'pending') service.issues.push('Party booking is not confirmed.');
     if (row.price_quote_cents == null || row.payment_review_required) service.issues.push('Party amount or payment needs review.');
@@ -166,8 +167,9 @@ export function revenueServices(data: RevenueSources) {
 
 export function calculateRevenue(services: RevenueService[], evidence: Map<string, RevenueEvidence>, date: string, sourceIssues: string[] = []) {
   if (!validRevenueDate(date)) throw new Error('Choose a valid date.');
-  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0 }));
-  const orderIds = new Set(rows.filter(row => row.date === date).flatMap(row => row.charges.map(charge => charge.order_id)));
+  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0, payment_details: [] as { id: string; date: string; received_cents: number; refunded_cents: number; net_cents: number }[] }));
+  const orderIds = new Set(rows.flatMap(row => row.charges.filter(charge => row.date === date
+    || (row.category === 'party' && evidence.get(charge.order_id)?.payments.some(payment => day(payment.paid_at) === date))).map(charge => charge.order_id)));
   for (const id of orderIds) {
     const units = rows.flatMap(row => row.charges.filter(charge => charge.order_id === id).map(charge => ({ row, amount: charge.amount_cents })));
     const order = evidence.get(id);
@@ -184,9 +186,10 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
       const refunds = allocateRevenue(payment.refunded_cents, gross);
       units.forEach((unit, index) => {
         const paymentDay = day(payment.paid_at);
-        if (['payment', 'unallocated_class'].includes(unit.row.recognition ?? '') && paymentDay !== unit.row.date) return;
+        if (['payment', 'unallocated_class', 'unallocated_party'].includes(unit.row.recognition ?? '') && paymentDay !== unit.row.date) return;
         const net = payment.gift_card ? 0 : gross[index] - refunds[index];
         if (payment.gift_card) unit.row.redeemed_cents += gross[index] - refunds[index];
+        unit.row.payment_details.push({ id: payment.id, date: paymentDay, received_cents: payment.gift_card ? 0 : gross[index], refunded_cents: payment.gift_card ? 0 : refunds[index], net_cents: net });
         unit.row.received_cents += gross[index]; unit.row.refunded_cents += refunds[index];
         if (!paymentDay) unit.row.issues.push('The payment date is unavailable.');
         else if (paymentDay < unit.row.date) unit.row.prepaid_cents += net;
@@ -196,7 +199,7 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     }
   }
   const selected = rows.filter(row => row.date === date && (row.recognition !== 'class_service' || row.received_cents > 0 || row.issues.length));
-  for (const row of selected) {
+  for (const row of rows) {
     if (row.cancelled && row.received_cents > row.refunded_cents) row.issues.push('Cancelled service retains payment; review its refund or cancellation fee.');
     row.issues = [...new Set(row.issues)];
     row.net_cents = row.cancelled || row.issues.length ? 0 : row.received_cents - row.refunded_cents - row.redeemed_cents;
@@ -204,21 +207,30 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     row.due_cents = row.cancelled || row.issues.length || row.recognition ? 0 : Math.max(0, row.expected_cents - row.received_cents);
     if (row.issues.length || row.cancelled) { row.prepaid_cents = 0; row.same_day_cents = 0; row.later_paid_cents = 0; }
   }
+  const partyRows = selected.filter(row => row.category === 'party' && row.recognition !== 'unallocated_party');
+  const partyReceipts = rows.filter(row => row.category === 'party').flatMap(row => row.payment_details.filter(payment => payment.date === date).map(payment => ({ ...payment, service_id: row.id, service_date: row.recognition === 'unallocated_party' ? null : row.date, label: row.label, review: row.issues.length > 0 || row.cancelled })));
+  const partyReview = partyReceipts.some(payment => payment.review);
   const sum = (field: 'net_cents' | 'prepaid_cents' | 'same_day_cents' | 'later_paid_cents' | 'due_cents') => selected.reduce((total, row) => total + row[field], 0);
   const issues = [...sourceIssues, ...rows.filter(row => !row.date).map(row => `${row.label}: ${row.issues.join(' ')}`)];
   const categories = (Object.keys(revenueCategories) as RevenueCategory[]).map(category => {
     const items = selected.filter(row => row.category === category);
     return { category, label: revenueCategories[category], count: items.filter(row => !row.cancelled).length, net_cents: items.reduce((sum, row) => sum + row.net_cents, 0), due_cents: items.reduce((sum, row) => sum + row.due_cents, 0) };
   });
-  return { date, timezone: 'America/New_York', complete: !issues.length && !selected.some(row => row.issues.length), issues, categories, rows: selected,
+  return { date, timezone: 'America/New_York', complete: !issues.length && !partyReview && !selected.some(row => row.issues.length), issues, categories, rows: selected,
     net_cents: sum('net_cents'), prepaid_cents: sum('prepaid_cents'), same_day_cents: sum('same_day_cents'), later_paid_cents: sum('later_paid_cents'), due_cents: sum('due_cents'),
     visited_cents: selected.filter(row => row.attendance === 'visited').reduce((sum, row) => sum + row.net_cents, 0),
     reserved_cents: selected.filter(row => row.attendance === 'reserved' || row.attendance === 'unknown').reduce((sum, row) => sum + row.net_cents, 0),
     sales_cents: selected.filter(row => row.attendance === 'sale').reduce((sum, row) => sum + row.net_cents, 0),
+    party_cents: partyRows.reduce((sum, row) => sum + row.net_cents, 0),
+    party_prepaid_cents: partyRows.reduce((sum, row) => sum + row.prepaid_cents, 0),
+    party_due_cents: partyRows.reduce((sum, row) => sum + row.due_cents, 0),
+    party_receipts: partyReceipts,
+    party_received_today_cents: partyReceipts.reduce((sum, payment) => sum + payment.received_cents, 0),
+    unallocated_party_cents: selected.filter(row => row.recognition === 'unallocated_party').reduce((sum, row) => sum + row.received_cents - row.refunded_cents - row.redeemed_cents, 0),
     class_cents: selected.filter(row => row.category === 'class').reduce((sum, row) => sum + row.net_cents, 0),
     unallocated_class_cents: selected.filter(row => row.recognition === 'unallocated_class').reduce((sum, row) => sum + row.received_cents - row.refunded_cents - row.redeemed_cents, 0),
     redeemed_cents: selected.reduce((sum, row) => sum + row.redeemed_cents, 0),
     refunded_cents: selected.filter(row => !row.cancelled && !row.issues.length).reduce((sum, row) => sum + row.refunded_cents, 0),
-    review_count: selected.filter(row => row.issues.length).length, generated_at: new Date().toISOString() };
+    review_count: new Set([...selected.filter(row => row.issues.length).map(row => row.id), ...partyReceipts.filter(payment => payment.review).map(payment => payment.service_id)]).size, generated_at: new Date().toISOString() };
 }
 export type RevenueReport = ReturnType<typeof calculateRevenue>;
