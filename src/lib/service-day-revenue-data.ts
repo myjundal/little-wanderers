@@ -4,7 +4,7 @@ import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { squareSaleCategory, supplementSquareRevenue } from '@/lib/square-daily-revenue';
 import { allocatePartyRevenue } from '@/lib/party-revenue-allocation';
 import { allocateCatalogClassRevenue } from '@/lib/class-revenue-allocation';
-import { allocateRevenue, calculateRevenue, revenueServices, type RevenueEvidence, type RevenueSources } from '@/lib/service-day-revenue';
+import { allocateRevenue, calculateRevenue, revenueDay, revenueServices, type RevenueEvidence, type RevenueSources } from '@/lib/service-day-revenue';
 
 const fields = {
   bookings: ['open_play_reservations', 'id,slot_id,household_id,child_ids,child_count,status,payment_status,payment_environment,amount_cents,square_order_id'],
@@ -48,6 +48,23 @@ export async function loadRevenueSources(admin: SupabaseClient) {
     } catch { issues.push(`Unable to load all ${table} records. This report is incomplete.`); }
   }));
   return { sources, issues };
+}
+
+/** Fetch roles only for the selected day's visitors. A failed lookup leaves
+ * explicit unknown people, never invented child/adult counts. */
+export async function loadRevenueVisitorRoles(admin: SupabaseClient, sources: RevenueSources, date: string, issues: string[]) {
+  const ids = [...new Set(sources.visits.filter(row => row.square_environment !== 'sandbox'
+    && Number.isFinite(Date.parse(row.checked_in_at)) && revenueDay(row.checked_in_at) === date).map(row => row.person_id))];
+  sources.people = [];
+  try {
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const batch = ids.slice(offset, offset + 100);
+      const { data, error } = await admin.from('people').select('id,role').in('id', batch);
+      if (error || !data || data.length !== batch.length || new Set(data.map(row => row.id)).size !== data.length
+        || data.some(row => !batch.includes(row.id))) throw new Error('Visitor roles are incomplete.');
+      sources.people.push(...data);
+    }
+  } catch { issues.push('Unable to load all visitor roles. Child/adult attendance is incomplete.'); }
 }
 
 type Money = { amount?: number; currency?: string };
@@ -161,6 +178,7 @@ function unlinkedPaymentEvidence(payment: ProviderPayment): RevenueEvidence {
 
 export async function getServiceDayRevenue(admin: SupabaseClient, date: string) {
   const { sources, issues } = await loadRevenueSources(admin);
+  await loadRevenueVisitorRoles(admin, sources, date, issues);
   const baseServices = revenueServices(sources);
   const variations = new Set((sources.classMappings ?? []).map(row => row.variation_id));
   let historicalOrders = new Map<string, ProviderOrder>();
@@ -192,5 +210,5 @@ export async function getServiceDayRevenue(admin: SupabaseClient, date: string) 
       catch (error) { issues.push(`Unable to verify Square receipt ${id.slice(0, 8)}.`); console.warn('revenue_receipt_unavailable', id, error instanceof Error ? error.message : 'Verification failed'); }
     }));
   }
-  return calculateRevenue(supplementSquareRevenue(allocatePartyRevenue(services, [...evidence.values()], sources), evidence, date), evidence, date, issues);
+  return calculateRevenue(supplementSquareRevenue(allocatePartyRevenue(services, [...evidence.values()], sources), evidence, date), evidence, date, issues, sources);
 }

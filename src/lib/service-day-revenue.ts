@@ -25,6 +25,7 @@ export type RevenueSources = {
   series: RevenueSeries[]; classes: RevenueClass[]; registrations: RevenueRegistration[];
   classCheckouts?: RevenueClassCheckout[];
   classPrograms?: RevenueClassProgram[]; classMappings?: RevenueClassMapping[];
+  people?: { id: string; role: string | null }[];
 };
 export type RevenueCharge = { order_id: string; amount_cents: number };
 export type RevenueService = {
@@ -165,9 +166,9 @@ export function revenueServices(data: RevenueSources) {
   return services;
 }
 
-export function calculateRevenue(services: RevenueService[], evidence: Map<string, RevenueEvidence>, date: string, sourceIssues: string[] = []) {
+export function calculateRevenue(services: RevenueService[], evidence: Map<string, RevenueEvidence>, date: string, sourceIssues: string[] = [], sources?: RevenueSources) {
   if (!validRevenueDate(date)) throw new Error('Choose a valid date.');
-  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0, payment_details: [] as { id: string; date: string; received_cents: number; refunded_cents: number; net_cents: number }[] }));
+  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0, pending_payment_cents: 0, payment_check: null as 'payment_unconfirmed' | 'visit_unconfirmed' | null, payment_details: [] as { id: string; date: string; received_cents: number; refunded_cents: number; net_cents: number }[] }));
   const orderIds = new Set(rows.flatMap(row => row.charges.filter(charge => row.date === date
     || (row.category === 'party' && evidence.get(charge.order_id)?.payments.some(payment => day(payment.paid_at) === date))).map(charge => charge.order_id)));
   for (const id of orderIds) {
@@ -205,6 +206,15 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     row.net_cents = row.cancelled || row.issues.length ? 0 : row.received_cents - row.refunded_cents - row.redeemed_cents;
     // A refund reduces revenue; it does not reopen the customer's original bill.
     row.due_cents = row.cancelled || row.issues.length || row.recognition ? 0 : Math.max(0, row.expected_cents - row.received_cents);
+    // A price on a booking/check-in is not proof of an outstanding debt.
+    // Only an attended admission with a verified partial receipt establishes
+    // a remaining balance. Other unpaid records need payment/visit review.
+    if (['open_play', 'walk_in'].includes(row.category) && row.due_cents > 0
+      && !(row.attendance === 'visited' && row.received_cents > 0 && row.charges.length > 0)) {
+      row.pending_payment_cents = row.due_cents;
+      row.payment_check = row.attendance === 'visited' ? 'payment_unconfirmed' : 'visit_unconfirmed';
+      row.due_cents = 0;
+    }
     if (row.issues.length || row.cancelled) { row.prepaid_cents = 0; row.same_day_cents = 0; row.later_paid_cents = 0; }
   }
   const partyRows = selected.filter(row => row.category === 'party' && row.recognition !== 'unallocated_party');
@@ -212,11 +222,43 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
   const partyReview = partyReceipts.some(payment => payment.review);
   const sum = (field: 'net_cents' | 'prepaid_cents' | 'same_day_cents' | 'later_paid_cents' | 'due_cents') => selected.reduce((total, row) => total + row[field], 0);
   const issues = [...sourceIssues, ...rows.filter(row => !row.date).map(row => `${row.label}: ${row.issues.join(' ')}`)];
-  const categories = (Object.keys(revenueCategories) as RevenueCategory[]).map(category => {
-    const items = selected.filter(row => row.category === category);
-    return { category, label: revenueCategories[category], count: items.filter(row => !row.cancelled).length, net_cents: items.reduce((sum, row) => sum + row.net_cents, 0), due_cents: items.reduce((sum, row) => sum + row.due_cents, 0) };
+  // Financial categories contain dollars only. Attendance, reservations and
+  // itemized receipt lines must never be summed into a single count.
+  const categoryDefinitions = [
+    { category: 'admission', label: '입장 (Open Play)', matches: ['open_play', 'walk_in'] },
+    ...Object.entries(revenueCategories).filter(([key]) => !['open_play', 'walk_in'].includes(key))
+      .map(([category, label]) => ({ category, label, matches: [category] })),
+  ];
+  const categories = categoryDefinitions.map(({ category, label, matches }) => {
+    const items = selected.filter(row => matches.includes(row.category));
+    return { category, label, net_cents: items.reduce((sum, row) => sum + row.net_cents, 0), due_cents: items.reduce((sum, row) => sum + row.due_cents, 0) };
   });
-  return { date, timezone: 'America/New_York', complete: !issues.length && !partyReview && !selected.some(row => row.issues.length), issues, categories, rows: selected,
+  const admissions = selected.filter(row => ['open_play', 'walk_in'].includes(row.category));
+  const admissionSummary = {
+    net_cents: admissions.reduce((sum, row) => sum + row.net_cents, 0),
+    linked_cents: admissions.filter(row => !row.id.startsWith('square:')).reduce((sum, row) => sum + row.net_cents, 0),
+    unlinked_square_cents: admissions.filter(row => row.id.startsWith('square:')).reduce((sum, row) => sum + row.net_cents, 0),
+    due_cents: admissions.reduce((sum, row) => sum + row.due_cents, 0),
+    payment_unconfirmed: admissions.filter(row => row.payment_check === 'payment_unconfirmed'),
+    visit_unconfirmed: admissions.filter(row => row.payment_check === 'visit_unconfirmed'),
+    other_review: admissions.filter(row => row.issues.length > 0),
+  };
+  const personRoles = new Map((sources?.people ?? []).map(row => [row.id, row.role]));
+  const checkedInPeople = new Set((sources?.visits ?? []).filter(row => production(row.square_environment) && day(row.checked_in_at) === date).map(row => row.person_id));
+  const bookingRows = selected.filter(row => row.id.startsWith('booking:') && !row.cancelled);
+  const visitorStats = sources ? {
+    children: [...checkedInPeople].filter(id => personRoles.get(id) === 'child').length,
+    adults: [...checkedInPeople].filter(id => personRoles.get(id) === 'adult').length,
+    unknown: [...checkedInPeople].filter(id => !['child', 'adult'].includes(personRoles.get(id) ?? '')).length,
+    total: checkedInPeople.size,
+    complete: !sourceIssues.some(issue => /checkins|visitor|people/.test(issue)),
+    reservations: bookingRows.length,
+    visited_reservations: bookingRows.filter(row => row.attendance === 'visited').length,
+    unvisited_reservations: bookingRows.filter(row => row.attendance !== 'visited').length,
+    declared_no_shows: (sources.bookings ?? []).filter(row => row.status === 'no_show' && bookingRows.some(service => service.id === `booking:${row.id}`)).length,
+  } : null;
+  return { date, timezone: 'America/New_York', complete: !issues.length && !partyReview && !selected.some(row => row.issues.length || row.payment_check), issues, categories, rows: selected,
+    admission: admissionSummary, visitor_stats: visitorStats,
     net_cents: sum('net_cents'), prepaid_cents: sum('prepaid_cents'), same_day_cents: sum('same_day_cents'), later_paid_cents: sum('later_paid_cents'), due_cents: sum('due_cents'),
     visited_cents: selected.filter(row => row.attendance === 'visited').reduce((sum, row) => sum + row.net_cents, 0),
     reserved_cents: selected.filter(row => row.attendance === 'reserved' || row.attendance === 'unknown').reduce((sum, row) => sum + row.net_cents, 0),
@@ -231,6 +273,6 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     unallocated_class_cents: selected.filter(row => row.recognition === 'unallocated_class').reduce((sum, row) => sum + row.received_cents - row.refunded_cents - row.redeemed_cents, 0),
     redeemed_cents: selected.reduce((sum, row) => sum + row.redeemed_cents, 0),
     refunded_cents: selected.filter(row => !row.cancelled && !row.issues.length).reduce((sum, row) => sum + row.refunded_cents, 0),
-    review_count: new Set([...selected.filter(row => row.issues.length).map(row => row.id), ...partyReceipts.filter(payment => payment.review).map(payment => payment.service_id)]).size, generated_at: new Date().toISOString() };
+    review_count: new Set([...selected.filter(row => row.issues.length || row.payment_check).map(row => row.id), ...partyReceipts.filter(payment => payment.review).map(payment => payment.service_id)]).size, generated_at: new Date().toISOString() };
 }
 export type RevenueReport = ReturnType<typeof calculateRevenue>;
