@@ -21,6 +21,7 @@
 .waiting h3 { font-weight: 800; }
 .checkedIn { color: #174b30; background: #edf8ef; }
 .checkedOut { color: #474747; background: #f2f2f2; }
+.checkedOut .familyStatus > span:first-child { font-weight: 700; }
 .checkoutButton { width: 100%; padding: 14px; margin-bottom: 8px; border: 1px solid #286443; border-radius: 12px; color: #fff; background: #286443; font-size: 16px; font-weight: 700; cursor: pointer; }
 .checkoutButton:disabled { opacity: .55; cursor: not-allowed; }
 
@@ -68,6 +69,7 @@
 .arrivalCards:focus-visible { outline: 2px solid #9471ae; outline-offset: 2px; border-radius: 12px; }
 .familyRow.familyCard { display: flex; flex: 0 0 252px; flex-direction: column; align-items: stretch; gap: 10px; scroll-snap-align: start; padding: 16px; border-radius: 16px; box-sizing: border-box; min-width: 0; }
 .familyCard.checkedIn { border-color: #8db89a; background: #edf8ef; }
+.familyRow.checkedOut { border-color: #d3d3d3; background: #f2f2f2; }
 .cardArrivalTime { font-size: 12px; color: #75677e; }
 .cardArrivalTime strong { font-size: 12px; font-weight: 500; }
 .familyCard .familySummary { flex: 1; }
