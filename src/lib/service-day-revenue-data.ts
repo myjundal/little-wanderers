@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareRequest } from '@/lib/square-client';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { squareSaleCategory, supplementSquareRevenue } from '@/lib/square-daily-revenue';
+import { allocatePartyRevenue } from '@/lib/party-revenue-allocation';
 import { allocateCatalogClassRevenue } from '@/lib/class-revenue-allocation';
 import { allocateRevenue, calculateRevenue, revenueServices, type RevenueEvidence, type RevenueSources } from '@/lib/service-day-revenue';
 
@@ -9,7 +10,7 @@ const fields = {
   bookings: ['open_play_reservations', 'id,slot_id,household_id,child_ids,child_count,status,payment_status,payment_environment,amount_cents,square_order_id'],
   slots: ['open_play_reservation_slots', 'id,starts_at'],
   visits: ['checkins', 'id,person_id,household_id,checked_in_at,price_cents,payment_status,square_environment,square_order_id'],
-  parties: ['party_bookings', 'id,start_time,status,price_quote_cents,square_environment,square_order_id,deposit_paid_cents,balance_paid_cents,payment_review_required,attendance_finalized_at'],
+  parties: ['party_bookings', 'id,birthday_child_name,start_time,status,price_quote_cents,square_environment,square_order_id,deposit_paid_cents,balance_paid_cents,payment_review_required,attendance_finalized_at'],
   series: ['class_series_sales', 'id,class_ids,child_ids,status,environment,amount_cents,square_order_id'],
   classes: ['classes', 'id,title,start_time,status'],
   registrations: ['class_registrations', 'id,class_id,person_id,status,attendance_status'],
@@ -50,7 +51,7 @@ export async function loadRevenueSources(admin: SupabaseClient) {
 }
 
 type Money = { amount?: number; currency?: string };
-type ProviderOrder = { id: string; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[]; line_items?: { name?: string; item_type?: string; catalog_object_id?: string; total_money?: Money; total_tax_money?: Money }[] };
+type ProviderOrder = { id: string; reference_id?: string; metadata?: Record<string, string>; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[]; line_items?: { name?: string; item_type?: string; catalog_object_id?: string; total_money?: Money; total_tax_money?: Money }[] };
 type ProviderPayment = { id: string; order_id?: string; location_id?: string; status?: string; amount_money?: Money; refunded_money?: Money; tip_money?: Money; created_at?: string; source_type?: string; card_details?: { card?: { card_brand?: string } } };
 function money(value?: Money, optional = false) {
   if (!value && optional) return 0;
@@ -90,13 +91,16 @@ export async function readRevenueEvidence(orderId: string, searchedOrder?: Provi
 function orderAllocation(order: ProviderOrder): RevenueEvidence {
   const total = money(order.total_money), tax = money(order.total_tax_money, true), tip = money(order.total_tip_money, true);
   if (total < tax + tip) throw new Error('Order amounts need review.');
-  return { order_id: order.id, service_total_cents: total - tax - tip, tax_cents: tax, tip_cents: tip,
+  const referencePartyId = /^party(?:_balance)?_([0-9a-f-]{36})$/i.exec(order.reference_id ?? '')?.[1];
+  const metadataPartyId = order.metadata?.party_booking_id;
+  if (referencePartyId && metadataPartyId && referencePartyId !== metadataPartyId) throw new Error('Party booking references disagree.');
+  return { order_id: order.id, party_booking_id: metadataPartyId ?? referencePartyId, service_total_cents: total - tax - tip, tax_cents: tax, tip_cents: tip,
     items: (order.line_items ?? []).map(item => ({ label: (item.name || 'Square sale').slice(0, 200), category: squareSaleCategory(item.name || '', item.item_type),
       catalog_object_id: item.catalog_object_id, amount_cents: money(item.total_money) - money(item.total_tax_money, true) })), payments: [] };
 }
 
-/** Scan itemized history so a POS prepayment is still discoverable on a later
- * class date. No arbitrary lookback window can silently drop earlier payments.
+/** Scan itemized history so a prepayment is still discoverable on a later
+ * class or party date. No arbitrary lookback window can silently drop earlier payments.
  * SearchOrders is read-only despite its POST method. */
 export async function readHistoricalClassOrders(variationIds: Set<string>) {
   const config = squareConfig();
@@ -109,7 +113,8 @@ export async function readHistoricalClassOrders(variationIds: Set<string>) {
     const result = await squareRequest<{ orders?: ProviderOrder[]; cursor?: string }>('/v2/orders/search', 'POST', { location_ids: [config.locationId], return_entries: false, limit: 500, query, ...(cursor ? { cursor } : {}) });
     for (const order of result.orders ?? []) {
       if (order.location_id !== config.locationId) throw new Error('Historical order location needs review.');
-      if (order.tenders?.length && order.line_items?.some(item => squareSaleCategory(item.name || '', item.item_type) === 'class' || variationIds.has(item.catalog_object_id ?? ''))) orders.set(order.id, order);
+      if (order.tenders?.length && (order.metadata?.party_booking_id || /^party(?:_balance)?_[0-9a-f-]{36}$/i.test(order.reference_id ?? '')
+        || order.line_items?.some(item => ['class', 'party'].includes(squareSaleCategory(item.name || '', item.item_type)) || variationIds.has(item.catalog_object_id ?? '')))) orders.set(order.id, order);
     }
     if (!result.cursor) break;
     if (cursors.has(result.cursor) || cursors.size >= 39) throw new Error('Class payment history is incomplete.');
@@ -160,13 +165,13 @@ export async function getServiceDayRevenue(admin: SupabaseClient, date: string) 
   const variations = new Set((sources.classMappings ?? []).map(row => row.variation_id));
   let historicalOrders = new Map<string, ProviderOrder>();
   try { historicalOrders = await readHistoricalClassOrders(variations); }
-  catch { issues.push('Unable to load complete class payment history. Earlier POS prepayments may be missing.'); }
+  catch { issues.push('Unable to load complete class and party payment history. Earlier prepayments may be missing.'); }
   const historicalAllocations = [...historicalOrders.values()].map(order => {
     try { return orderAllocation(order); }
-    catch { issues.push(`Unable to allocate class order ${order.id.slice(0, 8)}.`); return null; }
+    catch { issues.push(`Unable to allocate service order ${order.id.slice(0, 8)}.`); return null; }
   }).filter((row): row is RevenueEvidence => row !== null);
   for (const receipt of historicalAllocations) for (const item of receipt.items ?? []) if (variations.has(item.catalog_object_id ?? '')) item.category = 'class';
-  const services = allocateCatalogClassRevenue(baseServices, historicalAllocations, sources);
+  const services = allocatePartyRevenue(allocateCatalogClassRevenue(baseServices, historicalAllocations, sources), historicalAllocations, sources);
   let payments: ProviderPayment[] = [];
   try { payments = await readDailySquarePayments(date); }
   catch { issues.push('Unable to load all Square sales. Café, gift cards, memberships and other counter sales may be missing.'); }
@@ -187,5 +192,5 @@ export async function getServiceDayRevenue(admin: SupabaseClient, date: string) 
       catch (error) { issues.push(`Unable to verify Square receipt ${id.slice(0, 8)}.`); console.warn('revenue_receipt_unavailable', id, error instanceof Error ? error.message : 'Verification failed'); }
     }));
   }
-  return calculateRevenue(supplementSquareRevenue(services, evidence, date), evidence, date, issues);
+  return calculateRevenue(supplementSquareRevenue(allocatePartyRevenue(services, [...evidence.values()], sources), evidence, date), evidence, date, issues);
 }
