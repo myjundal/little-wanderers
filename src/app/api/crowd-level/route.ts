@@ -1,27 +1,22 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getOccupancyStatus } from '@/lib/occupancy';
+import { isPublicOpenPlayOpen, publicCrowdMessage, publicCrowdStatus } from '@/lib/public-crowd';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 const NO_STORE_HEADERS = { 'cache-control': 'no-store, max-age=0' };
 
 export async function GET() {
   try {
-    const summary = await getOccupancyStatus(createAdminSupabaseClient());
-
-    return Response.json({
-      ok: true,
-      occupancy: summary.occupancy,
-      capacity: summary.capacity,
-      progress: summary.progress,
-      crowd_level: summary.crowdLevel,
-      label: summary.crowdMeta.label,
-      description: summary.crowdMeta.description,
-      accent: summary.crowdMeta.accent,
-      accent_strong: summary.crowdMeta.accentStrong,
-      last_updated_at: summary.lastUpdatedAt,
-    }, { headers: NO_STORE_HEADERS });
+    const admin = createAdminSupabaseClient();
+    if (!await isPublicOpenPlayOpen(admin)) {
+      return Response.json(publicCrowdMessage('closed'), { headers: NO_STORE_HEADERS });
+    }
+    const summary = await getOccupancyStatus(admin);
+    if (!summary.source) throw new Error('Occupancy status is unavailable.');
+    return Response.json(publicCrowdMessage(publicCrowdStatus(summary.crowdLevel)), { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'unknown error';
-    return Response.json({ ok: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });
+    logger.warn({ action: 'public-crowd-status' }, e);
+    return Response.json(publicCrowdMessage('unavailable'), { status: 503, headers: NO_STORE_HEADERS });
   }
 }

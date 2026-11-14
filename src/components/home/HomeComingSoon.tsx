@@ -11,6 +11,7 @@ import { getPublicClasses } from '@/lib/public-class-data';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import CrowdLevelCard from '@/components/crowd/CrowdLevelCard';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://thelittlewanderers.com';
 
@@ -92,6 +93,7 @@ export default async function HomeComingSoon() {
           <p className={styles.openingBadge}>Everyone welcome from Saturday, November 14</p>
           <p>A thoughtful indoor play space for curious little ones, and a cozy cafe for their grown-ups. We’re ready for our first little adventures together.</p>
           <div className={styles.heroActions}><PastelButton href="/open-play">Reserve Open Play →</PastelButton><Link href="/classes">Explore classes</Link></div>
+          <CrowdLevelCard compact showHours={false} />
           <p className={styles.heroFootnote}>Bishop’s Corner, West Hartford · Grand opening coming soon</p>
         </div>
         <div className={styles.right}><PastelCard><div className={styles.heroImageFrame}><Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" /></div></PastelCard><p className={styles.photoCaption}>Room to explore. Space to take a breath.</p></div>

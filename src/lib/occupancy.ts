@@ -32,7 +32,7 @@ function readString(row: OccupancyStatusRow | null, keys: string[]) {
   return null;
 }
 
-export function normalizeCrowdLevel(level: string | null, occupancy: number, capacity: number): CrowdLevel {
+export function normalizeCrowdLevel(level: string | null, occupancy: number): CrowdLevel {
   const normalized = level?.trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_') ?? '';
   if (normalized === 'light') return 'light';
   if (normalized === 'moderate') return 'moderate';
@@ -40,10 +40,10 @@ export function normalizeCrowdLevel(level: string | null, occupancy: number, cap
   if (normalized === 'near_capacity' || normalized === 'nearcapacity') return 'near_capacity';
 
   const count = Math.max(occupancy, 0);
-  const safeCapacity = Math.max(capacity, 1);
-  if (count >= Math.round(safeCapacity * 0.3)) return 'near_capacity';
-  if (count >= Math.round(safeCapacity * 0.2)) return 'busy';
-  if (count >= Math.ceil(safeCapacity * 0.1125)) return 'moderate';
+  // Crowd guidance reflects how the studio feels, independently of its capacity.
+  if (count >= 36) return 'near_capacity';
+  if (count >= 26) return 'busy';
+  if (count >= 9) return 'moderate';
   return 'light';
 }
 
@@ -87,7 +87,7 @@ export async function getOccupancyStatus(admin: SupabaseClient) {
   const row = (data ?? null) as OccupancyStatusRow | null;
   const occupancy = Math.max(readNumber(row, OCCUPANCY_KEYS, 0), 0);
   const capacity = getOccupancyCapacity();
-  const crowdLevel = normalizeCrowdLevel(readString(row, LEVEL_KEYS), occupancy, capacity);
+  const crowdLevel = normalizeCrowdLevel(readString(row, LEVEL_KEYS), occupancy);
   const crowdMeta = getCrowdLevelMeta(crowdLevel);
 
   return {

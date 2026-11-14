@@ -2,21 +2,10 @@
 
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
+import type { PublicCrowdPayload } from '@/lib/public-crowd';
 import styles from './CrowdLevelCard.module.css';
 
-type CrowdPayload = {
-  ok: boolean;
-  occupancy: number;
-  capacity: number;
-  progress: number;
-  crowd_level: 'light' | 'moderate' | 'busy' | 'near_capacity';
-  label: string;
-  description: string;
-  accent: string;
-  accent_strong: string;
-  last_updated_at: string | null;
-  error?: string;
-};
+type CrowdPayload = PublicCrowdPayload;
 
 const BUSINESS_TIME_ZONE = 'America/New_York';
 const WEEKLY_HOURS = [
@@ -60,8 +49,8 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
         const json = (await res.json()) as CrowdPayload;
 
         if (!alive) return;
-        if (!res.ok || !json.ok) {
-          setError(json.error ?? 'Unable to load the current crowd level right now.');
+        if (!res.ok || !json.ok || !['welcome', 'busy', 'very_busy', 'closed'].includes(json.status)) {
+          setError('Our crowd update is unavailable. Please check availability before heading over.');
           setData(null);
           return;
         }
@@ -70,7 +59,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
         setError(null);
       } catch {
         if (!alive) return;
-        setError('Unable to load the current crowd level right now.');
+        setError('Our crowd update is unavailable. Please check availability before heading over.');
         setData(null);
       } finally {
         inFlight = false;
@@ -110,7 +99,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
   });
 
   return (
-    <section className={styles.card} aria-live="polite" style={{ ...(compact ? { padding: 16 } : {}), ...(style ?? {}) }}>
+    <section className={`${styles.card} ${styles[data?.status ?? 'unavailable']}`} aria-label="Open Play crowd level" style={{ ...(compact ? { maxWidth: 470 } : {}), ...(style ?? {}) }}>
       {showHours && <div className={styles.hoursBlock}>
         <p className={styles.currentDateTime}>{currentDate} · {currentTime}</p>
         <p className={styles.openStatus}>
@@ -129,45 +118,19 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
           </ul>
         </details>
       </div>}
-      {showStatus && <div className={styles.titleRow}>
-        <div>
-          <h3 style={{ margin: 0, color: '#4f3f82', fontSize: compact ? '1.1rem' : '1.35rem' }}>Current flow occupancy status</h3>
-          <p className={styles.helper} style={{ marginTop: 8, marginBottom: 0 }}>
-            {loading ? 'Refreshing today’s approximate studio flow…' : data?.description ?? 'A gentle estimate instead of an exact real-time headcount.'}
-          </p>
+      {showStatus && <>
+        <div className={styles.titleRow}>
+          <span className={styles.eyebrow}>Open Play · Crowd Level</span>
+          <details className={styles.about}>
+            <summary aria-label="About the crowd update">ⓘ</summary>
+            <p>A gentle estimate of how the studio feels, updated throughout the day. Availability can change; please check Open Play times before visiting.</p>
+          </details>
         </div>
-        <span
-          className={styles.badge}
-          style={{ background: `linear-gradient(135deg, ${data?.accent ?? '#eadcff'}, ${data?.accent_strong ?? '#8751df'})` }}
-        >
-          {data?.label ?? (error ? 'Unavailable' : 'Loading')}
-        </span>
-      </div>}
-
-      {showStatus && <div className={styles.progressTrack}>
-        <div
-          className={styles.progressFill}
-          style={{
-            width: `${Math.max((data?.progress ?? 0.1) * 100, 10)}%`,
-            background: `linear-gradient(90deg, ${data?.accent ?? '#eadcff'}, ${data?.accent_strong ?? '#8751df'})`,
-          }}
-        />
-      </div>}
-
-      {showStatus && <div className={styles.metrics}>
-        <div className={styles.metricCard}>
-          <span className={styles.metricLabel}>Current estimated occupancy</span>
-          <strong className={styles.metricValue}>
-            {loading || !data ? '—' : `${data.occupancy} / ${data.capacity}`}
-          </strong>
+        <div aria-live="polite">
+          <h2 className={styles.status}><span className={styles.dot} aria-hidden="true" />{data?.label ?? (loading ? 'Checking the studio…' : 'Check before visiting')}</h2>
+          <div className={styles.description}>{data?.description ?? (loading ? 'Getting the latest crowd update.' : error)}</div>
         </div>
-      </div>}
-
-      {showStatus && <div className={styles.meta}>
-        <span>{data?.last_updated_at ? `Updated ${new Date(data.last_updated_at).toLocaleTimeString()}` : 'Updates throughout the day'}</span>
-      </div>}
-
-      {showStatus && error && <p className={`${styles.helper} ${styles.error}`}>{error}</p>}
+      </>}
     </section>
   );
 }

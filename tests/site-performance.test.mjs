@@ -127,6 +127,7 @@ test('home hero renders before class metadata and uses the complete play studio 
     '@/app/(public)/home.module.css': {},
     '@/lib/class-config': classConfig,
     '@/components/home/WaitlistCountCard': () => null,
+    '@/components/crowd/CrowdLevelCard': () => null,
     '@/components/pastel/PastelPrimitives': { PastelButton: 'a', PastelCard: 'div' },
     '@/lib/party-config': { PARTY_BOOKING_START_LABEL: 'October 31, 2026' },
     '@/lib/public-classes': loadModule('src/lib/public-classes.ts'),
