@@ -7,6 +7,7 @@ import { arrivalGroups, familyArrival, type ArrivalCard, type DeskPerson, type D
 import { admissionDate, admissionTime, stayLabel, stayMinutes } from '@/lib/admission-stays';
 import { admissionPaymentLabel, reservationAdmissionLabel } from '@/lib/admission-payment-status';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
+import AdmissionHelp from '@/components/staff/AdmissionHelp';
 import { admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
@@ -521,6 +522,7 @@ export default function StaffCheckinPage() {
         <p>Ask the parent or legal guardian to open <a href="/waiver" target="_blank" rel="noreferrer">thelittlewanderers.com/waiver</a> on their own device, sign in to the account showing these children, and complete the waiver.</p>
         <p>After signing, recheck here. Your visitor selection will stay selected.</p>
         <button type="button" disabled={locked || loading} onClick={() => void openFamily(family.id, true)}>Recheck waiver</button>
+        <p><a href="#admission-help">Already signed? Find and connect the waiver below.</a></p>
       </aside>}
       {checkinBlockReason && <p id="checkin-block-reason" style={{ color: waiverBlocked ? '#8a4b0f' : '#655876', fontWeight: 600 }}>{checkinBlockReason}</p>}
       <p><button type="button" style={{ ...button, ...(checkinDisabled ? { background: '#e4dfeb', color: '#62586d', cursor: 'not-allowed' } : {}) }} disabled={checkinDisabled} aria-describedby={checkinBlockReason ? 'checkin-block-reason' : undefined} onClick={() => void checkInFamily()}>{checkingIn ? 'Recording visits…' : waiverBlocked ? 'Waiver required before check-in' : `Check in ${peopleIds.length || ''} selected visitors`}</button></p>
@@ -539,11 +541,15 @@ export default function StaffCheckinPage() {
         <p>Check in everyone visiting before payment. Membership, prepaid admission, and included adults are already applied.</p>
         {!!peopleIds.length && <p>Check in the selected visitors first to include them in this payment.</p>}
         <button style={button} disabled={!enabled || entriesLocked || !!peopleIds.length} onClick={() => void takePayment()}>{busy ? 'Checking with Square…' : `Pay ${money(selected.total)} in Square`}</button>
+        <p><a href="#admission-help">Already paid directly in Square? Connect the receipt below.</a></p>
       </> : !loading && <p>{paymentUnverified ? 'Square payment needs verification. Do not collect again; refresh payment status or check its receipt.' : familyVisits.length ? 'No admission payment due for this family. Paid visits, members and prepaid visitors are already accounted for.' : 'Check in a family to see their total here.'}</p>}
       {pendingSale && <aside style={{ marginTop: 20, padding: 16, background: '#fff1d8', borderRadius: 12 }}><h3>Square checkout needs review</h3><p>If Square was cancelled, did not open, or did not return a receipt, check Transactions on this iPad first. Wait at least one minute after the launch. Never reset while a payment is pending or saved offline.</p><label><input type="checkbox" checked={recoveryConfirmed} disabled={busy} onChange={event => setRecoveryConfirmed(event.target.checked)} /> I checked Square: this checkout is closed, with no completed, pending or offline payment.</label><p><button disabled={busy || !recoveryConfirmed} onClick={() => void recoverPayment()}>Reconcile Square and reset unpaid checkout</button></p><p>The server checks Square too. If it finds a completed matching payment, it records payment instead of starting another charge.</p></aside>}
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
       <p><button disabled={busy || checkingIn} onClick={() => void resumePayments()}>Refresh payment status</button></p>
     </section>}
+    <AdmissionHelp family={family} date={deskDate} disabled={busy || loading || checkingIn || !!checkingOut || !!completion} onOpenFamily={id => { void openFamily(id); }} onUpdated={() => {
+      void refreshPayments(); setDeskRefresh(value => value + 1); if (family) void openFamily(family.id, true);
+    }} />
     </div><aside className={styles.occupancy} aria-label="Live occupancy management">
       <p>Use family check-out to record departures and update occupancy. The controls below are for other count corrections.</p>
       <StaffDashboard view="occupancy" refreshKey={deskRefresh} />
