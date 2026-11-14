@@ -69,7 +69,39 @@ const checked = <T>(result: { data: T; error: unknown }) => {
   return result.data as NonNullable<T>;
 };
 
-/** Idempotent, non-destructive reconciliation. Original people and signed snapshots stay intact.
+type SignedChild = Profile['children'][number];
+type WalkInLink = { source_household_id: string; target_household_id: string; match_basis?: string; person_ids?: Record<string, string> };
+
+/** Complete only blank birthdays in the same-day anonymous register roster.
+ * Revalidate on retries: a linked waiver never permits changing an Auth profile,
+ * replacing an existing birthday, or changing the original signed child snapshot.
+ */
+async function completeWalkInBirthdays(admin: SupabaseClient, link: WalkInLink, signedChildren: SignedChild[] | undefined) {
+  if (link.match_basis !== 'same_day_staff_walkin' || !signedChildren?.length || !link.person_ids) return;
+  const [familiesResult, peopleResult, membersResult] = await Promise.all([
+    admin.from('households').select('id,name,email,phone,created_at').in('id', [link.source_household_id, link.target_household_id]),
+    admin.from('people').select('id,household_id,role,first_name,last_name,birthdate').in('household_id', [link.source_household_id, link.target_household_id]),
+    admin.from('household_members').select('household_id,user_id,role,full_name,member_role').eq('household_id', link.target_household_id),
+  ]);
+  const families = checked(familiesResult) as Family[], people = checked(peopleResult) as Person[], members = checked(membersResult) as FamilyMember[];
+  const source = families.find(row => row.id === link.source_household_id), target = families.find(row => row.id === link.target_household_id);
+  const guardians = people.filter(row => row.household_id === link.source_household_id && row.role === 'adult');
+  if (!source || !target || guardians.length !== 1) return;
+  const sourceChildren = people.filter(row => row.household_id === source.id && row.role === 'child');
+  if (sourceChildren.length !== signedChildren.length || signedChildren.some(child => !child.id || !sourceChildren.some(person => person.id === child.id
+    && identityName(person.first_name) === identityName(child.first_name) && identityName(person.last_name) === identityName(child.last_name)
+    && person.birthdate === child.birthdate))) return;
+  const targetPeople = people.filter(row => row.household_id === target.id);
+  const ids = matchWalkInFamily({ ...guardians[0], last_name: guardians[0].last_name ?? '', phone: '', children: signedChildren }, source, target, targetPeople, members);
+  if (!ids || ids.some((id, index) => link.person_ids![signedChildren[index].id!] !== id)) return;
+  for (let index = 0; index < ids.length; index++) {
+    const child = signedChildren[index], person = targetPeople.find(row => row.id === ids[index])!;
+    if (person.birthdate || !child.birthdate) continue;
+    checked(await admin.from('people').update({ birthdate: child.birthdate }).eq('id', person.id).eq('household_id', target.id).is('birthdate', null));
+  }
+}
+
+/** Idempotent reconciliation. Source people and signed snapshots stay intact.
  * Each waiver's household and covered IDs change in one database statement. The directory
  * alias is committed last, so an interrupted attempt stays visible and can safely retry.
  */
@@ -82,6 +114,7 @@ export async function reconcileGuestWaiverFamily(admin: SupabaseClient, waiverId
     // Finish an interrupted link before looking for a new match. The immutable
     // signed child snapshot and original covered IDs remain in the saved audit.
     if (apply) {
+      await completeWalkInBirthdays(admin, savedLink, waiver.agreement_snapshot?.children);
       checked(await admin.from('party_guest_waivers').update({ household_id: waiver.household_id }).eq('waiver_id', waiver.id).eq('household_id', savedLink.source_household_id));
       const remaining = checked(await admin.from('waivers').select('id').eq('household_id', savedLink.source_household_id).limit(1));
       if (!remaining.length) checked(await admin.from('staff_family_search_aliases').upsert({ alias_household_id: savedLink.source_household_id,
@@ -147,14 +180,16 @@ export async function reconcileGuestWaiverFamily(admin: SupabaseClient, waiverId
   const idMap = new Map(children.map((child, index) => [child.id, target.targetIds[index]]));
   if (!apply) return { status: 'match', source_id: sourceId, household_id: target.family.id, waiver_ids: sourceWaivers.map(row => row.id), person_ids: Object.fromEntries(idMap) };
   for (const row of sourceWaivers) {
+    const link = { source_household_id: sourceId, target_household_id: target.family.id,
+      original_covered_person_ids: row.covered_person_ids, person_ids: Object.fromEntries(idMap), linked_at: new Date().toISOString(),
+      match_basis: target.walkIn ? 'same_day_staff_walkin' : 'guardian_contact_children' };
     checked(await admin.from('waivers').update({ household_id: target.family.id, covered_person_ids: row.covered_person_ids.map((id: string) => idMap.get(id)!),
-      agreement_snapshot: { ...row.agreement_snapshot, family_reconciliation: { source_household_id: sourceId, target_household_id: target.family.id,
-        original_covered_person_ids: row.covered_person_ids, person_ids: Object.fromEntries(idMap), linked_at: new Date().toISOString(),
-        match_basis: target.walkIn ? 'same_day_staff_walkin' : 'guardian_contact_children' } } })
+      agreement_snapshot: { ...row.agreement_snapshot, family_reconciliation: link } })
       .eq('id', row.id).eq('household_id', sourceId));
+    await completeWalkInBirthdays(admin, link, row.agreement_snapshot?.children);
     checked(await admin.from('party_guest_waivers').update({ household_id: target.family.id }).eq('waiver_id', row.id).eq('household_id', sourceId));
   }
-  // No identity/access or personal details are changed. Preserve the signed child snapshot.
+  // No account access changes. Only blank anonymous walk-in birthdays are completed.
   checked(await admin.from('staff_family_search_aliases').upsert({ alias_household_id: sourceId, canonical_household_id: target.family.id,
     reason: target.walkIn ? 'Same-day staff walk-in and guest waiver matched by guardian, family surname and all children; original signed evidence retained.'
       : 'Guest waiver reconciled: guardian name, contact and child identity matched; original records and signed evidence retained.' }, { onConflict: 'alias_household_id', ignoreDuplicates: true }));

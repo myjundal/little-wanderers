@@ -9,6 +9,7 @@ export function memoryAdmin(tables, users = {}) {
       const q = {
         select() { return q; }, order() { return q; }, limit() { return q; },
         eq(key, value) { filters.push(row => row[key] === value); return q; },
+        is(key, value) { filters.push(row => row[key] === value); return q; },
         gte(key, value) { filters.push(row => row[key] >= value); return q; },
         in(key, values) { filters.push(row => values.includes(row[key])); return q; },
         not(key, op, value) { if (op !== 'is') throw Error(op); filters.push(row => row[key] !== value); return q; },
