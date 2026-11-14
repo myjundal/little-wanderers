@@ -422,6 +422,8 @@ test('checked-in families stay in the same results with checkout and retain thei
   assert.equal(h.button('Choose family'), undefined);
   assert.ok(h.button('Open family / payment'));
   assert.ok(h.text().includes('Checked in · 2 guests here'));
+  const familyCard = () => h.nodes().find(node => node.type === 'article' && node.props['data-family-id'] === family.id);
+  assert.equal(familyCard().props['data-arrival-state'], 'checked-in');
   assert.ok(!h.nodes().some(node => node.type === 'admission-visits'));
   const checkout = h.button('Check out family (2)').props.onClick;
   checkout();
@@ -429,6 +431,7 @@ test('checked-in families stay in the same results with checkout and retain thei
   await h.flush();
   assert.ok(h.visits().every(visit => visit.checked_out_at));
   assert.ok(h.text().includes('Checked out'));
+  assert.equal(familyCard().props['data-arrival-state'], 'checked-out');
   assert.equal(h.button('Check out family'), undefined);
   assert.ok(h.text().includes('Total due: $16.00'));
   assert.equal(h.requests.filter(request => request.url === '/api/admin/admission/checkout').length, 1);

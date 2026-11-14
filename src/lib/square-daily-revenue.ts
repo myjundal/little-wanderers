@@ -28,6 +28,7 @@ export function supplementSquareRevenue(services: RevenueService[], evidence: Ma
       budgets.set(category, (budgets.get(category) ?? 0) + unit.amount);
     }
     let items = (receipt.items ?? []).map(item => {
+      if (receipt.party_booking_id && item.category === 'other') item = { ...item, category: 'party' };
       const consume = Math.min(item.amount_cents, budgets.get(item.category) ?? 0);
       budgets.set(item.category, (budgets.get(item.category) ?? 0) - consume);
       return { ...item, amount_cents: item.amount_cents - consume };
@@ -38,16 +39,16 @@ export function supplementSquareRevenue(services: RevenueService[], evidence: Ma
       const extras = items.filter(item => ['cafe', 'gift_card', 'membership', 'retail'].includes(item.category));
       items = extras.reduce((sum, item) => sum + item.amount_cents, 0) === remainder ? extras
         : [{ label: items.some(item => item.category === 'class') ? 'Class payment allocation needs review' : linkedTotal ? 'Additional Square purchases' : 'Square sale',
-          category: items.some(item => item.category === 'class') ? 'class' : 'other', amount_cents: remainder }];
+          category: items.some(item => item.category === 'class') ? 'class' : receipt.party_booking_id || items.some(item => item.category === 'party') ? 'party' : 'other', amount_cents: remainder }];
     }
     const paidOnDate = receipt.payments.some(payment => revenueDay(payment.paid_at) === date);
     const saleDate = paidOnDate ? date : receipt.payments[0] ? revenueDay(receipt.payments[0].paid_at) : date;
     for (const [index, item] of items.entries()) result.push({
       id: `square:${receipt.order_id}:${index}`, date: saleDate, category: item.category,
       label: `${item.label} · ${receipt.order_id.slice(0, 8)}`, expected_cents: item.amount_cents,
-      attendance: item.category === 'class' ? 'unknown' : 'sale', recognition: item.category === 'class' ? 'unallocated_class' : 'payment', cancelled: false,
+      attendance: ['class', 'party'].includes(item.category) ? 'unknown' : 'sale', recognition: item.category === 'class' ? 'unallocated_class' : item.category === 'party' ? 'unallocated_party' : 'payment', cancelled: false,
       charges: [{ order_id: receipt.order_id, amount_cents: item.amount_cents }],
-      issues: item.category === 'class' ? ['수업일 연결이 필요합니다. 미배분 선결제로 표시하며 매출 합계에서 제외합니다.'] : [],
+      issues: item.category === 'class' ? ['수업일 연결이 필요합니다. 미배분 선결제로 표시하며 매출 합계에서 제외합니다.'] : item.category === 'party' ? ['파티 예약일 연결이 필요합니다. 미배분 파티 수납으로 표시하며 매출 합계에서 제외합니다.'] : [],
     });
   }
   return result;
