@@ -64,7 +64,8 @@ export default function AdmissionStayStatistics({ refreshKey }: { refreshKey: nu
         {[['Completed family visits', report.completed.length], ['Average family stay', report.average_minutes === null ? '—' : stayLabel(report.average_minutes)],
           ['Longest family stay', report.longest_minutes === null ? '—' : stayLabel(report.longest_minutes)], ['Total guest-hours', (report.guest_minutes / 60).toFixed(1)]].map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}
       </div>
-      <p className={styles.note}>Check-out is optional. Only recorded check-outs count toward stay statistics.</p>
+      <p className={styles.note}>Check-out is optional. Only check-outs with known departure times count toward stay statistics.</p>
+      {report.unknown_checkout_time > 0 && <p className={styles.note}>{report.unknown_checkout_time} checked-out guests excluded because departure times are unknown.</p>}
       {!report.completed.length ? <p>No completed family visits in this date range yet.</p> : <>
         <button type="button" onClick={exportCsv}>Download CSV</button>
         <div className={styles.tableWrap}><table><caption>Completed family visits · Eastern time</caption><thead><tr><th>Date</th><th>Family</th><th>Guests</th><th>In</th><th>Out</th><th>Stay</th></tr></thead>

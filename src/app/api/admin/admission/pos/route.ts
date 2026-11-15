@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     ? await c.admin.from('households').select('id,name').in('id', familyIds)
     : { data: [], error: null };
   if (familyError) return Response.json({ ok: false, error: 'Unable to load visiting families.' }, { status: 503 });
-  let checkouts: Map<string, string>;
+  let checkouts: Map<string, string | null>;
   try { checkouts = await getAdmissionCheckouts(c.admin, data ?? []); }
   catch { return Response.json({ ok: false, error: 'Unable to load departures. Refresh admission status before continuing.' }, { status: 503 }); }
   const {data:pending,error:pendingError}=historical ? {data:[],error:null} : await c.admin.from('admission_pos_sales').select('*').eq('environment',squareEnvironment()).eq('status','open').limit(101);
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
   });
   const visits = priced.map(row => {
     const person = (people ?? []).find(person => person.id === row.person_id);
-    return { ...row, checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
+    return { ...row, checked_out: checkouts.has(row.id), checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });

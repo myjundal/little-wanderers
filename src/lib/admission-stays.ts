@@ -1,4 +1,4 @@
-import type { AdmissionVisit } from '@/lib/admission-pos-ui';
+import { admissionCheckedOut, type AdmissionVisit } from '@/lib/admission-pos-ui';
 
 export const admissionDate = (value: string) => new Date(value).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 export const admissionTime = (value: string) => new Date(value).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
@@ -49,7 +49,8 @@ export function admissionStayStatistics(visits: AdmissionVisit[]) {
   }).sort((a, b) => b.checked_out_at.localeCompare(a.checked_out_at));
   return {
     completed, completed_guests: completedGuests, guest_minutes: guestMinutes,
-    without_checkout: visits.length - completedGuests,
+    without_checkout: visits.filter(visit => !admissionCheckedOut(visit)).length,
+    unknown_checkout_time: visits.filter(visit => admissionCheckedOut(visit) && !visit.checked_out_at).length,
     average_minutes: completed.length ? completed.reduce((sum, row) => sum + row.minutes, 0) / completed.length : null,
     longest_minutes: completed.length ? Math.max(...completed.map(row => row.minutes)) : null,
   };

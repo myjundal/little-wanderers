@@ -7,7 +7,7 @@ import { arrivalGroups, familyArrival, type ArrivalCard, type DeskPerson, type D
 import { admissionDate, admissionTime, stayLabel, stayMinutes } from '@/lib/admission-stays';
 import { admissionPaymentLabel, reservationAdmissionLabel } from '@/lib/admission-payment-status';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
-import { admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
+import { admissionCheckedOut, admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
 const personName = (person: DeskPerson) => [person.first_name, person.last_name].filter(Boolean).join(' ') || 'Unnamed visitor';
@@ -386,8 +386,8 @@ export default function StaffCheckinPage() {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to check out family.');
       recorded = true;
-      const departures = new Map<string, string>((result.checkouts ?? []).map((row: { id: string; checked_out_at: string }) => [row.id, row.checked_out_at]));
-      setVisits(previous => previous.map(visit => departures.has(visit.id) ? { ...visit, checked_out_at: departures.get(visit.id) } : visit));
+      const departures = new Map<string, string | null>((result.checkouts ?? []).map((row: { id: string; checked_out_at: string | null }) => [row.id, row.checked_out_at]));
+      setVisits(previous => previous.map(visit => departures.has(visit.id) ? { ...visit, checked_out: true, checked_out_at: departures.get(visit.id) } : visit));
       setDeskRefresh(value => value + 1);
       await refreshPayments();
       setMessage('Family checked out. Departure times and crowd count are saved.');
@@ -437,7 +437,7 @@ export default function StaffCheckinPage() {
   function renderFamilyCard(card: ArrivalCard, horizontal = false) {
     const item = card.family;
     const todayVisits = boardVisits.filter(visit => visit.household_id === item.id);
-    const present = todayVisits.filter(visit => !visit.checked_out_at);
+    const present = todayVisits.filter(visit => !admissionCheckedOut(visit));
     const departed = todayVisits.length > 0 && !present.length;
     const booked = card.reservation ?? item.reservations.find(reservation=>admissionDate(reservation.slot.starts_at)===deskDate)
       ?? item.reservations.find(reservation=>Date.parse(reservation.slot.ends_at)>Date.now()) ?? item.reservations.at(-1);
@@ -473,7 +473,7 @@ export default function StaffCheckinPage() {
         </p>)}
         {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
         <p>{item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
-        {todayVisits.map(visit => <p key={visit.id}>{visit.name} · {admissionPaymentLabel(visit)}{visit.checked_in_at && visit.checked_out_at && <> · In {admissionTime(visit.checked_in_at)} · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</p>)}
+        {todayVisits.map(visit => <p key={visit.id}>{visit.name} · {admissionPaymentLabel(visit)}{admissionCheckedOut(visit) && !visit.checked_out_at && <> · Checked out · Departure time unknown</>}{visit.checked_in_at && visit.checked_out_at && <> · In {admissionTime(visit.checked_in_at)} · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</p>)}
       </details>
     </article>;
   }
@@ -528,7 +528,7 @@ export default function StaffCheckinPage() {
           const visit = familyVisits.find(visit => visit.person_id === person.id);
           return <label key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: visit ? '#f0f7ef' : '#f7f3fc', borderRadius: 12 }}>
             <input type="checkbox" style={{ width: 24, height: 24 }} checked={!!visit || peopleIds.includes(person.id)} disabled={!!visit || entriesLocked} onChange={event => setPeopleIds(previous => event.target.checked ? [...previous, person.id] : previous.filter(id => id !== person.id))} />
-            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · {visit.checked_out_at ? 'Checked out' : 'Checked in'} — {admissionPaymentLabel(visit)}</span>}</span>
+            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · {admissionCheckedOut(visit) ? 'Checked out' : 'Checked in'} — {admissionPaymentLabel(visit)}</span>}</span>
           </label>;
         })}
       </div>

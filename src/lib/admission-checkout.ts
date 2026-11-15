@@ -17,7 +17,7 @@ export function checkoutEventId(checkinId: string) {
 type Checkin = { id: string; checked_in_at: string };
 
 export async function getAdmissionCheckouts(admin: SupabaseClient, checkins: Checkin[]) {
-  const checkouts = new Map<string, string>();
+  const checkouts = new Map<string, string | null>();
   for (let offset = 0; offset < checkins.length; offset += 150) {
     const batch = checkins.slice(offset, offset + 150);
     const expected = new Map(batch.map(row => [checkoutEventId(row.id), row]));
@@ -30,13 +30,14 @@ export async function getAdmissionCheckouts(admin: SupabaseClient, checkins: Che
         || !Number.isFinite(Date.parse(event.created_at)) || Date.parse(event.created_at) < Date.parse(checkin.checked_in_at)) {
         throw new Error('A departure record needs review. Please contact the owner.');
       }
-      checkouts.set(checkin.id, event.created_at);
+      // created_at audits the write; it is not a departure time when the owner does not know it.
+      checkouts.set(checkin.id, event.metadata?.checkout_time_unknown === true ? null : event.created_at);
     }
   }
   return checkouts;
 }
 
-export async function checkoutAdmission(admin: SupabaseClient, ids: string[], householdId: string, staffId: string, now = new Date()) {
+export async function checkoutAdmission(admin: SupabaseClient, ids: string[], householdId: string, staffId: string, now = new Date(), options: { timeUnknown?: boolean } = {}) {
   const today = getPartyDateKey(now);
   const { data, error } = await admin.from('checkins').select('id,person_id,household_id,checked_in_at')
     .in('id', ids).limit(101);
@@ -67,15 +68,15 @@ export async function checkoutAdmission(admin: SupabaseClient, ids: string[], ho
       // A reset already removed earlier arrivals from the crowd count.
       delta: reset && Date.parse(row.checked_in_at) <= Date.parse(reset.created_at) ? 0 : -1,
       effective_date: occupancyDate, created_by: staffId, created_at: now.toISOString(),
-      notes: 'Family check-out',
-      metadata: { source: CHECKOUT_SOURCE, checkin_id: row.id, household_id: householdId, checked_in_at: row.checked_in_at },
+      notes: options.timeUnknown ? 'Family check-out; departure time unknown (owner reported)' : 'Family check-out',
+      metadata: { source: CHECKOUT_SOURCE, checkin_id: row.id, household_id: householdId, checked_in_at: row.checked_in_at, ...(options.timeUnknown ? { checkout_time_unknown: true } : {}) },
     }));
     const { error: writeError } = await admin.from('occupancy_events').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
     if (writeError) throw new Error('Unable to record checkout. Refresh and retry; saved departures will not be counted twice.');
   }
   const saved = await getAdmissionCheckouts(admin, data);
   if (saved.size !== data.length) throw new Error('Unable to confirm every departure. Refresh and retry.');
-  return { checkouts: data.map(row => ({ id: row.id, checked_out_at: saved.get(row.id)! })), checked_out_count: remaining.length };
+  return { checkouts: data.map(row => ({ id: row.id, checked_out: true, checked_out_at: saved.get(row.id)! })), checked_out_count: remaining.length };
 }
 
 export function admissionDayRange(start: string, end: string) {
