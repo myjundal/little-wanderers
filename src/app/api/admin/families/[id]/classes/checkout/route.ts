@@ -281,14 +281,25 @@ export async function POST(req: Request, { params: pendingParams }: Params) {
     return Response.json({ ok: false, error: 'Square payment is not configured' }, { status: 500 });
   }
 
-  const total = items.reduce((sum, item) => sum + (classById.get(item.class_id)?.price_cents ?? 0) * item.quantity, 0);
+  if (!peopleRows.some(person => person.id === personId && person.role === 'child')
+    || items.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > peopleRows.filter(person => person.role === 'child').length)) {
+    return Response.json({ ok: false, error: 'Choose children in this family.' }, { status: 409 });
+  }
+  const { readClassDateQuote, isBalletClass } = await import('@/lib/class-date-pricing');
+  let quote;
+  try { quote = await readClassDateQuote(admin, householdId, personId, classes ?? []); }
+  catch { return Response.json({ ok: false, error: 'Unable to verify the family class price.' }, { status: 503 }); }
+  const lineItems = items.flatMap(item => {
+    const klass = classById.get(item.class_id);
+    const price = quote.lines.find(line => line.class_id === item.class_id);
+    if (!klass || !price) return [];
+    const first = { name: klass.title + (price.discount_cents ? ' · 20% sibling discount' : ''), quantity: '1', base_price_money: { amount: price.amount_cents, currency: 'USD' } };
+    if (item.quantity === 1) return [first];
+    const additional = isBalletClass(klass.title) ? klass.price_cents - Math.round(klass.price_cents * 0.2) : klass.price_cents;
+    return [first, { name: klass.title + (isBalletClass(klass.title) ? ' · 20% sibling discount' : ''), quantity: String(item.quantity - 1), base_price_money: { amount: additional, currency: 'USD' } }];
+  });
+  const total = lineItems.reduce((sum, line) => sum + line.base_price_money.amount * Number(line.quantity), 0);
   if (total <= 0) return Response.json({ ok: false, error: 'total must be greater than 0' }, { status: 409 });
-
-  const lineItems = items.map((item) => ({
-    name: classById.get(item.class_id)?.title ?? 'Class',
-    quantity: String(item.quantity),
-    base_price_money: { amount: classById.get(item.class_id)?.price_cents ?? 0, currency: 'USD' },
-  }));
 
   const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
   const redirectParams = new URLSearchParams({

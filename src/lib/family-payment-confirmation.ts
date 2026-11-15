@@ -4,6 +4,7 @@ import { squareEnvironment } from '@/lib/square-client';
 import { refreshAdmissionPosSales, type PosSale } from '@/lib/square-admission-pos';
 import { getAdmissionPrepayments } from '@/lib/admission-prepayments';
 import { projectInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
+import { applyFoundingAdmissionCoverage } from '@/lib/founding-admission-coverage';
 import { admissionIsIncluded, admissionIsPaid } from '@/lib/admission-payment-status';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { reconcilePaidFamily, type FamilyLinkResult } from '@/lib/paid-family-reconciliation';
@@ -47,7 +48,8 @@ export async function confirmFamilyPayment(admin: SupabaseClient, requestedId: s
   if (visits.some(visit => (visit.household_id && visit.household_id !== householdId) || (visit.square_environment ?? 'production') !== environment))
     return { status: 'review', family_link: 'none', household_id: householdId };
   const prepaid = await getAdmissionPrepayments(admin, visits.map(visit => ({ ...visit, household_id: householdId })), environment);
-  const priced = projectInfantSiblingAdmission(prepaid, people, environment).filter(visit => children.has(visit.person_id));
+  const covered = await applyFoundingAdmissionCoverage(admin, prepaid, people, environment);
+  const priced = projectInfantSiblingAdmission(covered, people, environment).filter(visit => children.has(visit.person_id));
   if (priced.some(visit => visit.payment_status === 'review')) return { status: 'review', family_link: 'none', household_id: householdId };
   if (priced.some(visit => !admissionIsPaid(visit.payment_status) && !admissionIsIncluded(visit.payment_status)))
     return { status: 'pending', family_link: 'none', household_id: householdId };
