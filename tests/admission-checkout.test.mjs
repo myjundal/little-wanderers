@@ -179,3 +179,36 @@ test('visit reports read beyond the first database page and CSV escapes names an
   assert.ok(csv.includes('"\'  =DANGEROUS(""name"")"'));
   assert.ok(csv.includes('"10:00 AM","12:00 PM","120"'));
 });
+
+
+test('unknown-time departures are durable, leave billing intact, and never imply an observed departure time', async t => {
+  const { db, admin } = await fixture(t);
+  const result = await checkoutAdmission(admin, [first, second], ids.household, ids.user, now, { timeUnknown: true });
+  assert.equal(result.checked_out_count, 2);
+  assert.ok(result.checkouts.every(row => row.checked_out === true && row.checked_out_at === null));
+  const retry = await checkoutAdmission(admin, [first, second], ids.household, ids.user, new Date(now.getTime() + 60000));
+  assert.equal(retry.checked_out_count, 0);
+  assert.ok(retry.checkouts.every(row => row.checked_out_at === null));
+  const events = (await db.query('select * from occupancy_events')).rows;
+  assert.equal(events.length, 2);
+  assert.equal(events.reduce((sum, row) => sum + row.delta, 0), -2);
+  assert.ok(events.every(row => row.metadata.checkout_time_unknown === true && row.created_at.toISOString() === now.toISOString()));
+  assert.deepEqual((await db.query('select distinct payment_status,price_cents from checkins')).rows, [{ payment_status: 'due', price_cents: 1600 }]);
+
+  const api = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: ids.user }, admin }) },
+    '@/lib/party-config': { getPartyDateKey: () => '2026-11-11', toPartyDateTimeIso: day => `${day}T05:00:00Z` } } }).load('src/app/api/admin/admission/pos/route.ts');
+  const response = await (await api.GET()).json();
+  assert.equal(response.ok, true);
+  assert.ok(response.visits.every(visit => visit.checked_out === true && visit.checked_out_at === null));
+  const { admissionCheckedOut } = modules.load('src/lib/admission-pos-ui.ts');
+  assert.equal(response.visits.filter(visit => !admissionCheckedOut(visit)).length, 0);
+  assert.ok(admissionCheckedOut({ checked_out_at: now.toISOString() })); // backwards-compatible timed visits
+  const history = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: ids.user }, admin }) } } }).load('src/app/api/admin/admission/stays/route.ts');
+  const stats = await (await history.GET(new Request('https://example.test?start=2026-11-11&end=2026-11-11'))).json();
+  assert.equal(stats.ok, true);
+  assert.equal(stats.without_checkout, 0);
+  assert.equal(stats.unknown_checkout_time, 2);
+  assert.equal(stats.completed.length, 0);
+  assert.equal(stats.guest_minutes, 0);
+  assert.equal(stats.average_minutes, null);
+});
