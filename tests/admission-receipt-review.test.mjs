@@ -30,9 +30,15 @@ test('owner review exposes settled admission evidence with names and last four o
   assert(!JSON.stringify(receipts).includes('private'));
   assert(p.requests.every(request => request.method === 'GET'));
 });
-test('cash and unrelated catalog sales are not admission card candidates', async () => {
-  assert.equal((await provider({ payment: { source_type: 'CASH' } }).read(date)).length, 0);
+test('cash receipts retain their tender type and unrelated catalog sales are excluded', async () => {
+  const cash = await provider({ payment: { source_type: 'CASH' } }).read(date);
+  assert.equal(cash.length, 1); assert.equal(cash[0].payments[0].source_type, 'CASH');
   assert.equal((await provider({ order: { line_items: [{ name: 'Coffee', total_money: { amount: 1600, currency: 'USD' } }] } }).read(date)).length, 0);
+});
+test('party lookup uses its explicit category and never treats admission receipts as parties', async () => {
+  assert.equal((await provider().read(date, 'party')).length, 0);
+  const party = await provider({ order: { line_items: [{ name: 'Birthday Party - Base Package', total_money: { amount: 1600, currency: 'USD' } }] } }).read(date, 'party');
+  assert.equal(party.length, 1);
 });
 test('binding errors fail instead of returning a plausible but unverified receipt', async () => {
   for (const patch of [{ order: { id: 'wrong' } }, { order: { location_id: 'wrong' } }, { verifiedPayment: { order_id: 'wrong' } }, { verifiedPayment: { id: 'wrong' } }, { verifiedPayment: { status: 'APPROVED' } }, { customer: { id: 'wrong' } }]) {
@@ -49,6 +55,7 @@ test('receipt review API enforces the existing personal-owner gate, dates and pr
   }
   const allowed = route({ ok: true, admin: {} });
   assert.equal((await allowed.GET(new Request('https://example.test/?date=2026-02-30'))).status, 400); assert.equal(reads, 0);
+  assert.equal((await allowed.GET(new Request('https://example.test/?kind=arbitrary'))).status, 400); assert.equal(reads, 0);
   const result = await allowed.GET(new Request('https://example.test/?date=' + date));
   assert.equal(result.status, 200); assert.equal(reads, 1);
   assert.match(result.headers.get('cache-control'), /private, no-store/); assert.equal(result.headers.get('vary'), 'Cookie');

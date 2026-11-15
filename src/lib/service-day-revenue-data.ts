@@ -170,9 +170,9 @@ export async function readDailySquarePayments(date: string) {
 /** Private owner reconciliation evidence. Never guesses a family by price/time,
  * writes a receipt, or creates a provider charge. Contact details and full card
  * data are deliberately omitted. Provider failures fail the whole lookup. */
-export async function readAdmissionReceiptCandidates(date: string) {
+export async function readAdmissionReceiptCandidates(date: string, kind: 'admission' | 'party' = 'admission') {
   const config = squareConfig();
-  const payments = (await readDailySquarePayments(date)).filter(payment => payment.source_type === 'CARD' && payment.order_id);
+  const payments = (await readDailySquarePayments(date)).filter(payment => payment.order_id);
   const orderIds = [...new Set(payments.map(payment => payment.order_id!))];
   if (orderIds.length > 300) throw new Error('Too many admission receipt candidates.');
   const customers = new Map<string, Promise<string>>();
@@ -188,7 +188,8 @@ export async function readAdmissionReceiptCandidates(date: string) {
     const batch = await Promise.all(orderIds.slice(offset, offset + 6).map(async id => {
       const { order } = await squareRequest<{ order: ProviderOrder }>(`/v2/orders/${encodeURIComponent(id)}`);
       if (order.id !== id || order.location_id !== config.locationId) throw new Error('Receipt order reference does not match.');
-      if (!order.line_items?.some(item => ['open_play', 'walk_in'].includes(squareSaleCategory(item.name ?? '', item.item_type)))) return null;
+      const categories = kind === 'party' ? ['party'] : ['open_play', 'walk_in'];
+      if (!order.line_items?.some(item => categories.includes(squareSaleCategory(item.name ?? '', item.item_type)))) return null;
       const evidence = await readRevenueEvidence(id, order);
       const settled = payments.filter(payment => payment.order_id === id);
       if (settled.some(payment => !evidence.payments.some(verified => verified.id === payment.id))) throw new Error('Receipt tender reference does not match.');
@@ -199,7 +200,7 @@ export async function readAdmissionReceiptCandidates(date: string) {
         payments: await Promise.all(settled.map(async payment => {
           const verified = evidence.payments.find(row => row.id === payment.id)!;
           const customerId = payment.customer_id ?? order.customer_id;
-          return { ...verified, source_type: 'CARD', customer_name: customerId ? await customerName(customerId) : '',
+          return { ...verified, source_type: payment.source_type ?? 'UNKNOWN', customer_name: customerId ? await customerName(customerId) : '',
             cardholder_name: (payment.card_details?.card?.cardholder_name ?? '').slice(0, 200),
             card_brand: payment.card_details?.card?.card_brand ?? null, last_4: /^\d{4}$/.test(payment.card_details?.card?.last_4 ?? '') ? payment.card_details!.card!.last_4 : null,
             note: (payment.note ?? '').slice(0, 500) };

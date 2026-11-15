@@ -74,6 +74,7 @@ export function revenueServices(data: RevenueSources) {
     if (row.status === 'no_show') service.issues.push('No-show reservation requires revenue review.');
     if (paid(row.payment_status) && (!row.square_order_id || row.payment_environment !== 'production')) service.issues.push('Paid reservation has no linked production order.');
     if (row.square_order_id && row.payment_environment !== 'production') service.issues.push('The payment environment is not verified.');
+    if (included(row.payment_status)) service.expected_cents = 0;
     if (service.cancelled) {
       if (row.square_order_id && row.payment_environment === 'production') service.charges.push({ order_id: row.square_order_id, amount_cents: row.amount_cents });
       continue;
@@ -84,12 +85,15 @@ export function revenueServices(data: RevenueSources) {
     if (ambiguous) { service.issues.push('More than one booking or visit matches a child.'); continue; }
     if (row.payment_environment === 'production' && row.square_order_id) {
       service.charges.push({ order_id: row.square_order_id, amount_cents: row.amount_cents });
+      if (included(row.payment_status)) service.issues.push('Complimentary admission retains a provider payment; verify the owner correction.');
       for (const visit of matches) {
         if (!visit.square_order_id || visit.square_order_id === row.square_order_id) consumed.add(visit.id);
       }
     } else if (included(row.payment_status)) {
       service.expected_cents = 0;
-      for (const visit of matches.filter(visit => included(visit.payment_status) || visit.price_cents === 0)) consumed.add(visit.id);
+      for (const visit of matches.filter(visit => included(visit.payment_status) || visit.price_cents === 0)) {
+        consumed.add(visit.id); addVisitCharge(service, visit);
+      }
     } else if (matches.length && row.child_ids.length && row.child_ids.length === row.child_count) {
       // A counter reservation and its exact named-child check-ins are one sale.
       if (row.child_ids.every(id => matches.some(visit => visit.person_id === id))) service.expected_cents = matches.reduce((sum, visit) => sum + (included(visit.payment_status) ? 0 : visit.price_cents), 0);
@@ -97,7 +101,16 @@ export function revenueServices(data: RevenueSources) {
     } else if (paid(row.payment_status)) service.issues.push('Paid reservation has no linked production order.');
   }
   function addVisitCharge(service: RevenueService, visit: RevenueVisit) {
-    if (included(visit.payment_status)) return;
+    if (included(visit.payment_status)) {
+      // Preserve a conflicting receipt's allocation so supplementing Square
+      // sales cannot silently turn a waived visit back into a standalone sale.
+      // This is a visible review exclusion, never a provider refund or deletion.
+      if (visit.square_order_id && visit.square_environment === 'production' && visit.price_cents > 0) {
+        service.charges.push({ order_id: visit.square_order_id, amount_cents: visit.price_cents });
+        service.issues.push('Complimentary admission retains a provider payment; verify the owner correction.');
+      }
+      return;
+    }
     if (visit.square_order_id && visit.square_environment === 'production') {
       if (visit.price_cents > 0) service.charges.push({ order_id: visit.square_order_id, amount_cents: visit.price_cents });
       else if (paid(visit.payment_status)) service.issues.push('Prepaid visit has no matching reservation amount.');

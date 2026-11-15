@@ -9,7 +9,9 @@ export async function GET(req: Request) {
   const context = await requireRevenueContext();
   if (!context.ok) return context.response;
   const date = new URL(req.url).searchParams.get('date') ?? revenueDay(new Date());
+  const kind = new URL(req.url).searchParams.get('kind') ?? 'admission';
   if (!validRevenueDate(date)) return Response.json({ ok: false, error: 'Choose a valid date.' }, { status: 400, headers });
-  try { return Response.json({ ok: true, date, receipts: await readAdmissionReceiptCandidates(date) }, { headers }); }
+  if (kind !== 'admission' && kind !== 'party') return Response.json({ ok: false, error: 'Choose admission or party receipts.' }, { status: 400, headers });
+  try { return Response.json({ ok: true, date, kind, receipts: await readAdmissionReceiptCandidates(date, kind) }, { headers }); }
   catch { return Response.json({ ok: false, error: 'Admission receipts could not be verified. No matches were saved.' }, { status: 503, headers }); }
 }

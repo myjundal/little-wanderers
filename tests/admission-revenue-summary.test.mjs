@@ -74,6 +74,20 @@ test('financial categories merge admission sources and never expose a mixed reco
   assert.equal(r.categories.reduce((n, row) => n + row.net_cents, 0), r.net_cents);
   assert.equal(r.admission.linked_cents + r.admission.unlinked_square_cents, r.admission.net_cents);
 });
+test('waiving a visit with a conflicting receipt cannot revive it as an unlinked Square admission', () => {
+  const data = reserved(); data.bookings[0].payment_status = 'covered';
+  data.visits = [visit({ payment_status: 'covered', square_environment: 'production', square_order_id: 'order' })];
+  const r = report(data, [receipt()]);
+  assert.equal(r.net_cents, 0); assert.equal(r.due_cents, 0); assert.equal(r.admission.unlinked_square_cents, 0);
+  assert.equal(r.rows.length, 1); assert.equal(r.rows[0].expected_cents, 0);
+  assert.equal(r.rows[0].received_cents, 1600); assert.equal(r.rows[0].issues.length, 1);
+  assert.match(r.rows[0].issues[0], /Complimentary admission retains/);
+  assert.equal(r.complete, false);
+  data.bookings[0].square_order_id = 'order'; data.bookings[0].payment_environment = 'production';
+  assert.equal(report(data, [receipt()]).net_cents, 0);
+  data.bookings = [];
+  assert.equal(report(data, [receipt()]).net_cents, 0);
+});
 test('missing visitor roles remain unknown, and sandbox/other-day visits never inflate attendance', async () => {
   const data = empty(); data.visits = [visit(), visit({ id: 'test', person_id: 'test', square_environment: 'sandbox' }), visit({ id: 'old', person_id: 'old', checked_in_at: '2026-11-13T16:00:00Z' })];
   const issues = []; let ids;
