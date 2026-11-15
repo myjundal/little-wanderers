@@ -3,6 +3,7 @@ import StaffSessionBar from '@/components/staff/StaffSessionBar';
 import StaffQuickNav from '@/components/staff/StaffQuickNav';
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
+import { getKioskDevice } from '@/lib/staff-kiosk';
 import { getCurrentUserRole, isStaffRole } from '@/lib/authz';
 import { PastelDashboardShell } from '@/components/pastel/PastelShells';
 
@@ -10,7 +11,7 @@ export default async function StaffLayout({ children }: { children: ReactNode })
   const { user, role } = await getCurrentUserRole();
 
   if (!user) {
-    redirect('/login');
+    redirect(await getKioskDevice() ? '/staff-login' : '/login');
   }
 
   if (!isStaffRole(role)) {
