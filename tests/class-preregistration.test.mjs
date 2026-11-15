@@ -119,6 +119,8 @@ test('confirmation email uses pre-registration and payment terms for interest an
   }
 });
 
+class RegistrationClock extends Date { static now() { return Date.parse('2026-11-10T17:00:00Z'); } }
+
 function registrationApi({ existing = null, klass = { ...fixtureClass, start_time: '2026-11-12T22:00:00Z', end_time: '2026-11-12T22:45:00Z' }, email = async () => ({ ok: true, id: 'email' }) } = {}) {
   const inserts = [];
   const updates = [];
@@ -160,7 +162,7 @@ function registrationApi({ existing = null, klass = { ...fixtureClass, start_tim
       parseGuardianName: () => ({ firstName: 'Parent', lastName: 'Family' }),
     },
     '@/lib/logger': { logger: { warn(message) { warnings.push(message); }, error() {} } },
-  }, { process: { env: {} } });
+  }, { process: { env: {} }, Date: RegistrationClock });
   return { inserts, updates, emails, background, warnings, post: () => POST({ json: async () => ({ class_id: 'painting', person_id: 'child' }) }) };
 }
 

@@ -3,7 +3,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { ensureGuardianProfile, parseGuardianName } from '@/lib/family-profile';
-import { classCheckoutRequest, validCheckoutId, readClassCheckout, startClassCheckout, reconcileClassCheckout, closeClassCheckout, cleanupClassCheckouts, publicClassCheckout } from '@/lib/class-checkout';
+import { classCheckoutRequest, validCheckoutId, readClassCheckout, startClassCheckout, reconcileClassCheckout, closeClassCheckout, cleanupClassCheckouts, publicClassCheckout, quoteClassSelection } from '@/lib/class-checkout';
+import { saveClassArrivalPayment } from '@/lib/class-arrival-payment';
+import { isSameOriginRequest } from '@/lib/request-origin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -19,7 +21,20 @@ export async function POST(req: Request) {
     const body = await req.json();
     if (!body || typeof body !== 'object') return reply({ ok: false, error: 'Choose a valid checkout action.' }, 400);
     const mode = body.mode ?? 'create_payment_link';
-    if (!['current', 'finalize', 'cancel', 'create_payment_link'].includes(mode)) return reply({ ok: false, error: 'Choose a valid checkout action.' }, 400);
+    if (!['current', 'finalize', 'cancel', 'create_payment_link', 'quote', 'pay_on_arrival'].includes(mode)) return reply({ ok: false, error: 'Choose a valid checkout action.' }, 400);
+    if (mode === 'quote') {
+      const selection = await quoteClassSelection(db, { householdId, request: classCheckoutRequest(body) });
+      return reply({ ok: true, quote: selection.quote });
+    }
+    if (mode === 'pay_on_arrival') {
+      if (!isSameOriginRequest(req)) return reply({ ok: false, error: 'Invalid request origin.' }, 403);
+      const request = classCheckoutRequest(body);
+      const guardian = parseGuardianName(body);
+      if (!guardian.firstName || !guardian.lastName) return reply({ ok: false, error: 'Enter the parent/guardian first and last name above.' }, 400);
+      if (await readClassCheckout(db, householdId)) return reply({ ok: false, error: 'Finish or close the pending checkout before choosing payment on arrival.' }, 409);
+      await ensureGuardianProfile({ admin: db, householdId, userId: user.id, email: user.email, firstName: guardian.firstName, lastName: guardian.lastName });
+      return reply({ ok: true, ...await saveClassArrivalPayment(db, { householdId, userId: user.id, request }) });
+    }
     waitUntil(cleanupClassCheckouts(db));
     if (mode === 'current') {
       let current = await readClassCheckout(db, householdId);

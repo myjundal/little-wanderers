@@ -55,6 +55,45 @@ test('new families can buy multiple dates once; server pricing and selected chil
  assert.equal((await h.flow.reconcileClassCheckout(h.admin,a)).status,'open');
 });
 
+test('ballet second-child discount is frozen before Square and exact discounted payment confirms the seat', async t => {
+ const h=await fixture(t);
+ await h.db.query("update classes set title='PreK+ Ballet' where id=$1",[h.sessions[1]]);
+ await h.db.query("insert into class_registrations(class_id,person_id,household_id,child_id,status) values($1,$2,$3,$2,'scheduled')",[h.sessions[1],h.sibling,h.family]);
+ const attempt=await h.start();
+ assert.equal(attempt.expected_amount_cents,5000); assert.equal(attempt.payload.pricing.discount_cents,500);
+ const balletLine=h.requests.find(row=>row.body?.order).body.order.line_items.find(row=>row.name==='PreK+ Ballet');
+ assert.equal(balletLine.base_price_money.amount,2000);
+ assert.match(balletLine.note,/20% sibling discount/);
+ assert.equal((await h.start()).id,attempt.id);
+ assert.equal(h.requests.filter(row=>row.method==='POST').length,1);
+ h.pay(attempt); assert.equal((await h.flow.reconcileClassCheckout(h.admin,attempt)).status,'completed');
+ assert.equal((await h.db.query("select count(*)::int n from class_registrations where status='scheduled'")).rows[0].n,3);
+});
+
+test('unpaid sibling interest does not qualify for a ballet discount', async t => {
+ const h=await fixture(t);
+ await h.db.query("update classes set title='PreK+ Ballet' where id=$1",[h.sessions[1]]);
+ await h.db.query("insert into class_registrations(class_id,person_id,household_id,child_id,status) values($1,$2,$3,$2,'preregistered')",[h.sessions[1],h.sibling,h.family]);
+ assert.equal((await h.start()).expected_amount_cents,5500);
+});
+
+test('pay-on-arrival records interest only, is idempotent and preserves paid registrations', async t => {
+ const h=await fixture(t);
+ const {saveClassArrivalPayment}=loadSquareModules().load('src/lib/class-arrival-payment.ts');
+ const first=await saveClassArrivalPayment(h.admin,{householdId:h.family,userId:h.user,request:h.request});
+ assert.equal(first.seat_confirmed,false); assert.equal(first.registration_ids.length,2);
+ const rows=(await h.db.query('select * from class_registrations')).rows;
+ assert(rows.every(row=>row.status==='preregistered'&&row.customer_note.includes('Pay on arrival')));
+ await saveClassArrivalPayment(h.admin,{householdId:h.family,userId:h.user,request:h.request});
+ assert.equal((await h.db.query('select count(*)::int n from class_registrations')).rows[0].n,2);
+ await h.db.query("update class_registrations set status='scheduled',customer_note='Paid receipt confirmed' where class_id=$1",[h.sessions[0]]);
+ await saveClassArrivalPayment(h.admin,{householdId:h.family,userId:h.user,request:h.request});
+ const paid=(await h.db.query('select * from class_registrations where class_id=$1',[h.sessions[0]])).rows[0];
+ assert.equal(paid.status,'scheduled'); assert.equal(paid.customer_note,'Paid receipt confirmed');
+ const foreign={...h.request,person_id:crypto.randomUUID()};
+ await assert.rejects(saveClassArrivalPayment(h.admin,{householdId:h.family,userId:h.user,request:foreign}),/child in your family/);
+});
+
 test('completed exact-amount Square receipts atomically confirm all dates and preserve preregistration IDs',async t=>{
  const h=await fixture(t),existing=crypto.randomUUID();
  await h.db.query("insert into class_registrations(id,class_id,person_id,household_id,child_id,status) values($1,$2,$3,$4,$3,'preregistered')",[existing,h.sessions[0],h.child,h.family]);
@@ -138,7 +177,7 @@ test('server checkout requires authentication, isolates households, and verifies
   '@/lib/supabase/admin':{createAdminSupabaseClient:()=>h.admin},
   '@/lib/households':{getLatestHouseholdIdForUser:async()=>household},
   '@/lib/family-profile':{parseGuardianName:()=>({firstName:'Parent',lastName:'Test'}),ensureGuardianProfile:async()=>{}},
-  '@/lib/class-checkout':{...h.flow,cleanupClassCheckouts:async()=>{}},
+  '@/lib/class-arrival-payment':{}, '@/lib/request-origin':{}, '@/lib/class-checkout':{...h.flow,cleanupClassCheckouts:async()=>{}},
  },{console}).POST;
  const post=(handler,body)=>handler(new Request('https://example.test/api/classes/checkout',{method:'POST',body:JSON.stringify(body)}));
  assert.equal((await post(api(null),h.request)).status,401);
@@ -157,7 +196,7 @@ test('signed class payment webhook routes to persisted checkout and retries veri
   '@/lib/square-webhook':{verifySquareWebhook:()=>true},
   '@/lib/soft-opening-payments':{},'@/lib/class-series-payments':{},'@/lib/households':{},'@/lib/founding-square':{},
   '@vercel/functions':{},'@/lib/membership-notifications':{},'@/lib/square-admission-pos':{},
-  '@/lib/class-checkout':{reconcileClassCheckout:async(...args)=>{called++;if(fail)throw Error('provider unavailable');return h.flow.reconcileClassCheckout(...args);}},
+  '@/lib/class-arrival-payment':{}, '@/lib/request-origin':{}, '@/lib/class-checkout':{reconcileClassCheckout:async(...args)=>{called++;if(fail)throw Error('provider unavailable');return h.flow.reconcileClassCheckout(...args);}},
  }});
  const route=runtime.load('src/app/api/webhooks/square/route.ts');
  const req=()=>new Request('https://example.test/api/webhooks/square',{method:'POST',body:JSON.stringify({type:'payment.updated',data:{object:{payment:{status:'COMPLETED',order_id:a.order_id}}}})});

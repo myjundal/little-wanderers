@@ -59,6 +59,7 @@ type ClassItem = {
     person_name: string;
     household_id: string | null;
     registration_status: 'preregistered' | 'scheduled' | 'cancelled' | 'waitlist' | 'attended';
+    payment_choice?: string | null;
     attendance_status: 'unknown' | 'attended' | 'cancelled' | 'no_show';
     attendance_marked_at: string | null;
     attendance_marked_by: string | null;
@@ -451,7 +452,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
   const rosterSessions = useMemo<RosterSession[]>(() => classes.map(item => ({
     id: item.id, title: item.title, startTime: item.start_time, endTime: item.end_time,
     status: item.status, scheduleLabel: item.schedule_label,
-    registrations: item.registrants.map(reg => ({ id: reg.registration_id, personId: reg.person_id, name: reg.person_name, status: reg.registration_status, householdId: reg.household_id, attendanceStatus: reg.attendance_status })),
+    registrations: item.registrants.map(reg => ({ id: reg.registration_id, personId: reg.person_id, name: reg.person_name, status: reg.registration_status, householdId: reg.household_id, attendanceStatus: reg.attendance_status, paymentChoice: reg.payment_choice })),
   })), [classes]);
 
   useEffect(() => {
