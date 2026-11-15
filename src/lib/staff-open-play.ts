@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isUuid, SOFT_OPENING_START, SOFT_OPENING_END, OPEN_PLAY_SLOT_SELECT, OPEN_PLAY_RESERVATION_SELECT } from '@/lib/open-play-reservations';
+import { isOpenPlayArrivalAvailable, isUuid, SOFT_OPENING_START, SOFT_OPENING_END, OPEN_PLAY_SLOT_SELECT, OPEN_PLAY_RESERVATION_SELECT } from '@/lib/open-play-reservations';
 import { readSoftOpeningFamily } from '@/lib/soft-opening-family';
 import { softOpeningAmount } from '@/lib/soft-opening-pricing';
 import { getPartyDateKey } from '@/lib/party-config';
@@ -18,7 +18,7 @@ export async function createStaffOpenPlayReservation(db: SupabaseClient, househo
   if (slot.error || existing.error || household.error) throw new Error('Unable to verify this reservation. Please refresh.');
   if (!household.data) throw new Error('Family not found.');
   if (existing.data?.length) throw new Error('This family already has an upcoming Open Play reservation. Cancel it before choosing another time.');
-  if (!slot.data || slot.data.status !== 'open' || new Date(slot.data.starts_at) < new Date(SOFT_OPENING_START) || new Date(slot.data.starts_at) >= new Date(SOFT_OPENING_END) || new Date(slot.data.ends_at) <= new Date()) throw new Error('This arrival window is no longer available.');
+  if (!slot.data || slot.data.status !== 'open' || !isOpenPlayArrivalAvailable(slot.data) || new Date(slot.data.starts_at) < new Date(SOFT_OPENING_START) || new Date(slot.data.starts_at) >= new Date(SOFT_OPENING_END) || new Date(slot.data.ends_at) <= new Date()) throw new Error('This arrival window is no longer available.');
   if (ids.some(id => !family.children.some(child => child.id === id))) throw new Error('Choose children belonging to this family.');
   const amount = softOpeningAmount(ids, family.memberships, getPartyDateKey(new Date(slot.data.starts_at)), family.children);
   const saved = await db.from('open_play_reservations').insert({ household_id: householdId, slot_id: input.slot_id, created_by_user_id: staffId, contact_email: household.data.email, child_ids: ids, child_count: ids.length, adult_count: input.adult_count, amount_cents: amount, payment_choice: amount === 0 ? 'membership' : 'counter', payment_status: amount === 0 ? 'covered' : 'due', status: 'reserved', notes: typeof input.notes === 'string' ? input.notes.trim().slice(0, 500) || null : null }).select(OPEN_PLAY_RESERVATION_SELECT).single();

@@ -35,7 +35,7 @@ test('phone-only member can reserve an enrolled child with zero admission and co
     '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'phone-user', email: '', phone: '18605550123' } } }) } }) },
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
     '@/lib/households': { getLatestHouseholdIdForUser: async () => 'family' },
-    '@/lib/open-play-reservations': { SOFT_OPENING_START: '2099-11-11', SOFT_OPENING_END: '2100-01-01', isUuid: v => v === slotId, sanitizeReservationCount: v => v, getReservationOccupancy: async () => ({ children: 0, total: 0 }), isMissingOpenPlayReservationTable: () => false, formatOpenPlayReservationError: v => v },
+    '@/lib/open-play-reservations': { ...loadModule('src/lib/open-play-reservations.ts'), SOFT_OPENING_START: '2099-11-11', SOFT_OPENING_END: '2100-01-01', isUuid: v => v === slotId, sanitizeReservationCount: v => v, getReservationOccupancy: async () => ({ children: 0, total: 0 }), isMissingOpenPlayReservationTable: () => false, formatOpenPlayReservationError: v => v },
     '@/lib/soft-opening-family': { saveSoftOpeningFamily: async () => ({ childIds: ['child'], memberships: [{ child_ids: ['child'], status: 'pending', start_date: null, paid_through: null }], children: [], guardianName: 'Parent Family' }) },
     '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], overlapsPrivateParty: () => false },
     '@/lib/admin-notifications': { sendOpenPlayReservationNotification: async () => ({ ok: true }) },
