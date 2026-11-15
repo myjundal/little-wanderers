@@ -143,8 +143,8 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     if (url === '/api/admin/admission/confirm') return Response.json({ ok: true, ...confirmationResult });
     if (url === '/api/admin/admission/checkout') {
       if (failCheckout) return Response.json({ ok: false, error: 'Unable to record checkout' }, { status: 409 });
-      const checkouts = body.checkin_ids.map(id => ({ id, checked_out_at: '2026-11-11T17:00:00Z' }));
-      visits = visits.map(visit => checkouts.some(row => row.id === visit.id) ? { ...visit, checked_out_at: checkouts.find(row => row.id === visit.id).checked_out_at } : visit);
+      const checkouts = body.checkin_ids.map(id => ({ id, checked_out: true, checked_out_at: body.checkout_time_unknown ? null : '2026-11-11T17:00:00Z' }));
+      visits = visits.map(visit => checkouts.some(row => row.id === visit.id) ? { ...visit, checked_out: true, checked_out_at: checkouts.find(row => row.id === visit.id).checked_out_at } : visit);
       return Response.json({ ok: true, checkouts });
     }
     if (url === '/api/checkin') {
@@ -639,4 +639,26 @@ test('unknown-time departures show checked out on the desk without a running dur
   assert.ok(h.text().includes('Departure time unknown'));
   assert.equal(h.button('Check out family'), undefined);
   assert.ok(!h.text().includes('guests here'));
+});
+
+
+test('check out without time sends an explicit choice, prevents repeat checkout, and preserves admission due', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  await h.button('Back to desk').props.onClick(); await h.flush();
+  const unknownCheckout = h.button('Check out without time (2)').props.onClick;
+  const timedCheckout = h.button('Check out family (2)').props.onClick;
+  unknownCheckout(); timedCheckout(); unknownCheckout();
+  await h.flush();
+  const requests = h.requests.filter(request => request.url === '/api/admin/admission/checkout');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.checkout_time_unknown, true);
+  assert.equal(requests[0].body.checkin_ids.length, 2);
+  assert.ok(h.visits().every(visit => visit.checked_out === true && visit.checked_out_at === null));
+  assert.ok(h.text().includes('Departure time unknown'));
+  assert.ok(h.text().includes('Excluded from stay statistics'));
+  assert.ok(h.text().includes('Total due: $16.00'));
+  assert.equal(h.button('Check out family'), undefined);
+  assert.equal(h.button('Check out without time'), undefined);
 });
