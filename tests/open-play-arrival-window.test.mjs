@@ -60,3 +60,12 @@ test('public calendar repeats the 6 PM warning only for the selected last arriva
     assert.equal(html.includes(policy.LAST_OPEN_PLAY_ARRIVAL_NOTICE),id==='late');
   }
 });
+
+test('a preserved 4–5 PM reservation on a private-party date shows change instructions without a conflicting 6 PM visit reminder', () => {
+ const h=reservationHarness();
+ h.state[0].reservations=[{id:'saved',status:'reserved',slot:late,child_count:1,adult_count:1,payment_choice:'counter',payment_status:'due',amount_cents:1600}];
+ h.state[0].private_party_days=[{date:'2026-11-16',starts_at:'2026-11-16T21:00Z',ends_at:'2026-11-16T23:00Z'}];
+ const html=renderToStaticMarkup(h.render());
+ assert.match(html,/Your reserved arrival overlaps a private party/);
+ assert.doesNotMatch(html,/Your arrival window is 4–5 PM. We close at 6 PM/);
+});
