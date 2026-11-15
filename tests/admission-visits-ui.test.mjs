@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { loadModule } from './helpers/class-preregistration-harness.mjs';
 
-const logic = loadModule('src/lib/admission-stays.ts');
+const checkoutLogic = loadModule('src/lib/admission-pos-ui.ts');
+const logic = loadModule('src/lib/admission-stays.ts', { '@/lib/admission-pos-ui': checkoutLogic });
 const base = { household_id: 'family', household_name: 'Gardner', checked_in_at: '2026-11-11T15:00:00Z', checked_out_at: null,
   price_cents: 1600, payment_status: 'due', name: 'Alondra' };
 const react = { ...React, useState: value => [typeof value === 'function' ? value() : value, () => {}], useEffect() {} };
-const Component = loadModule('src/components/staff/AdmissionVisits.tsx', { react, '@/lib/admission-stays': logic, './admission-visits.module.css': { default: {} } }, { React }).default;
+const Component = loadModule('src/components/staff/AdmissionVisits.tsx', { react, '@/lib/admission-pos-ui': checkoutLogic, '@/lib/admission-stays': logic, './admission-visits.module.css': { default: {} } }, { React }).default;
 function inspect(tree) {
   const nodes = [];
   const text = node => Array.isArray(node) ? node.map(text).join('') : node == null || typeof node === 'boolean' ? '' : typeof node === 'object' ? text(node.props?.children) : String(node);
@@ -36,5 +37,20 @@ test('checkout is disabled until current arrival and departure status is availab
     const view = inspect(Component({ ...settings, visits: [{ ...base, id: 'one' }], checkingOut: '', onCheckout() {}, onOpenFamily() {}, onRefresh() {} }));
     const checkout = view.nodes.find(node => node.type === 'button' && view.text(node).includes('Check out family'));
     assert.equal(checkout.props.disabled, true);
+  }
+});
+
+
+test('unknown-time departures are listed as departed without estimated times or durations, including partially departed families', () => {
+  const settings = { ready: true, locked: false, checkingOut: '', onCheckout() {}, onOpenFamily() {}, onRefresh() {} };
+  for (const mixed of [false, true]) {
+    const visits = [{ ...base, id: 'unknown', checked_out: true }, ...(mixed ? [{ ...base, id: 'still-here' }] : [])];
+    const view = inspect(Component({ ...settings, visits }));
+    assert.ok(view.fullText.includes('Departure time unknown'));
+    const unknown = view.nodes.find(node => node.type === 'li' && view.text(node).includes('Departure time unknown'));
+    assert.ok(!view.text(unknown).includes('so far'));
+    assert.ok(!view.text(unknown).includes('Invalid Date'));
+    assert.ok(view.fullText.includes(mixed ? '1 family · 1 guests here now' : '0 families · 0 guests here now'));
+    if (!mixed) assert.ok(view.fullText.includes('Checked out today · 1 family'));
   }
 });

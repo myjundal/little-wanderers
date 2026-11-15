@@ -167,7 +167,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     return Response.json(snapshot);
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
-  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic, '@/lib/admission-arrivals': loadSquareModules().load('src/lib/admission-arrivals.ts') }, {
+  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts', { '@/lib/admission-pos-ui': logic }), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic, '@/lib/admission-arrivals': loadSquareModules().load('src/lib/admission-arrivals.ts') }, {
     React, fetch, AbortController, Date: class extends Date { constructor(value) { super(value ?? '2026-11-11T15:00:00Z'); } static now() { return Date.parse('2026-11-11T15:00:00Z'); } },
     document: { visibilityState: 'visible', addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; } },
     navigator: { userAgent: 'iPad', standalone: homeScreen },
@@ -626,4 +626,17 @@ test('confirmation distinguishes an unverified receipt from a paid family requir
     assert.equal(h.requests.filter(row => row.body?.checkin_ids).length, 0);
     assert.equal(h.button('Payment confirmed').props.disabled, false);
   }
+});
+
+
+test('unknown-time departures show checked out on the desk without a running duration or checkout action', async () => {
+  const h = uiHarness({ initialVisits: people.map(person => ({ id: `visit-${person.id}`, person_id: person.id, household_id: family.id,
+    household_name: family.name, name: person.first_name, checked_in_at: '2026-11-11T15:00:00Z', checked_out: true,
+    checked_out_at: null, price_cents: 0, payment_status: 'covered' })) });
+  await h.flush();
+  const card = h.nodes().find(node => node.type === 'article' && node.props['data-family-id'] === family.id);
+  assert.equal(card.props['data-arrival-state'], 'checked-out');
+  assert.ok(h.text().includes('Departure time unknown'));
+  assert.equal(h.button('Check out family'), undefined);
+  assert.ok(!h.text().includes('guests here'));
 });
