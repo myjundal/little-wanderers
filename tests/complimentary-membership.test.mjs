@@ -50,3 +50,22 @@ test('customer enrollment rejects complimentary households before reading card i
  assert.equal(response.status,409);assert.match((await response.json()).error,/lifetime Friends & Family/);
  assert.equal(cardInputRead,false);assert.equal(providerCalls,0);
 });
+
+test('household gift covers children added after the lifetime grant, but not another family',async t=>{
+ const {admin,db}=await setup(t);const m=modules();
+ await db.query("insert into people values($1,$2,'New','Sibling','2024-01-01','child',now())",[ids.otherPerson,ids.household]);
+ const family=await m.load('src/lib/soft-opening-family.ts').readSoftOpeningFamily(admin,ids.household);
+ assert.equal(m.load('src/lib/soft-opening-pricing.ts').softOpeningAmount([ids.person,ids.otherPerson],family.memberships,'2036-11-14',family.children),0);
+ assert.equal(m.load('src/lib/soft-opening-pricing.ts').softOpeningAmount([ids.user],family.memberships,'2036-11-14',[]),1600);
+});
+
+test('adding the first child to a precreated complimentary family is free in that same request',async t=>{
+ const {admin,db}=await setup(t);const m=modules();
+ await db.exec("create table households(id uuid,role text,email text,name text); alter table people alter column id set default gen_random_uuid(); alter table people add column notes text; alter table people add column gender text;");
+ await db.query('delete from people where role=$1',['child']);
+ await db.query('update memberships set covered_person_ids=$1',[JSON.stringify([ids.user])]);
+ await db.query('insert into households(id) values($1)',[ids.household]);
+ const saved=await m.load('src/lib/soft-opening-family.ts').saveSoftOpeningFamily(admin,ids.household,{id:ids.user,email:'parent@example.test'},{guardian_first_name:'Parent',guardian_last_name:'Family',children:[{new_id:ids.otherPerson,name:'First Child',age:2,age_unit:'years'}]});
+ assert.equal(m.load('src/lib/soft-opening-pricing.ts').softOpeningAmount(saved.childIds,saved.memberships,'2036-11-14',saved.children),0);
+ assert.deepEqual(Array.from(saved.memberships[0].child_ids),[ids.otherPerson]);
+});
