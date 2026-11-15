@@ -110,6 +110,7 @@ async function loadClasses(admin: SupabaseClient) {
     class_id: string;
     person_id: string;
     status: string;
+    customer_note?: string | null;
     attendance_status?: AttendanceStatus;
     attendance_marked_at?: string | null;
     attendance_marked_by?: string | null;
@@ -118,7 +119,7 @@ async function loadClasses(admin: SupabaseClient) {
   if (ids.length > 0) {
     const primaryRegs = await admin
       .from('class_registrations')
-      .select('id,class_id,person_id,status,attendance_status,attendance_marked_at,attendance_marked_by')
+      .select('id,class_id,person_id,status,attendance_status,attendance_marked_at,attendance_marked_by,customer_note')
       .in('class_id', ids);
 
     if (primaryRegs.error) {
@@ -157,6 +158,7 @@ async function loadClasses(admin: SupabaseClient) {
       person_name: `${person?.first_name ?? ''} ${person?.last_name ?? ''}`.trim() || 'Unknown',
       household_id: person?.household_id ?? null,
       registration_status: row.status,
+      payment_choice: row.status === 'preregistered' && row.customer_note?.includes('Payment choice: Pay on arrival.') ? 'arrival' : null,
       attendance_status: row.attendance_status ?? 'unknown',
       attendance_marked_at: row.attendance_marked_at ?? null,
       attendance_marked_by: row.attendance_marked_by ?? null,

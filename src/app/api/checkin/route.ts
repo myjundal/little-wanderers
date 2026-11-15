@@ -27,7 +27,15 @@ export async function POST(req: Request) {
     try {
       const pricing = await readInfantSiblingAdmission(context.admin, [data.checkin_id], squareEnvironment());
       const priced = pricing.priced.find(row => row.id === data.checkin_id);
-      if (priced) { data.price_cents = priced.price_cents; data.payment_status = priced.payment_status; data.infant_sibling_free = priced.infant_sibling_free; }
+      if (priced) {
+        if (priced.founding_membership_applied) {
+          const corrected = await context.admin.from('checkins').update({ price_cents: 0, payment_status: 'covered', membership_applied: true })
+            .eq('id', data.checkin_id).eq('payment_status', 'due').is('square_order_id', null).select('id');
+          if (corrected.error || !corrected.data?.length) throw new Error('Membership check-in needs refresh.');
+          data.membership_applied = true;
+        }
+        data.price_cents = priced.price_cents; data.payment_status = priced.payment_status; data.infant_sibling_free = priced.infant_sibling_free;
+      }
     } catch { return Response.json({ok:false,error:'Check-in saved. Refresh admission status before collecting payment.'},{status:503}); }
   }
   const status = data?.ok ? 200 : data?.code === 'not_found' ? 404 : data?.code === 'forbidden' ? 403 : 409;

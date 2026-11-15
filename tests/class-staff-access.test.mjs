@@ -39,16 +39,21 @@ test('server page gives management controls and instructor assignments to the ow
   }
 });
 
-test('staff see names, dates and family links without management navigation or session buttons', () => {
+test('staff see names, dates, arrival payment preference and family links without management navigation or session buttons', () => {
+  class RosterClock extends Date {
+    constructor(...args) { super(args.length ? args[0] : '2026-11-09T17:00:00Z'); }
+    static now() { return Date.parse('2026-11-09T17:00:00Z'); }
+  }
   const { default: Roster } = loadModule('src/components/classes/ClassPreRegistrationRosters.tsx', {
     react: React,
     'next/link': props => React.createElement('a', { href: props.href }, props.children),
-    '@/lib/class-rosters': loadModule('src/lib/class-rosters.ts'),
+    '@/lib/class-rosters': loadModule('src/lib/class-rosters.ts', {}, { Date: RosterClock }),
     './class-rosters.module.css': {},
-  }, { React });
-  const sessions = [{ id: 'class', title: 'Art', startTime: '2026-11-12T22:00:00Z', endTime: '2026-11-12T22:45:00Z', status: 'scheduled', registrations: [{ id: 'interest', personId: 'child', name: 'Sam Family', status: 'preregistered', householdId: 'family' }] }];
+  }, { React, Date: RosterClock });
+  const sessions = [{ id: 'class', title: 'Art', startTime: '2026-11-12T22:00:00Z', endTime: '2026-11-12T22:45:00Z', status: 'scheduled', registrations: [{ id: 'interest', personId: 'child', name: 'Sam Family', status: 'preregistered', householdId: 'family', paymentChoice: 'arrival' }] }];
   const markup = renderToStaticMarkup(React.createElement(Roster, { sessions, showFamilyLinks: true, onRefresh() {} }));
   assert.match(markup, /Sam Family/);
+  assert.match(markup, /Pay on arrival · unpaid/);
   assert.match(markup, /Nov 12/);
   assert.match(markup, /\/staff\/families\/family/);
   assert.doesNotMatch(markup, /aria-label="Open|Schedule &amp; attendance/);

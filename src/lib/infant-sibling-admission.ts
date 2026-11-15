@@ -2,6 +2,7 @@ import { admissionIsPaid, admissionIsIncluded } from '@/lib/admission-payment-st
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { freeInfantSiblingIds, isInfantSibling } from '@/lib/infant-sibling-pricing';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
+import { applyFoundingAdmissionCoverage } from '@/lib/founding-admission-coverage';
 
 type Person = { id: string; household_id: string; role?: string; birthdate?: string | null };
 type Visit = { id: string; person_id: string; price_cents: number; payment_status: string; checked_in_at: string; square_environment?: string | null };
@@ -49,5 +50,6 @@ export async function readInfantSiblingAdmission(admin: SupabaseClient, checkinI
     .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0)).limit(101);
   if (rows.error || (rows.data?.length ?? 0) > 100) throw new Error('Unable to verify today’s admission. Refresh first.');
   const visits = rows.data ?? [];
-  return { householdId: families[0], visits, priced: projectInfantSiblingAdmission(visits, people.data, environment) };
+  const covered = await applyFoundingAdmissionCoverage(admin, visits, people.data, environment);
+  return { householdId: families[0], visits, priced: projectInfantSiblingAdmission(covered, people.data, environment) };
 }

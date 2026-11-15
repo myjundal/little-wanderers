@@ -6,6 +6,7 @@ export type RosterRegistration = {
   age?: number | null;
   attendanceStatus?: string;
   householdId?: string | null;
+  paymentChoice?: string | null;
 };
 
 export type RosterSession = {

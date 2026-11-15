@@ -57,7 +57,7 @@ export function localSquareAdmin(db) {
         upsert(value){action='insert';rows=value;upsert=true;return q;}, update(value){action='update';rows=value;return q;},
         eq(key,value){filters.push(`${ident(key)}=${param(value)}`);return q;},
         neq(key,value){filters.push(`${ident(key)}<>${param(value)}`);return q;},
-        is(key,value){if(value!==null)throw new Error('Only null is supported');filters.push(`${ident(key)} is null`);return q;},
+        is(key,value){if(value!==null)throw new Error('Only null is supported');filters.push(`${key==='payload->provider_request'?`${ident('payload')}->'provider_request'`:ident(key)} is null`);return q;},
         not(key,op,value){if(op!=='is'||value!==null)throw new Error('Unsupported not');filters.push(`${ident(key)} is not null`);return q;},
         in(key,list){filters.push(list.length?`${ident(key)} in (${list.map(param).join(',')})`:'false');return q;},
         lt(key,value){filters.push(`${ident(key)}<${param(value)}`);return q;},gt(key,value){filters.push(`${ident(key)}>${param(value)}`);return q;},
