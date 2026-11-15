@@ -11,11 +11,12 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const ids: unknown = body?.checkin_ids;
   if (!isUuid(String(body?.household_id ?? '')) || !Array.isArray(ids) || !ids.length || ids.length > 100
+    || (body.checkout_time_unknown !== undefined && typeof body.checkout_time_unknown !== 'boolean')
     || ids.some(id => typeof id !== 'string' || !isUuid(id)) || new Set(ids).size !== ids.length) {
     return Response.json({ ok: false, error: 'Choose one visiting family to check out.' }, { status: 400, headers });
   }
   try {
-    const result = await checkoutAdmission(context.admin, ids as string[], body.household_id, context.user.id);
+    const result = await checkoutAdmission(context.admin, ids as string[], body.household_id, context.user.id, new Date(), { timeUnknown: body.checkout_time_unknown === true });
     return Response.json({ ok: true, ...result }, { headers });
   } catch (error) {
     return Response.json({ ok: false, error: error instanceof Error ? error.message : 'Unable to check out family.' }, { status: 409, headers });

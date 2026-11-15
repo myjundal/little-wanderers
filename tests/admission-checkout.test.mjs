@@ -103,15 +103,23 @@ test('invalid saved departures fail visibly rather than showing a visitor as che
 
 test('checkout API authorizes staff, validates selection, and uses the server operator identity', async () => {
   let calls = 0;
+  const options = [];
   const denied = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: false, response: Response.json({}, { status: 403 }) }) } } }).load('src/app/api/admin/admission/checkout/route.ts');
   assert.equal((await denied.POST(new Request('https://example.test', { method: 'POST', body: '{}' }))).status, 403);
   const api = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: ids.user }, admin: {} }) },
-    '@/lib/admission-checkout': { checkoutAdmission: async (...args) => { calls++; assert.equal(args[3], ids.user); return { checkouts: [] }; } } } }).load('src/app/api/admin/admission/checkout/route.ts');
+    '@/lib/admission-checkout': { checkoutAdmission: async (...args) => { calls++; assert.equal(args[3], ids.user); options.push(args[5]); return { checkouts: [] }; } } } }).load('src/app/api/admin/admission/checkout/route.ts');
   const request = body => new Request('https://example.test', { method: 'POST', body: JSON.stringify(body) });
   for (const checkin_ids of [[], [first, first], ['bad-id']]) assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids }))).status, 400);
   assert.equal(calls, 0);
   assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids: [first], created_by: ids.other }))).status, 200);
   assert.equal(calls, 1);
+  assert.equal(options[0].timeUnknown, false);
+  for (const checkout_time_unknown of ['true', 1, null, {}]) {
+    assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids: [first], checkout_time_unknown }))).status, 400);
+  }
+  assert.equal(calls, 1);
+  assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids: [first], checkout_time_unknown: true }))).status, 200);
+  assert.equal(options[1].timeUnknown, true);
 });
 
 test('admission payment API retains checked-out unpaid visits and attaches stored arrival/departure times', async t => {

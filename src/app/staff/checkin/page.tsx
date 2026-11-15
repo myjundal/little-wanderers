@@ -375,14 +375,14 @@ export default function StaffCheckinPage() {
     finally { setBusy(false); }
   }
 
-  async function checkOutFamily(householdId: string, ids: string[]) {
+  async function checkOutFamily(householdId: string, ids: string[], timeUnknown = false) {
     if (locked || !paymentsReady || loading || checkoutBusy.current || paymentPending.current) return;
     checkoutBusy.current = true;
     setCheckingOut(householdId);
     let recorded = false;
     try {
       const response = await fetch('/api/admin/admission/checkout', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ household_id: householdId, checkin_ids: ids }) });
+        body: JSON.stringify({ household_id: householdId, checkin_ids: ids, checkout_time_unknown: timeUnknown }) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to check out family.');
       recorded = true;
@@ -390,7 +390,7 @@ export default function StaffCheckinPage() {
       setVisits(previous => previous.map(visit => departures.has(visit.id) ? { ...visit, checked_out: true, checked_out_at: departures.get(visit.id) } : visit));
       setDeskRefresh(value => value + 1);
       await refreshPayments();
-      setMessage('Family checked out. Departure times and crowd count are saved.');
+      setMessage(timeUnknown ? 'Family checked out without a departure time. Excluded from stay statistics; crowd count updated.' : 'Family checked out. Departure times and crowd count are saved.');
     } catch (error) {
       setMessage(`${recorded ? 'Checkout is saved. ' : ''}${error instanceof Error ? error.message : 'Unable to check out family.'}`);
     } finally { checkoutBusy.current = false; setCheckingOut(''); }
@@ -462,7 +462,10 @@ export default function StaffCheckinPage() {
         </div>
       </div>
       <div className={styles.familyActions}>
-        {present.length > 0 && <button className={styles.rowCheckout} aria-label={`Check out family (${present.length})`} disabled={!isToday || locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Saving…' : 'Check out'}</button>}
+        {present.length > 0 && <>
+          <button className={styles.rowCheckout} aria-label={`Check out family (${present.length})`} disabled={!isToday || locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Saving…' : 'Check out'}</button>
+          <button className={styles.rowOpen} aria-label={`Check out without time (${present.length})`} title="Use when the family has already left and the departure time is unknown. Excluded from stay statistics." disabled={!isToday || locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id), true)}>Check out without time</button>
+        </>}
         <button className={styles.rowOpen} aria-label={todayVisits.length ? 'Open family / payment' : 'Choose family'} disabled={!isToday || locked} onClick={() => void openFamily(item.id)}>Open</button>
       </div>
       <details className={styles.familyDetails}><summary>Details</summary>
