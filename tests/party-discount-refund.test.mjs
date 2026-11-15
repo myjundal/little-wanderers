@@ -95,3 +95,17 @@ test('party refund API requires personal owner access, same origin, exact amount
   assert.equal((await route.POST(request({ action: 'preview' }))).status, 200);
   assert.equal((await route.POST(request({ confirmation: 'REFUND PARTY FRIENDS FAMILY 50', refund_cents: 5000 }))).status, 200); assert.equal(calls, 2);
 });
+
+
+test('explicit provider references must identify the selected party, while opaque receipts remain supported', async () => {
+  for (const reference of ['metadata', 'reference', 'balance', 'contradictory']) {
+    const h = fixture(), other = '10000000-0000-4000-8000-000000000002';
+    if (reference === 'metadata') h.order.metadata = { party_booking_id: other };
+    if (reference === 'reference') h.order.reference_id = `party_${other}`;
+    if (reference === 'balance') h.order.reference_id = `party_balance_${other}`;
+    if (reference === 'contradictory') { h.order.metadata = { party_booking_id: h.party.id }; h.order.reference_id = `party_${other}`; }
+    await assert.rejects(h.api.refundPartyDiscount(h.admin, h.input), /different party/); assert.equal(h.posts(), 0);
+  }
+  const h = fixture(); h.order.metadata = { party_booking_id: h.party.id }; h.order.reference_id = `party_${h.party.id}`;
+  assert.equal((await h.api.refundPartyDiscount(h.admin, h.input)).amount_cents, 5000);
+});

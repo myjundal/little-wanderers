@@ -20,9 +20,11 @@ export async function previewPartyDiscountRefund(admin: SupabaseClient, input: I
     || !Number.isSafeInteger(input.expectedPaymentCents) || input.expectedPaymentCents <= PARTY_FRIENDS_FAMILY_REFUND_CENTS) throw new Error('Verify the linked party and original payment amount first.');
   const linked = await admin.from('party_bookings').select('id').eq('square_environment', 'production').eq('square_order_id', input.orderId).limit(2);
   if (linked.error || linked.data?.length !== 1 || linked.data[0].id !== party.id) throw new Error('This receipt must belong exclusively to one party.');
-  const { order } = await squareRequest<{ order: { id: string; location_id: string; total_money: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[] } }>(`/v2/orders/${encodeURIComponent(input.orderId)}`);
+  const { order } = await squareRequest<{ order: { id: string; reference_id?: string; metadata?: Record<string, string>; location_id: string; total_money: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[] } }>(`/v2/orders/${encodeURIComponent(input.orderId)}`);
   if (order.id !== input.orderId || order.location_id !== cfg.locationId || order.tenders?.length !== 1 || order.tenders[0].payment_id !== input.paymentId
     || (order.total_tax_money?.amount ?? 0) !== 0 || (order.total_tip_money?.amount ?? 0) !== 0) throw new Error('Choose one untaxed party card payment without tips.');
+  const referencedParty = /^party(?:_balance)?_([0-9a-f-]{36})$/i.exec(order.reference_id ?? '')?.[1];
+  if ([referencedParty, order.metadata?.party_booking_id].some(id => id !== undefined && id !== party.id)) throw new Error('Provider references identify a different party.');
   assertUsd(order.total_money, input.expectedPaymentCents);
   const { payment } = await squareRequest<{ payment: Payment }>(`/v2/payments/${encodeURIComponent(input.paymentId)}`);
   if (payment.id !== input.paymentId || payment.order_id !== input.orderId || payment.location_id !== cfg.locationId || payment.status !== 'COMPLETED'
