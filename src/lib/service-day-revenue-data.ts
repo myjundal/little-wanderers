@@ -78,7 +78,7 @@ function money(value?: Money, optional = false) {
 
 /** Provider reads only: never calls fulfillment, reconciliation, invoice
  * publication, receipt persistence or any other operation that writes. */
-export async function readRevenueEvidence(orderId: string, searchedOrder?: ProviderOrder): Promise<RevenueEvidence> {
+export async function readRevenueEvidence(orderId: string, searchedOrder?: ProviderOrder, collectPayment?: (payment: ProviderPayment) => void): Promise<RevenueEvidence> {
   const config = squareConfig();
   if (config.environment !== 'production') throw new Error('Production Square access is required.');
   const order = searchedOrder ?? (await squareRequest<{ order: ProviderOrder }>(`/v2/orders/${encodeURIComponent(orderId)}`)).order;
@@ -94,6 +94,7 @@ export async function readRevenueEvidence(orderId: string, searchedOrder?: Provi
     if (payment.status !== 'COMPLETED' || !payment.created_at || !Number.isFinite(Date.parse(payment.created_at))) throw new Error('Payment is not settled.');
     const amount = money(payment.amount_money), refund = money(payment.refunded_money, true);
     if (refund > amount || ((tax || tip) && refund)) throw new Error('Refund with tax or tip needs a separate allocation.');
+    collectPayment?.(payment);
     payments.push({ id: payment.id, amount_cents: amount, refunded_cents: refund, paid_at: payment.created_at, gift_card: payment.source_type === 'GIFT_CARD' || payment.card_details?.card?.card_brand === 'SQUARE_GIFT_CARD', tip: money(payment.tip_money, true) });
   }
   const received = payments.reduce((sum, payment) => sum + payment.amount_cents, 0);
@@ -170,10 +171,20 @@ export async function readDailySquarePayments(date: string) {
 /** Private owner reconciliation evidence. Never guesses a family by price/time,
  * writes a receipt, or creates a provider charge. Contact details and full card
  * data are deliberately omitted. Provider failures fail the whole lookup. */
-export async function readAdmissionReceiptCandidates(date: string, kind: 'admission' | 'party' = 'admission') {
+export async function readAdmissionReceiptCandidates(date: string, kind: 'admission' | 'party' = 'admission', admin?: SupabaseClient) {
   const config = squareConfig();
   const payments = (await readDailySquarePayments(date)).filter(payment => payment.order_id);
-  const orderIds = [...new Set(payments.map(payment => payment.order_id!))];
+  let linkedOrderIds: string[] = [];
+  if (admin) {
+    const { sources, issues } = await loadRevenueSources(admin);
+    if (issues.length) throw new Error('Linked service receipt discovery is incomplete.');
+    linkedOrderIds = revenueServices(sources).filter(service => service.date === date && (kind === 'party' ? service.category === 'party' : ['open_play', 'walk_in'].includes(service.category))).flatMap(service => service.charges.map(charge => charge.order_id));
+  }
+  // POS receipts known through a booking/check-in must be fetched explicitly:
+  // a daily payment listing alone is not a complete service-day receipt audit.
+  // Party history also discovers deposits received before the selected day.
+  const history = kind === 'party' ? await readHistoricalClassOrders(new Set()) : new Map<string, ProviderOrder>();
+  const orderIds = [...new Set([...payments.map(payment => payment.order_id!), ...linkedOrderIds, ...history.keys()])];
   if (orderIds.length > 300) throw new Error('Too many admission receipt candidates.');
   const customers = new Map<string, Promise<string>>();
   const customerName = (id: string) => {
@@ -186,13 +197,13 @@ export async function readAdmissionReceiptCandidates(date: string, kind: 'admiss
   const receipts = [];
   for (let offset = 0; offset < orderIds.length; offset += 6) {
     const batch = await Promise.all(orderIds.slice(offset, offset + 6).map(async id => {
-      const { order } = await squareRequest<{ order: ProviderOrder }>(`/v2/orders/${encodeURIComponent(id)}`);
+      const order = history.get(id) ?? (await squareRequest<{ order: ProviderOrder }>(`/v2/orders/${encodeURIComponent(id)}`)).order;
       if (order.id !== id || order.location_id !== config.locationId) throw new Error('Receipt order reference does not match.');
       const categories = kind === 'party' ? ['party'] : ['open_play', 'walk_in'];
       if (!order.line_items?.some(item => categories.includes(squareSaleCategory(item.name ?? '', item.item_type)))) return null;
-      const evidence = await readRevenueEvidence(id, order);
-      const settled = payments.filter(payment => payment.order_id === id);
-      if (settled.some(payment => !evidence.payments.some(verified => verified.id === payment.id))) throw new Error('Receipt tender reference does not match.');
+      const settled: ProviderPayment[] = [];
+      const evidence = await readRevenueEvidence(id, order, payment => settled.push(payment));
+      if (payments.filter(payment => payment.order_id === id).some(payment => !evidence.payments.some(verified => verified.id === payment.id))) throw new Error('Receipt tender reference does not match.');
       return {
         order_id: id, reference_id: order.reference_id ?? null, service_total_cents: evidence.service_total_cents,
         tax_cents: evidence.tax_cents, tip_cents: evidence.tip_cents,

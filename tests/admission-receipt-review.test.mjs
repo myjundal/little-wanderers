@@ -12,7 +12,8 @@ function provider(patch = {}) {
   const requests = [];
   const modules = loadSquareModules({ env: { SQUARE_ENVIRONMENT: 'production' }, fetch: async (url, options) => {
     requests.push({ url, method: options.method });
-    if (url.includes('/payments?')) return Response.json({ payments: [{ ...payment, ...patch.payment }] });
+    if (url.includes('/payments?')) return Response.json({ payments: patch.emptyListing ? [] : [{ ...payment, ...patch.payment }] });
+    if (url.includes('/orders/search')) return Response.json({ orders: patch.historicalOrders ?? [] });
     if (url.includes('/orders/')) return Response.json({ order: { ...order, ...patch.order } });
     if (url.includes('/payments/')) return Response.json({ payment: { ...payment, ...patch.verifiedPayment } });
     if (url.includes('/customers/')) return Response.json({ customer: { id: 'customer', given_name: 'Parent', family_name: 'Name', email_address: 'private', phone_number: 'private', ...patch.customer } });
@@ -31,9 +32,23 @@ test('owner review exposes settled admission evidence with names and last four o
   assert(p.requests.every(request => request.method === 'GET'));
 });
 test('cash receipts retain their tender type and unrelated catalog sales are excluded', async () => {
-  const cash = await provider({ payment: { source_type: 'CASH' } }).read(date);
+  const cash = await provider({ payment: { source_type: 'CASH' }, verifiedPayment: { source_type: 'CASH' } }).read(date);
   assert.equal(cash.length, 1); assert.equal(cash[0].payments[0].source_type, 'CASH');
   assert.equal((await provider({ order: { line_items: [{ name: 'Coffee', total_money: { amount: 1600, currency: 'USD' } }] } }).read(date)).length, 0);
+});
+test('linked service receipts are verified even when absent from the daily listing', async () => {
+  const admin = { from(table) {
+    const q = { select() { return q; }, order() { return q; }, limit() { return q; }, eq() { return q; }, in() { return q; }, gt() { return q; }, then(resolve) {
+      return resolve({ error: null, data: table === 'checkins' ? [{ id: 'visit', person_id: 'child', household_id: 'family', checked_in_at: date + 'T15:00:00Z', price_cents: 1600, payment_status: 'paid', square_order_id: 'order', square_environment: 'production' }] : [] });
+    } }; return q;
+  } };
+  const receipts = await provider({ emptyListing: true }).read(date, 'admission', admin);
+  assert.equal(receipts.length, 1); assert.equal(receipts[0].payments[0].id, 'payment');
+});
+test('party deposits are discoverable from itemized history before their service day', async () => {
+  const party = { ...order, line_items: [{ name: 'Birthday Party - Base Package', total_money: { amount: 1600, currency: 'USD' } }] };
+  const receipts = await provider({ emptyListing: true, historicalOrders: [party] }).read(date, 'party');
+  assert.equal(receipts.length, 1); assert.equal(receipts[0].order_id, 'order');
 });
 test('party lookup uses its explicit category and never treats admission receipts as parties', async () => {
   assert.equal((await provider().read(date, 'party')).length, 0);
