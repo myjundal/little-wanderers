@@ -9,16 +9,23 @@ export function memoryAdmin(tables, users = {}) {
       const q = {
         select() { return q; }, order() { return q; }, limit() { return q; },
         eq(key, value) { filters.push(row => row[key] === value); return q; },
+        neq(key, value) { filters.push(row => row[key] !== value); return q; },
         is(key, value) { filters.push(row => row[key] === value); return q; },
         gte(key, value) { filters.push(row => row[key] >= value); return q; },
+        lt(key, value) { filters.push(row => row[key] < value); return q; },
         in(key, values) { filters.push(row => values.includes(row[key])); return q; },
         not(key, op, value) { if (op !== 'is') throw Error(op); filters.push(row => row[key] !== value); return q; },
         update(v) { action = 'update'; value = v; return q; },
+        insert(v) { action = 'insert'; value = v; return q; },
         upsert(v, options) { action = 'upsert'; value = v; upsertOptions = options; return q; },
         maybeSingle() { one = true; return q; }, single() { one = true; return q; },
         then(resolve) {
           if (fail === table) { fail = ''; return resolve({ data: null, error: { message: 'temporary write failure' } }); }
           let rows = tables[table].filter(row => filters.every(test => test(row)));
+          if (action === 'insert') {
+            if (value.id && tables[table].some(row => row.id === value.id)) return resolve({ data: null, error: { code: '23505', message: 'duplicate key' } });
+            tables[table].push(structuredClone(value)); rows = [value]; writes.push({ table, action, value: structuredClone(value) });
+          }
           if (action === 'update') { writes.push({ table, action, value: structuredClone(value) }); rows.forEach(row => Object.assign(row, structuredClone(value))); }
           if (action === 'upsert') {
             const key = upsertOptions.onConflict;

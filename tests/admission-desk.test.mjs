@@ -122,7 +122,7 @@ test('search and direct family lookup include confirmed alternate-profile bookin
   assert.equal((await apiHarness({ reservationRows: Array.from({ length: 501 }, () => booking) }).get('?q=Family')).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false, initialVisits = [] } = {}) {
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false, initialVisits = [], confirmationResult = { status: 'confirmed', family_link: 'linked', household_id: family.id } } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
   let cursor = 0, tree, visits = initialVisits, timers = [], refreshes = 0, saleOpen = false, holdRead = false, holdSync = false;
   const storage = new Map(), intervals = [], heldReads = [];
@@ -140,6 +140,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     const body = options.body ? JSON.parse(options.body) : undefined;
     requests.push({ url, body });
     if (url.includes('/desk')) return Response.json({ ok: true, date: '2026-11-11', items: deskItems ?? [{ ...deskFamily, waiver_status: waiver }] });
+    if (url === '/api/admin/admission/confirm') return Response.json({ ok: true, ...confirmationResult });
     if (url === '/api/admin/admission/checkout') {
       if (failCheckout) return Response.json({ ok: false, error: 'Unable to record checkout' }, { status: 409 });
       const checkouts = body.checkin_ids.map(id => ({ id, checked_out_at: '2026-11-11T17:00:00Z' }));
@@ -597,5 +598,32 @@ test('desk date validation and Eastern date boundaries handle daylight saving ch
       const start = query.filters.find(([op]) => op === 'gte')[2], end = query.filters.find(([op]) => op === 'lt')[2];
       assert.equal((Date.parse(end) - Date.parse(start)) / 3600000, hours);
     }
+  }
+});
+
+
+test('Payment confirmed posts the active family, refreshes the desk and reports the automatic link', async () => {
+  const initialVisits = [{ id: 'paid-child', person_id: 'child', household_id: family.id, household_name: family.name, name: 'Sam Family', checked_in_at: '2026-11-11T15:00:00Z', price_cents: 1600, payment_status: 'paid' }];
+  const h = uiHarness({ initialVisits }); await h.flush(); h.button('Open family / payment').props.onClick(); await h.flush();
+  const before = h.requests.filter(row => row.url === '/api/admin/admission/pos').length;
+  h.button('Payment confirmed').props.onClick(); await h.flush();
+  assert.deepEqual(h.requests.find(row => row.url === '/api/admin/admission/confirm').body, { household_id: family.id });
+  assert.ok(h.requests.filter(row => row.url === '/api/admin/admission/pos').length > before);
+  assert.ok(h.text().includes('Payment confirmed. Family records connected.'));
+  assert.equal(h.button('Payment confirmed').props.disabled, false);
+});
+
+test('confirmation distinguishes an unverified receipt from a paid family requiring identity review', async () => {
+  for (const [result, message] of [
+    [{ status: 'pending', family_link: 'none' }, 'Payment is not verified yet'],
+    [{ status: 'confirmed', family_link: 'review' }, 'Family records need owner review'],
+    [{ status: 'confirmed', family_link: 'pending' }, 'Family linking is still pending'],
+  ]) {
+    const h = uiHarness({ confirmationResult: result }); await choose(h);
+    h.button('Payment confirmed').props.onClick(); await h.flush();
+    assert.ok(h.text().includes(message));
+    assert.equal(h.requests.filter(row => row.url === '/api/checkin').length, 0);
+    assert.equal(h.requests.filter(row => row.body?.checkin_ids).length, 0);
+    assert.equal(h.button('Payment confirmed').props.disabled, false);
   }
 });

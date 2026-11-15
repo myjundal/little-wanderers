@@ -45,6 +45,8 @@ export default function StaffCheckinPage() {
   const [checkingOut, setCheckingOut] = useState('');
   const [squareCustomerMessage, setSquareCustomerMessage] = useState('');
   const [connectingCustomer, setConnectingCustomer] = useState(false);
+  const [confirmationMessage, setConfirmationMessage] = useState('');
+  const confirmingPayment = useRef(false);
   const [staffMode, setStaffMode] = useState<'home-screen' | 'browser' | null>(null);
   const checkoutBusy = useRef(false);
   const [launchUrl, setLaunchUrl] = useState('');
@@ -262,6 +264,7 @@ export default function StaffCheckinPage() {
     const request = ++familyRequest.current;
     if (!preserveSelection) { setFamily(null); setPeopleIds([]); }
     setActiveFamily(id);
+    setConfirmationMessage('');
     setSquareCustomerMessage('');
     setRecoveryConfirmed(false);
     setDeskError('');
@@ -278,6 +281,30 @@ export default function StaffCheckinPage() {
       } else if (!new URLSearchParams(window.location.search).has('data')) setMessage(result.items[0].waiver_status === 'completed' ? 'Select only the children and adults who are here today.' : 'Check-in is blocked: a parent or legal guardian must complete the family waiver first.');
       await refreshPayments();
     } catch (error) { if (request === familyRequest.current) setDeskError(error instanceof Error ? error.message : 'Unable to open family.'); }
+  }
+
+  async function confirmPayment() {
+    if (!isToday || !activeFamily || busy || checkingIn || confirmingPayment.current) return;
+    confirmingPayment.current = true;
+    setBusy(true);
+    setConfirmationMessage('Checking payment and family records…');
+    try {
+      const response = await fetch('/api/admin/admission/confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ household_id: activeFamily }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to confirm payment.');
+      await refreshPayments();
+      setDeskRefresh(value => value + 1);
+      if (result.household_id && result.household_id !== activeFamily) await openFamily(result.household_id);
+      if (result.status !== 'confirmed') setConfirmationMessage(result.status === 'review'
+        ? 'Payment needs review. Check the Square receipt or ask the owner; do not collect again.'
+        : 'Payment is not verified yet. Check Square, then retry; do not collect again.');
+      else if (result.family_link === 'linked') setConfirmationMessage('Payment confirmed. Family records connected.');
+      else if (result.family_link === 'review') setConfirmationMessage('Payment confirmed. Family records need owner review.');
+      else if (result.family_link === 'pending') setConfirmationMessage('Payment confirmed. Family linking is still pending; retry Payment confirmed.');
+      else setConfirmationMessage(result.payment_status === 'included' ? 'Admission included. No payment is due.' : 'Payment confirmed. Family records are up to date.');
+    } catch (error) {
+      setConfirmationMessage(`${error instanceof Error ? error.message : 'Unable to confirm payment.'} Do not collect again.`);
+    } finally { confirmingPayment.current = false; setBusy(false); }
   }
 
   async function connectSquareCustomer() {
@@ -532,6 +559,9 @@ export default function StaffCheckinPage() {
       </> : !loading && <p>{paymentUnverified ? 'Square payment needs verification. Do not collect again; refresh payment status or check its receipt.' : familyVisits.length ? 'No admission payment due for this family. Paid visits, members and prepaid visitors are already accounted for.' : 'Check in a family to see their total here.'}</p>}
       {pendingSale && <aside style={{ marginTop: 20, padding: 16, background: '#fff1d8', borderRadius: 12 }}><h3>Square checkout needs review</h3><p>If Square was cancelled, did not open, or did not return a receipt, check Transactions on this iPad first. Wait at least one minute after the launch. Never reset while a payment is pending or saved offline.</p><label><input type="checkbox" checked={recoveryConfirmed} disabled={busy} onChange={event => setRecoveryConfirmed(event.target.checked)} /> I checked Square: this checkout is closed, with no completed, pending or offline payment.</label><p><button disabled={busy || !recoveryConfirmed} onClick={() => void recoverPayment()}>Reconcile Square and reset unpaid checkout</button></p><p>The server checks Square too. If it finds a completed matching payment, it records payment instead of starting another charge.</p></aside>}
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
+      {!!activeFamily && <p><button type="button" style={button} disabled={busy || checkingIn || loading || !!checkingOut} onClick={() => void confirmPayment()}>{busy ? 'Checking payment…' : 'Payment confirmed'}</button></p>}
+      <p>Confirm after payment in Square. We check the saved receipt and connect matching family records.</p>
+      {confirmationMessage && <p role="status" aria-live="polite">{confirmationMessage}</p>}
       <p><button disabled={busy || checkingIn} onClick={() => void resumePayments()}>Refresh payment status</button></p>
     </section>}
     </div><aside className={styles.occupancy} aria-label="Live occupancy management">
