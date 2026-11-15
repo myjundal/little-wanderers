@@ -68,8 +68,8 @@ export async function loadRevenueVisitorRoles(admin: SupabaseClient, sources: Re
 }
 
 type Money = { amount?: number; currency?: string };
-type ProviderOrder = { id: string; reference_id?: string; metadata?: Record<string, string>; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[]; line_items?: { name?: string; item_type?: string; catalog_object_id?: string; total_money?: Money; total_tax_money?: Money }[] };
-type ProviderPayment = { id: string; order_id?: string; location_id?: string; status?: string; amount_money?: Money; refunded_money?: Money; tip_money?: Money; created_at?: string; source_type?: string; card_details?: { card?: { card_brand?: string } } };
+type ProviderOrder = { id: string; customer_id?: string; reference_id?: string; metadata?: Record<string, string>; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[]; line_items?: { name?: string; note?: string; item_type?: string; catalog_object_id?: string; total_money?: Money; total_tax_money?: Money }[] };
+type ProviderPayment = { id: string; order_id?: string; customer_id?: string; note?: string; location_id?: string; status?: string; amount_money?: Money; refunded_money?: Money; tip_money?: Money; created_at?: string; source_type?: string; card_details?: { card?: { card_brand?: string; last_4?: string; cardholder_name?: string } } };
 function money(value?: Money, optional = false) {
   if (!value && optional) return 0;
   if (value?.currency !== 'USD' || !Number.isSafeInteger(value.amount) || value.amount! < 0) throw new Error('Payment currency or amount needs review.');
@@ -165,6 +165,50 @@ export async function readDailySquarePayments(date: string) {
     cursors.add(result.cursor); cursor = result.cursor;
   }
   return [...payments.values()];
+}
+
+/** Private owner reconciliation evidence. Never guesses a family by price/time,
+ * writes a receipt, or creates a provider charge. Contact details and full card
+ * data are deliberately omitted. Provider failures fail the whole lookup. */
+export async function readAdmissionReceiptCandidates(date: string) {
+  const config = squareConfig();
+  const payments = (await readDailySquarePayments(date)).filter(payment => payment.source_type === 'CARD' && payment.order_id);
+  const orderIds = [...new Set(payments.map(payment => payment.order_id!))];
+  if (orderIds.length > 300) throw new Error('Too many admission receipt candidates.');
+  const customers = new Map<string, Promise<string>>();
+  const customerName = (id: string) => {
+    if (!customers.has(id)) customers.set(id, squareRequest<{ customer: { id: string; given_name?: string; family_name?: string; company_name?: string } }>(`/v2/customers/${encodeURIComponent(id)}`).then(({ customer }) => {
+      if (customer.id !== id) throw new Error('Receipt customer reference does not match.');
+      return [customer.given_name, customer.family_name].filter(Boolean).join(' ').slice(0, 200) || (customer.company_name ?? '').slice(0, 200);
+    }));
+    return customers.get(id)!;
+  };
+  const receipts = [];
+  for (let offset = 0; offset < orderIds.length; offset += 6) {
+    const batch = await Promise.all(orderIds.slice(offset, offset + 6).map(async id => {
+      const { order } = await squareRequest<{ order: ProviderOrder }>(`/v2/orders/${encodeURIComponent(id)}`);
+      if (order.id !== id || order.location_id !== config.locationId) throw new Error('Receipt order reference does not match.');
+      if (!order.line_items?.some(item => ['open_play', 'walk_in'].includes(squareSaleCategory(item.name ?? '', item.item_type)))) return null;
+      const evidence = await readRevenueEvidence(id, order);
+      const settled = payments.filter(payment => payment.order_id === id);
+      if (settled.some(payment => !evidence.payments.some(verified => verified.id === payment.id))) throw new Error('Receipt tender reference does not match.');
+      return {
+        order_id: id, reference_id: order.reference_id ?? null, service_total_cents: evidence.service_total_cents,
+        tax_cents: evidence.tax_cents, tip_cents: evidence.tip_cents,
+        items: (order.line_items ?? []).map(item => ({ label: (item.name ?? '').slice(0, 200), note: (item.note ?? '').slice(0, 500), amount_cents: money(item.total_money) - money(item.total_tax_money, true) })),
+        payments: await Promise.all(settled.map(async payment => {
+          const verified = evidence.payments.find(row => row.id === payment.id)!;
+          const customerId = payment.customer_id ?? order.customer_id;
+          return { ...verified, source_type: 'CARD', customer_name: customerId ? await customerName(customerId) : '',
+            cardholder_name: (payment.card_details?.card?.cardholder_name ?? '').slice(0, 200),
+            card_brand: payment.card_details?.card?.card_brand ?? null, last_4: /^\d{4}$/.test(payment.card_details?.card?.last_4 ?? '') ? payment.card_details!.card!.last_4 : null,
+            note: (payment.note ?? '').slice(0, 500) };
+        })),
+      };
+    }));
+    receipts.push(...batch.filter(row => row !== null));
+  }
+  return receipts;
 }
 
 function unlinkedPaymentEvidence(payment: ProviderPayment): RevenueEvidence {
