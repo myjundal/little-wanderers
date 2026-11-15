@@ -1,6 +1,6 @@
 import { readPrivatePartyDays, overlapsPrivateParty } from '@/lib/private-party-open-play';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { PUBLIC_OPEN_PLAY_START, SOFT_OPENING_END } from '@/lib/open-play-reservations';
+import { PUBLIC_OPEN_PLAY_START, SOFT_OPENING_END, isOpenPlayArrivalAvailable } from '@/lib/open-play-reservations';
 
 export type PublicOpenPlaySlot = { id: string; starts_at: string; ends_at: string; remaining_children: number; capacity_children: number; is_closed: boolean; is_full: boolean; is_private_party_blocked: boolean; closing_at: string | null };
 
@@ -23,7 +23,7 @@ export async function loadPublicOpenPlaySlots(admin: SupabaseClient): Promise<Pu
     }
     if ((reservations.data?.length ?? 0) < 500) break;
   }
-  return slots.data.map(slot => {
+  return slots.data.filter(isOpenPlayArrivalAvailable).map(slot => {
     const used = occupancy.get(slot.id) ?? { children: 0, total: 0 };
     const remaining = Math.max(0, slot.capacity_children - used.children);
     return { id: slot.id, starts_at: slot.starts_at, ends_at: slot.ends_at, remaining_children: remaining, capacity_children: slot.capacity_children,

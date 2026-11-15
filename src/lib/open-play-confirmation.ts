@@ -1,3 +1,4 @@
+import { isLastOpenPlayArrival } from '@/lib/open-play-reservations';
 import { readPrivatePartyDays, privatePartyWindow } from '@/lib/private-party-open-play';
 import { sendResendEmail, validateEmail } from '@/lib/email-campaigns';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -46,7 +47,7 @@ export function renderOpenPlayConfirmation(input: OpenPlayConfirmation) {
   const rows: Array<[string, string]> = [
     ['Parent / guardian', name],
     ...(input.childNames.length ? [['Children', input.childNames.join(', ')] as [string, string]] : []),
-    ['Visit date', date], ['Arrival window', time],
+    ['Visit date', date], ['ARRIVAL WINDOW', time],
     ['Guests', `${input.childCount} child${input.childCount === 1 ? '' : 'ren'} · ${input.adultCount} adult${input.adultCount === 1 ? '' : 's'}`],
     ['Admission total', price], ['Payment status', payment],
   ];
@@ -60,7 +61,8 @@ export function renderOpenPlayConfirmation(input: OpenPlayConfirmation) {
       <h1 style="font-size:25px;line-height:1.25;margin:0 0 18px;color:#4f3f82;">Your Open Play visit is confirmed!</h1>
       <p>Hi ${escapeHtml(name)},</p><p>We’re looking forward to welcoming your family. Here are your reservation details:</p>
       <table style="width:100%;border-collapse:collapse;font-size:15px;"><tbody>${rows.map(([label, value]) => `<tr><th scope="row" style="text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #eadff3;font-weight:400;color:#6d6480;">${escapeHtml(label)}</th><td style="padding:10px 8px;border-bottom:1px solid #eadff3;font-weight:600;">${escapeHtml(value)}</td></tr>`).join('')}</tbody></table>
-      <p><strong>This is your arrival window, not a one-hour play limit.</strong> Aim to arrive within the window; once you’re here, you may stay until you’re ready to leave, up to closing.</p>
+      <p><strong>ARRIVAL WINDOW · UNLIMITED STAY until closing.</strong> Arrive any time within your reserved window and enjoy unlimited play until closing.</p>
+      ${!closing && isLastOpenPlayArrival({ starts_at: input.startTime, ends_at: input.endTime }) ? '<p><strong>Your arrival window is 4–5 PM. We close at 6 PM. Please finish your visit by then.</strong></p>' : ''}
       ${closing ? `<p><strong>Open Play ends at ${escapeHtml(timeFormat.format(closing))} on this date for a private party. Please finish your visit by then.</strong></p>` : ''}
       <p>Please complete your family’s waiver before your visit.</p>
       <p><a href="${escapeHtml(waiverUrl)}" style="color:#5f3da4;font-weight:700;">Complete your waiver</a> &nbsp;·&nbsp; <a href="${escapeHtml(manageUrl)}" style="color:#5f3da4;font-weight:700;">View your reservation</a></p>

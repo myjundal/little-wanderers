@@ -12,6 +12,7 @@ const input = {
 function harness() {
   const sent = [];
   const api = loadModule('src/lib/open-play-confirmation.ts', {
+    '@/lib/open-play-reservations': loadModule('src/lib/open-play-reservations.ts'),
     '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], privatePartyWindow: () => ({ date: 'fixture' }) },
     '@/lib/email-campaigns': {
       validateEmail: value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ? value.trim().toLowerCase() : null,
@@ -28,7 +29,7 @@ test('customer confirmation includes readable Eastern weekday, arrival window, n
   assert.equal(mail.to, input.email);
   assert.equal(mail.idempotencyKey, 'open-play-confirmation/visit-id');
   assert.match(mail.subject, /Wednesday, November 11, 2026/);
-  for (const value of ['9:00 AM–10:00 AM (Eastern Time)', 'Parent &lt;Family&gt;', 'Sam &lt;Family&gt;', '1 child · 2 adults', '$16.00', 'Payment pending', 'not a one-hour play limit', 'not a payment receipt']) assert.ok(mail.html.includes(value), value);
+  for (const value of ['9:00 AM–10:00 AM (Eastern Time)', 'Parent &lt;Family&gt;', 'Sam &lt;Family&gt;', '1 child · 2 adults', '$16.00', 'Payment pending', 'ARRIVAL WINDOW · UNLIMITED STAY until closing.', 'not a payment receipt']) assert.ok(mail.html.includes(value), value);
   assert.match(mail.html, /https:\/\/www.thelittlewanderers.com\/landing\/waiver\?reservation=visit-id/);
   assert.match(mail.html, /https:\/\/www.thelittlewanderers.com\/landing\/soft-opening/);
   assert.doesNotMatch(mail.html, /Parent <Family>|Sam <Family>|\/staff\//);
@@ -159,4 +160,13 @@ test('a private-party date confirmation states the actual 4pm closing without ch
   assert.match(html, /Please finish your visit by then/);
   assert.match(html, /9:00 AM–10:00 AM/);
   assert.match(html, /\$16.00/);
+});
+
+test('4–5 PM confirmation repeats 6 PM closing while earlier visits retain unlimited stay and private closing wins', () => {
+ const h=harness();
+ const late={...input,startTime:'2026-11-16T21:00:00Z',endTime:'2026-11-16T22:00:00Z'};
+ assert.match(h.renderOpenPlayConfirmation(late).html,/We close at 6 PM/);
+ assert.doesNotMatch(h.renderOpenPlayConfirmation(input).html,/We close at 6 PM/);
+ const privateHtml=h.renderOpenPlayConfirmation({...late,closingTime:'2026-11-16T21:00:00Z'}).html;
+ assert.match(privateHtml,/Open Play ends at 4:00 PM/);assert.doesNotMatch(privateHtml,/We close at 6 PM/);
 });
