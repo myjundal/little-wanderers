@@ -79,14 +79,28 @@ test('waiving a visit with a conflicting receipt cannot revive it as an unlinked
   data.visits = [visit({ payment_status: 'covered', square_environment: 'production', square_order_id: 'order' })];
   const r = report(data, [receipt()]);
   assert.equal(r.net_cents, 0); assert.equal(r.due_cents, 0); assert.equal(r.admission.unlinked_square_cents, 0);
-  assert.equal(r.rows.length, 1); assert.equal(r.rows[0].expected_cents, 0);
-  assert.equal(r.rows[0].received_cents, 1600); assert.equal(r.rows[0].issues.length, 1);
-  assert.match(r.rows[0].issues[0], /Complimentary admission retains/);
+  assert.equal(r.rows[0].expected_cents, 0);
+  const exclusion = r.rows.find(row => row.id === 'waived:visit');
+  assert.equal(exclusion.received_cents, 1600); assert.equal(exclusion.issues.length, 1);
+  assert.match(exclusion.issues[0], /Complimentary admission retains/);
   assert.equal(r.complete, false);
   data.bookings[0].square_order_id = 'order'; data.bookings[0].payment_environment = 'production';
   assert.equal(report(data, [receipt()]).net_cents, 0);
   data.bookings = [];
   assert.equal(report(data, [receipt()]).net_cents, 0);
+});
+test('waiving one child preserves a paid sibling on separate and shared receipts', () => {
+  const data = reserved(); Object.assign(data.bookings[0], { child_ids: ['child', 'sibling'], child_count: 2, amount_cents: 3200 });
+  data.visits = [visit({ payment_status: 'paid', square_environment: 'production', square_order_id: 'paid' }),
+    visit({ id: 'waived-visit', person_id: 'sibling', payment_status: 'covered', square_environment: 'production', square_order_id: 'waived' })];
+  const split = report(data, [receipt({ order_id: 'paid' }), receipt({ order_id: 'waived', payments: [{ id: 'waived-payment', amount_cents: 1600, refunded_cents: 0, paid_at: date + 'T16:00:00Z' }] })]);
+  assert.equal(split.net_cents, 1600); assert.equal(split.admission.unlinked_square_cents, 0); assert.equal(split.review_count, 1);
+  const paid = split.rows.find(row => row.id === 'booking:booking'); assert.equal(paid.net_cents, 1600); assert.equal(paid.issues.length, 0);
+  data.visits.forEach(row => { row.square_order_id = 'shared'; });
+  const shared = receipt({ order_id: 'shared', service_total_cents: 3200, items: [{ label: 'Admission', category: 'open_play', amount_cents: 3200 }], payments: [{ id: 'shared-payment', amount_cents: 3200, refunded_cents: 0, paid_at: date + 'T16:00:00Z' }] });
+  assert.equal(report(data, [shared]).net_cents, 1600);
+  Object.assign(data.bookings[0], { payment_status: 'paid', payment_environment: 'production', square_order_id: 'shared' });
+  const prepaid = report(data, [shared]); assert.equal(prepaid.net_cents, 1600); assert.equal(prepaid.due_cents, 0); assert.equal(prepaid.review_count, 1);
 });
 test('missing visitor roles remain unknown, and sandbox/other-day visits never inflate attendance', async () => {
   const data = empty(); data.visits = [visit(), visit({ id: 'test', person_id: 'test', square_environment: 'sandbox' }), visit({ id: 'old', person_id: 'old', checked_in_at: '2026-11-13T16:00:00Z' })];

@@ -84,7 +84,13 @@ export function revenueServices(data: RevenueSources) {
       || row.child_ids.some(id => matches.filter(visit => visit.person_id === id).length > 1);
     if (ambiguous) { service.issues.push('More than one booking or visit matches a child.'); continue; }
     if (row.payment_environment === 'production' && row.square_order_id) {
-      service.charges.push({ order_id: row.square_order_id, amount_cents: row.amount_cents });
+      const waived = included(row.payment_status) ? [] : matches.filter(visit => included(visit.payment_status)
+        && visit.square_order_id === row.square_order_id && visit.square_environment === 'production' && visit.price_cents > 0);
+      const waivedAmount = waived.reduce((sum, visit) => sum + visit.price_cents, 0);
+      if (waivedAmount > row.amount_cents) { service.issues.push('Waived admission receipt allocation needs review.'); continue; }
+      if (row.amount_cents > waivedAmount) service.charges.push({ order_id: row.square_order_id, amount_cents: row.amount_cents - waivedAmount });
+      if (waivedAmount) service.expected_cents = Math.max(0, service.expected_cents - waivedAmount);
+      for (const visit of waived) addWaivedVisitCharge(service, visit);
       if (included(row.payment_status)) service.issues.push('Complimentary admission retains a provider payment; verify the owner correction.');
       for (const visit of matches) {
         if (!visit.square_order_id || visit.square_order_id === row.square_order_id) consumed.add(visit.id);
@@ -100,14 +106,20 @@ export function revenueServices(data: RevenueSources) {
       for (const visit of matches) { consumed.add(visit.id); addVisitCharge(service, visit); }
     } else if (paid(row.payment_status)) service.issues.push('Paid reservation has no linked production order.');
   }
+  function addWaivedVisitCharge(service: RevenueService, visit: RevenueVisit) {
+    const target = service.id === `visit:${visit.id}` ? service : newService({ id: `waived:${visit.id}`, date: service.date,
+      category: 'walk_in', label: `Complimentary admission · ${visit.id.slice(0, 8)}`, expected_cents: 0,
+      attendance: 'visited', cancelled: false, charges: [], issues: [] });
+    target.charges.push({ order_id: visit.square_order_id!, amount_cents: visit.price_cents });
+    target.issues.push('Complimentary admission retains a provider payment; verify the owner correction.');
+  }
   function addVisitCharge(service: RevenueService, visit: RevenueVisit) {
     if (included(visit.payment_status)) {
       // Preserve a conflicting receipt's allocation so supplementing Square
       // sales cannot silently turn a waived visit back into a standalone sale.
       // This is a visible review exclusion, never a provider refund or deletion.
       if (visit.square_order_id && visit.square_environment === 'production' && visit.price_cents > 0) {
-        service.charges.push({ order_id: visit.square_order_id, amount_cents: visit.price_cents });
-        service.issues.push('Complimentary admission retains a provider payment; verify the owner correction.');
+        addWaivedVisitCharge(service, visit);
       }
       return;
     }
