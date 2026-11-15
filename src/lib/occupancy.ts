@@ -102,7 +102,7 @@ export async function getOccupancyStatus(admin: SupabaseClient) {
   };
 }
 
-const RPC_VARIANTS: Record<string, Array<(amount?: number) => Record<string, unknown>>> = {
+const RPC_VARIANTS: Record<string, Array<(amount?: number, notes?: string) => Record<string, unknown>>> = {
   record_checkin: [
     (amount = 1) => ({ p_group_size: amount }),
     (amount = 1) => ({ group_size: amount }),
@@ -123,26 +123,29 @@ const RPC_VARIANTS: Record<string, Array<(amount?: number) => Record<string, unk
     (amount = 1) => ({ p_decrement_by: amount }),
   ],
   reset_occupancy: [
+    // An explicit argument distinguishes the production p_note overload from reset_occupancy().
+    (_amount, notes) => ({ p_note: notes ?? 'Daily reset from staff dashboard' }),
     () => ({}),
     () => ({ p_confirm: true }),
   ],
 };
 
-function isSignatureError(message: string) {
-  return /Could not find the function|No function matches|PGRST202|PGRST203|schema cache/i.test(message);
+function isSignatureError(error: { code?: string; message: string }) {
+  return error.code === 'PGRST202' || error.code === 'PGRST203'
+    || /Could not find the function|Could not choose the best candidate function|No function matches|schema cache/i.test(error.message);
 }
 
-export async function callOccupancyRpc(admin: SupabaseClient, rpcName: 'record_checkin' | 'record_manual_increment' | 'record_manual_decrement' | 'reset_occupancy', amount?: number) {
+export async function callOccupancyRpc(admin: SupabaseClient, rpcName: 'record_checkin' | 'record_manual_increment' | 'record_manual_decrement' | 'reset_occupancy', amount?: number, notes?: string) {
   const variants = RPC_VARIANTS[rpcName] ?? [() => ({})];
   let lastError: Error | null = null;
 
   for (const buildArgs of variants) {
-    const payload = buildArgs(amount);
+    const payload = buildArgs(amount, notes);
     const { error } = await admin.rpc(rpcName, payload);
     if (!error) return;
 
     lastError = new Error(error.message);
-    if (!isSignatureError(error.message)) {
+    if (!isSignatureError(error)) {
       throw lastError;
     }
   }

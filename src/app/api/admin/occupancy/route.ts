@@ -130,8 +130,8 @@ export async function POST(req: Request) {
     const action = body?.action as 'increment' | 'decrement' | 'reset' | undefined;
     const amount = toPositiveInt(body?.amount, 1);
 
-    if (!action) {
-      return Response.json({ ok: false, error: 'action is required' }, { status: 400 });
+    if (!action || !['increment', 'decrement', 'reset'].includes(action)) {
+      return Response.json({ ok: false, error: 'Choose increment, decrement, or reset.' }, { status: 400 });
     }
 
     const before = await getOccupancyStatus(context.admin);
@@ -141,11 +141,13 @@ export async function POST(req: Request) {
     } else if (action === 'decrement') {
       await callOccupancyRpc(context.admin, 'record_manual_decrement', amount);
     } else {
-      await callOccupancyRpc(context.admin, 'reset_occupancy');
+      const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, 500) : undefined;
+      await callOccupancyRpc(context.admin, 'reset_occupancy', undefined, notes);
     }
 
     const updated = await getOccupancyStatus(context.admin);
-    await notifyIfLessCrowded(context.admin, before.crowdLevel, updated.crowdLevel);
+    // A daily reset is housekeeping, not a live signal that families have left.
+    if (action !== 'reset') await notifyIfLessCrowded(context.admin, before.crowdLevel, updated.crowdLevel);
     return Response.json(formatResponse(updated));
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
