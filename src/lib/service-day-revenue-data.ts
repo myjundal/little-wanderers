@@ -14,6 +14,7 @@ const fields = {
   series: ['class_series_sales', 'id,class_ids,child_ids,status,environment,amount_cents,square_order_id'],
   classes: ['classes', 'id,title,start_time,status'],
   registrations: ['class_registrations', 'id,class_id,person_id,status,attendance_status'],
+  classCancellationEvents: ['membership_events', 'id,notes'],
   classCheckouts: ['square_checkout_attempts', 'id,kind,status,environment,order_id,expected_amount_cents,payload'],
   classPrograms: ['class_series_programs', 'id,title,class_ids'],
   classMappings: ['square_catalog_mappings', 'entity_key,variation_id,program_key'],
@@ -33,6 +34,7 @@ export async function loadRevenueSources(admin: SupabaseClient) {
       for (;;) {
         let query = admin.from(table).select(select).order(cursorField).limit(500);
         if (key === 'classCheckouts') query = query.eq('kind', 'class').eq('environment', 'production').in('status', ['completed', 'needs_review']);
+        if (key === 'classCancellationEvents') query = query.eq('action', 'class_minimum_cancellation');
         if (key === 'classMappings') query = query.eq('kind', 'class').eq('environment', 'production');
         if (cursor) query = query.gt(cursorField, cursor);
         const { data, error } = await query;

@@ -24,10 +24,11 @@ export type RevenueSources = {
   bookings: RevenueBooking[]; slots: { id: string; starts_at: string }[]; visits: RevenueVisit[]; parties: RevenueParty[];
   series: RevenueSeries[]; classes: RevenueClass[]; registrations: RevenueRegistration[];
   classCheckouts?: RevenueClassCheckout[];
+  classCancellationEvents?: { id: string; notes: string }[];
   classPrograms?: RevenueClassProgram[]; classMappings?: RevenueClassMapping[];
   people?: { id: string; role: string | null }[];
 };
-export type RevenueCharge = { order_id: string; amount_cents: number };
+export type RevenueCharge = { order_id: string; amount_cents: number; known_refund_cents?: number };
 export type RevenueService = {
   id: string; date: string; category: RevenueCategory; label: string; expected_cents: number;
   attendance: 'visited' | 'reserved' | 'unknown' | 'sale'; recognition?: 'payment' | 'unallocated_class' | 'unallocated_party' | 'class_service'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
@@ -143,6 +144,7 @@ export function revenueServices(data: RevenueSources) {
   }
   const classMap = new Map(data.classes.map(row => [row.id, row]));
   const linkedRegistrations = new Set<string>();
+  const changes = (data.classCancellationEvents ?? []).flatMap(row => { try { const n = JSON.parse(row.notes); return n.version === 1 && n.checkout_id && n.person_id && n.class_id ? [n as { checkout_id: string; person_id: string; class_id: string; state: string; target_class_id?: string; target_registration_id?: string; amount_cents: number }] : []; } catch { return []; } });
   for (const sale of (data.classCheckouts ?? []).filter(row => row.kind === 'class' && row.environment === 'production' && ['completed', 'needs_review'].includes(row.status))) {
     const items = sale.payload.request?.items ?? [];
     const lines = sale.payload.line_items ?? [];
@@ -151,16 +153,28 @@ export function revenueServices(data: RevenueSources) {
       && items.every(item => item.quantity === 1) && amounts.every(cents) && amounts.reduce((sum, amount) => sum + amount, 0) === sale.expected_amount_cents;
     if (!items.length) newService({ id: `class-checkout:${sale.id}`, date: '', category: 'class', label: 'Class checkout with no dates', expected_cents: 0, attendance: 'unknown', cancelled: false, charges: [], issues: ['Class checkout allocation needs review.'] });
     for (const [index, item] of items.entries()) {
-      const session = classMap.get(item.class_id);
-      const registrations = data.registrations.filter(row => row.class_id === item.class_id && row.person_id === sale.payload.request?.person_id);
+      let destination = item.class_id, refunded = 0;
+      const visited = new Set<string>();
+      for (;;) {
+        if (visited.has(destination)) break; visited.add(destination);
+        const change = changes.find(n => n.checkout_id === sale.id && n.person_id === sale.payload.request?.person_id && n.class_id === destination);
+        if (!change) break;
+        if (change.state === 'refunded' && cents(change.amount_cents)) refunded = change.amount_cents;
+        if (change.state !== 'transferred' || !change.target_class_id) break;
+        if (change.target_registration_id) linkedRegistrations.add(change.target_registration_id);
+        destination = change.target_class_id;
+      }
+      const session = classMap.get(destination);
+      data.registrations.filter(row => visited.has(row.class_id) && row.person_id === sale.payload.request?.person_id).forEach(row => linkedRegistrations.add(row.id));
+      const registrations = data.registrations.filter(row => row.class_id === destination && row.person_id === sale.payload.request?.person_id);
       registrations.forEach(row => linkedRegistrations.add(row.id));
       const amount = cents(amounts[index]) ? amounts[index] : 0;
       const service = newService({ id: `class-checkout:${sale.id}:${item.class_id}`, date: day(session?.start_time), category: 'class', label: `${session?.title ?? 'Class'} · ${sale.id.slice(0, 8)}`,
         expected_cents: amount, attendance: registrations.some(row => row.attendance_status === 'attended') ? 'visited' : 'reserved',
-        cancelled: session?.status === 'cancelled', charges: sale.order_id ? [{ order_id: sale.order_id, amount_cents: amount }] : [], issues: [] });
+        cancelled: session?.status === 'cancelled', charges: sale.order_id ? [{ order_id: sale.order_id, amount_cents: amount, ...(refunded ? { known_refund_cents: refunded } : {}) }] : [], issues: [] });
       if (!allocationValid || !session || !sale.order_id || !sale.payload.request?.person_id) service.issues.push('Class checkout allocation needs review.');
       if (sale.status === 'needs_review') service.issues.push('Class payment is marked for review.');
-      if (registrations.some(row => row.status === 'cancelled' || row.attendance_status === 'no_show')) service.issues.push('Cancelled or no-show class participation needs review.');
+      if (!refunded && registrations.some(row => row.status === 'cancelled' || row.attendance_status === 'no_show')) service.issues.push('Cancelled or no-show class participation needs review.');
     }
   }
   for (const sale of data.series.filter(row => row.environment === 'production')) {
@@ -197,7 +211,7 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
   const orderIds = new Set(rows.flatMap(row => row.charges.filter(charge => row.date === date
     || (row.category === 'party' && evidence.get(charge.order_id)?.payments.some(payment => day(payment.paid_at) === date))).map(charge => charge.order_id)));
   for (const id of orderIds) {
-    const units = rows.flatMap(row => row.charges.filter(charge => charge.order_id === id).map(charge => ({ row, amount: charge.amount_cents })));
+    const units = rows.flatMap(row => row.charges.filter(charge => charge.order_id === id).map(charge => ({ row, amount: charge.amount_cents, knownRefund: charge.known_refund_cents ?? 0 })));
     const order = evidence.get(id);
     const total = units.reduce((sum, unit) => sum + unit.amount, 0);
     if (!order || order.order_id !== id || units.some(unit => !cents(unit.amount)) || total !== order.service_total_cents || !total) {
@@ -209,7 +223,11 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     for (const payment of order.payments) {
       const gross = allocateRevenue(payment.amount_cents, weights);
       // Allocate refund using the already allocated gross to preserve net cents.
-      const refunds = allocateRevenue(payment.refunded_cents, gross);
+      const known = units.map((u, i) => Math.min(gross[i], u.knownRefund));
+      const knownTotal = known.reduce((s, n) => s + n, 0);
+      const namedRefunds = knownTotal && order.payments.length === 1 ? allocateRevenue(Math.min(payment.refunded_cents, knownTotal), known) : units.map(() => 0);
+      const residual = allocateRevenue(payment.refunded_cents - namedRefunds.reduce((s, n) => s + n, 0), gross.map((n, i) => n - namedRefunds[i]));
+      const refunds = residual.map((n, i) => n + namedRefunds[i]);
       units.forEach((unit, index) => {
         const paymentDay = day(payment.paid_at);
         if (['payment', 'unallocated_class', 'unallocated_party'].includes(unit.row.recognition ?? '') && paymentDay !== unit.row.date) return;
