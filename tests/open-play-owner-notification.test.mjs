@@ -36,6 +36,7 @@ function reservationHarness({ failInsert = false, failEmail = false, failConfirm
     return q;
   } };
   const api = loadModule('src/app/api/open-play-reservations/route.ts', {
+    '@/lib/open-play-quote': { refreshOpenPlayQuote: async (_db, row) => row },
     '@vercel/functions': { waitUntil: promise => background.push(promise) },
     'next/server': { NextResponse: { json: Response.json } },
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },

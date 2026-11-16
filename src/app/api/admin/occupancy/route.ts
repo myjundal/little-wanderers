@@ -27,6 +27,8 @@ function formatResponse(summary: Awaited<ReturnType<typeof getOccupancyStatus>>)
   return {
     ok: true,
     occupancy: summary.occupancy,
+    open_play_occupancy: summary.openPlayOccupancy,
+    party_occupancy: summary.partyOccupancy,
     capacity: summary.capacity,
     progress: summary.progress,
     crowd_level: summary.crowdLevel,

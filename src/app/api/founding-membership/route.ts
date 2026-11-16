@@ -54,7 +54,7 @@ export async function GET() {
     const ctx = await context();
     if (ctx.response) {
       if (ctx.response.status !== 401) return ctx.response;
-      let offer = { phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 };
+      let offer = { phase: 'regular', tier: 'regular', can_enroll: false, base_cents: 6000, sibling_cents: 2000 };
       try { offer = await getMembershipOffer(createAdminSupabaseClient()); } catch { /* Show the initial waitlist offer before the migration is deployed. */ }
       return NextResponse.json({ ok: false, offer }, { status: 401, headers });
     }
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     if (new Set(profile.children.map(child => child.id)).size !== profile.children.length) return NextResponse.json({ ok: false, error: 'Add each child only once.' }, { status: 400, headers });
     if (ctx.user.email && profile.email.toLowerCase() !== ctx.user.email.toLowerCase()) return NextResponse.json({ ok: false, error: 'Use the email address on your account.' }, { status: 400, headers });
     const offer = await getMembershipOffer(ctx.admin, ctx.user.id, ctx.householdId);
-    if (!offer.can_enroll) return NextResponse.json({ ok: false, error: 'Wanderlist families have first access. Public founding membership will open next.' }, { status: 403, headers });
+    if (!offer.can_enroll) return NextResponse.json({ ok: false, error: 'Membership enrollment is unavailable right now. Please try again shortly.' }, { status: 403, headers });
     if (profile.pricingTier !== offer.tier) return NextResponse.json({ ok: false, error: 'Your membership offer changed. Refresh to review the correct price before saving your card.' }, { status: 409, headers });
     foundingCardConfig(offer.card_enrollment_enabled);
     const amount = foundingMonthlyCents(profile.children.map(child => child.birthdate), easternDate(), offer.tier);

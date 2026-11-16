@@ -19,7 +19,7 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
 
     const { data: booking, error: bookingErr } = await context.admin
       .from('party_bookings')
-      .select('id,status')
+      .select('*')
       .eq('id', params.id)
       .maybeSingle();
 
@@ -29,6 +29,24 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
 
     if (!booking) {
       return Response.json({ ok: false, error: 'booking not found' }, { status: 404 });
+    }
+
+    if (booking.square_environment && booking.status === 'pending' && nextStatus !== 'pending') {
+      const { closePartyCheckout, reconcilePartyCheckout, partyCheckoutFromBooking } = await import('@/lib/party-deposit');
+      const checkout = partyCheckoutFromBooking(booking);
+      const verified = await (nextStatus === 'cancelled' ? closePartyCheckout(context.admin, checkout) : reconcilePartyCheckout(context.admin, checkout));
+      if (verified.status !== (nextStatus === 'cancelled' ? 'cancelled' : 'completed')) {
+        return Response.json({ ok: false, error: 'Verify the deposit or resolve the invoice in Square before changing this booking.' }, { status: 409 });
+      }
+      return Response.json({ ok: true });
+    }
+
+    if (booking.square_invoice_id && booking.status === 'confirmed' && nextStatus === 'cancelled') {
+      const { reconcilePartyInvoice } = await import('@/lib/square-party');
+      const verified = await reconcilePartyInvoice(context.admin, booking);
+      if (!['CANCELED', 'PAID', 'REFUNDED'].includes(verified.square_invoice_status ?? '')) {
+        return Response.json({ ok: false, error: 'Close or resolve the outstanding Square invoice before cancelling this party. The date is still held.' }, { status: 409 });
+      }
     }
 
     const currentStatus = booking.status ?? 'pending';
@@ -45,7 +63,7 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
     const { error: updateErr } = await context.admin
       .from('party_bookings')
       .update({ status: nextStatus, status_updated_at: new Date().toISOString() })
-      .eq('id', params.id);
+      .eq('id', params.id).eq('status', booking.status);
 
     if (updateErr) {
       return Response.json({ ok: false, error: updateErr.message }, { status: 500 });

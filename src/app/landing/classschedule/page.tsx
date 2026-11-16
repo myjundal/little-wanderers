@@ -492,7 +492,7 @@ export default function ClassSchedulePage() {
     const firstName = guardianFirstName.trim();
     const lastName = guardianLastName.trim();
     if (!firstName || !lastName) {
-      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then choose the interest-only option or Pay now again.');
+      registrationFieldError(!firstName ? 'class-guardian-first-name' : 'class-guardian-last-name', 'Please enter the parent/guardian first and last name above, then choose Pay at counter or Pay now again.');
     }
     return { guardian_first_name: firstName, guardian_last_name: lastName };
   };
@@ -501,11 +501,11 @@ export default function ClassSchedulePage() {
     if (selectedPerson && !selectedPersonNeedsAge) return selectedPerson;
     const name = quickChildName.trim();
     if (!selectedPerson && !name) {
-      registrationFieldError('class-child-name', 'Please enter your child’s name above, then choose the interest-only option or Pay now again.');
+      registrationFieldError('class-child-name', 'Please enter your child’s name above, then choose Pay at counter or Pay now again.');
     }
     const ageValue = parsedQuickAge();
     if (ageValue == null) {
-      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then choose the interest-only option or Pay now again.');
+      registrationFieldError('class-child-age', 'Please enter your child’s age in years or months above, then choose Pay at counter or Pay now again.');
     }
 
     if (selectedPersonId && !isAddingAdditionalChild && selectedPersonNeedsAge) {
@@ -573,7 +573,7 @@ export default function ClassSchedulePage() {
       const res = await fetch('/api/classes/register', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ class_id: classId, person_id: personId, ...guardian }),
+        body: JSON.stringify({ class_id: classId, person_id: personId, payment_choice: 'counter', ...guardian }),
       });
       const json = await res.json().catch(() => null);
 
@@ -610,15 +610,15 @@ export default function ClassSchedulePage() {
         setMyItems((current) => [...current.filter((item) => item.id !== json.id), optimisticItem]);
       }
       const doneMessage = json.already_registered
-        ? 'Your child is already pre-registered for this class.'
+        ? 'Your child already has a registration for this class.'
         : emailPending
-        ? 'Pre-registration received. A confirmation email will arrive shortly.'
+        ? 'Pay at counter selected. A confirmation email will arrive shortly.'
         : emailFailed
-          ? 'Pre-registration received, but we could not send the confirmation email yet.'
-          : 'Pre-registration received. Confirmation email sent.';
+          ? 'Pay at counter selected, but we could not send the confirmation email yet.'
+          : 'Pay at counter selected. Confirmation email sent.';
       setMessage(`${doneMessage} ${CLASS_PRE_REGISTRATION_NOTE}`);
       setRegistrationFeedback({ classId, message: `${doneMessage} ${CLASS_PRE_REGISTRATION_NOTE}`, tone: emailFailed ? 'warning' : 'success' });
-      setToast({ message: 'Pre-registration received.', tone: emailFailed ? 'warning' : 'success' });
+      setToast({ message: 'Pay at counter selected.', tone: emailFailed ? 'warning' : 'success' });
       void load(false);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Pre-registration could not be saved. Please try again.';
@@ -696,7 +696,7 @@ export default function ClassSchedulePage() {
     <main style={{ padding: 24, maxWidth: 980, margin: '0 auto', background: 'linear-gradient(180deg,#fff,#f7efff)', border: '1px solid #e3d0fb', borderRadius: 28, boxShadow: '0 18px 30px rgba(120,87,177,0.12)' }}>
       <ActionToast message={toast?.message ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82', marginBottom: 4 }}>Class Registration</h1>
-      <p style={{ color: '#6f628d', marginTop: 8 }}>Find a class, choose your child, then share interest or reserve an available seat with payment.</p>
+      <p style={{ color: '#6f628d', marginTop: 8 }}>Find a class, choose your child, then pay at the counter or pay now to confirm an available seat.</p>
       <PreRegistrationNotice />
 
       <p style={{ color: '#6f628d' }}>{CLASS_START_NOTE}</p>
@@ -941,9 +941,9 @@ export default function ClassSchedulePage() {
                   <div className={registrationStyles.facts}><span>Ages {series.age_range ?? 'TBA'}</span><span>{compactCaregiverLabel(series.caregiver_participation)}</span><span>{series.duration_minutes ?? Math.round((new Date(series.end_time).getTime() - new Date(series.start_time).getTime()) / 60000)} minutes</span><span>{classSizeLabel(target.capacity)}</span></div>
                   <ClassDescription title={series.title} description={series.description} />
                   <div className={registrationStyles.interest}>
-                    <div><strong>Just interested?</strong><p>No payment today. No seat reserved.</p></div>
+                    <div><strong>Pay at counter</strong><p>Pay before class, subject to availability. Your seat is confirmed after payment.</p></div>
                     <button onClick={() => preRegisterClass(target.id)} disabled={registeringClassId !== null || creatingChild || alreadyBooked} aria-busy={registeringClassId === target.id}>
-                      {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? (existingStatus === 'preregistered' ? 'Interest saved — no seat reserved' : 'Seat confirmed') : 'Interested — no payment, no seat reserved'}
+                      {registeringClassId === target.id || creatingChild ? 'Saving...' : alreadyBooked ? (existingStatus === 'preregistered' ? 'Pay at counter selected' : 'Seat confirmed') : 'Pay at counter'}
                     </button>
                   </div>
                   {series.title === 'Little Hands, Big Canvases' && <ClassSeriesPaymentChoice
@@ -975,7 +975,7 @@ export default function ClassSchedulePage() {
             {people.map((p) => <option key={`hist-${p.id}`} value={p.id}>{p.first_name} {p.last_name ?? ''}</option>)}
           </select>
           <button onClick={() => setHistoryTab('upcoming')} style={historyTab === 'upcoming' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
-            Classes & interest ({upcomingHistoryItems.length})
+            My classes ({upcomingHistoryItems.length})
           </button>
           <button onClick={() => setHistoryTab('past')} style={historyTab === 'past' ? historyTabButtonActiveStyle : historyTabButtonStyle}>
             Past ({pastHistoryItems.length})
@@ -1009,7 +1009,7 @@ export default function ClassSchedulePage() {
                 <p style={{ margin: '8px 0', color: '#666' }}>
                   Person: {item.person_name} · Status:{' '}
                   <b style={{ textTransform: 'uppercase' }}>
-                    {item.status === 'preregistered' ? 'interested — seat not confirmed' : item.status === 'waitlist' ? 'waitlisted' : item.attendance_display_status === 'upcoming' ? 'confirmed' : item.attendance_display_status}
+                    {item.status === 'preregistered' ? 'payment pending — seat not confirmed' : item.status === 'waitlist' ? 'waitlisted' : item.attendance_display_status === 'upcoming' ? 'confirmed' : item.attendance_display_status}
                   </b>
                 </p>
                 <p style={{ margin: '6px 0' }}>

@@ -91,7 +91,7 @@ export async function startOpenPlayPayment(db: SupabaseClient, r: OpenPlayPaymen
             url: string;
         };
     }>('/v2/online-checkout/payment-links', 'POST', {
-        idempotency_key: `op-${r.id}`, order: { location_id: cfg.locationId, reference_id: `op_${r.id}`, line_items: [{ name: 'Little Wanderers · Soft opening admission', quantity: '1', base_price_money: { amount: r.amount_cents, currency: 'USD' } }] },
+        idempotency_key: `op-${r.id}`, order: { location_id: cfg.locationId, reference_id: `op_${r.id}`, line_items: [{ name: 'Little Wanderers · Open Play admission', quantity: '1', base_price_money: { amount: r.amount_cents, currency: 'USD' } }] },
         checkout_options: { redirect_url: `${squareSiteUrl()}/landing/soft-opening?reservation=${r.id}&payment=returned`, ask_for_shipping_address: false, allow_tipping: false, enable_coupon: false, enable_loyalty: false },
     });
     const url = assertSquarePaymentUrl(link.url);

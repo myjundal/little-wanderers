@@ -159,7 +159,7 @@ export async function sendClassRegistrationEmail(
 ) {
   const { data: reg, error: regError } = await admin
     .from('class_registrations')
-    .select('id,class_id,person_id,status,created_by_user_id')
+    .select('id,class_id,person_id,status,created_by_user_id,customer_note')
     .eq('id', registrationId)
     .maybeSingle();
 
@@ -190,8 +190,9 @@ export async function sendClassRegistrationEmail(
   const childName = [person.first_name, person.last_name].filter(Boolean).join(' ').trim() || 'your child';
   const classTime = formatClassDateTime(klass.start_time, klass.end_time);
   const scheduleLabel = typeof klass.schedule_label === 'string' && klass.schedule_label.trim() ? klass.schedule_label.trim() : null;
-  const heading = 'Pre-registration received';
-  const intro = `We received ${childName}'s pre-registration for ${klass.title}.`;
+  const counter = reg.customer_note?.includes('Payment choice: Pay at counter.');
+  const heading = counter ? 'Pay at counter selected' : 'Pre-registration received';
+  const intro = counter ? `We saved ${childName}'s pay-at-counter preference for ${klass.title}. Please pay before class; places are subject to availability.` : `We received ${childName}'s pre-registration for ${klass.title}.`;
 
   const details = [
     ['Class', klass.title],
@@ -214,7 +215,7 @@ export async function sendClassRegistrationEmail(
       <h1 style="font-size:22px;margin:0 0 14px;color:#4f3f82;">${escapeHtml(heading)}</h1>
       <p>${escapeHtml(intro)}</p>
       <div style="padding:14px 16px;border:1px solid #d9c8f7;border-radius:12px;background:#f3ebff;">
-        <strong>Pre-registration only — your spot is not yet confirmed</strong>
+        <strong>${counter ? 'Payment pending — your seat is confirmed after payment' : 'Pre-registration only — your spot is not yet confirmed'}</strong>
         <p style="margin:6px 0 0;">${escapeHtml(CLASS_PRE_REGISTRATION_NOTE)}</p>
       </div>
       <table style="width:100%;border-collapse:collapse;border:1px solid #efe3ff;border-radius:12px;overflow:hidden;margin:18px 0;">
@@ -227,7 +228,7 @@ export async function sendClassRegistrationEmail(
 
   return sendResendEmail({
     to,
-    subject: `Pre-registration confirmation: ${klass.title}`,
+    subject: `${counter ? 'Pay at counter selected' : 'Pre-registration confirmation'}: ${klass.title}`,
     html,
   });
 }

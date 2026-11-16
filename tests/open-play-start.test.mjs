@@ -15,6 +15,7 @@ test('customer and operator calendars both exclude all windows before November 1
   const api=load(operator?'src/app/api/admin/open-play-reservations/route.ts':'src/app/api/open-play-reservations/route.ts',{
    '@/lib/reservation-admission-status':{getReservationAdmissionStatuses:async()=>new Map()},'@/lib/square-client':{squareEnvironment:()=> 'production'},
    '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], overlapsPrivateParty: () => false },
+   '@/lib/open-play-quote': { refreshOpenPlayQuote: async (_db, row) => row },
    '@/lib/open-play-reservations':lib,
    '@/lib/party-config':load('src/lib/party-config.ts'),
    '@/lib/waivers':{getWaiverStatus:()=>({status:'required'}),WAIVER_STATUS_SELECT:'signed_at'},'@/lib/authz':{requireStaffContext:async()=>({ok:true,admin})},
@@ -43,6 +44,7 @@ test('owner bulk changes use Eastern calendar days and cannot reopen pre-opening
   const api=load('src/app/api/admin/open-play-reservations/route.ts',{
    '@/lib/reservation-admission-status':{getReservationAdmissionStatuses:async()=>new Map()},'@/lib/square-client':{squareEnvironment:()=> 'production'},
    '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], overlapsPrivateParty: () => false },
+   '@/lib/open-play-quote': { refreshOpenPlayQuote: async (_db, row) => row },
    '@/lib/open-play-reservations':lib,'@/lib/party-config':load('src/lib/party-config.ts'),
    '@/lib/waivers':{getWaiverStatus:()=>({status:'required'}),WAIVER_STATUS_SELECT:'signed_at'},'@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin})},
   });

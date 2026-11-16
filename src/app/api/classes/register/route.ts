@@ -1,5 +1,5 @@
 import { isWanderlistSignupWindow } from '@/lib/signup-policy';
-import { CLASS_START_AT, CLASS_START_LABEL, CLASS_TERM_END_AT, CLASS_HOLIDAY_DATE } from '@/lib/class-config';
+import { CLASS_START_AT, CLASS_START_LABEL, CLASS_TERM_END_AT, CLASS_HOLIDAY_DATE, CLASS_PAY_AT_COUNTER_NOTE } from '@/lib/class-config';
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -138,6 +138,7 @@ export async function POST(req: Request) {
     const classId = body?.class_id as string | undefined;
     const personId = body?.person_id as string | undefined;
     const guardianName = parseGuardianName(body);
+    const counter = body?.payment_choice === 'counter';
 
     if (!classId || !personId) {
       return Response.json({ ok: false, error: 'class_id and person_id are required' }, { status: 400 });
@@ -162,7 +163,7 @@ export async function POST(req: Request) {
       supa.from('roles').select('role').eq('id', user.id).maybeSingle(),
       supa.from('people').select('id,role,first_name,last_name,birthdate').eq('id', personId).eq('household_id', householdId).maybeSingle(),
       supa.from('classes').select('id,title,category,capacity,status,start_time,end_time,schedule_label,instructor_name,price_cents').eq('id', classId).maybeSingle(),
-      supa.from('class_registrations').select('id,status').eq('class_id', classId).eq('person_id', personId).maybeSingle(),
+      supa.from('class_registrations').select('id,status,customer_note').eq('class_id', classId).eq('person_id', personId).maybeSingle(),
     ]);
     const isOperator = roleRow?.role === 'owner' || roleRow?.role === 'staff' || roleRow?.role === 'admin';
     const onWanderlist = isOperator || (await isUserOnWanderlist(supa, user.email));
@@ -192,6 +193,10 @@ export async function POST(req: Request) {
     if (existingResult.error) throw new Error(existingResult.error.message);
     const already = existingResult.data;
 
+    if (counter && already?.status === 'preregistered') {
+      const saved = await supa.from('class_registrations').update({ customer_note: [already.customer_note, CLASS_PAY_AT_COUNTER_NOTE].filter(Boolean).join('\n').slice(-2000), customer_note_updated_at: new Date().toISOString() }).eq('id', already.id).eq('status', 'preregistered');
+      if (saved.error) throw new Error('Unable to save payment choice.');
+    }
     if (already && already.status !== 'cancelled') {
       return Response.json({ ok: true, id: already.id, status: already.status, already_registered: true });
     }
@@ -205,6 +210,7 @@ export async function POST(req: Request) {
         .from('class_registrations')
         .update({
           status: nextStatus,
+          ...(counter ? { customer_note: CLASS_PAY_AT_COUNTER_NOTE, customer_note_updated_at: new Date().toISOString() } : {}),
           created_at: new Date().toISOString(),
           waitlist_offer_token: null,
           waitlist_offer_expires_at: null,
@@ -233,6 +239,7 @@ export async function POST(req: Request) {
         class_id: classId,
         person_id: personId,
         status: nextStatus,
+        ...(counter ? { customer_note: CLASS_PAY_AT_COUNTER_NOTE, customer_note_updated_at: new Date().toISOString() } : {}),
         household_id: householdId,
         child_id: person.role === 'child' ? person.id : null,
         created_by_user_id: user.id,

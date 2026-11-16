@@ -14,8 +14,8 @@ const WEEKLY_HOURS = [
   { label: 'Tuesday', hours: '9am–6pm' },
   { label: 'Wednesday', hours: '9am–6pm' },
   { label: 'Thursday', hours: '9am–6pm' },
-  { label: 'Friday', hours: '9am–7pm' },
-  { label: 'Saturday', hours: '9am–7pm' },
+  { label: 'Friday', hours: '9am–6pm' },
+  { label: 'Saturday', hours: '9am–6pm' },
 ];
 
 export default function CrowdLevelCard({ compact = false, style, showHours = true, showStatus = true }: { compact?: boolean; style?: CSSProperties; showHours?: boolean; showStatus?: boolean }) {
@@ -82,7 +82,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
   const weekday = new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, weekday: 'long' }).format(now);
   const dayIndex = WEEKLY_HOURS.findIndex((entry) => entry.label === weekday);
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, hour: 'numeric', hourCycle: 'h23' }).format(now));
-  const todaysCloseHour = dayIndex === 5 || dayIndex === 6 ? 19 : 18;
+  const todaysCloseHour = 18;
   const isOpenNow = hour >= 9 && hour < todaysCloseHour;
   const todaysHours = WEEKLY_HOURS[dayIndex]?.hours ?? '9am–6pm';
   const currentDate = now.toLocaleDateString('en-US', {
@@ -123,7 +123,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
           <span className={styles.eyebrow}>Open Play · Crowd Level</span>
           <details className={styles.about}>
             <summary aria-label="About the crowd update">ⓘ</summary>
-            <p>A gentle estimate of how the studio feels, updated throughout the day. Availability can change; please check Open Play times before visiting.</p>
+            <p>A gentle estimate of how the studio feels, including Open Play and party guests, updated throughout the day. Availability can change; please check Open Play times before visiting.</p>
           </details>
         </div>
         <div aria-live="polite">

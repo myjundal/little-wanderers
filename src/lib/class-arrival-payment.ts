@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { quoteClassSelection, type classCheckoutRequest } from '@/lib/class-checkout';
 
-export const CLASS_PAY_ON_ARRIVAL_NOTE = 'Payment choice: Pay on arrival. Payment is required before participation; a seat is not reserved until payment.';
+import { CLASS_PAY_AT_COUNTER_NOTE } from '@/lib/class-config';
+export const CLASS_PAY_ON_ARRIVAL_NOTE = CLASS_PAY_AT_COUNTER_NOTE;
 
 export async function saveClassArrivalPayment(admin: SupabaseClient, input: {
   householdId: string; userId: string; request: ReturnType<typeof classCheckoutRequest>;
@@ -26,5 +27,5 @@ export async function saveClassArrivalPayment(admin: SupabaseClient, input: {
     ids.push(result.data.id);
   }
   return { registration_ids: ids, payment_choice: 'arrival', seat_confirmed: false,
-    message: 'Pay-on-arrival preference saved. Please arrive early and pay before class. Places are subject to availability; this does not reserve a seat.' };
+    message: 'Pay at counter selected. Please arrive early and pay before class. Places are subject to availability; this does not reserve a seat.' };
 }

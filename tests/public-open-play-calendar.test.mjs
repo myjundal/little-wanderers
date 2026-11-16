@@ -17,7 +17,7 @@ test('public availability exposes only calendar fields, honors closure and total
 test('guests see dates and arrival times before any login link or family form',()=>{
  const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{'@/lib/open-play-reservations':constants,react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
  const html=renderToStaticMarkup(React.createElement(Calendar,{slots:[{...slot,remaining_children:5,is_closed:false,is_full:false}]}));
- assert.match(html,/November 2026/);assert.match(html,/9 AM/);assert.match(html,/\(5\/7\) spots left/);assert.match(html,/unlimited play until closing/);assert.match(html,/Reservations are recommended/);
+ assert.match(html,/November 2026/);assert.match(html,/9 AM/);assert.match(html,/\(5\/7\) spots left/);assert.match(html,/unlimited play until closing/);assert.match(html,/Reservations are highly recommended on weekends/);
  assert.doesNotMatch(html,/href="\/login|Parent.*first name/);
 });
 test('calendar keeps a selected time through sign-in without making a reservation',()=>{

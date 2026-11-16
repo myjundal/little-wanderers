@@ -1,3 +1,4 @@
+import { refreshOpenPlayQuote } from '@/lib/open-play-quote';
 import { waitUntil } from '@vercel/functions';
 import { sendOpenPlayReservationNotification } from '@/lib/admin-notifications';
 import { sendOpenPlayConfirmation } from '@/lib/open-play-confirmation';
@@ -144,6 +145,7 @@ export async function GET(req: Request) {
     });
 
     const family = await readSoftOpeningFamily(context.admin, context.householdId);
+    for (let index = 0; index < reservations.length; index++) reservations[index] = await refreshOpenPlayQuote(context.admin, reservations[index], family);
     return NextResponse.json({ ok: true, allowed: true, access: context.access, slots, reservations, family, private_party_days: privatePartyDays }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const rawMessage = e instanceof Error ? e.message : 'unknown error';
@@ -160,7 +162,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as ReservationPayload | null;
     const slotId = String(body?.slot_id ?? '');
     if (!isUuid(slotId)) {
-      return NextResponse.json({ ok: false, error: 'Choose a soft opening visit time.' }, { status: 400, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'Choose an Open Play visit time.' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
     const childCount = Array.isArray(body?.children) ? body.children.length : 0;
@@ -180,7 +182,7 @@ export async function POST(req: Request) {
 
     if (existingActiveError) throw new Error(existingActiveError.message);
     if (existingActive) {
-      return NextResponse.json({ ok: false, error: 'You already have a soft opening reservation. Please cancel it before choosing another time.' }, { status: 409, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'You already have an Open Play reservation. Please cancel it before choosing another time.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
 
     const { data: slot, error: slotError } = await context.admin
@@ -192,23 +194,23 @@ export async function POST(req: Request) {
 
     if (slotError) throw new Error(slotError.message);
     if (!slot) {
-      return NextResponse.json({ ok: false, error: 'This soft opening visit time is no longer available.' }, { status: 404, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'This Open Play visit time is no longer available.' }, { status: 404, headers: NO_STORE_HEADERS });
     }
     if (!isOpenPlayArrivalAvailable(slot)) {
       return NextResponse.json({ ok: false, error: 'The last Open Play ARRIVAL WINDOW is 4–5 PM. Unlimited play continues until closing at 6 PM. Please choose an earlier arrival window.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
     if (slot.status !== 'open') {
-      return NextResponse.json({ ok: false, error: 'This soft opening visit time is not open for reservations.' }, { status: 409, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'This Open Play visit time is not open for reservations.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
     const slotStartMs = new Date(slot.starts_at as string).getTime();
     if (body?.booking_source === 'public' && slotStartMs < new Date(PUBLIC_OPEN_PLAY_START).getTime()) {
       return NextResponse.json({ ok: false, error: 'Public Open Play visits begin Saturday, November 14. Please choose November 14 or later.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
     if (slotStartMs < new Date(SOFT_OPENING_START).getTime() || slotStartMs >= new Date(SOFT_OPENING_END).getTime()) {
-      return NextResponse.json({ ok: false, error: 'This visit time is outside the soft opening reservation window.' }, { status: 409, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'This visit time is outside the Open Play reservation window.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
     if (new Date(slot.ends_at as string).getTime() <= Date.now()) {
-      return NextResponse.json({ ok: false, error: 'This soft opening visit time has already passed.' }, { status: 409, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'This Open Play visit time has already passed.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
 
     const privatePartyDays = await readPrivatePartyDays(context.admin, [slot]);
@@ -224,7 +226,7 @@ export async function POST(req: Request) {
     const capacityTotal = slot.capacity_total == null ? null : Number(slot.capacity_total);
 
     if (nextChildren > capacityChildren || (capacityTotal != null && nextTotal > capacityTotal)) {
-      return NextResponse.json({ ok: false, error: 'This soft opening visit time is full. Please choose another time.' }, { status: 409, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'This Open Play visit time is full. Please choose another time.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
 
     let family;

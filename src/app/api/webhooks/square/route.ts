@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+import { reconcilePartyCheckout, partyCheckoutFromBooking } from '@/lib/party-deposit';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySquareWebhook } from '@/lib/square-webhook';
@@ -45,6 +46,15 @@ export async function POST(req: NextRequest) {
   }
 
   const eventType = payload?.type ?? '';
+  const partyInvoiceId = payload?.data?.object?.invoice?.id;
+  if (typeof partyInvoiceId === 'string' && eventType.startsWith('invoice.')) {
+    const party = await supa.from('party_bookings').select('*').eq('square_environment', squareEnvironment()).eq('square_invoice_id', partyInvoiceId).maybeSingle();
+    if (party.error) return new Response('Party invoice lookup pending', { status: 503 });
+    if (party.data) {
+      try { await reconcilePartyCheckout(supa, partyCheckoutFromBooking(party.data)); return new Response('Party invoice verified', { status: 200 }); }
+      catch { return new Response('Party invoice verification pending', { status: 503 }); }
+    }
+  }
   // The installed staff app can be suspended while Square returns to Safari.
   // Settle the admission on the server independently of either browser session.
   // Run before event logging so failed verification remains retryable by Square.
@@ -71,6 +81,12 @@ export async function POST(req: NextRequest) {
   if (['payment.created', 'payment.updated', 'invoice.payment_made'].includes(eventType)) {
     const eventOrder = payload?.data?.object?.payment?.order_id ?? payload?.data?.object?.invoice?.order_id;
     if (eventOrder) {
+      const party = await supa.from('party_bookings').select('*').eq('square_environment', squareEnvironment()).eq('square_order_id', eventOrder).maybeSingle();
+      if (party.error) return new Response('Party checkout lookup pending', { status: 503 });
+      if (party.data) {
+        try { await reconcilePartyCheckout(supa, partyCheckoutFromBooking(party.data)); return new Response('Party deposit verified', { status: 200 }); }
+        catch { return new Response('Party deposit verification pending', { status: 503 }); }
+      }
       const { data: checkout, error: checkoutError } = await supa.from('square_checkout_attempts').select('*')
         .eq('kind', 'class').eq('environment', squareEnvironment()).eq('order_id', eventOrder).maybeSingle();
       if (checkoutError) return new Response('Class checkout lookup pending', { status: 503 });

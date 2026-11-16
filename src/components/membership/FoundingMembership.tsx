@@ -24,7 +24,7 @@ function GenderSelect({ id, value, onChange }: { id: string; value: Gender; onCh
 }
 
 export default function FoundingMembership({ audience }: { audience?: 'waitlist' | 'public' } = {}) {
-  const entryPath = audience === 'waitlist' ? '/wanderlist-founding' : audience === 'public' ? '/general-founding' : '/founding-membership';
+  const entryPath = audience === 'waitlist' ? '/wanderlist-founding' : audience === 'public' ? '/general-founding' : '/monthly-membership';
   const signInHref = `/login?mode=continue&next=${encodeURIComponent(entryPath)}`;
   const [auth, setAuth] = useState<'loading' | 'guest' | 'signedIn' | 'error'>('loading');
   const [profile, setProfile] = useState<Profile>(emptyProfile);
@@ -32,7 +32,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
   const [signedInAs, setSignedInAs] = useState('');
   const [complimentary, setComplimentary] = useState(false);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
-  const [offer, setOffer] = useState<MembershipOffer>({ phase: 'waitlist', tier: 'waitlist', can_enroll: false, base_cents: 5000, sibling_cents: 1000 });
+  const [offer, setOffer] = useState<MembershipOffer>({ phase: 'regular', tier: 'regular', can_enroll: false, base_cents: 6000, sibling_cents: 2000 });
   const [config, setConfig] = useState<Config | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [cardReady, setCardReady] = useState(false);
@@ -172,10 +172,10 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
         <p className={styles.sibling}><strong>+{money(price.sibling_cents)}/mo</strong> per sibling, 7 months or older</p>
         <p className={styles.small}>Baby siblings 6 months and under are free.</p>
         <p className={styles.rateNote}>{founding ? 'Lifetime rates while active.' : 'Regular monthly pricing.'} Cancel anytime.</p>
-        <div className={styles.today}><strong>Pay $0 today.</strong><span>Monthly billing starts on your first membership visit, including during soft opening.</span></div>
+        <div className={styles.today}><strong>Pay $0 today.</strong><span>Monthly billing starts on your first membership visit.</span></div>
         <details className={styles.offerDetails}>
           <summary>What’s included & membership details</summary>
-          <ul><li>Unlimited open play, with up to two accompanying adults.</li><li>Visits throughout our soft opening period are included, with no separate admission charge. Reservations, capacity limits, and a signed waiver apply.</li><li>Priority registration for select classes and events.</li></ul>
+          <ul><li>Unlimited open play, with up to two accompanying adults.</li><li>Open play visits are included, with no separate admission charge. Reservations, capacity limits, and a signed waiver apply.</li><li>Priority registration for select classes and events.</li></ul>
           {founding && <p>Two children, both 7mo+: {money(price.base_cents + price.sibling_cents)}/mo · {price.two_child_discount}% off regular pricing.</p>}
           <p>No commitment. {founding && 'Both first-child and sibling rates stay locked in while your membership stays active.'} If you cancel and rejoin, regular $60 + $20 pricing applies. Sibling charges begin with the first billing cycle on or after a baby turns 7 months.</p>
         </details>
@@ -197,19 +197,19 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
           <p>We could not confirm eligibility with this account. Sign in with the email you joined the Wanderlist with for $50/month + $10 per eligible sibling.</p>
           <p className={styles.small}>First-time phone sign-in doesn’t connect to your Wanderlist email.</p>
           <button type="button" className={styles.primary} disabled={busy} onClick={switchAccount}>{busy ? 'Switching accounts…' : 'Use my Wanderlist email'}</button>
-          <Link className={styles.secondary} href={offer.tier === 'regular' ? '/founding-membership' : '/general-founding'}>{offer.tier === 'regular' ? 'View regular membership' : 'View general founding membership'}</Link>
+          <Link className={styles.secondary} href={offer.tier === 'regular' ? '/monthly-membership' : '/general-founding'}>{offer.tier === 'regular' ? 'View regular membership' : 'View general founding membership'}</Link>
           <Link className={styles.help} href="/contact">Need a hand? Contact us</Link>
         </div>}
         {auth === 'signedIn' && locked && <div id="founding-status" tabIndex={-1} className={styles.status}>
           <span className={styles.eyebrow}>{enrollment.status === 'canceled' ? 'Membership canceled' : accountPrice.label}</span>
-          <h3>{enrollment.status === 'canceled' ? 'Your cancellation is confirmed.' : enrollment.status === 'pending' ? 'You’re in. We can’t wait to meet you.' : 'Your founding membership'}</h3>
-          {enrollment.status !== 'canceled' && <><p>Card saved: {enrollment.card_brand} ending in {enrollment.card_last4}.</p><p>{enrollment.start_date ? `Monthly billing starts ${enrollment.start_date}.` : 'No payment has been taken for your reservation. Your first monthly payment begins on your first membership visit, including during soft opening, when we activate your membership at the studio. Your billing start date is not set yet.'}</p><p><strong>{money(enrollment.base_cents)}/month</strong> for the first child + {money(enrollment.sibling_cents)}/month per sibling age 7 months or older.{enrollment.pricing_tier !== 'regular' && ' Both rates stay locked in while your membership stays active.'}</p><p>Your visits throughout the soft opening period are included with your membership, with no separate admission charge. Choose an available arrival window and complete your family waiver.</p></>}
-          {enrollment.status === 'canceled' && <p>Your founding rates have ended. Rejoining is $60/month for the first child + $20/month per eligible sibling.{enrollment.paid_through ? ` Any paid access continues through ${enrollment.paid_through}.` : ' No further monthly billing is scheduled.'}</p>}
-          {enrollment.status === 'canceled' && (waitlistUnavailable ? <Link className={styles.primary} href="/founding-membership">Rejoin at regular $60 + $20 pricing</Link> : <button type="button" className={styles.primary} onClick={() => { setEnrollment(null); setStep(0); setConsent(false); setBirthdaysConfirmed(false); }}>Rejoin at regular $60 + $20 pricing</button>)}
-          {['pending', 'activating', 'scheduled', 'active'].includes(enrollment.status) && <Link className={styles.primary} href="/landing/soft-opening">Reserve a visit →</Link>}
+          <h3>{enrollment.status === 'canceled' ? 'Your cancellation is confirmed.' : enrollment.status === 'pending' ? 'You’re in. We can’t wait to meet you.' : (founding ? 'Your founding membership' : 'Your membership')}</h3>
+          {enrollment.status !== 'canceled' && <><p>Card saved: {enrollment.card_brand} ending in {enrollment.card_last4}.</p><p>{enrollment.start_date ? `Monthly billing starts ${enrollment.start_date}.` : 'No payment has been taken for your reservation. Your first monthly payment begins on your first membership visit, when we activate your membership at the studio. Your billing start date is not set yet.'}</p><p><strong>{money(enrollment.base_cents)}/month</strong> for the first child + {money(enrollment.sibling_cents)}/month per sibling age 7 months or older.{enrollment.pricing_tier !== 'regular' && ' Both rates stay locked in while your membership stays active.'}</p><p>Your visits during open play are included with your membership, with no separate admission charge. Choose an available arrival window and complete your family waiver.</p></>}
+          {enrollment.status === 'canceled' && <p>{founding ? 'Your founding rates have ended. ' : ''}Rejoining is $60/month for the first child + $20/month per eligible sibling.{enrollment.paid_through ? ` Any paid access continues through ${enrollment.paid_through}.` : ' No further monthly billing is scheduled.'}</p>}
+          {enrollment.status === 'canceled' && (waitlistUnavailable ? <Link className={styles.primary} href="/monthly-membership">Rejoin at regular $60 + $20 pricing</Link> : <button type="button" className={styles.primary} onClick={() => { setEnrollment(null); setStep(0); setConsent(false); setBirthdaysConfirmed(false); }}>Rejoin at regular $60 + $20 pricing</button>)}
+          {['pending', 'activating', 'scheduled', 'active'].includes(enrollment.status) && <Link className={styles.primary} href="/landing/open-play">Reserve a visit →</Link>}
           <Link className={styles.secondary} href="/landing">Go to my family dashboard</Link>
           <Link className={styles.textButton} href="/landing/people">Connect email &amp; phone sign-in</Link>
-          {enrollment.status !== 'canceled' && <>{!cancelConfirm ? <button type="button" className={styles.textButton} onClick={() => setCancelConfirm(true)}>Cancel my membership</button> : <div className={styles.cancelBox}><p>Cancel anytime. Canceling ends your founding rates. Rejoining is $60/month + $20/month per eligible sibling. Future renewals stop.</p><button type="button" className={styles.secondary} disabled={busy} onClick={cancel}>{busy ? 'Canceling…' : 'Confirm cancellation'}</button><button className={styles.textButton} type="button" disabled={busy} onClick={() => setCancelConfirm(false)}>Keep my membership</button></div>}</>}
+          {enrollment.status !== 'canceled' && <>{!cancelConfirm ? <button type="button" className={styles.textButton} onClick={() => setCancelConfirm(true)}>Cancel my membership</button> : <div className={styles.cancelBox}><p>Cancel anytime. {founding && 'Canceling ends your founding rates. '}Rejoining is $60/month + $20/month per eligible sibling. Future renewals stop.</p><button type="button" className={styles.secondary} disabled={busy} onClick={cancel}>{busy ? 'Canceling…' : 'Confirm cancellation'}</button><button className={styles.textButton} type="button" disabled={busy} onClick={() => setCancelConfirm(false)}>Keep my membership</button></div>}</>}
         </div>}
         {auth === 'signedIn' && !locked && !waitlistUnavailable && <form onSubmit={submit}>
           <ol className={styles.progress} aria-label="Membership setup">
@@ -217,7 +217,7 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
           </ol>
           <p className={styles.account}>Signed in as <strong>{signedInAs}</strong></p>
           {audience && audience !== accountTier && offer.can_enroll && <p className={styles.notice}>{accountTier === 'waitlist' ? 'Your account qualifies for original Wanderlist pricing: $50/month + $10/month per eligible sibling.' : accountTier === 'regular' ? 'Your account is eligible for regular membership: $60/month + $20/month per eligible sibling.' : 'Your account qualifies for public founding pricing: $50/month + $20/month per eligible sibling.'}</p>}
-          {!offer.can_enroll && <p className={styles.notice}>Public founding registration opens next. We’re saving first access for Wanderlist families.</p>}
+          {!offer.can_enroll && <p className={styles.notice}>Membership enrollment is unavailable right now. Please try again shortly.</p>}
 
           {step === 0 && <fieldset disabled={busy}><legend>Your details</legend>
             <p className={styles.stepIntro}>Confirm your contact details. Saved information is filled in for you.</p>
@@ -251,10 +251,10 @@ export default function FoundingMembership({ audience }: { audience?: 'waitlist'
             <p className={styles.stepIntro}>Last step. No membership payment today.</p>
             <div className={styles.review}><strong>{profile.adultFirstName} {profile.adultLastName}</strong><span>{profile.children.map(child => child.firstName).join(' · ')}</span><button type="button" className={styles.textButton} onClick={() => changeStep(0)}>Edit family details</button></div>
             <div className={styles.total}><span>Due today</span><strong>$0</strong><span>Monthly membership</span><strong>{estimate === null ? 'Check birthdays' : `${money(estimate)}/mo`}</strong></div>
-            <p className={styles.small}>Starts on your first membership visit, including soft opening. Total is based on your children’s ages when billing begins.</p>
+            <p className={styles.small}>Starts on your first membership visit, during open play. Total is based on your children’s ages when billing begins.</p>
             {config ? <><div id="founding-card" className={styles.cardMount} />{!cardReady && <p role="status" className={styles.small}>Loading secure card form…</p>}</> : <p className={styles.notice}>Card registration is not available yet. No payment is due today.</p>}
             <details className={styles.terms}><summary>Membership terms & card authorization</summary><p>{terms}</p></details>
-            <label className={styles.checkbox}><input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>I agree to the membership terms and authorize Square to save my card. Monthly billing starts on my first membership visit, including soft opening.</span></label>
+            <label className={styles.checkbox}><input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>I agree to the membership terms and authorize Square to save my card. Monthly billing starts on my first membership visit, during open play.</span></label>
           </fieldset>}
           {step < 2 ? <button className={styles.primary} type="submit" disabled={busy || !offer.can_enroll}>{step === 0 ? 'Continue to children' : 'Continue to card'}</button> : <button className={styles.primary} type="submit" disabled={busy || !cardReady || !consent || !birthdaysConfirmed || !offer.can_enroll}>{busy ? 'Saving your card…' : 'Save my card · $0 today'}</button>}
           {step > 0 && <button type="button" className={styles.textButton} disabled={busy} onClick={() => changeStep(step - 1)}>← Back</button>}

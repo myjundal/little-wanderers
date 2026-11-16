@@ -14,8 +14,10 @@ test('public header exposes Open Play reservations and retains account destinati
 test('legacy membership URLs preserve a permanent destination to the new pricing section',()=>{
  let to;const route=loadModule('src/app/(public)/membership/page.tsx',{'next/navigation':{permanentRedirect:value=>{to=value;}}});route.default();assert.equal(to,'/pricing#memberships');
 });
-test('pricing links to real founding enrollment and gift card pages, with regular membership marked for after grand opening',()=>{
- const page=loadModule('src/app/(public)/pricing/page.tsx',mocks,{React});const html=renderToStaticMarkup(page.default());assert.match(html,/\$16/);assert.match(html,/\$10/);assert.match(html,/\$50/);assert.match(html,/\$60/);assert.match(html,/\+\$20\/month/);assert.match(html,/href="\/general-founding"/);assert.match(html,/Available after grand opening/);assert.match(html,/not a one-time payment/);assert.match(html,/href="\/gift-cards"/);
+test('pricing advertises current age bands, general membership and gift cards',()=>{
+ const page=loadModule('src/app/(public)/pricing/page.tsx',mocks,{React});const html=renderToStaticMarkup(page.default());
+ for(const text of [/Under 6 months/, /6–11 months/, /12 months and older/, /\$16/, /\$10/, /\$60/, /\+\$20\/month/, /href="\/monthly-membership"/, /href="\/gift-cards"/])assert.match(html,text);
+ assert.doesNotMatch(html,/\$50|Available after grand opening|founding lifetime/i);
 });
 test('gift card purchase uses the exact supplied Square merchant link and a safe new tab',()=>{
  const page=loadModule('src/app/(public)/gift-cards/page.tsx',mocks,{React});const html=renderToStaticMarkup(page.default());assert.match(html,/https:\/\/app.squareup.com\/gift\/ML2Z4R0HJT14W\/order/);assert.match(html,/target="_blank"/);assert.match(html,/noopener noreferrer/);assert.match(html,/Myjundal LLC/);

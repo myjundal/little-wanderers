@@ -1,3 +1,4 @@
+import { AGE_PRICING_START, openPlayAgeAmount } from '@/lib/open-play-age-pricing';
 import { freeInfantSiblingIds, isInfantSibling, type AdmissionChild } from '@/lib/infant-sibling-pricing';
 
 export function softOpeningAmount(childIds: string[], memberships: Array<{
@@ -8,6 +9,7 @@ export function softOpeningAmount(childIds: string[], memberships: Array<{
 }>, visitDate: string, children: AdmissionChild[] = []) {
     const covered = new Set(childIds.filter(id => memberships.some(m => m.child_ids.includes(id) && (['complimentary', 'pending', 'activating', 'scheduled'].includes(m.status) || (m.status === 'active' && !m.start_date) ||
         (['active', 'canceling', 'canceled'].includes(m.status) && m.start_date && m.start_date <= visitDate && m.paid_through && m.paid_through >= visitDate)))));
+    if (visitDate >= AGE_PRICING_START) return openPlayAgeAmount(childIds.map(id => ({ id, birthdate: children.find(child => child.id === id)?.birthdate })), visitDate, covered);
     const freeInfants = freeInfantSiblingIds(childIds.map(id => ({ id, birthdate: children.find(child => child.id === id)?.birthdate })), visitDate, covered);
     const uncovered = childIds.filter(id => !freeInfants.has(id) && !covered.has(id));
     if (!uncovered.length) return 0;

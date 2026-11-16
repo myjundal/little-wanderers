@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react';
 export const metadata = {
   title: 'Cafe — Little Wanderers',
   description:
-    'Cafe drinks, locally roasted Victus Coffee, and opening menu details at Little Wanderers Play Studio & Cafe in West Hartford, CT.',
+    'Cafe drinks, locally roasted Victus Coffee, and snacks at Little Wanderers Play Studio & Cafe in West Hartford, CT.',
 };
 
 const pageStyle: CSSProperties = {
@@ -47,25 +47,10 @@ const menuCardStyle: CSSProperties = {
 };
 
 const menuGroups = [
-  {
-    title: 'Espresso & Coffee',
-    items: ['Espresso', 'Americano', 'Latte', 'Cappuccino'],
-  },
-  {
-    title: 'Matcha',
-    items: ['Matcha Latte - iced or hot'],
-  },
-  {
-    title: (
-      <>
-        Little Wanderers
-        <br />
-        Specials
-      </>
-    ),
-    key: 'Little Wanderers Specials',
-    items: ['Strawberry Hibiscus Tea', 'Lavender Cloud Milk'],
-  },
+  { title: 'Coffee', note: '12 oz · Hot or iced · Decaf available', items: [['Americano', '$3.00'], ['Café Latte', '$3.50'], ['Caramel Macchiato', '$4.50']] },
+  { title: 'Non-Coffee', note: '12 oz · Hot or iced', items: [['Matcha Latte', '$4.50'], ['Strawberry Hibiscus Tea · Decaf', '$4.00'], ['Lavender Cloud Milk · Decaf', '$4.00']] },
+  { title: 'From Fire x Forge', note: 'A little treat to enjoy with your drink', items: [['Cookies', '$3.00'], ['Gluten-free brownies', '$4.50']] },
+  { title: 'Little Snacks & Juice', note: 'Grab a snack for your little wanderer', items: [['Mango juice box', '$2.00'], ['Fig bar', '$1.00'], ['Popcorn', '$1.00'], ['Rice Krispies', '$1.00'], ['Strawberry Yoggies', '$1.00']] },
 ];
 
 export default function CafePage() {
@@ -77,7 +62,7 @@ export default function CafePage() {
           A cozy pause for grown-ups and little treats for wanderers.
         </h1>
         <p style={{ margin: 0, color: '#7e7695', maxWidth: 780, fontSize: '1.05rem', lineHeight: 1.75 }}>
-          Our cafe will serve thoughtfully made drinks alongside locally roasted{' '}
+          Our cafe serves thoughtfully made drinks alongside locally roasted{' '}
           <Link href="https://victuscoffee.com/" target="_blank" rel="noreferrer">
             Victus Coffee
           </Link>
@@ -86,7 +71,7 @@ export default function CafePage() {
       </section>
 
       <section style={sectionStyle}>
-        <p style={eyebrowStyle}>A taste of what&apos;s coming</p>
+        <p style={eyebrowStyle}>Our menu</p>
         <div
           style={{
             display: 'grid',
@@ -96,11 +81,12 @@ export default function CafePage() {
           }}
         >
           {menuGroups.map((group) => (
-            <article key={group.key ?? group.title} style={menuCardStyle}>
+            <article key={group.title} style={menuCardStyle}>
               <h2 style={{ margin: 0, color: '#4b4360', fontSize: '1.35rem' }}>{group.title}</h2>
-              <ul style={{ display: 'grid', gap: 8, margin: 0, paddingLeft: 18, color: '#7e7695', lineHeight: 1.65 }}>
-                {group.items.map((item) => (
-                  <li key={item}>{item}</li>
+              <p style={{ margin: 0, color: '#7e7695', fontSize: 13 }}>{group.note}</p>
+              <ul style={{ listStyle: 'none', display: 'grid', gap: 8, margin: 0, paddingLeft: 0, color: '#7e7695', lineHeight: 1.65 }}>
+                {group.items.map(([item, price]) => (
+                  <li key={item} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>{item}</span><strong style={{ whiteSpace: 'nowrap', color: '#4b4360' }}>{price}</strong></li>
                 ))}
               </ul>
             </article>
@@ -108,22 +94,7 @@ export default function CafePage() {
         </div>
       </section>
 
-      <section
-        style={{
-          display: 'grid',
-          gap: 12,
-          marginTop: 24,
-          padding: 'clamp(20px, 4vw, 24px)',
-          borderRadius: 24,
-          background: 'rgba(255,255,255,0.58)',
-          border: '1px solid rgba(255,255,255,0.72)',
-        }}
-      >
-        <p style={{ margin: 0, color: '#4b4360', fontWeight: 800 }}>Full menu coming soon.</p>
-        <p style={{ margin: 0, color: '#7e7695', lineHeight: 1.75 }}>
-          Additional drinks and grab-and-go snacks will be added as we get closer to opening.
-        </p>
-      </section>
+      <p style={{ marginTop: 24, color: '#7e7695', lineHeight: 1.75 }}>Drinks and snacks are subject to availability. Please ask us about ingredients and allergens.</p>
     </main>
   );
 }

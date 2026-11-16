@@ -150,6 +150,7 @@ test('public party calendar excludes cancelled bookings and uses no-store', asyn
     order: async () => ({ data: items.filter(item => item.status !== 'cancelled'), error: null }),
   };
   const { GET } = loadModule('src/app/api/party-bookings/calendar/route.ts', {
+    '@/lib/party-deposit': { cleanupPartyCheckouts: async () => {} },
     '@supabase/supabase-js': { createClient: () => ({ from: () => query }) },
     '@/lib/party-config': { isVisiblePartyCalendarSlot: () => true },
   }, { process: { env: {} } });
@@ -167,6 +168,7 @@ test('a cancellation request keeps its public calendar slot reserved until cance
     order: async () => ({ data: [item], error: null }),
   };
   const { GET } = loadModule('src/app/api/party-bookings/calendar/route.ts', {
+    '@/lib/party-deposit': { cleanupPartyCheckouts: async () => {} },
     '@supabase/supabase-js': { createClient: () => ({ from: () => query }) },
     '@/lib/party-config': { isVisiblePartyCalendarSlot: () => true },
   }, { process: { env: {} } });

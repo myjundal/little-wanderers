@@ -83,7 +83,7 @@ test('pay-on-arrival records interest only, is idempotent and preserves paid reg
  const first=await saveClassArrivalPayment(h.admin,{householdId:h.family,userId:h.user,request:h.request});
  assert.equal(first.seat_confirmed,false); assert.equal(first.registration_ids.length,2);
  const rows=(await h.db.query('select * from class_registrations')).rows;
- assert(rows.every(row=>row.status==='preregistered'&&row.customer_note.includes('Pay on arrival')));
+ assert(rows.every(row=>row.status==='preregistered'&&row.customer_note.includes('Pay at counter')));
  await saveClassArrivalPayment(h.admin,{householdId:h.family,userId:h.user,request:h.request});
  assert.equal((await h.db.query('select count(*)::int n from class_registrations')).rows[0].n,2);
  await h.db.query("update class_registrations set status='scheduled',customer_note='Paid receipt confirmed' where class_id=$1",[h.sessions[0]]);
@@ -192,7 +192,7 @@ test('server checkout requires authentication, isolates households, and verifies
 test('signed class payment webhook routes to persisted checkout and retries verification failures before logging',async t=>{
  const h=await fixture(t),a=await h.start();h.pay(a);let fail=false,called=0;
  const runtime=loadSquareModules({fetch:async()=>Response.json({order:h.orders.get(a.order_id)}),mocks:{
-  'next/server':{},'@supabase/supabase-js':{createClient:()=>h.admin},
+  'next/server':{},'@supabase/supabase-js':{createClient:()=>({...h.admin,from:table=>table==='party_bookings'?{select(){return this;},eq(){return this;},maybeSingle:async()=>({data:null,error:null})}:h.admin.from(table)})},
   '@/lib/square-webhook':{verifySquareWebhook:()=>true},
   '@/lib/soft-opening-payments':{},'@/lib/class-series-payments':{},'@/lib/households':{},'@/lib/founding-square':{},
   '@vercel/functions':{},'@/lib/membership-notifications':{},'@/lib/square-admission-pos':{},

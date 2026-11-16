@@ -320,8 +320,8 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
         </section>
       ) : slots.length === 0 ? (
         <section style={{ border: '1px solid #f0d89b', borderRadius: 18, background: '#fff8e6', padding: 16 }}>
-          <strong style={{ color: '#6b4d12' }}>No soft opening windows yet.</strong>
-          <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Seed the November–December soft opening windows in Supabase first.</p>
+          <strong style={{ color: '#6b4d12' }}>No Open Play windows yet.</strong>
+          <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Seed the November–December Open Play windows in Supabase first.</p>
         </section>
       ) : (
         <AvailabilityCalendar

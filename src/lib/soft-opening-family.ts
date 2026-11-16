@@ -68,7 +68,7 @@ export async function saveSoftOpeningFamily(db: SupabaseClient, householdId: str
     await ensureGuardianProfile({ admin: db, householdId, userId: user.id, email: user.email, firstName, lastName });
     for (const e of entries) {
         const [first, ...rest] = e.name.split(' ');
-        const row = { first_name: first, last_name: rest.join(' ') || null, birthdate: e.birthdate, ...(!e.existing?.birthdate ? { notes: `Approximate age ${e.age!.label} entered for soft opening. Update birthday in My Info/People.` } : {}) };
+        const row = { first_name: first, last_name: rest.join(' ') || null, birthdate: e.birthdate, ...(!e.existing?.birthdate ? { notes: `Approximate age ${e.age!.label} entered for Open Play. Update birthday in My Info/People.` } : {}) };
         const query = e.existing ? db.from('people').update(row).eq('id', e.existing.id).eq('household_id', householdId).eq('role', 'child') : db.from('people').insert({ ...row, ...(e.newId ? { id: e.newId } : {}), household_id: householdId, role: 'child', gender: null });
         const result = await query.select('id').single();
         if (result.error || !result.data)

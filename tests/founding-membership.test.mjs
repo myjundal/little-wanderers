@@ -452,13 +452,13 @@ test('check-in patch preserves the production environment argument, paid admissi
 });
 
 
-test('all membership authorizations start on first visit including soft opening and include the whole soft opening period', () => {
+test('membership authorizations retain first-visit billing and ongoing open play benefits', () => {
   const lib = modules().load('src/lib/founding-membership.ts');
   assert.equal(lib.FOUNDING_TERMS_VERSION, '2026-11-03-first-visit');
   for (const tier of ['waitlist', 'public', 'regular']) {
     const terms = lib.membershipTerms(tier);
-    assert.match(terms, /first membership visit, including a visit during soft opening/);
-    assert.match(terms, /Visits throughout the soft opening period/);
+    assert.match(terms, /first membership visit/);
+    assert.match(terms, /Open play visits/);
     assert.match(terms, /saving my card does not start billing/);
     assert.doesNotMatch(terms, /announced soft opening date|A soft opening visit is included/);
   }
