@@ -90,11 +90,11 @@ export default async function HomeComingSoon() {
         <div className={styles.left}>
           <p className={styles.eyebrow}>West Hartford · Play studio &amp; cafe · Ages 0–6</p>
           <h1>A little play.<br /><span>A little pause.</span></h1>
-          <p className={styles.openingBadge}>We’re fully open!</p>
+          <p className={styles.openingHours}><span>Open everyday</span><strong>9am–6pm</strong></p>
           <p>A thoughtful indoor play space for curious little ones, and a cozy cafe for their grown-ups. We’re ready for our first little adventures together.</p>
           <div className={styles.heroActions}><PastelButton href="/open-play">Reserve Open Play →</PastelButton><Link href="/classes">Explore classes</Link></div>
           <CrowdLevelCard compact showHours={false} />
-          <p className={styles.heroFootnote}>Bishop’s Corner, West Hartford · Open everyday 9am–6pm</p>
+          <p className={styles.heroFootnote}>Bishop’s Corner, West Hartford</p>
         </div>
         <div className={styles.right}><PastelCard><div className={styles.heroImageFrame}><Image src="/play-studio.jpg" alt="Little Wanderers play studio with a purple foam pit, climbing structure, and slide" width={1280} height={749} priority sizes="(max-width: 980px) calc(100vw - 72px), (max-width: 1400px) 50vw, 700px" /></div></PastelCard><p className={styles.photoCaption}>Room to explore. Space to take a breath.</p></div>
       </section>
