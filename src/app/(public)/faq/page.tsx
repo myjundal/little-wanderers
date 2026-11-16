@@ -47,7 +47,7 @@ const faqItems = [
       </>
     ),
   },
-  { q: 'What are your operating hours?', a: 'Open daily, 9am–6pm. All times Eastern; available dates and any closures appear in the reservation calendar. Our grand opening date is coming soon.' },
+  { q: 'What are your operating hours?', a: 'Open daily, 9am–6pm. All times Eastern; available dates and any closures appear in the reservation calendar.' },
   { q: 'Do you offer gift cards?', a: <>Yes! Visit our <Link href="/gift-cards">gift card page</Link> to choose a digital gift card through Square.</> },
   { q: 'How do you keep the space clean?', a: 'We clean and sanitize toys, play materials, and high-touch surfaces throughout the day and as needed.' },
   { q: 'Do we need socks?', a: 'Yes, socks are required for children and adults throughout the play area. Shoes are not permitted. Socks should be removed before entering the sand play area and put back on before returning to the rest of the play space.' },
