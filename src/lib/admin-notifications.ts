@@ -71,6 +71,34 @@ function getWebsiteNotificationEmail() {
   return process.env.WEBSITE_NOTIFICATION_EMAIL?.trim() || DEFAULT_WEBSITE_NOTIFICATION_EMAIL;
 }
 
+export function classChoiceNotificationEmail(input: {
+  eventId: string; outcome: 'transferred' | 'refunded'; familyName: string | null;
+  familyEmail: string; childName: string | null; classTitle: string;
+  originalStart: string; targetStart: string | null; amountCents: number;
+  refundStatus?: string; decidedAt?: string;
+}) {
+  const transferred = input.outcome === 'transferred';
+  const when = (value: string) => new Date(value).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' });
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').replace(/\/$/, '');
+  return {
+    to: getWebsiteNotificationEmail(),
+    subject: `Class ${transferred ? 'moved' : 'refund submitted'}: ${input.familyName || input.familyEmail} — ${input.classTitle}`,
+    html: renderOperationalNotification({
+      title: transferred ? 'Family moved their cancelled class' : 'Family chose a class refund',
+      rows: [
+        ['Family', input.familyName], ['Email', input.familyEmail], ['Child', input.childName],
+        ['Class', input.classTitle], ['Original class (Eastern)', when(input.originalStart)],
+        ['New class (Eastern)', transferred && input.targetStart ? when(input.targetStart) : null],
+        [transferred ? 'Payment carried over' : 'Refund amount', formatPrice(input.amountCents)],
+        ['Result', transferred ? 'Moved successfully; no additional charge' : `Refund submitted to Square (${input.refundStatus || 'pending'}); bank posting may take time`],
+        ['Customer selected (Eastern)', input.decidedAt ? when(input.decidedAt) : null],
+      ],
+      ctaHref: `${siteUrl}/staff/classes`, ctaLabel: 'Open class management',
+    }),
+    idempotencyKey: `class-choice-owner/${input.eventId}/${input.outcome}`,
+  };
+}
+
 function renderOperationalNotification(input: {
   title: string;
   rows: Array<[string, string | number | null | undefined]>;

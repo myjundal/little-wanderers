@@ -9,14 +9,16 @@ async function fixture(t) {
  await db.exec(`alter table classes add column end_time timestamptz, add column schedule_note text;
  alter table class_registrations add column attendance_status text default 'unknown';
  create table class_series_programs(id text,class_ids uuid[]);
- create table membership_events(id uuid primary key,household_id uuid,action text,notes text,created_by_user_id uuid,created_by_role text,created_at timestamptz default now());`);
+ create table membership_events(id uuid primary key,household_id uuid,action text,notes text,created_by_user_id uuid,created_by_role text,created_at timestamptz default now());
+ alter table households add column name text;
+ alter table people add column last_name text;`);
  const user=crypto.randomUUID(),family=crypto.randomUUID(),child=crypto.randomUUID(),klass=crypto.randomUUID(),next=crypto.randomUUID(),other=crypto.randomUUID(),checkout=crypto.randomUUID(),registration=crypto.randomUUID();
  await db.query('insert into auth.users values($1)',[user]);await db.query("insert into households values($1,'fictional@example.invalid')",[family]);await db.query("insert into people(id,household_id,role) values($1,$2,'child')",[child,family]);
  await db.query("insert into classes(id,title,status,price_cents,capacity,start_time) values($1,'Juega en Español','scheduled',2500,8,'2026-11-16T15:30:00Z'),($2,'Juega en Español','scheduled',2500,8,'2026-11-23T15:30:00Z'),($3,'Other class','scheduled',2500,8,'2026-11-19T15:30:00Z')",[klass,next,other]);
  await db.query("insert into class_registrations(id,class_id,person_id,household_id,child_id,status,created_by_user_id) values($1,$2,$3,$4,$3,'scheduled',$5)",[registration,klass,child,family,user]);
  const payload={request:{person_id:child,items:[{class_id:klass,quantity:1},{class_id:other,quantity:1}]},assignments:[{class_id:klass,person_id:child},{class_id:other,person_id:child}],line_items:[{quantity:'1',base_price_money:{amount:2500,currency:'USD'}},{quantity:'1',base_price_money:{amount:2500,currency:'USD'}}],provider_request:{order:{line_items:[{quantity:'1',base_price_money:{amount:2500,currency:'USD'}},{quantity:'1',base_price_money:{amount:2500,currency:'USD'}}]}}};
  await db.query("insert into square_checkout_attempts(id,household_id,kind,environment,location_id,expected_amount_cents,payload,status,order_id,created_by_user_id) values($1,$2,'class','sandbox','test-location',5000,$3,'completed','order-test',$4)",[checkout,family,JSON.stringify(payload),user]);
- const requests=[],emails=[];const refunds=new Map();const payment={id:'payment-test',order_id:'order-test',location_id:'test-location',status:'COMPLETED',amount_money:{amount:5000,currency:'USD'},refund_ids:[]};
+ const requests=[],emails=[],mailControl={failOwner:0};const refunds=new Map();const payment={id:'payment-test',order_id:'order-test',location_id:'test-location',status:'COMPLETED',amount_money:{amount:5000,currency:'USD'},refund_ids:[]};
  const fetch=async(url,opt={})=>{const p=new URL(url).pathname,body=opt.body&&JSON.parse(opt.body);requests.push({path:p,body,method:opt.method||'GET'});
  if(p==='/v2/orders/order-test')return Response.json({order:{id:'order-test',reference_id:checkout,location_id:'test-location',total_money:{amount:5000,currency:'USD'},tenders:[{payment_id:payment.id}]}});
  if(p==='/v2/payments/payment-test')return Response.json({payment});
@@ -25,11 +27,25 @@ async function fixture(t) {
  throw Error('Unexpected request '+p);
  };
  const env={RESEND_API_KEY:'test-email-secret',RESEND_FROM_EMAIL:'Little Wanderers <hello@example.invalid>'};
- const runtime=loadSquareModules({fetch,env,mocks:{'@/lib/email-campaigns':{sendResendEmail:async m=>{emails.push(m);return {ok:true,id:'email-1'};}}}});
+ const runtime=loadSquareModules({fetch,env,mocks:{'@/lib/email-campaigns':{sendResendEmail:async m=>{emails.push(m);if(m.idempotencyKey.startsWith('class-choice-owner/')&&mailControl.failOwner>0){mailControl.failOwner--;return {ok:false,error:'Temporary mail outage'};}return {ok:true,id:'email-'+emails.length};}}}});
  const flow=runtime.load('src/lib/class-cancellations.ts'),admin=localSquareAdmin(db);const run=(dryRun=false)=>flow.runClassMinimumCancellations(admin,{dryRun,now:new Date('2026-11-16T12:00:00Z')});
  const token=async()=>flow.classCancellationToken((await db.query('select id from membership_events')).rows[0].id);
- return {db,admin,flow,run,token,klass,next,other,registration,checkout,child,family,user,payment,requests,emails,refunds};
+ return {db,admin,flow,run,token,klass,next,other,registration,checkout,child,family,user,payment,requests,emails,refunds,mailControl};
 }
+
+test('completed transfer notifies the owner once with family, dates and credit; link reads never send',async t=>{
+ const h=await fixture(t);await h.db.query('update households set name=$1 where id=$2',['Maltz <family>',h.family]);await h.db.query('update people set first_name=$1,last_name=$2 where id=$3',['William','Maltz',h.child]);
+ await h.run();const token=await h.token();await h.flow.readClassCancellation(h.admin,token);assert.equal(h.emails.length,1);
+ await h.flow.chooseClassCancellation(h.admin,token,'transfer');await h.flow.chooseClassCancellation(h.admin,token,'transfer');await h.run();
+ const messages=h.emails.filter(e=>e.idempotencyKey.startsWith('class-choice-owner/'));assert.equal(messages.length,1);assert.equal(messages[0].to,'hello@thelittlewanderers.com');
+ assert.match(messages[0].html,/Maltz &lt;family&gt;/);assert.match(messages[0].html,/William Maltz/);assert.match(messages[0].html,/November 16/);assert.match(messages[0].html,/November 23/);assert.match(messages[0].html,/\$25.00/);assert(!messages[0].html.includes(token));
+});
+test('mail outage preserves the completed choice and retries the same frozen owner alert',async t=>{
+ const h=await fixture(t);await h.run();h.mailControl.failOwner=1;const token=await h.token();assert.equal((await h.flow.chooseClassCancellation(h.admin,token,'refund')).state,'refunded');
+ assert.equal(h.refunds.size,1);const n=(await h.flow.readClassCancellation(h.admin,token)).notice;assert(!n.owner_notice.sent_at);assert.match(n.owner_notice.payload.html,/PENDING/);
+ assert.equal((await h.run()).ok,true);const messages=h.emails.filter(e=>e.idempotencyKey.startsWith('class-choice-owner/'));assert.equal(messages.length,2);assert.equal(JSON.stringify(messages[0]),JSON.stringify(messages[1]));assert.equal(h.refunds.size,1);
+ assert((await h.flow.readClassCancellation(h.admin,token)).notice.owner_notice.sent_at);
+});
 test('7 AM Eastern handles standard time and daylight saving time, excludes prior/future days',async t=>{const h=await fixture(t);for(const [start,now,expected] of [['2026-11-16T15:30:00Z','2026-11-16T11:59:59Z',false],['2026-11-16T15:30:00Z','2026-11-16T12:00:00Z',true],['2027-06-14T14:30:00Z','2027-06-14T11:00:00Z',true],['2026-11-17T15:30:00Z','2026-11-16T12:00:00Z',false]])assert.equal(h.flow.classMinimumDue({start_time:start},new Date(now)),expected);});
 test('preview is read-only; under-three cancellation sends personal choices once and leaves other dates intact',async t=>{const h=await fixture(t);assert.equal((await h.run(true)).results[0].confirmed,1);assert.equal((await h.db.query('select count(*)::int n from membership_events')).rows[0].n,0);assert.equal(h.emails.length,0);assert.equal((await h.run()).sent,1);assert.match(h.emails[0].html,/Move to next week/);assert.match(h.emails[0].html,/\$25.00 refund/);assert.match(h.emails[0].html,/Monday, November 23/);assert.equal((await h.run()).sent,0);assert.equal(h.emails.length,1);assert.equal((await h.db.query('select status from classes where id=$1',[h.other])).rows[0].status,'scheduled');const token=await h.token();assert.equal((await h.flow.readClassCancellation(h.admin,token)).notice.state,'pending');assert.equal(h.refunds.size,0);await assert.rejects(h.flow.readClassCancellation(h.admin,token.slice(0,-1)+'x'));});
 test('three confirmed children run; interest and Jamie series do not trigger the drop-in policy',async t=>{const h=await fixture(t);for(let i=0;i<2;i++)await h.db.query("insert into class_registrations(class_id,person_id,status) values($1,$2,'scheduled')",[h.klass,crypto.randomUUID()]);assert.equal((await h.run()).results[0].action,'run');assert.equal(h.emails.length,0);await h.db.query("update class_registrations set status='preregistered' where id<>$1",[h.registration]);await h.db.query('insert into class_series_programs values($1,$2)',['series',[h.klass]]);assert.equal((await h.run()).results.length,0);});
