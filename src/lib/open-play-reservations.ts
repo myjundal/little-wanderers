@@ -10,7 +10,7 @@ export const SOFT_OPENING_END = '2027-01-01T00:00:00-05:00';
 
 export function defaultOpenPlayCapacity(startsAt: string | Date) {
   const start = typeof startsAt === 'string' ? Date.parse(startsAt) : startsAt.getTime();
-  if (start >= Date.parse('2026-11-16T00:00:00-05:00')) return 10;
+  if (start >= Date.parse('2026-11-16T00:00:00-05:00')) return 6;
   if (start >= Date.parse('2026-11-14T00:00:00-05:00')) return 7;
   return 5;
 }
