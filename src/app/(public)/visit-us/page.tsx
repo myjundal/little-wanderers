@@ -12,7 +12,7 @@ export default function VisitUsPage() {
         <p style={{ margin: 0, color: '#8f85a5', fontWeight: 700, letterSpacing: '0.02em' }}>Little Wanderers Play Studio & Cafe • We’re fully open</p>
         <h1 style={{ margin: '8px 0 12px', color: '#A78BCB' }}>Visit us in Bishop’s Corner</h1>
         <p style={{ lineHeight: 1.7, marginBottom: 16 }}>
-          We’re welcoming our first families to Bishop’s Corner in West Hartford, CT. Reserve your arrival window for Open Play. Explore our new play studio and cafe at your own pace. Our grand opening date is coming soon.
+          We’re welcoming our first families to Bishop’s Corner in West Hartford, CT. Reserve your arrival window for Open Play. Explore our new play studio and cafe at your own pace.
         </p>
         <p style={{lineHeight:1.7}}>Open daily, 9am–6pm Eastern. Check the reservation calendar for private events and closures. Weekend reservations are highly recommended.</p>
         <p><Link href="/open-play">Reserve Open Play →</Link></p>
