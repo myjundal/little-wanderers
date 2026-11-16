@@ -13,6 +13,7 @@
 .welcome { --crowd-dot: #75845e; background: #edf0e7; }
 .busy { --crowd-dot: #a07838; background: #f5eedf; }
 .very_busy { --crowd-dot: #9c6289; background: #f2e7ef; }
+.closing { --crowd-dot: #a07838; background: #f5eedf; }
 .closed, .unavailable { --crowd-dot: #8b7d94; background: #eeeaf0; }
 .titleRow { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .eyebrow { font-size: 10px; line-height: 1.4; letter-spacing: .06em; text-transform: uppercase; color: #746679; }
