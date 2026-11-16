@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareRequest, squareSiteUrl, type SquareOrder } from '@/lib/square-client';
 import { sendResendEmail } from '@/lib/email-campaigns';
 import { closeClassCheckout, type ClassCheckout } from '@/lib/class-checkout';
+import { classChoiceNotificationEmail } from '@/lib/admin-notifications';
 
 export const MINIMUM_CLASS_REGISTRATIONS = 3;
 const ACTION = 'class_minimum_cancellation';
@@ -11,7 +12,8 @@ type Session = { id: string; title: string; status: string; start_time: string; 
 type Registration = { id: string; class_id: string; person_id: string; household_id: string; status: string; created_by_user_id: string };
 export type ClassCancellation = { version: 1; class_id: string; title: string; start_time: string; registration_id: string; person_id: string; household_id: string;
   checkout_id: string; amount_cents: number; recipient: string; target_class_id: string | null; target_start_time: string | null;
-  state: 'pending' | 'transfer' | 'refund' | 'transferred' | 'refunded'; email_started_at?: string; processing_until?: string; sent_at?: string; email_id?: string; decided_at?: string; target_registration_id?: string; refund_id?: string; refund_status?: string; hold_id?: string };
+  state: 'pending' | 'transfer' | 'refund' | 'transferred' | 'refunded'; email_started_at?: string; processing_until?: string; sent_at?: string; email_id?: string; decided_at?: string; target_registration_id?: string; refund_id?: string; refund_status?: string; hold_id?: string;
+  owner_notice?: { payload: ReturnType<typeof classChoiceNotificationEmail>; started_at: string; lease_until?: string; sent_at?: string; email_id?: string } };
 type Event = { id: string; notes: string; household_id: string };
 const checked = <T>(r: { data: T; error: { message: string } | null }): T => { if (r.error) throw Error(r.error.message); return r.data; };
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -37,6 +39,43 @@ async function save(db: SupabaseClient, event: Event, notice: ClassCancellation)
   event.notes = notes;
 }
 function parseEvent(e: Event) { return JSON.parse(e.notes) as ClassCancellation; }
+
+/** Durable, keyed owner alert; mail failures never undo the customer's completed choice. */
+export async function notifyClassCancellationOwner(db: SupabaseClient, id: string) {
+  const event = checked(await db.from('membership_events').select('id,notes,household_id').eq('id', id).eq('action', ACTION).single()) as Event;
+  const n = parseEvent(event);
+  if (n.state !== 'transferred' && n.state !== 'refunded') return false;
+  if (n.owner_notice?.sent_at) return true;
+  if (n.owner_notice?.lease_until && Date.parse(n.owner_notice.lease_until) > Date.now()) return false;
+  if (n.owner_notice && Date.now() - Date.parse(n.owner_notice.started_at) > 23 * 3600_000) throw Error('Owner notification delivery needs review before retrying.');
+  let notice = n.owner_notice;
+  if (!notice) {
+    const family = checked(await db.from('households').select('name').eq('id', n.household_id).single());
+    const child = checked(await db.from('people').select('first_name,last_name').eq('id', n.person_id).eq('household_id', n.household_id).single());
+    notice = { started_at: new Date().toISOString(), payload: classChoiceNotificationEmail({
+      eventId: event.id, outcome: n.state, familyName: family?.name || null, familyEmail: n.recipient,
+      childName: [child?.first_name, child?.last_name].filter(Boolean).join(' ') || null,
+      classTitle: n.title, originalStart: n.start_time, targetStart: n.target_start_time,
+      amountCents: n.amount_cents, refundStatus: n.refund_status, decidedAt: n.decided_at,
+    }) };
+  }
+  const claimed = { ...n, owner_notice: { ...notice, lease_until: new Date(Date.now() + 120_000).toISOString() } };
+  await save(db, event, claimed);
+  try {
+    const result = await sendResendEmail(claimed.owner_notice.payload);
+    if (!result.ok || !('id' in result) || !result.id) throw Error('Owner notification delivery pending.');
+    await save(db, event, { ...claimed, owner_notice: { ...claimed.owner_notice, lease_until: undefined, sent_at: new Date().toISOString(), email_id: result.id } });
+    return true;
+  } catch (error) {
+    // Retain the frozen payload/key if a provider response or final save is uncertain.
+    try { await save(db, event, { ...claimed, owner_notice: { ...claimed.owner_notice, lease_until: undefined } }); } catch { /* Another retry will re-read the durable state. */ }
+    throw error;
+  }
+}
+async function tryNotifyOwner(db: SupabaseClient, id: string) {
+  try { return await notifyClassCancellationOwner(db, id); }
+  catch { console.error('class_choice_owner_notification_pending', id); return false; }
+}
 async function events(db: SupabaseClient) {
   const rows = checked(await db.from('membership_events').select('id,notes,household_id').eq('action', ACTION).order('created_at').limit(1000)) as Event[];
   if (rows.length === 1000) throw Error('Class cancellation history requires pagination.');
@@ -139,6 +178,12 @@ export async function runClassMinimumCancellations(db: SupabaseClient, input: { 
     try { if (n.email_started_at && Date.now() - Date.parse(n.email_started_at) > 23 * 3600_000) throw Error('Email delivery needs review before resending.'); if (!n.email_started_at) { n.email_started_at = new Date().toISOString(); await save(db, event, n); } const email = await sendResendEmail(classCancellationEmail(event.id, n)); if (!email.ok || !('id' in email) || !email.id) throw Error('Class cancellation email was not accepted.'); await save(db, event, { ...n, sent_at: new Date().toISOString(), email_id: email.id }); sent++; }
     catch { failures.push(event.id); }
   }
+  if (!input.dryRun) for (const event of await events(db)) {
+    const n = parseEvent(event);
+    if ((n.state === 'transferred' || n.state === 'refunded') && !n.owner_notice?.sent_at) {
+      if (!await tryNotifyOwner(db, event.id)) failures.push(event.id);
+    }
+  }
   return { ok: !failures.length, dry_run: input.dryRun, checked_at: now.toISOString(), results, sent, failures };
 }
 
@@ -202,7 +247,7 @@ async function transferClass(db: SupabaseClient, event: Event, n: ClassCancellat
 export async function chooseClassCancellation(db: SupabaseClient, token: unknown, choice: unknown) {
   if (choice !== 'transfer' && choice !== 'refund') throw Error('Choose next week or a refund.');
   const { event, notice } = await readClassCancellation(db, token); let n = notice;
-  if (n.state === 'transferred' || n.state === 'refunded') { if (n.hold_id) checked(await db.from('square_checkout_attempts').update({ status: 'cancelled' }).eq('id', n.hold_id).eq('status','creating').is('order_id', null).is('payload->provider_request',null)); return n; }
+  if (n.state === 'transferred' || n.state === 'refunded') { if (n.hold_id) checked(await db.from('square_checkout_attempts').update({ status: 'cancelled' }).eq('id', n.hold_id).eq('status','creating').is('order_id', null).is('payload->provider_request',null)); await tryNotifyOwner(db, event.id); return n; }
   if (n.processing_until && Date.parse(n.processing_until) > Date.now()) throw Error('Your selection is being processed. Please refresh in a moment.');
   if (n.state !== 'pending' && n.state !== choice) throw Error('Your first selection is already being processed. Please refresh.');
   if (n.state === 'pending' && choice === 'transfer') {
@@ -227,5 +272,6 @@ export async function chooseClassCancellation(db: SupabaseClient, token: unknown
       throw error;
     }
   }
+  await tryNotifyOwner(db, event.id);
   return parseEvent(event);
 }

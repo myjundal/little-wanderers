@@ -1,4 +1,6 @@
 import { requireOwnerContext } from '@/lib/authz';
+import { repairOpenPlayMembership } from '@/lib/open-play-membership-repair';
+import { isSameOriginRequest } from '@/lib/request-origin';
 import {
   formatOpenPlayReservationError,
   isMissingOpenPlayReservationTable,
@@ -21,7 +23,16 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
       return Response.json({ ok: false, error: 'invalid reservation id' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
-    const body = (await req.json().catch(() => null)) as { status?: string } | null;
+    const body = (await req.json().catch(() => null)) as { status?: string; action?: string } | null;
+    if (body?.action === 'apply_membership') {
+      if (!isSameOriginRequest(req)) return Response.json({ ok: false, error: 'Invalid request origin.' }, { status: 403, headers: NO_STORE_HEADERS });
+      try {
+        const reservation = await repairOpenPlayMembership(context.admin, params.id, context.user.id);
+        return Response.json({ ok: true, reservation }, { headers: NO_STORE_HEADERS });
+      } catch (error) {
+        return Response.json({ ok: false, error: error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Unable to verify the checkout. No new payment was created.' }, { status: 409, headers: NO_STORE_HEADERS });
+      }
+    }
     const status = typeof body?.status === 'string' ? body.status : '';
     if (!ALLOWED_STATUSES.has(status)) {
       return Response.json({ ok: false, error: 'invalid status' }, { status: 400, headers: NO_STORE_HEADERS });
