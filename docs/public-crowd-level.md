@@ -9,8 +9,9 @@ Public copy:
 - **Come on in!** — There’s room to play. Come join us!
 - **Getting Busy** — We’re filling up, but there’s still room to play.
 - **Very Busy** — We’re feeling the love! Please check back in a little while.
+- **We close at 6pm** (5–6pm Eastern) — Last entry was at 5pm. Guests already here can stay and play until 6pm.
 
-The public route checks the current Eastern day's open arrival windows and existing private-party closures before offering a visit invitation. Closed hours and failed/missing reads use separate neutral messages. Polling pauses in background tabs and aborts on unmount.
+The public route checks the current Eastern day's open arrival windows and existing private-party closures before offering a visit invitation. From November 16 onward, a scheduled final arrival window ending at 5pm enables the 5–6pm closing notice instead of claiming the studio is closed. Private-party closures and closed/hidden final windows take priority; the notice ends at exactly 6pm. Closed hours and failed/missing reads use separate neutral messages. Polling pauses in background tabs and aborts on unmount.
 
 ## Direct database access
 

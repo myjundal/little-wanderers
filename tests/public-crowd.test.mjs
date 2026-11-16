@@ -12,7 +12,7 @@ const privateParty = loadModule('src/lib/private-party-open-play.ts', { '@/lib/p
 const crowd = loadModule('src/lib/public-crowd.ts', { '@/lib/party-config': party, '@/lib/private-party-open-play': privateParty });
 const unavailable = crowd.publicCrowdMessage('unavailable');
 
-function route({ count = 0, open = true, fail = false, source = {} } = {}) {
+function route({ count = 0, open = true, phase = open ? 'open' : 'closed', fail = false, source = {} } = {}) {
   let reads = 0;
   const api = loadModule('src/app/api/crowd-level/route.ts', {
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => ({}) },
@@ -22,7 +22,7 @@ function route({ count = 0, open = true, fail = false, source = {} } = {}) {
       return { source, occupancy: count, capacity: 80, progress: count / 80,
         crowdLevel: occupancy.normalizeCrowdLevel(null, count), lastUpdatedAt: 'private-event-timestamp' };
     } },
-    '@/lib/public-crowd': { ...crowd, isPublicOpenPlayOpen: async () => open },
+    '@/lib/public-crowd': { ...crowd, getPublicOpenPlayPhase: async () => phase },
     '@/lib/logger': { logger: { warn() {} } },
   });
   return { ...api, reads: () => reads };
@@ -77,23 +77,49 @@ const slot = (start, end, status = 'open') => ({ id: start, starts_at: start, en
 test('studio hours follow current reservation windows, with exact opening/closing boundaries and no hidden hours', async () => {
   const slots = [slot('2026-11-14T14:00:00.000Z', '2026-11-14T20:00:00.000Z'), slot('2026-11-14T20:00:00.000Z', '2026-11-14T23:00:00.000Z', 'hidden')];
   for (const [time, open] of [['2026-11-14T13:59:00Z', false], ['2026-11-14T14:00:00Z', true], ['2026-11-14T19:59:59Z', true], ['2026-11-14T20:00:00Z', false]]) {
-    assert.equal(await crowd.isPublicOpenPlayOpen(scheduleAdmin(slots), new Date(time)), open, time);
+    assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin(slots), new Date(time)), open ? 'open' : 'closed', time);
   }
-  assert.equal(await crowd.isPublicOpenPlayOpen(scheduleAdmin([]), new Date('2026-11-14T16:00:00Z')), false);
+  assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin([]), new Date('2026-11-14T16:00:00Z')), 'closed');
 });
 
 test('private-party closures take priority and date filters follow Eastern time rather than UTC', async () => {
   const slots = [slot('2026-11-16T21:00:00.000Z', '2026-11-16T23:00:00.000Z')];
   const parties = [{ id: 'party', start_time: '2026-11-16T20:00:00.000Z', status: 'confirmed' }];
-  assert.equal(await crowd.isPublicOpenPlayOpen(scheduleAdmin(slots), new Date('2026-11-16T21:30:00Z')), true);
-  assert.equal(await crowd.isPublicOpenPlayOpen(scheduleAdmin(slots, parties), new Date('2026-11-16T21:30:00Z')), false);
+  assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin(slots), new Date('2026-11-16T21:30:00Z')), 'open');
+  assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin(slots, parties), new Date('2026-11-16T21:30:00Z')), 'closed');
   const admin = scheduleAdmin([]);
-  await crowd.isPublicOpenPlayOpen(admin, new Date('2026-11-17T00:30:00Z'));
+  await crowd.getPublicOpenPlayPhase(admin, new Date('2026-11-17T00:30:00Z'));
   assert.ok(admin.filters.some(([field, op, value]) => field === 'starts_at' && op === 'gte' && value === '2026-11-16T05:00:00.000Z'));
 });
 
+test('5–6pm is a last-entry notice, with exact boundaries in Eastern standard and daylight time', async () => {
+  for (const [day, offset] of [['2026-11-16', 5], ['2027-07-16', 4]]) {
+    const at = (hour, suffix = ':00:00.000Z') => `${day}T${String(hour + offset).padStart(2, '0')}${suffix}`;
+    const slots = [slot(at(16), at(17)), slot(at(17), at(18), 'hidden')];
+    for (const [time, phase] of [[at(16, ':59:59.999Z'), 'open'], [at(17), 'closing'], [at(17, ':59:59.999Z'), 'closing'], [at(18), 'closed']]) {
+      assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin(slots), new Date(time)), phase, time);
+    }
+    const now = new Date(at(17, ':30:00.000Z'));
+    assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin([]), now), 'closed');
+    assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin([slot(at(16), at(17), 'closed')]), now), 'closed');
+    assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin([slot(at(15), at(16))]), now), 'closed');
+    assert.equal(await crowd.getPublicOpenPlayPhase(scheduleAdmin(slots, [{ id: 'private', start_time: at(16), status: 'confirmed' }]), now), 'closed');
+  }
+});
+
+test('last-entry API notice skips occupancy reads and never invites new arrivals', async () => {
+  const closing = route({ phase: 'closing', fail: true });
+  const response = await closing.GET();
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.status, 'closing');
+  assert.equal(payload.label, 'We close at 6pm');
+  assert.match(payload.description, /Last entry was at 5pm/);
+  assert.equal(closing.reads(), 0);
+});
+
 test('compact customer card renders each message and explanatory disclosure without numerical metrics', () => {
-  for (const status of ['welcome', 'busy', 'very_busy', 'closed']) {
+  for (const status of ['welcome', 'busy', 'very_busy', 'closing', 'closed']) {
     let index = 0;
     const values = [crowd.publicCrowdMessage(status), false, null, new Date()];
     const Card = loadModule('src/components/crowd/CrowdLevelCard.tsx', {
@@ -104,6 +130,19 @@ test('compact customer card renders each message and explanatory disclosure with
     assert.ok(html.includes(crowd.publicCrowdMessage(status).label));
     assert.match(html, /<details/);
     assert.doesNotMatch(html, /Current estimated occupancy|progressbar|Calm|Comfortable|\/ 80/);
+  }
+});
+
+test('hours card does not invite arrivals after 5pm or during a scheduled closure', () => {
+  for (const [status, showStatus] of [['closing', true], ['closed', true], ['closing', false]]) {
+    let index = 0;
+    const values = [crowd.publicCrowdMessage(status), false, null, new Date('2026-11-16T22:30:00Z')];
+    const Card = loadModule('src/components/crowd/CrowdLevelCard.tsx', {
+      react: { useState: () => [values[index++], () => {}], useEffect() {} }, './CrowdLevelCard.module.css': {},
+    }, { React }).default;
+    const html = renderToStaticMarkup(React.createElement(Card, { showHours: true, showStatus }));
+    assert.doesNotMatch(html, /Come on in, we are open now/);
+    assert.match(html, status === 'closed' ? /Open Play is closed right now/ : /We close at 6pm. Last entry was at 5pm/);
   }
 });
 

@@ -49,7 +49,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
         const json = (await res.json()) as CrowdPayload;
 
         if (!alive) return;
-        if (!res.ok || !json.ok || !['welcome', 'busy', 'very_busy', 'closed'].includes(json.status)) {
+        if (!res.ok || !json.ok || !['welcome', 'busy', 'very_busy', 'closing', 'closed'].includes(json.status)) {
           setError('Our crowd update is unavailable. Please check availability before heading over.');
           setData(null);
           return;
@@ -103,7 +103,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
       {showHours && <div className={styles.hoursBlock}>
         <p className={styles.currentDateTime}>{currentDate} · {currentTime}</p>
         <p className={styles.openStatus}>
-          {isOpenNow ? 'Come on in, we are open now!' : 'We are closed now, but see you soon!'}
+          {data?.status === 'closed' ? 'Open Play is closed right now.' : data?.status === 'closing' || hour === 17 ? 'We close at 6pm. Last entry was at 5pm.' : isOpenNow ? 'Come on in, we are open now!' : 'We are closed now, but see you soon!'}
         </p>
         <p className={styles.todayHours}>Today&apos;s operating hours: {todaysHours}</p>
         <details className={styles.otherHours}>
