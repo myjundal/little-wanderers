@@ -29,7 +29,7 @@ export async function repairOpenPlayMembership(db: SupabaseClient, id: string, a
       const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(row.square_order_id)}`);
       if (order.id !== row.square_order_id || order.reference_id !== `op_${id}` || order.location_id !== cfg.locationId || order.tenders?.length) throw Error('Payment exists or checkout ownership needs review.');
       assertUsd(order.total_money, row.amount_cents);
-      if (!['OPEN', 'CANCELED'].includes(order.state || '')) throw Error('Checkout cannot be safely closed.');
+      if (!['DRAFT', 'OPEN', 'CANCELED'].includes(order.state || '')) throw Error('Checkout cannot be safely closed.');
       return order;
     };
     const order = await readOrder();
