@@ -1,3 +1,5 @@
+import { refreshOpenPlayQuote } from '@/lib/open-play-quote';
+import { readSoftOpeningFamily } from '@/lib/soft-opening-family';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
@@ -24,13 +26,16 @@ async function handle(req: Request, { params }: {
         const { data, error } = await db.from('open_play_reservations').select('*').eq('id', id).eq('household_id', family).single();
         if (error || !data)
             return Response.json({ ok: false, error: 'Reservation not found.' }, { status: 404 });
+        let reservation = data;
         if (start) {
-            const { data: slot, error: slotError } = await db.from('open_play_reservation_slots').select('ends_at,status').eq('id', data.slot_id).single();
+            const { data: slot, error: slotError } = await db.from('open_play_reservation_slots').select('starts_at,ends_at,status').eq('id', data.slot_id).single();
             if (slotError || !slot || slot.status !== 'open' || Date.parse(slot.ends_at) <= Date.now())
                 return Response.json({ ok: false, error: 'This visit window is no longer available for online payment. Please contact us.' }, { status: 409 });
+            const familyProfile = await readSoftOpeningFamily(db, family);
+            reservation = await refreshOpenPlayQuote(db, { ...data, slot }, familyProfile);
         }
-        const r = data as OpenPlayPayment;
-        const result = start ? await startOpenPlayPayment(db, r) : { reservation: await verifyOpenPlayPayment(db, r) };
+        const r = reservation as OpenPlayPayment;
+        const result = start ? r.payment_status === 'covered' ? { paid: true, url: null } : await startOpenPlayPayment(db, r) : { reservation: await verifyOpenPlayPayment(db, r) };
         return Response.json({ ok: true, ...result }, { headers: { 'cache-control': 'no-store' } });
     }
     catch {

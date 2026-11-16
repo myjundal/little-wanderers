@@ -30,23 +30,24 @@ const faqItems = [
   { q: 'What do you offer?', a: 'We offer unlimited Open Play, small-group classes and programs, birthday parties and private events, and a cafe serving coffee and specialty drinks.' },
   { q: 'Is drop-off permitted for open play?', a: 'No. Little Wanderers is a caregiver-accompanied space, so children must be with a caregiver at all times. For kids-only classes, caregivers should remain onsite outside the classroom.' },
   { q: 'Are there time limits for open play?', a: 'Your reservation is an approximate arrival window, not a timed play session. Aim to arrive within the window, then stay until you are ready to leave, up to closing.' },
-  { q: 'Do I need to reserve in advance?', a: <>All families can reserve Open Play visits from Saturday, November 14. Please <Link href="/open-play">reserve your arrival window</Link> before coming. Each hourly arrival window has space for six children. See the calendar for availability. A signed family waiver is required. Walk-in availability during regular opening hours will depend on capacity.</> },
+  { q: 'Do I need to reserve in advance?', a: <>Reservations are highly recommended on weekends. Please <Link href="/open-play">reserve your arrival window</Link> before coming. Each hourly arrival window has space for six children. See the calendar for availability. A signed family waiver is required. Walk-in availability during regular opening hours will depend on capacity.</> },
+  { q: 'How much is Open Play?', a: 'Children under 6 months are free. Ages 6–11 months are $10. For ages 12 months and older, the first child is $16 and each additional child age 6 months or older is $10. Up to two accompanying adults are included.' },
   { q: 'What happens if Little Wanderers is at capacity?', a: 'To keep the play space comfortable and safe, we limit capacity. If we are full when you arrive, admission may temporarily pause until space becomes available.' },
   { q: 'Can we leave and come back?', a: 'Open Play admission does not include re-entry once you leave for the day.' },
   { q: 'What is your cancellation policy?', a: 'Cancellation and rescheduling policies vary by booking type. Please review the policy shown when registering for a class or booking an event.' },
-  { q: 'Do you offer food and drinks?', a: 'Yes! Our cafe will offer coffee and drinks and pre-packaged snacks.' },
+  { q: 'Do you offer food and drinks?', a: 'Yes! Our cafe serves coffee, specialty drinks, Fire x Forge cookies and gluten-free brownies, and packaged snacks.' },
   { q: 'Can I bring outside food?', a: 'Small snacks for children are welcome. Outside meals and takeout food are not permitted during Open Play. Exceptions may be made for specific dietary needs. Please be mindful with allergy-sensitive snacks and avoid bringing foods that may create allergy concerns for other families. Separate food policies apply to private parties and events.' },
   {
     q: 'Do you have memberships?',
     a: (
       <>
         Yes! Memberships include unlimited Open Play, up to two accompanying adults per visit, and priority registration
-        for select classes and special events. Visit our <Link href="/pricing#memberships">Pricing page</Link> for founding and regular membership pricing and
+        for select classes and special events. Visit our <Link href="/pricing#memberships">Pricing page</Link> for monthly membership pricing and
         details.
       </>
     ),
   },
-  { q: 'What are your operating hours?', a: 'Soft opening, November 11–13: Wanderlist families only, 9am–3pm. Open to everyone from November 14: 9am–3pm. From Monday, November 16: 9am–6pm. All times Eastern; available dates and any closures appear in the reservation calendar. Our grand opening date is coming soon.' },
+  { q: 'What are your operating hours?', a: 'Open daily, 9am–6pm. All times Eastern; available dates and any closures appear in the reservation calendar. Our grand opening date is coming soon.' },
   { q: 'Do you offer gift cards?', a: <>Yes! Visit our <Link href="/gift-cards">gift card page</Link> to choose a digital gift card through Square.</> },
   { q: 'How do you keep the space clean?', a: 'We clean and sanitize toys, play materials, and high-touch surfaces throughout the day and as needed.' },
   { q: 'Do we need socks?', a: 'Yes, socks are required for children and adults throughout the play area. Shoes are not permitted. Socks should be removed before entering the sand play area and put back on before returning to the rest of the play space.' },

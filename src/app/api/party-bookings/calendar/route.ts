@@ -1,3 +1,4 @@
+import { cleanupPartyCheckouts } from '@/lib/party-deposit';
 import { createClient } from '@supabase/supabase-js';
 import { getPartyBookingSlotOptionsForDate, getPartyDateKey, isPartyRangeAvailable, isVisiblePartyCalendarSlot, toPartyDateTimeIso } from '@/lib/party-config';
 
@@ -21,6 +22,7 @@ function blocksVisibleSlot(item: { start_time: string; end_time: string }) {
 export async function GET() {
   try {
     const supa = admin();
+    await cleanupPartyCheckouts(supa);
     const lowerBound = new Date().toISOString();
     const primary = await supa
       .from('party_bookings')

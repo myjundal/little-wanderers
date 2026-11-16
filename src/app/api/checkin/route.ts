@@ -34,6 +34,11 @@ export async function POST(req: Request) {
           if (corrected.error || !corrected.data?.length) throw new Error('Membership check-in needs refresh.');
           data.membership_applied = true;
         }
+        if (!priced.founding_membership_applied && (priced.price_cents !== saved.data.price_cents || priced.payment_status !== saved.data.payment_status)) {
+          const corrected = await context.admin.from('checkins').update({ price_cents: priced.price_cents, payment_status: priced.payment_status })
+            .eq('id', data.checkin_id).eq('payment_status', 'due').eq('price_cents', saved.data.price_cents).is('square_order_id', null).select('id');
+          if (corrected.error || !corrected.data?.length) throw new Error('Admission price changed. Refresh first.');
+        }
         data.price_cents = priced.price_cents; data.payment_status = priced.payment_status; data.infant_sibling_free = priced.infant_sibling_free;
       }
     } catch { return Response.json({ok:false,error:'Check-in saved. Refresh admission status before collecting payment.'},{status:503}); }

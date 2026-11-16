@@ -15,7 +15,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ ok: false, allowed: false, error: 'Please sign in to view soft opening access.' }, { status: 401, headers: NO_STORE_HEADERS });
+    return NextResponse.json({ ok: false, allowed: false, error: 'Please sign in to view Open Play access.' }, { status: 401, headers: NO_STORE_HEADERS });
   }
 
   const admin = createAdminSupabaseClient();
@@ -34,7 +34,7 @@ export async function GET() {
       email: access.email,
     }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Unable to check soft opening access right now.';
+    const message = e instanceof Error ? e.message : 'Unable to check Open Play access right now.';
     return NextResponse.json({ ok: false, allowed: false, error: message }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }

@@ -17,6 +17,7 @@ function harness({ startsAt = '2026-11-14T14:00:00Z', endsAt = new Date(Date.par
     }; return q;
   } };
   const route = loadModule('src/app/api/open-play-reservations/route.ts', {
+    '@/lib/open-play-quote': { refreshOpenPlayQuote: async (_db, row) => row },
     '@vercel/functions': { waitUntil: promise => background.push(promise) },
     'next/server': { NextResponse: { json: Response.json } },
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },

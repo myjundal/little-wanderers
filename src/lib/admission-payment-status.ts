@@ -4,7 +4,7 @@ export const admissionIsIncluded = (status: string) => ['covered', 'included', '
 export function admissionPaymentLabel(visit: AdmissionPayment) {
   if (visit.payment_status === 'pending') return 'Checking Square payment';
   if (visit.payment_status === 'review') return 'Check Square receipt — do not charge again';
-  if (visit.infant_sibling_free) return 'Infant sibling included';
+  if (visit.infant_sibling_free) return 'Infant admission included';
   if (visit.payment_status === 'prepaid') return 'Paid in advance';
   if (admissionIsPaid(visit.payment_status)) return 'Paid';
   if (admissionIsIncluded(visit.payment_status)) return 'Included';

@@ -19,7 +19,7 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
 
     const { data: booking, error: bookingErr } = await context.admin
       .from('party_bookings')
-      .select('id,status')
+      .select('*')
       .eq('id', params.id)
       .maybeSingle();
 
@@ -29,6 +29,16 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
 
     if (!booking) {
       return Response.json({ ok: false, error: 'booking not found' }, { status: 404 });
+    }
+
+    if (booking.square_environment && booking.status === 'pending' && nextStatus !== 'pending') {
+      const { closePartyCheckout, reconcilePartyCheckout, partyCheckoutFromBooking } = await import('@/lib/party-deposit');
+      const checkout = partyCheckoutFromBooking(booking);
+      const verified = await (nextStatus === 'cancelled' ? closePartyCheckout(context.admin, checkout) : reconcilePartyCheckout(context.admin, checkout));
+      if (verified.status !== (nextStatus === 'cancelled' ? 'cancelled' : 'completed')) {
+        return Response.json({ ok: false, error: 'Verify the deposit or resolve the invoice in Square before changing this booking.' }, { status: 409 });
+      }
+      return Response.json({ ok: true });
     }
 
     const currentStatus = booking.status ?? 'pending';

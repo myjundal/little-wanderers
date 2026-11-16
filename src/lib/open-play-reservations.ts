@@ -69,7 +69,7 @@ export async function getReservationOccupancy(admin: SupabaseClient, slotId: str
 
 export function formatOpenPlayReservationError(message: string) {
   if (isMissingOpenPlayReservationTable(message)) {
-    return 'Open Play reservation tables are not set up yet. Run the soft opening reservation migration in Supabase first.';
+    return 'Open Play reservation tables are not set up yet. Run the Open Play reservation migration in Supabase first.';
   }
 
   return message;

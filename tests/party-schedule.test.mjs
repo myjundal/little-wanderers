@@ -33,6 +33,7 @@ test('public calendar includes ongoing and custom Friday ranges that block after
     order: async () => ({ data: [{ id: 'morning', ...morning }, { id: 'spanning', ...spanning }], error: null }),
   };
   const { GET } = loadModule('src/app/api/party-bookings/calendar/route.ts', {
+    '@/lib/party-deposit': { cleanupPartyCheckouts: async () => {} },
     '@supabase/supabase-js': { createClient: () => ({ from: () => query }) },
     '@/lib/party-config': config,
   }, { process: { env: {} } });

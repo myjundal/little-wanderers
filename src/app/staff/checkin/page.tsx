@@ -494,7 +494,6 @@ export default function StaffCheckinPage() {
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <h2>{query.trim() ? 'Search results' : isToday ? 'Today’s reservations & visitors' : 'Reservations & visitors'}</h2>
         <button disabled={locked} onClick={() => { selectDeskDate(admissionDate(new Date().toISOString())); setDeskRefresh(value => value + 1); void refreshPayments().catch(error => setMessage(error.message)); }}>Show / refresh today</button>
-        <Link href="/staff/families/new">+ New family</Link>
       </div>
       <div className={styles.dateNavigation} aria-label="Check-in date">
         <button type="button" aria-label="Previous day" disabled={locked} onClick={() => shiftDeskDate(-1)}>‹</button>

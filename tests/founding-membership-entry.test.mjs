@@ -44,15 +44,11 @@ async function advance(view) {
   return view.rerender();
 }
 
-test('each unlisted entry route selects its own audience and forbids indexing', () => {
-  for (const audience of ['waitlist', 'public']) {
-    const slug = audience === 'waitlist' ? 'wanderlist-founding' : 'general-founding';
-    const route = loadModule(`src/app/(public)/${slug}/page.tsx`, {
-      '@/components/membership/FoundingMembership': () => null,
-    }, { React });
-    assert.equal(route.default().props.audience, audience);
-    assert.equal(route.metadata.robots.index, false);
-    assert.equal(route.metadata.robots.follow, false);
+test('legacy founding entry routes redirect to monthly membership', () => {
+  for (const slug of ['wanderlist-founding', 'general-founding', 'founding-membership']) {
+    let destination;
+    const route = loadModule(`src/app/(public)/${slug}/page.tsx`, { 'next/navigation': { redirect: value => { destination = value; } } });
+    route.default(); assert.equal(destination, '/monthly-membership');
   }
 });
 
@@ -61,8 +57,8 @@ test('guest pages advertise separate prices and use a single authentication cont
     const view = await entry(audience);
     assert.match(view.html, new RegExp(`\\+\\$${sibling}/mo`));
     assert.match(view.html, /Pay \$0 today/);
-    assert.match(view.html, /first membership visit, including during soft opening/);
-    assert.match(view.html, /Visits throughout our soft opening period/);
+    assert.match(view.html, /first membership visit/);
+    assert.match(view.html, /Open play visits are included/);
     assert.doesNotMatch(view.html, /announced soft opening date|A free visit during/);
     const expected = `/login?mode=continue&next=${encodeURIComponent(audience === 'waitlist' ? '/wanderlist-founding' : '/general-founding')}`;
     assert.equal(view.nodes.filter(node => node.props.href?.startsWith('/login')).length, 1);

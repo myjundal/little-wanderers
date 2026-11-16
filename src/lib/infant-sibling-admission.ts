@@ -1,3 +1,4 @@
+import { AGE_PRICING_START, underMonths } from '@/lib/open-play-age-pricing';
 import { admissionIsPaid, admissionIsIncluded } from '@/lib/admission-payment-status';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { freeInfantSiblingIds, isInfantSibling } from '@/lib/infant-sibling-pricing';
@@ -21,18 +22,27 @@ export function projectInfantSiblingAdmission<T extends Visit>(visits: T[], peop
   }
   const freeVisits = new Set<string>();
   const infantRateVisits = new Set<string>();
+  const standardVisits = new Set<string>();
   for (const group of groups.values()) {
     const date = getPartyDateKey(new Date(group[0].checked_in_at));
     const included = new Set(group.filter(visit => admissionIsPaid(visit.payment_status) || admissionIsIncluded(visit.payment_status)).map(visit => visit.person_id));
-    const free = freeInfantSiblingIds(group.map(visit => peopleById.get(visit.person_id)!), date, included);
+    const free = date >= AGE_PRICING_START
+      ? new Set(group.filter(visit => underMonths(peopleById.get(visit.person_id)?.birthdate, date, 6)).map(visit => visit.person_id))
+      : freeInfantSiblingIds(group.map(visit => peopleById.get(visit.person_id)!), date, included);
+    if (date >= AGE_PRICING_START) {
+      const older = group.filter(visit => !underMonths(peopleById.get(visit.person_id)?.birthdate, date, 12));
+      const anchor = older[0];
+      if (anchor && anchor.payment_status === 'due' && !frozen.has(anchor.id) && !group.some(visit => visit.id !== anchor.id && visit.price_cents >= 1600 && admissionIsPaid(visit.payment_status))) standardVisits.add(anchor.id);
+    }
     for (const visit of group) {
       if (visit.payment_status !== 'due') continue;
       if (free.has(visit.person_id) && (!frozen.has(visit.id) || visit.price_cents === 0)) freeVisits.add(visit.id);
-      else if (!frozen.has(visit.id) && visit.price_cents > 1000 && isInfantSibling(peopleById.get(visit.person_id)?.birthdate, date)) infantRateVisits.add(visit.id);
+      else if (!frozen.has(visit.id) && visit.price_cents > 1000 && (date >= AGE_PRICING_START ? underMonths(peopleById.get(visit.person_id)?.birthdate, date, 12) : isInfantSibling(peopleById.get(visit.person_id)?.birthdate, date))) infantRateVisits.add(visit.id);
     }
   }
   return visits.map(visit => freeVisits.has(visit.id)
     ? { ...visit, price_cents: 0, payment_status: 'covered', infant_sibling_free: true }
+    : standardVisits.has(visit.id) ? { ...visit, price_cents: 1600, infant_sibling_free: false }
     : infantRateVisits.has(visit.id) ? { ...visit, price_cents: 1000, infant_sibling_free: false } : { ...visit, infant_sibling_free: false });
 }
 

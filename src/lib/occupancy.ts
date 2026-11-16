@@ -18,6 +18,7 @@ export function getOccupancyCapacity() {
 function readNumber(row: OccupancyStatusRow | null, keys: string[], fallback: number) {
   for (const key of keys) {
     const value = row?.[key];
+    if (value == null) continue;
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
@@ -80,24 +81,38 @@ export function getCrowdLevelMeta(level: CrowdLevel) {
   }
 }
 
-export async function getOccupancyStatus(admin: SupabaseClient) {
+export type PartyOccupancy = { current_child_count: number | null; current_adult_count: number | null };
+export function partyOccupancyTotal(parties: PartyOccupancy[]) {
+  return parties.reduce((sum, party) => sum + Math.max(0, Number(party.current_child_count) || 0) + Math.max(0, Number(party.current_adult_count) || 0), 0);
+}
+export async function getOccupancyStatus(admin: SupabaseClient, now = new Date()) {
   const { data, error } = await admin.from('occupancy_status').select('*').limit(1).maybeSingle();
   if (error) throw new Error(error.message);
 
   const row = (data ?? null) as OccupancyStatusRow | null;
-  const occupancy = Math.max(readNumber(row, OCCUPANCY_KEYS, 0), 0);
+  const current = now.toISOString();
+  const parties = await admin.from('party_bookings')
+    .select('current_child_count,current_adult_count,updated_at')
+    .in('status', ['confirmed', 'early_access_hold']).lte('start_time', current).gt('end_time', current)
+    .is('attendance_finalized_at', null).limit(100);
+  if (parties.error || (parties.data?.length ?? 0) >= 100) throw new Error('Unable to verify party occupancy.');
+  const partyOccupancy = partyOccupancyTotal(parties.data ?? []);
+  const openPlayOccupancy = Math.max(readNumber(row, OCCUPANCY_KEYS, 0), 0);
+  const occupancy = openPlayOccupancy + partyOccupancy;
   const capacity = getOccupancyCapacity();
-  const crowdLevel = normalizeCrowdLevel(readString(row, LEVEL_KEYS), occupancy);
+  const crowdLevel = normalizeCrowdLevel(partyOccupancy > 0 ? null : readString(row, LEVEL_KEYS), occupancy);
   const crowdMeta = getCrowdLevelMeta(crowdLevel);
 
   return {
     occupancy,
+    openPlayOccupancy,
+    partyOccupancy,
     capacity,
     progress: Math.min(occupancy / capacity, 1),
     crowdLevel,
     crowdMeta,
     effectiveDate: readString(row, DATE_KEYS) ?? new Date().toISOString().slice(0, 10),
-    lastUpdatedAt: readString(row, UPDATED_AT_KEYS),
+    lastUpdatedAt: [readString(row, UPDATED_AT_KEYS), ...(parties.data ?? []).map(party => party.updated_at)].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
     source: row,
   };
 }

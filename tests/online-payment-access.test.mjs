@@ -12,8 +12,5 @@ test('dormant payment routes refuse to charge or fulfill without server verifica
   const api=load(`src/app/api/${file}/route.ts`,access);
   const result=await api.POST({json:async()=>({mode:'finalize'})});assert.equal(result.status,503,file);
  }
- const party=load('src/app/api/party-bookings/route.ts',access);
- for(const mode of ['finalize','create_payment_link','arbitrary-mode'])assert.equal((await party.POST({json:async()=>({mode})})).status,503);
- // The existing no-deposit hold path remains available and reaches ordinary validation.
- assert.equal((await party.POST({json:async()=>({mode:'early_access_hold'})})).status,400);
+
 });

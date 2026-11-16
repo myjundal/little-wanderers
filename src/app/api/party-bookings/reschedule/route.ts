@@ -59,6 +59,7 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (!booking) return Response.json({ ok: false, error: 'booking not found' }, { status: 404 });
+    if (booking.status === 'pending') return Response.json({ ok: false, error: 'Finish or close your pending deposit checkout before changing the party date.' }, { status: 409 });
     if (booking.status === 'cancelled') return Response.json({ ok: false, error: 'booking is cancelled' }, { status: 409 });
     if ((booking.notes ?? '').includes('[Rescheduled once')) {
       return Response.json({ ok: false, error: 'This booking has already been rescheduled once.' }, { status: 409 });

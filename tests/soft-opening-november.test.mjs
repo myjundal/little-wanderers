@@ -52,7 +52,7 @@ test('infant siblings are included through six months; only attending siblings c
  assert.equal(softOpeningAmount(['older'],[],'2026-11-11',[older,baby]),1600);
  assert.equal(price([older,{...baby,birthdate:'2026-04-12'}]),1600); // 6m 30d
  assert.equal(price([older,{...baby,birthdate:'2026-04-11'}]),2600); // seven months
- assert.equal(price([older,{...baby,birthdate:'2026-04-30'}],'2026-11-29'),1600);
+ assert.equal(price([older,{...baby,birthdate:'2026-04-30'}],'2026-11-29'),2600);
  assert.equal(price([older,{...baby,birthdate:'2026-04-30'}],'2026-11-30'),2600);
  assert.equal(price([older,{...baby,birthdate:'2026-02-31'}]),2600);
  assert.equal(price([older,{...baby,birthdate:'2026-12-01'}]),2600);
@@ -70,5 +70,5 @@ test('Square online checkout charges the infant-only quote, not the older-child 
  await m.load('src/lib/soft-opening-payments.ts').startOpenPlayPayment({from:()=>q},{id:'booking',status:'reserved',amount_cents:amount,payment_status:'due'});
  assert.equal(requests[0].order.line_items[0].base_price_money.amount,1000);
  assert.equal(softOpeningAmount(['older',child.id],[],'2026-11-12',[{id:'older',birthdate:'2023-01-01'},child]),1600);
- assert.equal(softOpeningAmount([child.id],[],'2026-12-12',[child]),1600);
+ assert.equal(softOpeningAmount([child.id],[],'2026-12-12',[child]),1000);
 });

@@ -157,7 +157,7 @@ export async function POST(req: Request) {
 
   try {
     const body = (await req.json().catch(() => null)) as SlotPayload | null;
-    const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, 80) : 'Soft Opening Open Play';
+    const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, 80) : 'Open Play';
     const startsAt = typeof body?.starts_at === 'string' ? body.starts_at : '';
     const endsAt = typeof body?.ends_at === 'string' ? body.ends_at : '';
     const start = new Date(startsAt);

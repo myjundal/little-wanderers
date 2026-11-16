@@ -22,9 +22,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   try {
     const { data: booking, error } = await context.admin.from('party_bookings')
-      .select('id,start_time,end_time,status').eq('id', id).maybeSingle();
+      .select('id,start_time,end_time,status,square_environment').eq('id', id).maybeSingle();
     if (error) throw error;
     if (!booking) return Response.json({ ok: false, error: 'Party booking not found.' }, { status: 404 });
+    if (booking.status === 'pending' && booking.square_environment) {
+      return Response.json({ ok: false, error: 'Close the unpaid checkout before choosing a different party date.' }, { status: 409 });
+    }
     if (booking.status === 'cancelled' || new Date(booking.end_time).getTime() <= Date.now()) {
       return Response.json({ ok: false, error: 'Completed or cancelled parties cannot be rescheduled.' }, { status: 409 });
     }
