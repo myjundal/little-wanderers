@@ -8,6 +8,7 @@ import { admissionDate, admissionTime, stayLabel, stayMinutes } from '@/lib/admi
 import { admissionPaymentLabel, reservationAdmissionLabel } from '@/lib/admission-payment-status';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
 import AdmissionHelp from '@/components/staff/AdmissionHelp';
+import VoidAdmissionPayment from '@/components/staff/VoidAdmissionPayment';
 import { admissionCheckedOut, admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
@@ -351,6 +352,13 @@ export default function StaffCheckinPage() {
     finally { if (!refreshed) { await refreshPayments().catch(error => setMessage(error.message)); setDeskRefresh(value => value + 1); } checkinBusy.current = false; setCheckingIn(false); }
   }
 
+  async function paymentVoided() {
+    await refreshPayments();
+    setDeskRefresh(value => value + 1);
+    setConfirmationMessage('Payment voided — $0 due. Check-in and attendance are unchanged.');
+    setMessage('Payment voided — $0 due. This family is still checked in.');
+  }
+
   async function takePayment() {
     if (!isToday || !selected || !enabled || !paymentsReady || peopleIds.length || paymentPending.current || pendingSale || busy || loading || checkingIn || needsVerification) return;
     if (!/iPad|iPhone|iPod/.test(navigator.userAgent) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
@@ -560,6 +568,7 @@ export default function StaffCheckinPage() {
         <p>Check in everyone visiting before payment. Membership, prepaid admission, and included adults are already applied.</p>
         {!!peopleIds.length && <p>Check in the selected visitors first to include them in this payment.</p>}
         <button style={button} disabled={!enabled || entriesLocked || !!peopleIds.length} onClick={() => void takePayment()}>{busy ? 'Checking with Square…' : `Pay ${money(selected.total)} in Square`}</button>
+        <VoidAdmissionPayment householdId={activeFamily} checkinIds={selected.visits.map(visit => visit.id)} total={selected.total} disabled={entriesLocked || !!peopleIds.length || !!launchUrl || needsVerification || paymentUnverified} onBusyChange={setBusy} onVoided={paymentVoided} />
         <p><a href="#admission-help">Already paid directly in Square? Connect the receipt below.</a></p>
       </> : !loading && <p>{paymentUnverified ? 'Square payment needs verification. Do not collect again; refresh payment status or check its receipt.' : familyVisits.length ? 'No admission payment due for this family. Paid visits, members and prepaid visitors are already accounted for.' : 'Check in a family to see their total here.'}</p>}
       {pendingSale && <aside style={{ marginTop: 20, padding: 16, background: '#fff1d8', borderRadius: 12 }}><h3>Square checkout needs review</h3><p>If Square was cancelled, did not open, or did not return a receipt, check Transactions on this iPad first. Wait at least one minute after the launch. Never reset while a payment is pending or saved offline.</p><label><input type="checkbox" checked={recoveryConfirmed} disabled={busy} onChange={event => setRecoveryConfirmed(event.target.checked)} /> I checked Square: this checkout is closed, with no completed, pending or offline payment.</label><p><button disabled={busy || !recoveryConfirmed} onClick={() => void recoverPayment()}>Reconcile Square and reset unpaid checkout</button></p><p>The server checks Square too. If it finds a completed matching payment, it records payment instead of starting another charge.</p></aside>}
@@ -584,9 +593,10 @@ export default function StaffCheckinPage() {
       <ul>{completion.visitors.map((name, index) => <li key={index}>{name}</li>)}</ul>
       {selected ? <>
         <p style={{ fontSize: 26 }}><strong>Total due: {money(selected.total)}</strong></p>
-        <p>Continue to Square on this iPad to collect this family’s payment.</p>
+        <p>Collect admission in Square, or use Void payment below for free admission.</p>
         {!enabled && <p>Square handoff is currently closed. Admission is saved; collect payment at the counter.</p>}
         <button type="button" style={button} disabled={!enabled || busy || loading || !paymentsReady || !!pendingSale || !!launchUrl || needsVerification} onClick={() => void takePayment()}>Continue to Square — {money(selected.total)}</button>
+        <VoidAdmissionPayment householdId={activeFamily} checkinIds={selected.visits.map(visit => visit.id)} total={selected.total} disabled={busy || loading || !paymentsReady || !!pendingSale || !!launchUrl || needsVerification || paymentUnverified} onBusyChange={setBusy} onVoided={paymentVoided} />
       </> : paymentUnverified ? <p><strong>Checking Square payment.</strong> Do not collect again. Refresh payment status to verify the receipt.</p> : <p><strong>No admission payment due.</strong> Membership, included or prepaid admission has been applied.</p>}
       <p role="status" aria-live="polite">{message}</p>
       <p><button type="button" disabled={busy} onClick={returnToDesk}>{selected ? 'Back to desk' : 'Done'}</button></p>

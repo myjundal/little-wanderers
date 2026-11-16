@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   if (!validRevenueDate(today)) return Response.json({ ok: false, error: 'Choose a valid date.' }, { status: 400 });
   const historical = today !== currentDate;
   const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
-  const { data, error } = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment')
+  const { data, error } = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment,notes')
     .gte('checked_in_at', toPartyDateTimeIso(today, 0)).lt('checked_in_at', toPartyDateTimeIso(tomorrow, 0));
   if (error) return Response.json({ ok: false, error: 'Unable to load today’s admission payments.' }, { status: 503 });
   const ids = [...new Set((data ?? []).map(row => row.person_id))];
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
   const settled = historical ? new Map<string, string>() : await refreshAdmissionPosSales(c.admin,relevant as PosSale[]);
   let recorded = data ?? [];
   if ([...settled.values()].includes('paid')) {
-    const latest = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment')
+    const latest = await c.admin.from('checkins').select('id,person_id,price_cents,payment_status,checked_in_at,square_environment,notes')
       .in('id',recorded.map(row=>row.id));
     if (latest.error || latest.data?.length !== recorded.length) return Response.json({ok:false,error:'Payment recorded. Refresh admission status before continuing.'},{status:503});
     recorded = latest.data;
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
   });
   const visits = priced.map(row => {
     const person = (people ?? []).find(person => person.id === row.person_id);
-    return { ...row, checked_out: checkouts.has(row.id), checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
+    return { ...row, payment_voided: row.price_cents === 0 && row.payment_status === 'covered' && Boolean(row.notes?.includes('[Admission payment voided: ')), checked_out: checkouts.has(row.id), checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });

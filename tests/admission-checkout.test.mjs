@@ -13,7 +13,7 @@ const now = new Date('2026-11-11T17:00:00Z');
 
 async function fixture(t) {
   const db = new PGlite(); t.after(() => db.close());
-  await db.exec(`create table checkins(id uuid primary key,person_id uuid,household_id uuid,checked_in_at timestamptz,price_cents int default 1600,payment_status text default 'due',square_environment text);
+  await db.exec(`create table checkins(id uuid primary key,person_id uuid,household_id uuid,checked_in_at timestamptz,price_cents int default 1600,payment_status text default 'due',square_environment text,notes text);
     create table people(id uuid primary key,household_id uuid,first_name text default 'Test',last_name text default 'Guest',role text default 'child',birthdate text);
     create table households(id uuid primary key,name text);
     create table founding_memberships(household_id uuid,environment text,status text,child_ids uuid[],square_card_id text,start_date date,paid_through date,created_at timestamptz default now());
