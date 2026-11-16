@@ -31,6 +31,9 @@ test('verified membership closes unpaid checkout before changing the visit to in
 test('expired or partial membership cannot discard an admission charge or touch its checkout',async t=>{
  const h=await fixture(t);h.familyData.memberships[0].paid_through='2026-11-15';await assert.rejects(h.flow.repairOpenPlayMembership(h.admin,h.id,h.actor),/cover/);assert.equal(h.requests.length,0);assert.equal((await h.db.query('select amount_cents from open_play_reservations')).rows[0].amount_cents,1600);
 });
+test('unpaid checkout draft is safely cancelled before applying membership coverage',async t=>{
+ const h=await fixture(t);h.order.state='DRAFT';const r=await h.flow.repairOpenPlayMembership(h.admin,h.id,h.actor);assert.equal(r.payment_status,'covered');assert.equal(h.order.state,'CANCELED');assert(h.requests.some(r=>r.method==='DELETE'));
+});
 test('a payment tender or mismatched order prevents reclassification and link deletion',async t=>{
  const h=await fixture(t);h.order.tenders=[{payment_id:'payment-test'}];await assert.rejects(h.flow.repairOpenPlayMembership(h.admin,h.id,h.actor),/payment|paid|review/i);assert(!h.requests.some(r=>r.method==='DELETE'));
  h.order.tenders=[];h.order.reference_id='different-reservation';await assert.rejects(h.flow.repairOpenPlayMembership(h.admin,h.id,h.actor),/match|review/i);assert(!h.requests.some(r=>r.method==='DELETE'));
