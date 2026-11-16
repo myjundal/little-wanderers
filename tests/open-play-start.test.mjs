@@ -53,14 +53,14 @@ test('owner bulk changes use Eastern calendar days and cannot reopen pre-opening
  }
 });
 
-test('new arrival windows default to seven on the weekend and ten from Monday Eastern onward', async () => {
+test('new arrival windows default to six from November 16 Eastern while preserving owner overrides', async () => {
  const lib=load('src/lib/open-play-reservations.ts');
  for(const [starts_at,capacity_children,expected] of [
   ['2026-11-13T14:00:00Z',undefined,5],
   ['2026-11-14T14:00:00Z',undefined,7],
   ['2026-11-16T04:00:00Z',undefined,7],
-  ['2026-11-16T05:00:00Z',undefined,10],
-  ['2027-01-05T14:00:00Z',undefined,10],
+  ['2026-11-16T05:00:00Z',undefined,6],
+  ['2027-01-05T14:00:00Z',undefined,6],
   ['2026-11-16T14:00:00Z',12,12],
  ]) {
   let inserted;
