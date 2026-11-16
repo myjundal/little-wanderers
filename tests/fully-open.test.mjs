@@ -47,12 +47,12 @@ async function fixture(t){
   if(path.includes('/orders/'))return Response.json({order:orders.get('order')});
   throw Error('Unexpected provider call '+path);
  };
- const modules=loadSquareModules({fetch,mocks:{'@/lib/party-emails':{sendPartyConfirmationEmail:async()=>({ok:true})},'@/lib/admin-notifications':{sendPartyBookingNotification:async value=>{notifications.push(value);return{ok:true};}}}});
+ const modules=loadSquareModules({fetch,mocks:{'@/lib/authz':{requireOwnerContext:async()=>({ok:true,admin,user:{id:ids.user}})},'@/lib/supabase/server':{createServerSupabaseClient:async()=>({auth:{getUser:async()=>({data:{user:{id:ids.user}}})}})},'@supabase/supabase-js':{createClient:()=>admin},'@/lib/households':{getLatestHouseholdIdForUser:async()=>ids.household},'@/lib/party-emails':{sendPartyConfirmationEmail:async()=>({ok:true})},'@/lib/admin-notifications':{sendPartyBookingNotification:async value=>{notifications.push(value);return{ok:true};}}}});
  const flow=modules.load('src/lib/party-deposit.ts'),admin=localSquareAdmin(db);
  const request={start_time:'2099-11-20T15:00:00.000Z',end_time:'2099-11-20T18:00:00.000Z',headcount_expected:30,notes:null,birthday_child_name:'Test',birthday_age:3,occasion_details:null};
  const start=()=>flow.startPartyCheckout(admin,ids.household,ids.user,request);
  const pay=()=>{const invoice=invoices.get('invoice');invoice.version++;invoice.status='PARTIALLY_PAID';invoice.payment_requests[0].total_completed_amount_money.amount=15000;};
- return{db,flow,admin,request,start,pay,orders,invoices,orderCalls:()=>orderCalls,notifications};
+ return{db,flow,admin,runtime:modules,request,start,pay,orders,invoices,orderCalls:()=>orderCalls,notifications};
 }
 test('one $300 party invoice collects a $150 deposit now and a $150 balance before the party',async t=>{
  const h=await fixture(t);const a=await h.start();assert.equal(a.status,'open');assert.equal(a.expected_amount_cents,15000);
@@ -87,4 +87,20 @@ test('future unpaid counter quotes change to current age pricing while provider 
  const {refreshOpenPlayQuote}=load('src/lib/open-play-quote.ts');const row={id:'quote',household_id:'family',status:'reserved',payment_status:'due',payment_choice:'counter',amount_cents:1600,square_order_id:null,child_ids:['baby'],slot:{starts_at:'2026-11-17T15:00Z'}};const family={memberships:[],children:[{id:'baby',birthdate:'2026-06-01'}]};
  assert.equal((await refreshOpenPlayQuote(localSquareAdmin(db),row,family,new Date('2026-11-16T15:00Z'))).amount_cents,0);
  for(const patch of [{payment_status:'paid'},{payment_choice:'now',square_order_id:'order'},{slot:{starts_at:'2026-11-15T15:00Z'}}])assert.equal((await refreshOpenPlayQuote(localSquareAdmin(db),{...row,...patch},family,new Date('2026-11-16T15:00Z'))).amount_cents,1600);
+});
+
+test('confirmed invoice parties retain their date while a balance is payable; provider-closed invoices allow owner cancellation',async t=>{
+ const h=await fixture(t);const a=await h.start();h.pay();await h.flow.reconcilePartyCheckout(h.admin,a);
+ const route=h.runtime.load('src/app/api/admin/party-bookings/[id]/status/route.ts');
+ const request=()=>new Request('https://example.test/api/admin/party-bookings/'+a.id+'/status',{method:'PATCH',body:JSON.stringify({status:'cancelled'})});
+ const params={params:Promise.resolve({id:a.id})};assert.equal((await route.PATCH(request(),params)).status,409);assert.equal((await h.db.query('select status from party_bookings')).rows[0].status,'confirmed');
+ const invoice=h.invoices.get('invoice');invoice.version++;invoice.status='CANCELED';assert.equal((await route.PATCH(request(),params)).status,200);assert.equal((await h.db.query('select status from party_bookings')).rows[0].status,'cancelled');
+});
+test('customer and owner cannot move an invoice party independently of its balance deadline',async t=>{
+ const h=await fixture(t);const a=await h.start();h.pay();await h.flow.reconcilePartyCheckout(h.admin,a);
+ const customer=h.runtime.load('src/app/api/party-bookings/reschedule/route.ts');
+ const changed=await customer.POST(new Request('https://example.test/api/party-bookings/reschedule',{method:'POST',body:JSON.stringify({booking_id:a.id,start_time:'2030-11-16T15:00:00Z',end_time:'2030-11-16T18:00:00Z'})}));assert.equal(changed.status,409);assert.match((await changed.json()).error,/invoice payment deadline/);
+ const owner=h.runtime.load('src/app/api/admin/party-bookings/[id]/schedule/route.ts');
+ const response=await owner.PATCH(new Request('https://example.test/schedule',{method:'PATCH',body:JSON.stringify({date:'2030-11-16',start_time:'10:00',end_time:'13:00',expected_start_time:h.request.start_time,expected_end_time:h.request.end_time})}),{params:Promise.resolve({id:a.id})});assert.equal(response.status,409);assert.match((await response.json()).error,/payment deadline/);
+ assert.equal(new Date((await h.db.query('select start_time from party_bookings')).rows[0].start_time).toISOString(),h.request.start_time);
 });

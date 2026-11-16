@@ -729,6 +729,7 @@ export default function PartyPage() {
                         {requestingCancelId === item.id ? 'Requesting...' : 'Request to cancel'}
                       </button>
                       {(() => {
+                        if (item.square_invoice_url) return <Link href="/contact">Contact us to reschedule and update your invoice</Link>;
                         const daysLeft = (new Date(item.start_time).getTime() - Date.now()) / 86_400_000;
                         const alreadyRescheduled = (item.notes ?? '').includes('[Rescheduled once');
                         const unavailable = alreadyRescheduled || daysLeft < 7;
