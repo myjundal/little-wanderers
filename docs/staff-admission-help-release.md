@@ -1,6 +1,6 @@
 # Staff admission help release
 
-Status: implementation and local verification complete; production database migration and live browser verification remain pending. Do not deploy the application before applying the migration.
+Status on November 16, 2026: the production database migration is applied and its tables/functions are visible through the service role. The branch is updated with current production check-in behavior; 114 focused tests, TypeScript, lint and production build pass. Application rollout and live verification follow the checks below.
 
 ## Apply and enable
 

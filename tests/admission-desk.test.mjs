@@ -122,7 +122,7 @@ test('search and direct family lookup include confirmed alternate-profile bookin
   assert.equal((await apiHarness({ reservationRows: Array.from({ length: 501 }, () => booking) }).get('?q=Family')).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false, initialVisits = [] } = {}) {
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false, initialVisits = [], confirmationResult = { status: 'confirmed', family_link: 'linked', household_id: family.id } } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
   let cursor = 0, tree, visits = initialVisits, timers = [], refreshes = 0, saleOpen = false, holdRead = false, holdSync = false;
   const storage = new Map(), intervals = [], heldReads = [];
@@ -140,10 +140,11 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     const body = options.body ? JSON.parse(options.body) : undefined;
     requests.push({ url, body });
     if (url.includes('/desk')) return Response.json({ ok: true, date: '2026-11-11', items: deskItems ?? [{ ...deskFamily, waiver_status: waiver }] });
+    if (url === '/api/admin/admission/confirm') return Response.json({ ok: true, ...confirmationResult });
     if (url === '/api/admin/admission/checkout') {
       if (failCheckout) return Response.json({ ok: false, error: 'Unable to record checkout' }, { status: 409 });
-      const checkouts = body.checkin_ids.map(id => ({ id, checked_out_at: '2026-11-11T17:00:00Z' }));
-      visits = visits.map(visit => checkouts.some(row => row.id === visit.id) ? { ...visit, checked_out_at: checkouts.find(row => row.id === visit.id).checked_out_at } : visit);
+      const checkouts = body.checkin_ids.map(id => ({ id, checked_out: true, checked_out_at: body.checkout_time_unknown ? null : '2026-11-11T17:00:00Z' }));
+      visits = visits.map(visit => checkouts.some(row => row.id === visit.id) ? { ...visit, checked_out: true, checked_out_at: checkouts.find(row => row.id === visit.id).checked_out_at } : visit);
       return Response.json({ ok: true, checkouts });
     }
     if (url === '/api/checkin') {
@@ -166,7 +167,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
     return Response.json(snapshot);
   };
   const logic = loadModule('src/lib/admission-pos-ui.ts');
-  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/AdmissionHelp': 'admission-help', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts'), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic, '@/lib/admission-arrivals': loadSquareModules().load('src/lib/admission-arrivals.ts') }, {
+  const page = loadModule('src/app/staff/checkin/page.tsx', { react, 'next/link': 'a', '@/components/staff/AdmissionVisits': 'admission-visits', '@/components/staff/AdmissionStayStatistics': 'admission-statistics', '@/components/staff/AdmissionHelp': 'admission-help', '@/components/staff/StaffToolNav': 'nav', '@/components/staff/StaffDashboard': 'occupancy-controls', '@/components/staff/OpenPlayReservationsAdmin': 'reservations-admin', '@/lib/use-owner-dashboard-access': { useOperatorAccess: () => ({ role }) }, './checkin.module.css': { default: {} }, '@/lib/admission-stays': loadModule('src/lib/admission-stays.ts', { '@/lib/admission-pos-ui': logic }), '@/lib/admission-payment-status': loadModule('src/lib/admission-payment-status.ts'), '@/lib/admission-pos-ui': logic, '@/lib/admission-arrivals': loadSquareModules().load('src/lib/admission-arrivals.ts') }, {
     React, fetch, AbortController, Date: class extends Date { constructor(value) { super(value ?? '2026-11-11T15:00:00Z'); } static now() { return Date.parse('2026-11-11T15:00:00Z'); } },
     document: { visibilityState: 'visible', addEventListener(name, fn) { listeners[name] = fn; }, removeEventListener(name) { delete listeners[name]; } },
     navigator: { userAgent: 'iPad', standalone: homeScreen },
@@ -598,4 +599,66 @@ test('desk date validation and Eastern date boundaries handle daylight saving ch
       assert.equal((Date.parse(end) - Date.parse(start)) / 3600000, hours);
     }
   }
+});
+
+
+test('Payment confirmed posts the active family, refreshes the desk and reports the automatic link', async () => {
+  const initialVisits = [{ id: 'paid-child', person_id: 'child', household_id: family.id, household_name: family.name, name: 'Sam Family', checked_in_at: '2026-11-11T15:00:00Z', price_cents: 1600, payment_status: 'paid' }];
+  const h = uiHarness({ initialVisits }); await h.flush(); h.button('Open family / payment').props.onClick(); await h.flush();
+  const before = h.requests.filter(row => row.url === '/api/admin/admission/pos').length;
+  h.button('Payment confirmed').props.onClick(); await h.flush();
+  assert.deepEqual(h.requests.find(row => row.url === '/api/admin/admission/confirm').body, { household_id: family.id });
+  assert.ok(h.requests.filter(row => row.url === '/api/admin/admission/pos').length > before);
+  assert.ok(h.text().includes('Payment confirmed. Family records connected.'));
+  assert.equal(h.button('Payment confirmed').props.disabled, false);
+});
+
+test('confirmation distinguishes an unverified receipt from a paid family requiring identity review', async () => {
+  for (const [result, message] of [
+    [{ status: 'pending', family_link: 'none' }, 'Payment is not verified yet'],
+    [{ status: 'confirmed', family_link: 'review' }, 'Family records need owner review'],
+    [{ status: 'confirmed', family_link: 'pending' }, 'Family linking is still pending'],
+  ]) {
+    const h = uiHarness({ confirmationResult: result }); await choose(h);
+    h.button('Payment confirmed').props.onClick(); await h.flush();
+    assert.ok(h.text().includes(message));
+    assert.equal(h.requests.filter(row => row.url === '/api/checkin').length, 0);
+    assert.equal(h.requests.filter(row => row.body?.checkin_ids).length, 0);
+    assert.equal(h.button('Payment confirmed').props.disabled, false);
+  }
+});
+
+
+test('unknown-time departures show checked out on the desk without a running duration or checkout action', async () => {
+  const h = uiHarness({ initialVisits: people.map(person => ({ id: `visit-${person.id}`, person_id: person.id, household_id: family.id,
+    household_name: family.name, name: person.first_name, checked_in_at: '2026-11-11T15:00:00Z', checked_out: true,
+    checked_out_at: null, price_cents: 0, payment_status: 'covered' })) });
+  await h.flush();
+  const card = h.nodes().find(node => node.type === 'article' && node.props['data-family-id'] === family.id);
+  assert.equal(card.props['data-arrival-state'], 'checked-out');
+  assert.ok(h.text().includes('Departure time unknown'));
+  assert.equal(h.button('Check out family'), undefined);
+  assert.ok(!h.text().includes('guests here'));
+});
+
+
+test('check out without time sends an explicit choice, prevents repeat checkout, and preserves admission due', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  await h.button('Check in 2').props.onClick(); await h.flush();
+  await h.button('Back to desk').props.onClick(); await h.flush();
+  const unknownCheckout = h.button('Check out without time (2)').props.onClick;
+  const timedCheckout = h.button('Check out family (2)').props.onClick;
+  unknownCheckout(); timedCheckout(); unknownCheckout();
+  await h.flush();
+  const requests = h.requests.filter(request => request.url === '/api/admin/admission/checkout');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.checkout_time_unknown, true);
+  assert.equal(requests[0].body.checkin_ids.length, 2);
+  assert.ok(h.visits().every(visit => visit.checked_out === true && visit.checked_out_at === null));
+  assert.ok(h.text().includes('Departure time unknown'));
+  assert.ok(h.text().includes('Excluded from stay statistics'));
+  assert.ok(h.text().includes('Total due: $16.00'));
+  assert.equal(h.button('Check out family'), undefined);
+  assert.equal(h.button('Check out without time'), undefined);
 });

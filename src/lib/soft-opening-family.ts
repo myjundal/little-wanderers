@@ -13,7 +13,7 @@ export async function readSoftOpeningFamily(db: SupabaseClient, householdId: str
     ]);
     if (children.error || founding.error)
         throw new Error('Unable to load family details.');
-    return { guardian, children: children.data ?? [], memberships: [...(founding.data ?? []), ...(complimentary ? [{ child_ids: complimentary.covered_person_ids!, status: 'complimentary', start_date: null, paid_through: null }] : [])] };
+    return { guardian, children: children.data ?? [], memberships: [...(founding.data ?? []), ...(complimentary ? [{ child_ids: (children.data ?? []).map(child => child.id), status: 'complimentary', start_date: null, paid_through: null }] : [])] };
 }
 export type SoftOpeningPersonInput = {
     id?: string;
@@ -75,5 +75,5 @@ export async function saveSoftOpeningFamily(db: SupabaseClient, householdId: str
             throw new Error('Unable to save your family details. Please try again.');
         ids.push(result.data.id);
     }
-    return { childIds: ids, memberships: family.memberships, guardianName: `${firstName} ${lastName}`, children: entries.map((e, index) => ({ id: ids[index], name: e.name, birthdate: e.birthdate, ageLabel: e.age?.label })) };
+    return { childIds: ids, memberships: family.memberships.map(membership => membership.status === 'complimentary' ? { ...membership, child_ids: ids } : membership), guardianName: `${firstName} ${lastName}`, children: entries.map((e, index) => ({ id: ids[index], name: e.name, birthdate: e.birthdate, ageLabel: e.age?.label })) };
 }

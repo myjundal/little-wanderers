@@ -1,6 +1,6 @@
 import { readPrivatePartyDays, overlapsPrivateParty } from '@/lib/private-party-open-play';
 import { requireOwnerContext, requireStaffContext } from '@/lib/authz';
-import { isUuid, OPEN_PLAY_SLOT_SELECT, OPEN_PLAY_RESERVATION_SELECT, SOFT_OPENING_END } from '@/lib/open-play-reservations';
+import { isOpenPlayArrivalAvailable, isUuid, OPEN_PLAY_SLOT_SELECT, OPEN_PLAY_RESERVATION_SELECT, SOFT_OPENING_END } from '@/lib/open-play-reservations';
 import { readSoftOpeningFamily } from '@/lib/soft-opening-family';
 import { createStaffOpenPlayReservation } from '@/lib/staff-open-play';
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ export async function GET(_req: Request, { params }: Params) {
     ]);
     if (slots.error || reservations.error) throw new Error();
     const privateDays = await readPrivatePartyDays(c.admin, slots.data ?? []);
-    const available = (slots.data ?? []).filter(slot => !overlapsPrivateParty(slot, privateDays));
+    const available = (slots.data ?? []).filter(slot => isOpenPlayArrivalAvailable(slot) && !overlapsPrivateParty(slot, privateDays));
     const occupancy = slots.data?.length ? await c.admin.from('open_play_reservations').select('slot_id,child_count,adult_count').in('slot_id', slots.data.map(s => s.id)).neq('status', 'cancelled') : { data: [], error: null };
     if (occupancy.error) throw new Error();
     return Response.json({ ok: true, family, reservations: reservations.data, slots: available.map(slot => {

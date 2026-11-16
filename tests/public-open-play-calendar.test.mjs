@@ -15,7 +15,7 @@ test('public availability exposes only calendar fields, honors closure and total
  assert.equal(JSON.stringify(slots).includes('PRIVATE'),false);assert.deepEqual(ranges,[[0,499],[500,999]]);
 });
 test('guests see dates and arrival times before any login link or family form',()=>{
- const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
+ const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{'@/lib/open-play-reservations':constants,react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
  const html=renderToStaticMarkup(React.createElement(Calendar,{slots:[{...slot,remaining_children:5,is_closed:false,is_full:false}]}));
  assert.match(html,/November 2026/);assert.match(html,/9 AM/);assert.match(html,/\(5\/7\) spots left/);assert.match(html,/unlimited play until closing/);assert.match(html,/Reservations are recommended/);
  assert.doesNotMatch(html,/href="\/login|Parent.*first name/);
@@ -23,7 +23,7 @@ test('guests see dates and arrival times before any login link or family form',(
 test('calendar keeps a selected time through sign-in without making a reservation',()=>{
  const states=['2026-11-14','2026-11','available'];let index=0;
  const react={...React,useState:()=>[states[index++],()=>{}]};
- const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{react,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
+ const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{'@/lib/open-play-reservations':constants,react,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
  const html=renderToStaticMarkup(Calendar({slots:[{...slot,remaining_children:5,is_closed:false,is_full:false}]}));
  assert.match(html,/href="\/login\?next=%2Flanding%2Fopen-play%3Fslot%3Davailable"/);
  assert.match(html,/Your spot is confirmed after you finish reserving/);
@@ -37,8 +37,15 @@ test('public guests see the private closing time and blocked arrival windows wit
  const {loadPublicOpenPlaySlots}=loadModule('src/lib/public-open-play.ts',{'@/lib/open-play-reservations':constants,'@/lib/private-party-open-play':{...privacy,readPrivatePartyDays:async()=>privateDays}});
  const slots=await loadPublicOpenPlaySlots(admin);
  assert.equal(slots[0].is_closed,false);assert.equal(slots[1].is_closed,true);assert.equal(slots[1].is_private_party_blocked,true);assert.equal(slots[0].closing_at,'2026-11-16T21:00:00.000Z');
- const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
+ const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{'@/lib/open-play-reservations':constants,react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
  const html=renderToStaticMarkup(React.createElement(Calendar,{slots}));assert.match(html,/Open Play ends at 4 PM/);assert.match(html,/Private party/);assert.match(html,/disabled=""/);assert.doesNotMatch(JSON.stringify(slots),/PRIVATE|household|party_id/);
  const unavailable=loadModule('src/lib/public-open-play.ts',{'@/lib/open-play-reservations':constants,'@/lib/private-party-open-play':{...privacy,readPrivatePartyDays:async()=>{throw Error('Unable to verify')}}});
  await assert.rejects(unavailable.loadPublicOpenPlaySlots(admin),/Unable to verify/);
+});
+
+test('public calendar drops 5–6 PM windows after November 16 even when they are open in the database',async()=>{
+ const windows=[{...slot,starts_at:'2026-11-16T21:00:00Z',ends_at:'2026-11-16T22:00:00Z'},{...slot,id:'late',starts_at:'2026-11-16T22:00:00Z',ends_at:'2026-11-16T23:00:00Z'}];
+ const admin={from(table){const q={select(){return q},eq(){return q},neq(){return q},gte(){return q},lt(){return q},gt(){return q},order(){return q},range(){return Promise.resolve({data:[],error:null})},then(resolve){return resolve({data:table==='open_play_reservation_slots'?windows:[],error:null})}};return q}};
+ const {loadPublicOpenPlaySlots}=loadModule('src/lib/public-open-play.ts',{'@/lib/open-play-reservations':constants,'@/lib/private-party-open-play':{...privacy,readPrivatePartyDays:async()=>[]}});
+ const result=await loadPublicOpenPlaySlots(admin);assert.equal(result.length,1);assert.equal(result[0].id,slot.id);
 });

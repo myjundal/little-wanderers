@@ -39,7 +39,7 @@ export async function GET(req: Request) {
       if (error) throw new Error('Unable to load family names.');
       for (const family of data ?? []) names.set(family.id, family.name || 'Visiting family');
     }
-    const visits: AdmissionVisit[] = rows.map(row => ({ ...row, checked_out_at: checkouts.get(row.id) ?? null,
+    const visits: AdmissionVisit[] = rows.map(row => ({ ...row, checked_out: checkouts.has(row.id), checked_out_at: checkouts.get(row.id) ?? null,
       household_id: row.household_id || row.id, household_name: names.get(row.household_id ?? '') ?? 'Visiting family',
       name: '', price_cents: 0, payment_status: '' }));
     return Response.json({ ok: true, start: startDate, end: endDate, ...admissionStayStatistics(visits) }, { headers });

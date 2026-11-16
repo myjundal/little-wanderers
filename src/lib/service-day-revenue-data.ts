@@ -4,7 +4,7 @@ import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { squareSaleCategory, supplementSquareRevenue } from '@/lib/square-daily-revenue';
 import { allocatePartyRevenue } from '@/lib/party-revenue-allocation';
 import { allocateCatalogClassRevenue } from '@/lib/class-revenue-allocation';
-import { allocateRevenue, calculateRevenue, revenueServices, type RevenueEvidence, type RevenueSources } from '@/lib/service-day-revenue';
+import { allocateRevenue, calculateRevenue, revenueDay, revenueServices, type RevenueEvidence, type RevenueSources } from '@/lib/service-day-revenue';
 
 const fields = {
   bookings: ['open_play_reservations', 'id,slot_id,household_id,child_ids,child_count,status,payment_status,payment_environment,amount_cents,square_order_id'],
@@ -14,6 +14,7 @@ const fields = {
   series: ['class_series_sales', 'id,class_ids,child_ids,status,environment,amount_cents,square_order_id'],
   classes: ['classes', 'id,title,start_time,status'],
   registrations: ['class_registrations', 'id,class_id,person_id,status,attendance_status'],
+  classCancellationEvents: ['membership_events', 'id,notes'],
   classCheckouts: ['square_checkout_attempts', 'id,kind,status,environment,order_id,expected_amount_cents,payload'],
   classPrograms: ['class_series_programs', 'id,title,class_ids'],
   classMappings: ['square_catalog_mappings', 'entity_key,variation_id,program_key'],
@@ -33,6 +34,7 @@ export async function loadRevenueSources(admin: SupabaseClient) {
       for (;;) {
         let query = admin.from(table).select(select).order(cursorField).limit(500);
         if (key === 'classCheckouts') query = query.eq('kind', 'class').eq('environment', 'production').in('status', ['completed', 'needs_review']);
+        if (key === 'classCancellationEvents') query = query.eq('action', 'class_minimum_cancellation');
         if (key === 'classMappings') query = query.eq('kind', 'class').eq('environment', 'production');
         if (cursor) query = query.gt(cursorField, cursor);
         const { data, error } = await query;
@@ -50,9 +52,26 @@ export async function loadRevenueSources(admin: SupabaseClient) {
   return { sources, issues };
 }
 
+/** Fetch roles only for the selected day's visitors. A failed lookup leaves
+ * explicit unknown people, never invented child/adult counts. */
+export async function loadRevenueVisitorRoles(admin: SupabaseClient, sources: RevenueSources, date: string, issues: string[]) {
+  const ids = [...new Set(sources.visits.filter(row => row.square_environment !== 'sandbox'
+    && Number.isFinite(Date.parse(row.checked_in_at)) && revenueDay(row.checked_in_at) === date).map(row => row.person_id))];
+  sources.people = [];
+  try {
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const batch = ids.slice(offset, offset + 100);
+      const { data, error } = await admin.from('people').select('id,role').in('id', batch);
+      if (error || !data || data.length !== batch.length || new Set(data.map(row => row.id)).size !== data.length
+        || data.some(row => !batch.includes(row.id))) throw new Error('Visitor roles are incomplete.');
+      sources.people.push(...data);
+    }
+  } catch { issues.push('Unable to load all visitor roles. Child/adult attendance is incomplete.'); }
+}
+
 type Money = { amount?: number; currency?: string };
-type ProviderOrder = { id: string; reference_id?: string; metadata?: Record<string, string>; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[]; line_items?: { name?: string; item_type?: string; catalog_object_id?: string; total_money?: Money; total_tax_money?: Money }[] };
-type ProviderPayment = { id: string; order_id?: string; location_id?: string; status?: string; amount_money?: Money; refunded_money?: Money; tip_money?: Money; created_at?: string; source_type?: string; card_details?: { card?: { card_brand?: string } } };
+type ProviderOrder = { id: string; customer_id?: string; reference_id?: string; metadata?: Record<string, string>; location_id?: string; total_money?: Money; total_tax_money?: Money; total_tip_money?: Money; tenders?: { payment_id?: string }[]; line_items?: { name?: string; note?: string; item_type?: string; catalog_object_id?: string; total_money?: Money; total_tax_money?: Money }[] };
+type ProviderPayment = { id: string; order_id?: string; customer_id?: string; note?: string; location_id?: string; status?: string; amount_money?: Money; refunded_money?: Money; tip_money?: Money; created_at?: string; source_type?: string; card_details?: { card?: { card_brand?: string; last_4?: string; cardholder_name?: string } } };
 function money(value?: Money, optional = false) {
   if (!value && optional) return 0;
   if (value?.currency !== 'USD' || !Number.isSafeInteger(value.amount) || value.amount! < 0) throw new Error('Payment currency or amount needs review.');
@@ -61,7 +80,7 @@ function money(value?: Money, optional = false) {
 
 /** Provider reads only: never calls fulfillment, reconciliation, invoice
  * publication, receipt persistence or any other operation that writes. */
-export async function readRevenueEvidence(orderId: string, searchedOrder?: ProviderOrder): Promise<RevenueEvidence> {
+export async function readRevenueEvidence(orderId: string, searchedOrder?: ProviderOrder, collectPayment?: (payment: ProviderPayment) => void): Promise<RevenueEvidence> {
   const config = squareConfig();
   if (config.environment !== 'production') throw new Error('Production Square access is required.');
   const order = searchedOrder ?? (await squareRequest<{ order: ProviderOrder }>(`/v2/orders/${encodeURIComponent(orderId)}`)).order;
@@ -77,6 +96,7 @@ export async function readRevenueEvidence(orderId: string, searchedOrder?: Provi
     if (payment.status !== 'COMPLETED' || !payment.created_at || !Number.isFinite(Date.parse(payment.created_at))) throw new Error('Payment is not settled.');
     const amount = money(payment.amount_money), refund = money(payment.refunded_money, true);
     if (refund > amount || ((tax || tip) && refund)) throw new Error('Refund with tax or tip needs a separate allocation.');
+    collectPayment?.(payment);
     payments.push({ id: payment.id, amount_cents: amount, refunded_cents: refund, paid_at: payment.created_at, gift_card: payment.source_type === 'GIFT_CARD' || payment.card_details?.card?.card_brand === 'SQUARE_GIFT_CARD', tip: money(payment.tip_money, true) });
   }
   const received = payments.reduce((sum, payment) => sum + payment.amount_cents, 0);
@@ -150,6 +170,61 @@ export async function readDailySquarePayments(date: string) {
   return [...payments.values()];
 }
 
+/** Private owner reconciliation evidence. Never guesses a family by price/time,
+ * writes a receipt, or creates a provider charge. Contact details and full card
+ * data are deliberately omitted. Provider failures fail the whole lookup. */
+export async function readAdmissionReceiptCandidates(date: string, kind: 'admission' | 'party' = 'admission', admin?: SupabaseClient) {
+  const config = squareConfig();
+  const payments = (await readDailySquarePayments(date)).filter(payment => payment.order_id);
+  let linkedOrderIds: string[] = [];
+  if (admin) {
+    const { sources, issues } = await loadRevenueSources(admin);
+    if (issues.length) throw new Error('Linked service receipt discovery is incomplete.');
+    linkedOrderIds = revenueServices(sources).filter(service => service.date === date && (kind === 'party' ? service.category === 'party' : ['open_play', 'walk_in'].includes(service.category))).flatMap(service => service.charges.map(charge => charge.order_id));
+  }
+  // POS receipts known through a booking/check-in must be fetched explicitly:
+  // a daily payment listing alone is not a complete service-day receipt audit.
+  // Party history also discovers deposits received before the selected day.
+  const history = kind === 'party' ? await readHistoricalClassOrders(new Set()) : new Map<string, ProviderOrder>();
+  const orderIds = [...new Set([...payments.map(payment => payment.order_id!), ...linkedOrderIds, ...history.keys()])];
+  if (orderIds.length > 300) throw new Error('Too many admission receipt candidates.');
+  const customers = new Map<string, Promise<string>>();
+  const customerName = (id: string) => {
+    if (!customers.has(id)) customers.set(id, squareRequest<{ customer: { id: string; given_name?: string; family_name?: string; company_name?: string } }>(`/v2/customers/${encodeURIComponent(id)}`).then(({ customer }) => {
+      if (customer.id !== id) throw new Error('Receipt customer reference does not match.');
+      return [customer.given_name, customer.family_name].filter(Boolean).join(' ').slice(0, 200) || (customer.company_name ?? '').slice(0, 200);
+    }));
+    return customers.get(id)!;
+  };
+  const receipts = [];
+  for (let offset = 0; offset < orderIds.length; offset += 6) {
+    const batch = await Promise.all(orderIds.slice(offset, offset + 6).map(async id => {
+      const order = history.get(id) ?? (await squareRequest<{ order: ProviderOrder }>(`/v2/orders/${encodeURIComponent(id)}`)).order;
+      if (order.id !== id || order.location_id !== config.locationId) throw new Error('Receipt order reference does not match.');
+      const categories = kind === 'party' ? ['party'] : ['open_play', 'walk_in'];
+      if (!order.line_items?.some(item => categories.includes(squareSaleCategory(item.name ?? '', item.item_type)))) return null;
+      const settled: ProviderPayment[] = [];
+      const evidence = await readRevenueEvidence(id, order, payment => settled.push(payment));
+      if (payments.filter(payment => payment.order_id === id).some(payment => !evidence.payments.some(verified => verified.id === payment.id))) throw new Error('Receipt tender reference does not match.');
+      return {
+        order_id: id, reference_id: order.reference_id ?? null, service_total_cents: evidence.service_total_cents,
+        tax_cents: evidence.tax_cents, tip_cents: evidence.tip_cents,
+        items: (order.line_items ?? []).map(item => ({ label: (item.name ?? '').slice(0, 200), note: (item.note ?? '').slice(0, 500), amount_cents: money(item.total_money) - money(item.total_tax_money, true) })),
+        payments: await Promise.all(settled.map(async payment => {
+          const verified = evidence.payments.find(row => row.id === payment.id)!;
+          const customerId = payment.customer_id ?? order.customer_id;
+          return { ...verified, source_type: payment.source_type ?? 'UNKNOWN', customer_name: customerId ? await customerName(customerId) : '',
+            cardholder_name: (payment.card_details?.card?.cardholder_name ?? '').slice(0, 200),
+            card_brand: payment.card_details?.card?.card_brand ?? null, last_4: /^\d{4}$/.test(payment.card_details?.card?.last_4 ?? '') ? payment.card_details!.card!.last_4 : null,
+            note: (payment.note ?? '').slice(0, 500) };
+        })),
+      };
+    }));
+    receipts.push(...batch.filter(row => row !== null));
+  }
+  return receipts;
+}
+
 function unlinkedPaymentEvidence(payment: ProviderPayment): RevenueEvidence {
   const amount = money(payment.amount_money), refunded = money(payment.refunded_money, true);
   if (refunded > amount || !payment.created_at) throw new Error('Payment refund needs review.');
@@ -161,6 +236,7 @@ function unlinkedPaymentEvidence(payment: ProviderPayment): RevenueEvidence {
 
 export async function getServiceDayRevenue(admin: SupabaseClient, date: string) {
   const { sources, issues } = await loadRevenueSources(admin);
+  await loadRevenueVisitorRoles(admin, sources, date, issues);
   const baseServices = revenueServices(sources);
   const variations = new Set((sources.classMappings ?? []).map(row => row.variation_id));
   let historicalOrders = new Map<string, ProviderOrder>();
@@ -192,5 +268,5 @@ export async function getServiceDayRevenue(admin: SupabaseClient, date: string) 
       catch (error) { issues.push(`Unable to verify Square receipt ${id.slice(0, 8)}.`); console.warn('revenue_receipt_unavailable', id, error instanceof Error ? error.message : 'Verification failed'); }
     }));
   }
-  return calculateRevenue(supplementSquareRevenue(allocatePartyRevenue(services, [...evidence.values()], sources), evidence, date), evidence, date, issues);
+  return calculateRevenue(supplementSquareRevenue(allocatePartyRevenue(services, [...evidence.values()], sources), evidence, date), evidence, date, issues, sources);
 }

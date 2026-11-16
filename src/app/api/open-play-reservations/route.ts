@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import {
   SOFT_OPENING_START,
+  isOpenPlayArrivalAvailable,
   PUBLIC_OPEN_PLAY_START,
   SOFT_OPENING_END,
   formatOpenPlayReservationError,
@@ -123,7 +124,7 @@ export async function GET(req: Request) {
       }
     }
 
-    const slots = (slotsRes.data ?? []).map((slot) => {
+    const slots = (slotsRes.data ?? []).filter(isOpenPlayArrivalAvailable).map((slot) => {
       const occupancy = occupancyBySlot.get(slot.id as string) ?? { children: 0, adults: 0, total: 0 };
       const capacityChildren = Number(slot.capacity_children ?? 0);
       const capacityTotal = slot.capacity_total == null ? null : Number(slot.capacity_total);
@@ -192,6 +193,9 @@ export async function POST(req: Request) {
     if (slotError) throw new Error(slotError.message);
     if (!slot) {
       return NextResponse.json({ ok: false, error: 'This soft opening visit time is no longer available.' }, { status: 404, headers: NO_STORE_HEADERS });
+    }
+    if (!isOpenPlayArrivalAvailable(slot)) {
+      return NextResponse.json({ ok: false, error: 'The last Open Play ARRIVAL WINDOW is 4–5 PM. Unlimited play continues until closing at 6 PM. Please choose an earlier arrival window.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
     if (slot.status !== 'open') {
       return NextResponse.json({ ok: false, error: 'This soft opening visit time is not open for reservations.' }, { status: 409, headers: NO_STORE_HEADERS });

@@ -16,6 +16,7 @@ async function fixture(t) {
   await db.exec(`create table checkins(id uuid primary key,person_id uuid,household_id uuid,checked_in_at timestamptz,price_cents int default 1600,payment_status text default 'due',square_environment text);
     create table people(id uuid primary key,household_id uuid,first_name text default 'Test',last_name text default 'Guest',role text default 'child',birthdate text);
     create table households(id uuid primary key,name text);
+    create table founding_memberships(household_id uuid,environment text,status text,child_ids uuid[],square_card_id text,start_date date,paid_through date,created_at timestamptz default now());
     create table open_play_reservations(household_id uuid,child_ids uuid[],payment_status text,payment_environment text,status text,slot_id uuid);
     create table open_play_reservation_slots(id uuid,starts_at timestamptz);
     create table admission_pos_sales(id uuid,checkin_ids uuid[],launched_at timestamptz,created_by_user_id uuid,environment text,status text);
@@ -102,15 +103,23 @@ test('invalid saved departures fail visibly rather than showing a visitor as che
 
 test('checkout API authorizes staff, validates selection, and uses the server operator identity', async () => {
   let calls = 0;
+  const options = [];
   const denied = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: false, response: Response.json({}, { status: 403 }) }) } } }).load('src/app/api/admin/admission/checkout/route.ts');
   assert.equal((await denied.POST(new Request('https://example.test', { method: 'POST', body: '{}' }))).status, 403);
   const api = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: ids.user }, admin: {} }) },
-    '@/lib/admission-checkout': { checkoutAdmission: async (...args) => { calls++; assert.equal(args[3], ids.user); return { checkouts: [] }; } } } }).load('src/app/api/admin/admission/checkout/route.ts');
+    '@/lib/admission-checkout': { checkoutAdmission: async (...args) => { calls++; assert.equal(args[3], ids.user); options.push(args[5]); return { checkouts: [] }; } } } }).load('src/app/api/admin/admission/checkout/route.ts');
   const request = body => new Request('https://example.test', { method: 'POST', body: JSON.stringify(body) });
   for (const checkin_ids of [[], [first, first], ['bad-id']]) assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids }))).status, 400);
   assert.equal(calls, 0);
   assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids: [first], created_by: ids.other }))).status, 200);
   assert.equal(calls, 1);
+  assert.equal(options[0].timeUnknown, false);
+  for (const checkout_time_unknown of ['true', 1, null, {}]) {
+    assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids: [first], checkout_time_unknown }))).status, 400);
+  }
+  assert.equal(calls, 1);
+  assert.equal((await api.POST(request({ household_id: ids.household, checkin_ids: [first], checkout_time_unknown: true }))).status, 200);
+  assert.equal(options[1].timeUnknown, true);
 });
 
 test('admission payment API retains checked-out unpaid visits and attaches stored arrival/departure times', async t => {
@@ -177,4 +186,37 @@ test('visit reports read beyond the first database page and CSV escapes names an
   const csv = admissionStayCsv([{ ...result.completed[0], name: '  =DANGEROUS("name")' }]);
   assert.ok(csv.includes('"\'  =DANGEROUS(""name"")"'));
   assert.ok(csv.includes('"10:00 AM","12:00 PM","120"'));
+});
+
+
+test('unknown-time departures are durable, leave billing intact, and never imply an observed departure time', async t => {
+  const { db, admin } = await fixture(t);
+  const result = await checkoutAdmission(admin, [first, second], ids.household, ids.user, now, { timeUnknown: true });
+  assert.equal(result.checked_out_count, 2);
+  assert.ok(result.checkouts.every(row => row.checked_out === true && row.checked_out_at === null));
+  const retry = await checkoutAdmission(admin, [first, second], ids.household, ids.user, new Date(now.getTime() + 60000));
+  assert.equal(retry.checked_out_count, 0);
+  assert.ok(retry.checkouts.every(row => row.checked_out_at === null));
+  const events = (await db.query('select * from occupancy_events')).rows;
+  assert.equal(events.length, 2);
+  assert.equal(events.reduce((sum, row) => sum + row.delta, 0), -2);
+  assert.ok(events.every(row => row.metadata.checkout_time_unknown === true && row.created_at.toISOString() === now.toISOString()));
+  assert.deepEqual((await db.query('select distinct payment_status,price_cents from checkins')).rows, [{ payment_status: 'due', price_cents: 1600 }]);
+
+  const api = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: ids.user }, admin }) },
+    '@/lib/party-config': { getPartyDateKey: () => '2026-11-11', toPartyDateTimeIso: day => `${day}T05:00:00Z` } } }).load('src/app/api/admin/admission/pos/route.ts');
+  const response = await (await api.GET()).json();
+  assert.equal(response.ok, true);
+  assert.ok(response.visits.every(visit => visit.checked_out === true && visit.checked_out_at === null));
+  const { admissionCheckedOut } = modules.load('src/lib/admission-pos-ui.ts');
+  assert.equal(response.visits.filter(visit => !admissionCheckedOut(visit)).length, 0);
+  assert.ok(admissionCheckedOut({ checked_out_at: now.toISOString() })); // backwards-compatible timed visits
+  const history = loadSquareModules({ mocks: { '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: ids.user }, admin }) } } }).load('src/app/api/admin/admission/stays/route.ts');
+  const stats = await (await history.GET(new Request('https://example.test?start=2026-11-11&end=2026-11-11'))).json();
+  assert.equal(stats.ok, true);
+  assert.equal(stats.without_checkout, 0);
+  assert.equal(stats.unknown_checkout_time, 2);
+  assert.equal(stats.completed.length, 0);
+  assert.equal(stats.guest_minutes, 0);
+  assert.equal(stats.average_minutes, null);
 });

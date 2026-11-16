@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getCurrentUserRole } from '@/lib/authz';
 import { getKioskDevice, KIOSK_DEVICE_COOKIE, KIOSK_SESSION_COOKIE, kioskCookieOptions, sameOrigin } from '@/lib/staff-kiosk';
 import { validStaffPin, verifyStaffPin, staffTokenHash, newStaffToken } from '@/lib/staff-pin';
+import { resumeKioskShift } from '@/lib/staff-kiosk-recovery';
 export const dynamic = 'force-dynamic';
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function GET() {
@@ -22,7 +23,8 @@ export async function GET() {
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return fail('Invalid request origin.', 403);
   const deviceToken = (await cookies()).get(KIOSK_DEVICE_COOKIE)?.value;
-  if (!deviceToken || !await getKioskDevice()) return fail('An owner must register this iPad first.', 403);
+  const device = await getKioskDevice();
+  if (!deviceToken || !device) return fail('An owner must register this iPad first.', 403);
   let body: { action?: string; user_id?: string; pin?: string };
   try { body = await req.json(); } catch { return fail('Invalid request.'); }
   if (body.action === 'signout_personal') {
@@ -52,6 +54,17 @@ export async function POST(req: Request) {
   const roles = [primary?.role, ...(extra ?? []).map(row => row.role)];
   if (!roles.some(role => ['staff','instructor','owner','admin'].includes(role))) return fail('Staff access has been removed.', 403);
   const token = newStaffToken();
+  let resumed;
+  try {
+    resumed = await resumeKioskShift(admin, { userId: body.user_id, deviceId: device.id, sessionHash: staffTokenHash(token), pinVersion: attempt.pin_version });
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : 'Unable to restore your shift. Please try again.', 409);
+  }
+  if (resumed) {
+    const response = NextResponse.json({ ...resumed, next: roles.some(role => ['staff','owner','admin'].includes(role)) ? '/staff/dashboard' : '/teaching' });
+    response.cookies.set(KIOSK_SESSION_COOKIE, token, { ...kioskCookieOptions, maxAge: 7 * 86400 });
+    return response;
+  }
   const { data: result, error: clockError } = await admin.rpc('staff_kiosk_clock_in', { p_device_hash: staffTokenHash(deviceToken), p_user_id: body.user_id, p_session_hash: staffTokenHash(token), p_pin_version: attempt.pin_version });
   if (clockError || !result?.ok) return fail(result?.error ?? 'Could not record clock-in. Please try again.', 409);
   const response = NextResponse.json({ ok: true, clock_in: result.clock_in, next: roles.some(role => ['staff','owner','admin'].includes(role)) ? '/staff/dashboard' : '/teaching' });

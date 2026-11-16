@@ -15,6 +15,7 @@ export default function Page() {
       <h1>Come wander.</h1>
       <p className={styles.intro}>Soft opening starts November 11.</p>
 
+      <p><strong>ARRIVAL WINDOW · UNLIMITED STAY until closing.</strong> From November 16, the last arrival window is 4–5 PM. We close at 6 PM.</p>
       <SoftOpeningSignInButton>Sign in &amp; reserve →</SoftOpeningSignInButton>
       <p className={styles.accountNote}>New here? Create your free account at sign-in.</p>
 

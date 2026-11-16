@@ -36,6 +36,7 @@ export default async function ClassesPage() {
           Playful small-group programs for curious kids and families. Choose the classes and dates that work for your family, then pay once to confirm your seats. Registration is open to everyone. Spaces are limited.
         </p>
         <p style={{ color: '#6f628d', fontWeight: 700 }}>{CLASS_START_NOTE}</p>
+        <p style={{ color: '#6f628d', lineHeight: 1.7 }}>Regular drop-in classes need at least 3 confirmed children. If fewer than 3 are registered at 7:00 AM Eastern on class day, we’ll cancel and email registered families options to move to the following week or receive a refund. Ms. Jamie’s five-session series is separate.</p>
         <PreRegistrationNotice />
       </section>
       <PublicUpcomingClasses classes={classes} />

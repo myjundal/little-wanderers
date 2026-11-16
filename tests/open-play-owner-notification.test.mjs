@@ -41,7 +41,7 @@ function reservationHarness({ failInsert = false, failEmail = false, failConfirm
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
     '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: { getUser: async () => ({ data: { user: denied ? null : { id: 'parent', email: authEmail, phone: 'auth-login-phone' } } }) } }) },
     '@/lib/households': { getLatestHouseholdIdForUser: async () => 'family' },
-    '@/lib/open-play-reservations': { SOFT_OPENING_START: '2099-11-11', SOFT_OPENING_END: '2100-01-01', isUuid: value => value === slotId, sanitizeReservationCount: value => value, getReservationOccupancy: async () => ({ children: 0, total: 0 }), formatOpenPlayReservationError: value => value, isMissingOpenPlayReservationTable: () => false },
+    '@/lib/open-play-reservations': { ...loadModule('src/lib/open-play-reservations.ts'), SOFT_OPENING_START: '2099-11-11', SOFT_OPENING_END: '2100-01-01', isUuid: value => value === slotId, sanitizeReservationCount: value => value, getReservationOccupancy: async () => ({ children: 0, total: 0 }), formatOpenPlayReservationError: value => value, isMissingOpenPlayReservationTable: () => false },
     '@/lib/soft-opening-family': { saveSoftOpeningFamily: async () => ({ childIds: ['child'], memberships: [], guardianName: 'Parent Family', children: [{ name: 'Sam', ageLabel: '3 years' }] }) },
     '@/lib/soft-opening-pricing': { softOpeningAmount: () => 1600 },
     '@/lib/soft-opening-access': { getSoftOpeningAccessForUser: async () => ({ allowed: true }) },

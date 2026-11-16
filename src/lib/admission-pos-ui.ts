@@ -8,7 +8,10 @@ export type AdmissionVisit = {
   payment_status: string;
   checked_in_at?: string | null;
   checked_out_at?: string | null;
+  checked_out?: boolean;
 };
+
+export const admissionCheckedOut = (visit: AdmissionVisit) => visit.checked_out === true || Boolean(visit.checked_out_at);
 
 export function admissionGroups(visits: AdmissionVisit[]) {
   const groups = new Map<string, { id: string; name: string; visits: AdmissionVisit[]; total: number }>();

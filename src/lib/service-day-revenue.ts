@@ -24,9 +24,11 @@ export type RevenueSources = {
   bookings: RevenueBooking[]; slots: { id: string; starts_at: string }[]; visits: RevenueVisit[]; parties: RevenueParty[];
   series: RevenueSeries[]; classes: RevenueClass[]; registrations: RevenueRegistration[];
   classCheckouts?: RevenueClassCheckout[];
+  classCancellationEvents?: { id: string; notes: string }[];
   classPrograms?: RevenueClassProgram[]; classMappings?: RevenueClassMapping[];
+  people?: { id: string; role: string | null }[];
 };
-export type RevenueCharge = { order_id: string; amount_cents: number };
+export type RevenueCharge = { order_id: string; amount_cents: number; known_refund_cents?: number };
 export type RevenueService = {
   id: string; date: string; category: RevenueCategory; label: string; expected_cents: number;
   attendance: 'visited' | 'reserved' | 'unknown' | 'sale'; recognition?: 'payment' | 'unallocated_class' | 'unallocated_party' | 'class_service'; cancelled: boolean; charges: RevenueCharge[]; issues: string[];
@@ -73,6 +75,7 @@ export function revenueServices(data: RevenueSources) {
     if (row.status === 'no_show') service.issues.push('No-show reservation requires revenue review.');
     if (paid(row.payment_status) && (!row.square_order_id || row.payment_environment !== 'production')) service.issues.push('Paid reservation has no linked production order.');
     if (row.square_order_id && row.payment_environment !== 'production') service.issues.push('The payment environment is not verified.');
+    if (included(row.payment_status)) service.expected_cents = 0;
     if (service.cancelled) {
       if (row.square_order_id && row.payment_environment === 'production') service.charges.push({ order_id: row.square_order_id, amount_cents: row.amount_cents });
       continue;
@@ -82,21 +85,45 @@ export function revenueServices(data: RevenueSources) {
       || row.child_ids.some(id => matches.filter(visit => visit.person_id === id).length > 1);
     if (ambiguous) { service.issues.push('More than one booking or visit matches a child.'); continue; }
     if (row.payment_environment === 'production' && row.square_order_id) {
-      service.charges.push({ order_id: row.square_order_id, amount_cents: row.amount_cents });
+      const waived = included(row.payment_status) ? [] : matches.filter(visit => included(visit.payment_status)
+        && visit.square_order_id === row.square_order_id && visit.square_environment === 'production' && visit.price_cents > 0);
+      const waivedAmount = waived.reduce((sum, visit) => sum + visit.price_cents, 0);
+      if (waivedAmount > row.amount_cents) { service.issues.push('Waived admission receipt allocation needs review.'); continue; }
+      if (row.amount_cents > waivedAmount) service.charges.push({ order_id: row.square_order_id, amount_cents: row.amount_cents - waivedAmount });
+      if (waivedAmount) service.expected_cents = Math.max(0, service.expected_cents - waivedAmount);
+      for (const visit of waived) addWaivedVisitCharge(service, visit);
+      if (included(row.payment_status)) service.issues.push('Complimentary admission retains a provider payment; verify the owner correction.');
       for (const visit of matches) {
         if (!visit.square_order_id || visit.square_order_id === row.square_order_id) consumed.add(visit.id);
       }
     } else if (included(row.payment_status)) {
       service.expected_cents = 0;
-      for (const visit of matches.filter(visit => included(visit.payment_status) || visit.price_cents === 0)) consumed.add(visit.id);
+      for (const visit of matches.filter(visit => included(visit.payment_status) || visit.price_cents === 0)) {
+        consumed.add(visit.id); addVisitCharge(service, visit);
+      }
     } else if (matches.length && row.child_ids.length && row.child_ids.length === row.child_count) {
       // A counter reservation and its exact named-child check-ins are one sale.
       if (row.child_ids.every(id => matches.some(visit => visit.person_id === id))) service.expected_cents = matches.reduce((sum, visit) => sum + (included(visit.payment_status) ? 0 : visit.price_cents), 0);
       for (const visit of matches) { consumed.add(visit.id); addVisitCharge(service, visit); }
     } else if (paid(row.payment_status)) service.issues.push('Paid reservation has no linked production order.');
   }
+  function addWaivedVisitCharge(service: RevenueService, visit: RevenueVisit) {
+    const target = service.id === `visit:${visit.id}` ? service : newService({ id: `waived:${visit.id}`, date: service.date,
+      category: 'walk_in', label: `Complimentary admission · ${visit.id.slice(0, 8)}`, expected_cents: 0,
+      attendance: 'visited', cancelled: false, charges: [], issues: [] });
+    target.charges.push({ order_id: visit.square_order_id!, amount_cents: visit.price_cents });
+    target.issues.push('Complimentary admission retains a provider payment; verify the owner correction.');
+  }
   function addVisitCharge(service: RevenueService, visit: RevenueVisit) {
-    if (included(visit.payment_status)) return;
+    if (included(visit.payment_status)) {
+      // Preserve a conflicting receipt's allocation so supplementing Square
+      // sales cannot silently turn a waived visit back into a standalone sale.
+      // This is a visible review exclusion, never a provider refund or deletion.
+      if (visit.square_order_id && visit.square_environment === 'production' && visit.price_cents > 0) {
+        addWaivedVisitCharge(service, visit);
+      }
+      return;
+    }
     if (visit.square_order_id && visit.square_environment === 'production') {
       if (visit.price_cents > 0) service.charges.push({ order_id: visit.square_order_id, amount_cents: visit.price_cents });
       else if (paid(visit.payment_status)) service.issues.push('Prepaid visit has no matching reservation amount.');
@@ -117,6 +144,7 @@ export function revenueServices(data: RevenueSources) {
   }
   const classMap = new Map(data.classes.map(row => [row.id, row]));
   const linkedRegistrations = new Set<string>();
+  const changes = (data.classCancellationEvents ?? []).flatMap(row => { try { const n = JSON.parse(row.notes); return n.version === 1 && n.checkout_id && n.person_id && n.class_id ? [n as { checkout_id: string; person_id: string; class_id: string; state: string; target_class_id?: string; target_registration_id?: string; amount_cents: number }] : []; } catch { return []; } });
   for (const sale of (data.classCheckouts ?? []).filter(row => row.kind === 'class' && row.environment === 'production' && ['completed', 'needs_review'].includes(row.status))) {
     const items = sale.payload.request?.items ?? [];
     const lines = sale.payload.line_items ?? [];
@@ -125,16 +153,28 @@ export function revenueServices(data: RevenueSources) {
       && items.every(item => item.quantity === 1) && amounts.every(cents) && amounts.reduce((sum, amount) => sum + amount, 0) === sale.expected_amount_cents;
     if (!items.length) newService({ id: `class-checkout:${sale.id}`, date: '', category: 'class', label: 'Class checkout with no dates', expected_cents: 0, attendance: 'unknown', cancelled: false, charges: [], issues: ['Class checkout allocation needs review.'] });
     for (const [index, item] of items.entries()) {
-      const session = classMap.get(item.class_id);
-      const registrations = data.registrations.filter(row => row.class_id === item.class_id && row.person_id === sale.payload.request?.person_id);
+      let destination = item.class_id, refunded = 0;
+      const visited = new Set<string>();
+      for (;;) {
+        if (visited.has(destination)) break; visited.add(destination);
+        const change = changes.find(n => n.checkout_id === sale.id && n.person_id === sale.payload.request?.person_id && n.class_id === destination);
+        if (!change) break;
+        if (change.state === 'refunded' && cents(change.amount_cents)) refunded = change.amount_cents;
+        if (change.state !== 'transferred' || !change.target_class_id) break;
+        if (change.target_registration_id) linkedRegistrations.add(change.target_registration_id);
+        destination = change.target_class_id;
+      }
+      const session = classMap.get(destination);
+      data.registrations.filter(row => visited.has(row.class_id) && row.person_id === sale.payload.request?.person_id).forEach(row => linkedRegistrations.add(row.id));
+      const registrations = data.registrations.filter(row => row.class_id === destination && row.person_id === sale.payload.request?.person_id);
       registrations.forEach(row => linkedRegistrations.add(row.id));
       const amount = cents(amounts[index]) ? amounts[index] : 0;
       const service = newService({ id: `class-checkout:${sale.id}:${item.class_id}`, date: day(session?.start_time), category: 'class', label: `${session?.title ?? 'Class'} · ${sale.id.slice(0, 8)}`,
         expected_cents: amount, attendance: registrations.some(row => row.attendance_status === 'attended') ? 'visited' : 'reserved',
-        cancelled: session?.status === 'cancelled', charges: sale.order_id ? [{ order_id: sale.order_id, amount_cents: amount }] : [], issues: [] });
+        cancelled: session?.status === 'cancelled', charges: sale.order_id ? [{ order_id: sale.order_id, amount_cents: amount, ...(refunded ? { known_refund_cents: refunded } : {}) }] : [], issues: [] });
       if (!allocationValid || !session || !sale.order_id || !sale.payload.request?.person_id) service.issues.push('Class checkout allocation needs review.');
       if (sale.status === 'needs_review') service.issues.push('Class payment is marked for review.');
-      if (registrations.some(row => row.status === 'cancelled' || row.attendance_status === 'no_show')) service.issues.push('Cancelled or no-show class participation needs review.');
+      if (!refunded && registrations.some(row => row.status === 'cancelled' || row.attendance_status === 'no_show')) service.issues.push('Cancelled or no-show class participation needs review.');
     }
   }
   for (const sale of data.series.filter(row => row.environment === 'production')) {
@@ -165,13 +205,13 @@ export function revenueServices(data: RevenueSources) {
   return services;
 }
 
-export function calculateRevenue(services: RevenueService[], evidence: Map<string, RevenueEvidence>, date: string, sourceIssues: string[] = []) {
+export function calculateRevenue(services: RevenueService[], evidence: Map<string, RevenueEvidence>, date: string, sourceIssues: string[] = [], sources?: RevenueSources) {
   if (!validRevenueDate(date)) throw new Error('Choose a valid date.');
-  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0, payment_details: [] as { id: string; date: string; received_cents: number; refunded_cents: number; net_cents: number }[] }));
+  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0, pending_payment_cents: 0, payment_check: null as 'payment_unconfirmed' | 'visit_unconfirmed' | null, payment_details: [] as { id: string; date: string; received_cents: number; refunded_cents: number; net_cents: number }[] }));
   const orderIds = new Set(rows.flatMap(row => row.charges.filter(charge => row.date === date
     || (row.category === 'party' && evidence.get(charge.order_id)?.payments.some(payment => day(payment.paid_at) === date))).map(charge => charge.order_id)));
   for (const id of orderIds) {
-    const units = rows.flatMap(row => row.charges.filter(charge => charge.order_id === id).map(charge => ({ row, amount: charge.amount_cents })));
+    const units = rows.flatMap(row => row.charges.filter(charge => charge.order_id === id).map(charge => ({ row, amount: charge.amount_cents, knownRefund: charge.known_refund_cents ?? 0 })));
     const order = evidence.get(id);
     const total = units.reduce((sum, unit) => sum + unit.amount, 0);
     if (!order || order.order_id !== id || units.some(unit => !cents(unit.amount)) || total !== order.service_total_cents || !total) {
@@ -183,7 +223,11 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     for (const payment of order.payments) {
       const gross = allocateRevenue(payment.amount_cents, weights);
       // Allocate refund using the already allocated gross to preserve net cents.
-      const refunds = allocateRevenue(payment.refunded_cents, gross);
+      const known = units.map((u, i) => Math.min(gross[i], u.knownRefund));
+      const knownTotal = known.reduce((s, n) => s + n, 0);
+      const namedRefunds = knownTotal && order.payments.length === 1 ? allocateRevenue(Math.min(payment.refunded_cents, knownTotal), known) : units.map(() => 0);
+      const residual = allocateRevenue(payment.refunded_cents - namedRefunds.reduce((s, n) => s + n, 0), gross.map((n, i) => n - namedRefunds[i]));
+      const refunds = residual.map((n, i) => n + namedRefunds[i]);
       units.forEach((unit, index) => {
         const paymentDay = day(payment.paid_at);
         if (['payment', 'unallocated_class', 'unallocated_party'].includes(unit.row.recognition ?? '') && paymentDay !== unit.row.date) return;
@@ -205,6 +249,15 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     row.net_cents = row.cancelled || row.issues.length ? 0 : row.received_cents - row.refunded_cents - row.redeemed_cents;
     // A refund reduces revenue; it does not reopen the customer's original bill.
     row.due_cents = row.cancelled || row.issues.length || row.recognition ? 0 : Math.max(0, row.expected_cents - row.received_cents);
+    // A price on a booking/check-in is not proof of an outstanding debt.
+    // Only an attended admission with a verified partial receipt establishes
+    // a remaining balance. Other unpaid records need payment/visit review.
+    if (['open_play', 'walk_in'].includes(row.category) && row.due_cents > 0
+      && !(row.attendance === 'visited' && row.received_cents > 0 && row.charges.length > 0)) {
+      row.pending_payment_cents = row.due_cents;
+      row.payment_check = row.attendance === 'visited' ? 'payment_unconfirmed' : 'visit_unconfirmed';
+      row.due_cents = 0;
+    }
     if (row.issues.length || row.cancelled) { row.prepaid_cents = 0; row.same_day_cents = 0; row.later_paid_cents = 0; }
   }
   const partyRows = selected.filter(row => row.category === 'party' && row.recognition !== 'unallocated_party');
@@ -212,11 +265,43 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
   const partyReview = partyReceipts.some(payment => payment.review);
   const sum = (field: 'net_cents' | 'prepaid_cents' | 'same_day_cents' | 'later_paid_cents' | 'due_cents') => selected.reduce((total, row) => total + row[field], 0);
   const issues = [...sourceIssues, ...rows.filter(row => !row.date).map(row => `${row.label}: ${row.issues.join(' ')}`)];
-  const categories = (Object.keys(revenueCategories) as RevenueCategory[]).map(category => {
-    const items = selected.filter(row => row.category === category);
-    return { category, label: revenueCategories[category], count: items.filter(row => !row.cancelled).length, net_cents: items.reduce((sum, row) => sum + row.net_cents, 0), due_cents: items.reduce((sum, row) => sum + row.due_cents, 0) };
+  // Financial categories contain dollars only. Attendance, reservations and
+  // itemized receipt lines must never be summed into a single count.
+  const categoryDefinitions = [
+    { category: 'admission', label: '입장 (Open Play)', matches: ['open_play', 'walk_in'] },
+    ...Object.entries(revenueCategories).filter(([key]) => !['open_play', 'walk_in'].includes(key))
+      .map(([category, label]) => ({ category, label, matches: [category] })),
+  ];
+  const categories = categoryDefinitions.map(({ category, label, matches }) => {
+    const items = selected.filter(row => matches.includes(row.category));
+    return { category, label, net_cents: items.reduce((sum, row) => sum + row.net_cents, 0), due_cents: items.reduce((sum, row) => sum + row.due_cents, 0) };
   });
-  return { date, timezone: 'America/New_York', complete: !issues.length && !partyReview && !selected.some(row => row.issues.length), issues, categories, rows: selected,
+  const admissions = selected.filter(row => ['open_play', 'walk_in'].includes(row.category));
+  const admissionSummary = {
+    net_cents: admissions.reduce((sum, row) => sum + row.net_cents, 0),
+    linked_cents: admissions.filter(row => !row.id.startsWith('square:')).reduce((sum, row) => sum + row.net_cents, 0),
+    unlinked_square_cents: admissions.filter(row => row.id.startsWith('square:')).reduce((sum, row) => sum + row.net_cents, 0),
+    due_cents: admissions.reduce((sum, row) => sum + row.due_cents, 0),
+    payment_unconfirmed: admissions.filter(row => row.payment_check === 'payment_unconfirmed'),
+    visit_unconfirmed: admissions.filter(row => row.payment_check === 'visit_unconfirmed'),
+    other_review: admissions.filter(row => row.issues.length > 0),
+  };
+  const personRoles = new Map((sources?.people ?? []).map(row => [row.id, row.role]));
+  const checkedInPeople = new Set((sources?.visits ?? []).filter(row => production(row.square_environment) && day(row.checked_in_at) === date).map(row => row.person_id));
+  const bookingRows = selected.filter(row => row.id.startsWith('booking:') && !row.cancelled);
+  const visitorStats = sources ? {
+    children: [...checkedInPeople].filter(id => personRoles.get(id) === 'child').length,
+    adults: [...checkedInPeople].filter(id => personRoles.get(id) === 'adult').length,
+    unknown: [...checkedInPeople].filter(id => !['child', 'adult'].includes(personRoles.get(id) ?? '')).length,
+    total: checkedInPeople.size,
+    complete: !sourceIssues.some(issue => /checkins|visitor|people/.test(issue)),
+    reservations: bookingRows.length,
+    visited_reservations: bookingRows.filter(row => row.attendance === 'visited').length,
+    unvisited_reservations: bookingRows.filter(row => row.attendance !== 'visited').length,
+    declared_no_shows: (sources.bookings ?? []).filter(row => row.status === 'no_show' && bookingRows.some(service => service.id === `booking:${row.id}`)).length,
+  } : null;
+  return { date, timezone: 'America/New_York', complete: !issues.length && !partyReview && !selected.some(row => row.issues.length || row.payment_check), issues, categories, rows: selected,
+    admission: admissionSummary, visitor_stats: visitorStats,
     net_cents: sum('net_cents'), prepaid_cents: sum('prepaid_cents'), same_day_cents: sum('same_day_cents'), later_paid_cents: sum('later_paid_cents'), due_cents: sum('due_cents'),
     visited_cents: selected.filter(row => row.attendance === 'visited').reduce((sum, row) => sum + row.net_cents, 0),
     reserved_cents: selected.filter(row => row.attendance === 'reserved' || row.attendance === 'unknown').reduce((sum, row) => sum + row.net_cents, 0),
@@ -231,6 +316,6 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     unallocated_class_cents: selected.filter(row => row.recognition === 'unallocated_class').reduce((sum, row) => sum + row.received_cents - row.refunded_cents - row.redeemed_cents, 0),
     redeemed_cents: selected.reduce((sum, row) => sum + row.redeemed_cents, 0),
     refunded_cents: selected.filter(row => !row.cancelled && !row.issues.length).reduce((sum, row) => sum + row.refunded_cents, 0),
-    review_count: new Set([...selected.filter(row => row.issues.length).map(row => row.id), ...partyReceipts.filter(payment => payment.review).map(payment => payment.service_id)]).size, generated_at: new Date().toISOString() };
+    review_count: new Set([...selected.filter(row => row.issues.length || row.payment_check).map(row => row.id), ...partyReceipts.filter(payment => payment.review).map(payment => payment.service_id)]).size, generated_at: new Date().toISOString() };
 }
 export type RevenueReport = ReturnType<typeof calculateRevenue>;

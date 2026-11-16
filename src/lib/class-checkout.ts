@@ -2,16 +2,19 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareRequest, squareSiteUrl, assertSquarePaymentUrl, assertUsd, type SquareOrder } from '@/lib/square-client';
 import { buildPrePopulatedData } from '@/lib/square';
 import { CLASS_TERM_END_AT, CLASS_HOLIDAY_DATE } from '@/lib/class-config';
+import { readClassDateQuote, type ClassDateQuote } from '@/lib/class-date-pricing';
 
 export type ClassCheckout = {
   id: string; household_id: string; kind: string; environment: string; location_id: string;
   expected_amount_cents: number; status: string; order_id: string | null; payment_url: string | null;
   payment_link_id: string | null; created_at: string; hold_expires_at: string;
   payload: {
-    request: { person_id: string; items: Array<{ class_id: string; quantity: number }> };
+    request: { person_id: string; items: Array<{ class_id: string; quantity: number }>; class_transfer_event_id?: string };
     assignments: Array<{ class_id: string; person_id: string }>;
     line_items: Array<Record<string, unknown>>; provider_request?: Record<string, unknown>;
     summary?: { registration_ids: string[]; registration_count: number; total_price_cents: number };
+    class_transfer_event_id?: string;
+    pricing?: ClassDateQuote;
   };
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -41,30 +44,49 @@ export async function readClassCheckout(db: SupabaseClient, householdId: string,
 }
 const dateLabel = (start: string) => new Date(start).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-/** Server prices and atomic seat checks come from the installed prepare_square_checkout RPC. */
-export async function startClassCheckout(db: SupabaseClient, input: { householdId: string; userId: string; email?: string; request: ReturnType<typeof classCheckoutRequest> }) {
-  const cfg = squareConfig();
+export async function quoteClassSelection(db: SupabaseClient, input: { householdId: string; request: ReturnType<typeof classCheckoutRequest> }) {
   const child = checked(await db.from('people').select('id').eq('id', input.request.person_id).eq('household_id', input.householdId).eq('role', 'child').maybeSingle());
   if (!child) throw new Error('Choose a child in your family.');
   const classes = checked(await db.from('classes').select('id,title,status,start_time,price_cents').in('id', input.request.items.map(item => item.class_id))) ?? [];
   if (classes.length !== input.request.items.length || classes.some(row => row.status !== 'scheduled' || Date.parse(row.start_time) <= Date.now() || Date.parse(row.start_time) >= Date.parse(CLASS_TERM_END_AT)
     || new Date(row.start_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === CLASS_HOLIDAY_DATE)) throw new Error('Choose an available upcoming class date through December 17.');
   if (classes.some(row => row.title === 'Little Hands, Big Canvases')) throw new Error('Use the separate five-session checkout for Ms. Jamie’s art series.');
+  return { classes, quote: await readClassDateQuote(db, input.householdId, input.request.person_id, classes) };
+}
+
+/** The installed RPC reserves capacity; the server freezes the verified family discount before Square creation. */
+export async function startClassCheckout(db: SupabaseClient, input: { householdId: string; userId: string; email?: string; request: ReturnType<typeof classCheckoutRequest> }) {
+  const cfg = squareConfig();
+  const { classes, quote } = await quoteClassSelection(db, input);
   let attempt = checked(await db.rpc('prepare_square_checkout', {
     p_household: input.householdId, p_kind: 'class', p_environment: cfg.environment, p_location: cfg.locationId,
     p_user: input.userId, p_role: 'customer', p_request: input.request,
   })) as ClassCheckout;
   assertEnvironment(attempt);
+  if (attempt.payload.class_transfer_event_id || attempt.payload.request.class_transfer_event_id) throw new Error('Your class transfer is being processed. Please use your cancellation email.');
   if (attempt.payload.assignments.length !== input.request.items.length || attempt.payload.assignments.some(row => row.person_id !== input.request.person_id)
-    || attempt.expected_amount_cents !== classes.reduce((total, row) => total + row.price_cents, 0)) throw new Error('Class selection or price changed. Close the pending checkout and try again.');
+    || (attempt.payload.pricing?.subtotal_cents ?? attempt.expected_amount_cents) !== quote.subtotal_cents
+    || (attempt.payload.pricing && attempt.expected_amount_cents !== attempt.payload.pricing.total_cents)) throw new Error('Class selection or price changed. Close the pending checkout and try again.');
   if (Date.parse(attempt.hold_expires_at) <= Date.now()) {
     await closeClassCheckout(db, attempt);
     throw new Error('Your checkout expired. Please select your dates again.');
   }
   if (attempt.payment_url) return attempt;
+  if (quote.discount_cents && !attempt.payload.pricing && !attempt.payload.provider_request) {
+    const payload = { ...attempt.payload, pricing: quote, line_items: input.request.items.map((item, index) => ({
+      ...attempt.payload.line_items[index], base_price_money: { amount: quote.lines.find(row => row.class_id === item.class_id)!.amount_cents, currency: 'USD' },
+    })) };
+    const saved = await db.from('square_checkout_attempts').update({ expected_amount_cents: quote.total_cents, payload })
+      .eq('id', attempt.id).eq('status', 'creating').eq('expected_amount_cents', quote.subtotal_cents).is('payload->provider_request', null).select('*').maybeSingle();
+    if (saved.error) throw new Error('Unable to freeze your sibling discount. Please try again.');
+    attempt = (saved.data ?? await readClassCheckout(db, input.householdId, attempt.id)) as ClassCheckout;
+    if (!attempt) throw new Error('Unable to verify your checkout. Please refresh.');
+    if (attempt.payment_url) return attempt;
+  }
   const lines = input.request.items.map((item, index) => {
     const row = classes.find(c => c.id === item.class_id)!;
-    return { ...attempt.payload.line_items[index], name: row.title, note: dateLabel(row.start_time) };
+    return { ...attempt.payload.line_items[index], name: row.title, note: dateLabel(row.start_time)
+      + (attempt.payload.pricing?.lines.some(line => line.class_id === row.id && line.discount_cents > 0) ? ' · 20% sibling discount' : '') };
   });
   const providerRequest = {
     idempotency_key: `lw-class-${attempt.id}`,
@@ -88,6 +110,7 @@ export async function startClassCheckout(db: SupabaseClient, input: { householdI
 type Payment = { id: string; order_id?: string; location_id?: string; status?: string; amount_money?: { amount?: number; currency?: string }; refunded_money?: { amount?: number }; tip_money?: { amount?: number }; created_at?: string; updated_at?: string };
 /** Redirects, browser totals, and webhook payloads alone never prove payment. */
 export async function reconcileClassCheckout(db: SupabaseClient, attempt: ClassCheckout) {
+  if ((attempt.payload.class_transfer_event_id || attempt.payload.request.class_transfer_event_id)) throw new Error('Your class transfer is being processed. Please use your cancellation email.');
   const cfg = assertEnvironment(attempt);
   if (['completed', 'needs_review', 'cancelled'].includes(attempt.status) || !attempt.order_id) return attempt;
   const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(attempt.order_id)}`);
@@ -127,6 +150,7 @@ export async function reconcileClassCheckout(db: SupabaseClient, attempt: ClassC
 
 /** Close the live Square page before releasing temporary checkout capacity. */
 export async function closeClassCheckout(db: SupabaseClient, attempt: ClassCheckout) {
+  if ((attempt.payload.class_transfer_event_id || attempt.payload.request.class_transfer_event_id)) throw new Error('Your class transfer is being processed. Please use your cancellation email.');
   const cfg = assertEnvironment(attempt);
   if (['completed', 'needs_review', 'cancelled'].includes(attempt.status)) return attempt;
   if (!attempt.order_id) {
@@ -163,6 +187,7 @@ export async function cleanupClassCheckouts(db: SupabaseClient) {
   }));
 }
 export function publicClassCheckout(attempt: ClassCheckout | null) {
+  if ((attempt?.payload.class_transfer_event_id || attempt?.payload.request.class_transfer_event_id)) return null;
   return attempt ? { id: attempt.id, status: attempt.status, payment_url: attempt.payment_url ? assertSquarePaymentUrl(attempt.payment_url) : null,
     total_price_cents: attempt.expected_amount_cents, person_id: attempt.payload.request.person_id,
     class_ids: attempt.payload.request.items.map(item => item.class_id), expires_at: attempt.hold_expires_at, summary: attempt.payload.summary ?? null } : null;

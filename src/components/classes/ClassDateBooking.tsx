@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CLASS_TERM_END_AT, CLASS_HOLIDAY_DATE } from '@/lib/class-config';
 import styles from './class-registration.module.css';
+import type { ClassDateQuote } from '@/lib/class-date-pricing';
 
 type Session = { id: string; title: string; start_time: string; end_time: string; price_cents: number; seats_left: number | null; schedule_label: string | null; age_range?: string | null; instructor_name?: string | null };
 type Registration = { person_id: string; status: string; class: { id: string } | null };
@@ -22,6 +23,7 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [quote, setQuote] = useState<{ key: string; value: ClassDateQuote } | null>(null);
   const mounted = useRef(false);
   const confirmed = useRef('');
   const callbacks = useRef({ onPaid, onRestoreChild });
@@ -37,7 +39,18 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
   const locked = Boolean(checkout && !['completed', 'cancelled'].includes(checkout.status));
   const ids = selected.personId === selectedChildId || !selected.personId ? selected.ids : [];
   const selectedSessions = sessions.filter(row => ids.includes(row.id));
-  const total = selectedSessions.reduce((sum, row) => sum + row.price_cents, 0);
+  const quoteKey = `${selectedChildId}:${[...ids].sort().join(',')}`;
+  const currentQuote = quote?.key === quoteKey ? quote.value : null;
+  const total = currentQuote?.total_cents ?? selectedSessions.reduce((sum, row) => sum + row.price_cents, 0);
+  useEffect(() => {
+    if (!authenticated || !selectedChildId || quoteKey.endsWith(':') || locked) return;
+    let active = true;
+    fetch('/api/classes/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'quote', person_id: selectedChildId, items: quoteKey.slice(quoteKey.indexOf(':') + 1).split(',').map(class_id => ({ class_id })) }) })
+      .then(async response => { const data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || 'Unable to check the family price.'); return data.quote as ClassDateQuote; })
+      .then(value => { if (active) setQuote({ key: quoteKey, value }); })
+      .catch(reason => { if (active) setError(reason.message); });
+    return () => { active = false; };
+  }, [authenticated, selectedChildId, quoteKey, locked]);
   const changeSelection = (nextIds: string[]) => {
     const next = { personId: selectedChildId, ids: nextIds };
     setSelected(next); setError(''); setNotice('');
@@ -72,6 +85,13 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
   useEffect(() => {
     if (mounted.current) return;
     mounted.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const child = params.get('child_id'); const dates = (params.get('class_ids') ?? '').split(',').filter(id => /^[a-f0-9-]{36}$/i.test(id));
+    if (child && /^[a-f0-9-]{36}$/i.test(child) && dates.length) {
+      setSelected({ personId: child, ids: dates }); callbacks.current.onRestoreChild(child);
+      if (params.get('payment') === 'arrival') setNotice('To save your choice, select “I’ll pay on arrival” below. Payment is required before class and places are subject to availability.');
+      return;
+    }
     try { const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null'); if (saved && Array.isArray(saved.ids) && saved.ids.every((id: unknown) => typeof id === 'string')) setSelected({ personId: saved.personId || '', ids: saved.ids }); } catch {}
   }, []);
   useEffect(() => {
@@ -92,7 +112,7 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
     window.addEventListener('focus', verify);
     return () => { active = false; window.clearInterval(interval); window.removeEventListener('focus', verify); };
   }, [checkout, request, applyCheckout]);
-  const start = async () => {
+  const start = async (payOnArrival = false) => {
     if (busy || locked || restoring || !selectedSessions.length) return;
     if (!authenticated) {
       const next = '/landing/classschedule';
@@ -102,7 +122,13 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
     setBusy(true); setError('');
     try {
       const child = await resolveChild();
-      const current = await request({ person_id: child.id, items: selectedSessions.map(row => ({ class_id: row.id, quantity: 1 })), guardian_first_name: child.guardian_first_name, guardian_last_name: child.guardian_last_name });
+      const body = { person_id: child.id, items: selectedSessions.map(row => ({ class_id: row.id, quantity: 1 })), guardian_first_name: child.guardian_first_name, guardian_last_name: child.guardian_last_name };
+      if (payOnArrival) {
+        const response = await fetch('/api/classes/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...body, mode: 'pay_on_arrival' }) });
+        const data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || 'Unable to save your payment choice.');
+        setNotice(data.message); callbacks.current.onPaid(); return;
+      }
+      const current = await request(body);
       applyCheckout(current);
       if (current?.payment_url && current.status === 'open') window.location.assign(current.payment_url);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to open checkout.'); }
@@ -116,11 +142,12 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
     finally { setBusy(false); }
   };
   if (!sessions.length) return null;
-  return <section className={styles.booking} aria-label="Choose class dates and pay">
-    <header><p className={styles.eyebrow}>November 16 – December 17</p><h2>Choose your dates & pay</h2><p>Open to all families. Pick any combination of classes and dates for the child selected above, then pay once.</p><p>No classes on Thanksgiving, November 26. Ms. Jamie’s art series has its own registration below.</p></header>
+  return <section id="class-date-booking" className={styles.booking} aria-label="Choose class dates and pay">
+    <header><p className={styles.eyebrow}>November 16 – December 17</p><h2>Choose your dates & pay</h2><p>Open to all families. Pick any combination of classes and dates for the child selected above, then pay once.</p><p>No classes on Thanksgiving, November 26. Ms. Jamie’s art series has its own registration below.</p><p>Regular drop-in classes need at least 3 confirmed children. We check at 7:00 AM Eastern on class day. If the minimum is not met, we’ll email options to move to the following week or receive a refund.</p></header>
     <div className={styles.dateGroups}>{groups.map(group => <fieldset key={group.title} disabled={locked || busy || restoring} className={styles.dateGroup}>
       <legend>{group.title} <span>{money(group.dates[0].price_cents)} / class</span></legend>
       <p>{time(group.dates[0].start_time)}–{time(group.dates[0].end_time)} · Eastern{group.dates[0].age_range ? ` · Ages ${group.dates[0].age_range}` : ''}{group.dates[0].instructor_name ? ` · ${group.dates[0].instructor_name}` : ''}</p>
+      {/\bballet\b/i.test(group.title) && <p>20% off the second and each additional child in the same family and class date. Pay for the first child, then select the next child above.</p>}
       {group.title === 'Baby Music' && <p>30 minutes of guided music + 15 minutes of free play with instruments.</p>}
       <div className={styles.dateChoices}>{group.dates.map(row => {
         const booked = registrations.some(reg => reg.person_id === selectedChildId && reg.class?.id === row.id && ['scheduled', 'attended'].includes(reg.status));
@@ -131,9 +158,9 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
     </fieldset>)}</div>
     <div className={styles.cart} aria-label="Class cart">
       <h3>Your class dates</h3>
-      {selectedSessions.length ? <ul>{selectedSessions.map(row => <li key={row.id}><span>{row.title}<small>{day(row.start_time)} · {time(row.start_time)} Eastern</small></span><strong>{money(row.price_cents)}</strong>{!locked && <button type="button" onClick={() => changeSelection(ids.filter(id => id !== row.id))} aria-label={`Remove ${row.title}, ${day(row.start_time)}`}>×</button>}</li>)}</ul> : <p>Select the dates you would like to attend.</p>}
+      {selectedSessions.length ? <ul>{selectedSessions.map(row => <li key={row.id}><span>{row.title}<small>{day(row.start_time)} · {time(row.start_time)} Eastern</small></span><strong>{money(currentQuote?.lines.find(line => line.class_id === row.id)?.amount_cents ?? row.price_cents)}</strong>{!locked && <button type="button" onClick={() => changeSelection(ids.filter(id => id !== row.id))} aria-label={`Remove ${row.title}, ${day(row.start_time)}`}>×</button>}</li>)}</ul> : <p>Select the dates you would like to attend.</p>}
       {locked ? <><p><strong>Checkout total: {money(checkout!.total_price_cents)}</strong></p>{checkout?.payment_url && checkout.status === 'open' && <a href={checkout.payment_url} className={styles.payButton}>Continue to secure payment</a>}<p>Your place is confirmed after payment. Complete this checkout or close it before choosing different dates.</p>{checkout?.status !== 'needs_review' && <div className={styles.cartActions}><button type="button" disabled={busy} onClick={() => { void request({ mode: 'finalize', checkout_id: checkout!.id }).then(applyCheckout).catch(reason => setError(reason.message)); }}>Check payment</button><button type="button" disabled={busy} onClick={() => void close()}>Close unpaid checkout & change dates</button></div>}</>
-        : <><div className={styles.cartTotal}><span>{selectedSessions.length} date(s)</span><strong>Total {money(total)}</strong></div><button type="button" className={styles.payButton} disabled={busy || restoring || !selectedSessions.length} onClick={() => void start()}>{busy ? 'Preparing secure payment…' : restoring ? 'Checking pending payment…' : authenticated ? `Pay ${money(total)} & reserve dates` : 'Sign in / create account to pay'}</button><p>Only completed payment confirms your place. Prices are per class and per child.</p></>}
+        : <>{Boolean(currentQuote?.discount_cents) && <p>20% ballet sibling discount: −{money(currentQuote!.discount_cents)}</p>}<div className={styles.cartTotal}><span>{selectedSessions.length} date(s)</span><strong>Total {money(total)}</strong></div><button type="button" className={styles.payButton} disabled={busy || restoring || !selectedSessions.length} onClick={() => void start()}>{busy ? 'Preparing secure payment…' : restoring ? 'Checking pending payment…' : authenticated ? `Pay ${money(total)} & reserve dates` : 'Sign in / create account to pay'}</button><button type="button" disabled={busy || restoring || !selectedSessions.length} onClick={() => void start(true)}>I’ll pay on arrival</button><p>Only completed payment confirms your place. If your plans change, no payment is required. You may pay at the studio before class, subject to availability; choosing pay on arrival does not reserve a seat.</p></>}
       {notice && <p role="status" className={styles.confirmation}>{notice}</p>}
       {error && <p role="alert" className={styles.error}>{error}</p>}
     </div>

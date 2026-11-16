@@ -8,7 +8,7 @@ import { admissionDate, admissionTime, stayLabel, stayMinutes } from '@/lib/admi
 import { admissionPaymentLabel, reservationAdmissionLabel } from '@/lib/admission-payment-status';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
 import AdmissionHelp from '@/components/staff/AdmissionHelp';
-import { admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
+import { admissionCheckedOut, admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
 const personName = (person: DeskPerson) => [person.first_name, person.last_name].filter(Boolean).join(' ') || 'Unnamed visitor';
@@ -46,6 +46,8 @@ export default function StaffCheckinPage() {
   const [checkingOut, setCheckingOut] = useState('');
   const [squareCustomerMessage, setSquareCustomerMessage] = useState('');
   const [connectingCustomer, setConnectingCustomer] = useState(false);
+  const [confirmationMessage, setConfirmationMessage] = useState('');
+  const confirmingPayment = useRef(false);
   const [staffMode, setStaffMode] = useState<'home-screen' | 'browser' | null>(null);
   const checkoutBusy = useRef(false);
   const [launchUrl, setLaunchUrl] = useState('');
@@ -263,6 +265,7 @@ export default function StaffCheckinPage() {
     const request = ++familyRequest.current;
     if (!preserveSelection) { setFamily(null); setPeopleIds([]); }
     setActiveFamily(id);
+    setConfirmationMessage('');
     setSquareCustomerMessage('');
     setRecoveryConfirmed(false);
     setDeskError('');
@@ -279,6 +282,30 @@ export default function StaffCheckinPage() {
       } else if (!new URLSearchParams(window.location.search).has('data')) setMessage(result.items[0].waiver_status === 'completed' ? 'Select only the children and adults who are here today.' : 'Check-in is blocked: a parent or legal guardian must complete the family waiver first.');
       await refreshPayments();
     } catch (error) { if (request === familyRequest.current) setDeskError(error instanceof Error ? error.message : 'Unable to open family.'); }
+  }
+
+  async function confirmPayment() {
+    if (!isToday || !activeFamily || busy || checkingIn || confirmingPayment.current) return;
+    confirmingPayment.current = true;
+    setBusy(true);
+    setConfirmationMessage('Checking payment and family records…');
+    try {
+      const response = await fetch('/api/admin/admission/confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ household_id: activeFamily }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to confirm payment.');
+      await refreshPayments();
+      setDeskRefresh(value => value + 1);
+      if (result.household_id && result.household_id !== activeFamily) await openFamily(result.household_id);
+      if (result.status !== 'confirmed') setConfirmationMessage(result.status === 'review'
+        ? 'Payment needs review. Check the Square receipt or ask the owner; do not collect again.'
+        : 'Payment is not verified yet. Check Square, then retry; do not collect again.');
+      else if (result.family_link === 'linked') setConfirmationMessage('Payment confirmed. Family records connected.');
+      else if (result.family_link === 'review') setConfirmationMessage('Payment confirmed. Family records need owner review.');
+      else if (result.family_link === 'pending') setConfirmationMessage('Payment confirmed. Family linking is still pending; retry Payment confirmed.');
+      else setConfirmationMessage(result.payment_status === 'included' ? 'Admission included. No payment is due.' : 'Payment confirmed. Family records are up to date.');
+    } catch (error) {
+      setConfirmationMessage(`${error instanceof Error ? error.message : 'Unable to confirm payment.'} Do not collect again.`);
+    } finally { confirmingPayment.current = false; setBusy(false); }
   }
 
   async function connectSquareCustomer() {
@@ -349,22 +376,22 @@ export default function StaffCheckinPage() {
     finally { setBusy(false); }
   }
 
-  async function checkOutFamily(householdId: string, ids: string[]) {
+  async function checkOutFamily(householdId: string, ids: string[], timeUnknown = false) {
     if (locked || !paymentsReady || loading || checkoutBusy.current || paymentPending.current) return;
     checkoutBusy.current = true;
     setCheckingOut(householdId);
     let recorded = false;
     try {
       const response = await fetch('/api/admin/admission/checkout', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ household_id: householdId, checkin_ids: ids }) });
+        body: JSON.stringify({ household_id: householdId, checkin_ids: ids, checkout_time_unknown: timeUnknown }) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to check out family.');
       recorded = true;
-      const departures = new Map<string, string>((result.checkouts ?? []).map((row: { id: string; checked_out_at: string }) => [row.id, row.checked_out_at]));
-      setVisits(previous => previous.map(visit => departures.has(visit.id) ? { ...visit, checked_out_at: departures.get(visit.id) } : visit));
+      const departures = new Map<string, string | null>((result.checkouts ?? []).map((row: { id: string; checked_out_at: string | null }) => [row.id, row.checked_out_at]));
+      setVisits(previous => previous.map(visit => departures.has(visit.id) ? { ...visit, checked_out: true, checked_out_at: departures.get(visit.id) } : visit));
       setDeskRefresh(value => value + 1);
       await refreshPayments();
-      setMessage('Family checked out. Departure times and crowd count are saved.');
+      setMessage(timeUnknown ? 'Family checked out without a departure time. Excluded from stay statistics; crowd count updated.' : 'Family checked out. Departure times and crowd count are saved.');
     } catch (error) {
       setMessage(`${recorded ? 'Checkout is saved. ' : ''}${error instanceof Error ? error.message : 'Unable to check out family.'}`);
     } finally { checkoutBusy.current = false; setCheckingOut(''); }
@@ -411,7 +438,7 @@ export default function StaffCheckinPage() {
   function renderFamilyCard(card: ArrivalCard, horizontal = false) {
     const item = card.family;
     const todayVisits = boardVisits.filter(visit => visit.household_id === item.id);
-    const present = todayVisits.filter(visit => !visit.checked_out_at);
+    const present = todayVisits.filter(visit => !admissionCheckedOut(visit));
     const departed = todayVisits.length > 0 && !present.length;
     const booked = card.reservation ?? item.reservations.find(reservation=>admissionDate(reservation.slot.starts_at)===deskDate)
       ?? item.reservations.find(reservation=>Date.parse(reservation.slot.ends_at)>Date.now()) ?? item.reservations.at(-1);
@@ -436,7 +463,10 @@ export default function StaffCheckinPage() {
         </div>
       </div>
       <div className={styles.familyActions}>
-        {present.length > 0 && <button className={styles.rowCheckout} aria-label={`Check out family (${present.length})`} disabled={!isToday || locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Saving…' : 'Check out'}</button>}
+        {present.length > 0 && <>
+          <button className={styles.rowCheckout} aria-label={`Check out family (${present.length})`} disabled={!isToday || locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id))}>{checkingOut === item.id ? 'Saving…' : 'Check out'}</button>
+          <button className={styles.rowOpen} aria-label={`Check out without time (${present.length})`} title="Use when the family has already left and the departure time is unknown. Excluded from stay statistics." disabled={!isToday || locked || loading || !paymentsReady} onClick={() => void checkOutFamily(item.id, present.map(visit => visit.id), true)}>Check out without time</button>
+        </>}
         <button className={styles.rowOpen} aria-label={todayVisits.length ? 'Open family / payment' : 'Choose family'} disabled={!isToday || locked} onClick={() => void openFamily(item.id)}>Open</button>
       </div>
       <details className={styles.familyDetails}><summary>Details</summary>
@@ -447,7 +477,7 @@ export default function StaffCheckinPage() {
         </p>)}
         {query.trim() && !item.reservations.length && <p>No Open Play reservations</p>}
         <p>{item.waiver_status === 'completed' ? 'Waiver completed' : 'Waiver needed'}</p>
-        {todayVisits.map(visit => <p key={visit.id}>{visit.name} · {admissionPaymentLabel(visit)}{visit.checked_in_at && visit.checked_out_at && <> · In {admissionTime(visit.checked_in_at)} · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</p>)}
+        {todayVisits.map(visit => <p key={visit.id}>{visit.name} · {admissionPaymentLabel(visit)}{admissionCheckedOut(visit) && !visit.checked_out_at && <> · Checked out · Departure time unknown</>}{visit.checked_in_at && visit.checked_out_at && <> · In {admissionTime(visit.checked_in_at)} · Out {admissionTime(visit.checked_out_at)} · {stayLabel(stayMinutes(visit.checked_in_at, visit.checked_out_at))}</>}</p>)}
       </details>
     </article>;
   }
@@ -502,7 +532,7 @@ export default function StaffCheckinPage() {
           const visit = familyVisits.find(visit => visit.person_id === person.id);
           return <label key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: visit ? '#f0f7ef' : '#f7f3fc', borderRadius: 12 }}>
             <input type="checkbox" style={{ width: 24, height: 24 }} checked={!!visit || peopleIds.includes(person.id)} disabled={!!visit || entriesLocked} onChange={event => setPeopleIds(previous => event.target.checked ? [...previous, person.id] : previous.filter(id => id !== person.id))} />
-            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · {visit.checked_out_at ? 'Checked out' : 'Checked in'} — {admissionPaymentLabel(visit)}</span>}</span>
+            <span><strong>{personName(person)}</strong> · {person.role === 'child' ? 'Child' : 'Adult'}{visit && <span> · {admissionCheckedOut(visit) ? 'Checked out' : 'Checked in'} — {admissionPaymentLabel(visit)}</span>}</span>
           </label>;
         })}
       </div>
@@ -535,6 +565,9 @@ export default function StaffCheckinPage() {
       </> : !loading && <p>{paymentUnverified ? 'Square payment needs verification. Do not collect again; refresh payment status or check its receipt.' : familyVisits.length ? 'No admission payment due for this family. Paid visits, members and prepaid visitors are already accounted for.' : 'Check in a family to see their total here.'}</p>}
       {pendingSale && <aside style={{ marginTop: 20, padding: 16, background: '#fff1d8', borderRadius: 12 }}><h3>Square checkout needs review</h3><p>If Square was cancelled, did not open, or did not return a receipt, check Transactions on this iPad first. Wait at least one minute after the launch. Never reset while a payment is pending or saved offline.</p><label><input type="checkbox" checked={recoveryConfirmed} disabled={busy} onChange={event => setRecoveryConfirmed(event.target.checked)} /> I checked Square: this checkout is closed, with no completed, pending or offline payment.</label><p><button disabled={busy || !recoveryConfirmed} onClick={() => void recoverPayment()}>Reconcile Square and reset unpaid checkout</button></p><p>The server checks Square too. If it finds a completed matching payment, it records payment instead of starting another charge.</p></aside>}
       {launchUrl && <p><a href={launchUrl} style={{ fontWeight: 700 }}>Open Square{selected ? ` — ${money(selected.total)}` : ''}</a>. Use the same payment; do not start a separate sale.</p>}
+      {!!activeFamily && <p><button type="button" style={button} disabled={busy || checkingIn || loading || !!checkingOut} onClick={() => void confirmPayment()}>{busy ? 'Checking payment…' : 'Payment confirmed'}</button></p>}
+      <p>Confirm after payment in Square. We check the saved receipt and connect matching family records.</p>
+      {confirmationMessage && <p role="status" aria-live="polite">{confirmationMessage}</p>}
       <p><button disabled={busy || checkingIn} onClick={() => void resumePayments()}>Refresh payment status</button></p>
     </section>}
     <AdmissionHelp family={family} date={deskDate} disabled={busy || loading || checkingIn || !!checkingOut || !!completion} onOpenFamily={id => { void openFamily(id); }} onUpdated={() => {

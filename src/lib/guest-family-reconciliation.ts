@@ -33,6 +33,21 @@ export function matchGuestFamily(profile: Profile, email: string, family: Family
   return ids.length ? ids : null;
 }
 
+/** Staff payment confirmation can complete a blank child surname only when
+ * the confirmed caregiver email, guardian surname and entire child roster agree.
+ * Ordinary public waiver reconciliation keeps its existing stricter rules. */
+export function matchPaidGuestFamily(profile: Profile, email: string, family: Family, people: Person[], verifiedEmails: string[]) {
+  if (!verifiedEmails.some(value => emailKey(value) === emailKey(email))
+    || people.filter(person => person.role === 'child').length !== profile.children.length) return null;
+  const completed = people.map(person => {
+    if (person.role !== 'child' || person.last_name) return person;
+    const matches = profile.children.filter(child => identityName(child.first_name) === identityName(person.first_name)
+      && identityName(child.last_name) === identityName(profile.last_name));
+    return matches.length === 1 ? { ...person, last_name: matches[0].last_name } : person;
+  });
+  return matchGuestFamily(profile, email, family, completed, verifiedEmails);
+}
+
 /** The register stores staff-entered names in both people and anonymous member rows.
  * Only that same-day, contactless intake can use the family surname to complete
  * partial names. This never matches an Auth account or another guest submission.
@@ -169,8 +184,9 @@ export async function reconcileGuestWaiverFamily(admin: SupabaseClient, waiverId
     const hasAccount = familyMembers.some(member => !!member.user_id);
     const walkInIds = matchWalkInFamily(profile, source, family, familyPeople, familyMembers);
     if (!walkInIds && !hasAccount && (family.created_at > source.created_at || (family.created_at === source.created_at && family.id > sourceId))) return [];
-    const targetIds = matchGuestFamily(profile, waiver.email || source.email || '', family, familyPeople,
-      familyMembers.map(member => users.get(member.user_id) || '').filter(Boolean)) || walkInIds;
+    const verifiedEmails = familyMembers.map(member => users.get(member.user_id) || '').filter(Boolean);
+    const targetIds = matchGuestFamily(profile, waiver.email || source.email || '', family, familyPeople, verifiedEmails) || walkInIds
+      || (reviewVisits && hasAccount ? matchPaidGuestFamily(profile, waiver.email || source.email || '', family, familyPeople, verifiedEmails) : null);
     return targetIds ? [{ family, targetIds, hasAccount, walkIn: !!walkInIds }] : [];
   });
   const established = matches.filter(match => match.hasAccount);

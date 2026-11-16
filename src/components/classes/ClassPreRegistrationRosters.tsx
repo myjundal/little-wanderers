@@ -44,7 +44,7 @@ export default function ClassPreRegistrationRosters({ sessions, onSessionSelect,
         <caption className={styles.srOnly}>{title} — {label}</caption>
         <thead><tr><th scope="col">Child</th>{showAges && <th scope="col">Age</th>}</tr></thead>
         <tbody>{registrations.map(child => <tr key={child.personId || child.id}>
-          <td data-label="Child"><strong>{child.name}</strong>{showFamilyLinks && child.householdId && <Link className={styles.familyLink} href={`/staff/families/${encodeURIComponent(child.householdId)}`}>View family</Link>}</td>
+          <td data-label="Child"><strong>{child.name}</strong>{child.paymentChoice === 'arrival' && <small>Pay on arrival · unpaid</small>}{showFamilyLinks && child.householdId && <Link className={styles.familyLink} href={`/staff/families/${encodeURIComponent(child.householdId)}`}>View family</Link>}</td>
           {showAges && <td data-label="Age">{child.age == null ? 'Not provided' : `${child.age} ${child.age === 1 ? 'year' : 'years'}`}</td>}
         </tr>)}</tbody>
       </table></div>}

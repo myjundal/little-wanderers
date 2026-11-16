@@ -1,6 +1,7 @@
 import { validRevenueDate } from '@/lib/service-day-revenue';
 import { getAdmissionPrepayments } from '@/lib/admission-prepayments';
 import { projectInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
+import { applyFoundingAdmissionCoverage } from '@/lib/founding-admission-coverage';
 import { requireStaffContext } from '@/lib/authz';
 import { paymentFlowEnabled, squareConfig, squareEnvironment } from '@/lib/square-client';
 import { startAdmissionPos, verifyAdmissionPos, recoverAdmissionPos, reconcileAdmissionPos, refreshAdmissionPosSales, type PosSale } from '@/lib/square-admission-pos';
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
     ? await c.admin.from('households').select('id,name').in('id', familyIds)
     : { data: [], error: null };
   if (familyError) return Response.json({ ok: false, error: 'Unable to load visiting families.' }, { status: 503 });
-  let checkouts: Map<string, string>;
+  let checkouts: Map<string, string | null>;
   try { checkouts = await getAdmissionCheckouts(c.admin, data ?? []); }
   catch { return Response.json({ ok: false, error: 'Unable to load departures. Refresh admission status before continuing.' }, { status: 503 }); }
   const {data:pending,error:pendingError}=historical ? {data:[],error:null} : await c.admin.from('admission_pos_sales').select('*').eq('environment',squareEnvironment()).eq('status','open').limit(101);
@@ -60,14 +61,17 @@ export async function GET(req: Request) {
   let prepaid;
   try { prepaid = await getAdmissionPrepayments(c.admin,withFamilies,squareEnvironment()); }
   catch { return Response.json({ok:false,error:'Unable to verify prepaid admission. Refresh before collecting payment.'},{status:503}); }
-  const included = projectInfantSiblingAdmission(prepaid,people ?? [],squareEnvironment(),frozen);
+  let membershipCovered;
+  try { membershipCovered = await applyFoundingAdmissionCoverage(c.admin, prepaid, people ?? [], squareEnvironment(), frozen); }
+  catch { return Response.json({ ok: false, error: 'Unable to verify membership coverage. Refresh before collecting admission.' }, { status: 503 }); }
+  const included = projectInfantSiblingAdmission(membershipCovered,people ?? [],squareEnvironment(),frozen);
   const priced = included.map(row=>{
     const sale = openSales.find(sale=>sale.checkin_ids?.includes(row.id));
     return sale && row.payment_status==='due' && row.price_cents>0 ? {...row,payment_status:settled.get(sale.id)==='review'?'review':'pending'} : row;
   });
   const visits = priced.map(row => {
     const person = (people ?? []).find(person => person.id === row.person_id);
-    return { ...row, checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
+    return { ...row, checked_out: checkouts.has(row.id), checked_out_at: checkouts.get(row.id) ?? null, household_id: person?.household_id ?? null,
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });

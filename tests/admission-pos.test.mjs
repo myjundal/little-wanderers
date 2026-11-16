@@ -79,7 +79,7 @@ test('completed Square receipt can be retried after a database failure without a
 
 test('POS API requires staff and verification looks up the signed-in operator’s stored sale',async()=>{
  let expected;
- const base={'@/lib/service-day-revenue':{validRevenueDate:()=>true},'@/lib/admission-prepayments':{},'@/lib/infant-sibling-admission':{},'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
+ const base={'@/lib/service-day-revenue':{validRevenueDate:()=>true},'@/lib/admission-prepayments':{},'@/lib/infant-sibling-admission':{},'@/lib/founding-admission-coverage':{},'@/lib/admission-checkout':{getAdmissionCheckouts:async()=>new Map()},'@/lib/square-client':{squareConfig:()=>({environment:'production'}),paymentFlowEnabled:()=>true},'@/lib/square-admission-pos':{startAdmissionPos:()=>{throw Error('must not launch')},verifyAdmissionPos:async()=>({status:'paid'})},'@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)}};
  const denied=loadModule('src/app/api/admin/admission/pos/route.ts',{...base,'@/lib/authz':{requireStaffContext:async()=>({ok:false,response:Response.json({}, {status:403})})}});
  assert.equal((await denied.POST({json:async()=>({})})).status,403);
  const query={select(){return this},eq(key,value){expected??={};expected[key]=value;return this},async maybeSingle(){return {data:null,error:null}}};
@@ -153,7 +153,7 @@ test('staff sync is bound to its stored sale and a transaction callback can reso
  const sale={id:checkin,status:'open',environment:'production',created_by_user_id:ids.user};
  const query={select(){return this},eq(key,value){selected[key]=value;return this},async maybeSingle(){return {data:sale,error:null}}};
  const api=loadModule('src/app/api/admin/admission/pos/route.ts',{
-  '@/lib/service-day-revenue':{validRevenueDate:()=>true},'@/lib/admission-prepayments':{}, '@/lib/infant-sibling-admission':{},
+  '@/lib/service-day-revenue':{validRevenueDate:()=>true},'@/lib/admission-prepayments':{}, '@/lib/infant-sibling-admission':{},'@/lib/founding-admission-coverage':{},
   '@/lib/authz':{requireStaffContext:async()=>({ok:true,user:{id:ids.user},admin:{from:()=>query}})},
   '@/lib/square-client':{squareConfig:()=>({environment:'production'})},'@/lib/admission-checkout':{},
   '@/lib/party-config':{},'@/lib/open-play-reservations':{isUuid:value=>/^[a-f0-9-]{36}$/.test(value)},

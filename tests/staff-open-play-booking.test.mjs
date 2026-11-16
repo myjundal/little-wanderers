@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadSquareModules} from './helpers/admission-pos-harness.mjs';
 const family='10000000-0000-4000-8000-000000000001',child='20000000-0000-4000-8000-000000000001',slotId='30000000-0000-4000-8000-000000000001';
-function harness({existing=false,slotStatus='open',capacityError=false,member=true}={}){
+function harness({existing=false,slotStatus='open',capacityError=false,member=true,startsAt='2099-11-11T14:00:00Z',endsAt='2099-11-11T15:00:00Z'}={}){
  const writes=[];
  const db={from(table){let row;
-  const q={select(){return q;},eq(){return q;},gt(){return q;},limit(){return q;},maybeSingle(){return q;},single(){return q;},insert(value){row=value;writes.push(value);return q;},then(resolve){resolve({data:row?{id:'reservation',...row}:table==='households'?{email:'parent@example.test'}:table==='open_play_reservation_slots'?{id:slotId,status:slotStatus,starts_at:'2099-11-11T14:00:00Z',ends_at:'2099-11-11T15:00:00Z'}:existing?[{id:'existing'}]:[],error:row&&capacityError?{code:'23514'}:null});}};return q;
+  const q={select(){return q;},eq(){return q;},gt(){return q;},limit(){return q;},maybeSingle(){return q;},single(){return q;},insert(value){row=value;writes.push(value);return q;},then(resolve){resolve({data:row?{id:'reservation',...row}:table==='households'?{email:'parent@example.test'}:table==='open_play_reservation_slots'?{id:slotId,status:slotStatus,starts_at:startsAt,ends_at:endsAt}:existing?[{id:'existing'}]:[],error:row&&capacityError?{code:'23514'}:null});}};return q;
  }};
- const api=loadSquareModules({mocks:{'@/lib/open-play-reservations':{isUuid:v=>/^[0-9a-f-]{36}$/.test(v),SOFT_OPENING_START:'2099-11-11',SOFT_OPENING_END:'2100-01-01'},'@/lib/soft-opening-family':{readSoftOpeningFamily:async()=>({children:[{id:child}],memberships:member?[{child_ids:[child],status:'pending',start_date:null,paid_through:null}]:[]})}}}).load('src/lib/staff-open-play.ts');
+ const api=loadSquareModules({mocks:{'@/lib/open-play-reservations':{...loadSquareModules().load('src/lib/open-play-reservations.ts'),isUuid:v=>/^[0-9a-f-]{36}$/.test(v),SOFT_OPENING_START:'2099-11-11',SOFT_OPENING_END:'2100-01-01'},'@/lib/soft-opening-family':{readSoftOpeningFamily:async()=>({children:[{id:child}],memberships:member?[{child_ids:[child],status:'pending',start_date:null,paid_through:null}]:[]})}}}).load('src/lib/staff-open-play.ts');
  return {writes,create:patch=>api.createStaffOpenPlayReservation(db,family,'staff',{slot_id:slotId,child_ids:[child],adult_count:2,...patch})};
 }
 test('owner booking saves named family children, server-calculated membership admission and staff audit identity',async()=>{
@@ -23,3 +23,5 @@ test('family booking route authenticates an owner before accessing any submitted
  const api=loadSquareModules({mocks:{'@/lib/authz':{requireOwnerContext:async()=>({ok:false,response:Response.json({ok:false},{status:403})})}}}).load('src/app/api/admin/families/[id]/open-play-reservations/route.ts');
  assert.equal((await api.POST({json:()=>{throw Error('must not read body');}},{params:Promise.resolve({id:family})})).status,403);
 });
+
+test('owner cannot create a new arrival reservation at 5 PM or later even if its slot was reopened', async()=>{const h=harness({startsAt:'2099-11-11T22:00:00Z',endsAt:'2099-11-11T23:00:00Z'});await assert.rejects(h.create(),/no longer available/);assert.equal(h.writes.length,0);});

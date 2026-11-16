@@ -1,3 +1,4 @@
+import { isSameOriginRequest } from '@/lib/request-origin';
 import { requireStaffContext } from '@/lib/authz';
 import { helpChecked, searchHelpReceipts, linkHelpReceipt, searchHelpWaivers } from '@/lib/staff-admission-help';
 import { isUuid } from '@/lib/open-play-reservations';
@@ -25,7 +26,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const context = await requireStaffContext();
   if (!context.ok) return context.response;
-  if (req.headers.get('origin') !== new URL(req.url).origin || req.headers.get('sec-fetch-site') === 'cross-site') return json({ ok: false, error: 'Please use the staff check-in page.' }, 403);
+  if (!isSameOriginRequest(req) || req.headers.get('sec-fetch-site') === 'cross-site') return json({ ok: false, error: 'Please use the staff check-in page.' }, 403);
   try {
     const text = await req.text();
     if (text.length > 10000) throw new Error('Request is too long.');

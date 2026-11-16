@@ -5,14 +5,14 @@ import { loadModule } from './helpers/class-preregistration-harness.mjs';
 
 const schedule = loadModule('src/lib/open-play-reservations.ts');
 const slotId = '10000000-0000-4000-8000-000000000001';
-function harness({ startsAt = '2026-11-14T14:00:00Z', user = { id: 'new-user', email: 'new@example.test' } } = {}) {
+function harness({ startsAt = '2026-11-14T14:00:00Z', endsAt = new Date(Date.parse(startsAt) + 3600000).toISOString(), user = { id: 'new-user', email: 'new@example.test' } } = {}) {
   const filters = [], writes = [], background = [];
   const admin = { from(table) {
     let inserted;
     const q = { select() { return q; }, eq() { return q; }, neq() { return q; }, gt() { return q; }, lt() { return q; }, order() { return q; }, limit() { return q; },
       gte(key, value) { filters.push([table, key, value]); return q; },
       insert(row) { inserted = row; writes.push(row); return q; },
-      async maybeSingle() { return { error: null, data: table === 'open_play_reservation_slots' ? { id: slotId, starts_at: startsAt, ends_at: startsAt.replace('14:00', '15:00'), status: 'open', capacity_children: 5 } : inserted ? { id: 'booking', ...inserted } : null }; },
+      async maybeSingle() { return { error: null, data: table === 'open_play_reservation_slots' ? { id: slotId, starts_at: startsAt, ends_at: endsAt, status: 'open', capacity_children: 5 } : inserted ? { id: 'booking', ...inserted } : null }; },
       then(resolve) { resolve({ data: [], error: null }); },
     }; return q;
   } };
@@ -77,4 +77,21 @@ test('a new email account without Wanderlist history is eligible without buying 
   assert.equal(result.allowed, true);
   assert.equal(result.on_wanderlist, false);
   assert.equal(result.website_signup, true);
+});
+
+
+test('direct public and invitation posts reject arrivals after 5 PM from November 16 before any family or reservation write', async () => {
+  for (const source of ['public', 'invitation']) {
+    for (const startsAt of ['2026-11-16T22:00:00Z', '2026-12-31T22:00:00Z']) {
+      const h = harness({ startsAt });
+      const response = await h.route.POST({ json: async () => ({ slot_id: slotId, booking_source: source, children: [{ id: 'child' }], adult_count: 1, payment_choice: 'counter' }) });
+      assert.equal(response.status, 409);
+      assert.match((await response.json()).error, /last Open Play ARRIVAL WINDOW is 4–5 PM/);
+      assert.equal(h.writes.length, 0);
+      assert.equal(h.background.length, 0);
+    }
+    const h = harness({ startsAt: '2026-11-16T21:00:00Z' });
+    assert.equal((await h.route.POST({ json: async () => ({ slot_id: slotId, booking_source: source, children: [{ id: 'child' }], adult_count: 1, payment_choice: 'counter' }) })).status, 200);
+    await Promise.all(h.background);
+  }
 });
