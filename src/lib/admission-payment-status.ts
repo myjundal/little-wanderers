@@ -1,7 +1,8 @@
-export type AdmissionPayment = { payment_status: string; price_cents: number; infant_sibling_free?: boolean };
+export type AdmissionPayment = { payment_status: string; price_cents: number; infant_sibling_free?: boolean; payment_voided?: boolean };
 export const admissionIsPaid = (status: string) => ['paid', 'prepaid', 'walkin_paid', 'terminal_paid'].includes(status);
 export const admissionIsIncluded = (status: string) => ['covered', 'included', 'membership'].includes(status);
 export function admissionPaymentLabel(visit: AdmissionPayment) {
+  if (visit.payment_voided && visit.price_cents === 0 && admissionIsIncluded(visit.payment_status)) return 'Void · $0';
   if (visit.payment_status === 'pending') return 'Checking Square payment';
   if (visit.payment_status === 'review') return 'Check Square receipt — do not charge again';
   if (visit.infant_sibling_free) return 'Infant admission included';

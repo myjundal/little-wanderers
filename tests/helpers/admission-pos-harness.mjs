@@ -42,7 +42,7 @@ export function localSquareAdmin(db) {
   const normalize = value => value && typeof value==='object' ? JSON.stringify(value) : value;
   return {
     async rpc(name,args) {
-      const values = Object.entries(args).map(([key,value]) => name==='prepare_admission_pos'&&key==='p_ids'?value:normalize(value));
+      const values = Object.entries(args).map(([key,value]) => ['prepare_admission_pos','void_admission_payment'].includes(name)&&key==='p_ids'?value:normalize(value));
       try {
         const { rows } = await db.query(`select to_jsonb(${ident(name)}(${Object.keys(args).map((key,i)=>`${ident(key)} := $${i+1}`).join(',')})) as result`,values);
         return { data:json(rows[0].result),error:null };

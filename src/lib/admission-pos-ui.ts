@@ -6,6 +6,7 @@ export type AdmissionVisit = {
   name: string;
   price_cents: number;
   payment_status: string;
+  payment_voided?: boolean;
   checked_in_at?: string | null;
   checked_out_at?: string | null;
   checked_out?: boolean;
