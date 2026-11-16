@@ -1,0 +1,17 @@
+# Minimum enrollment cancellation
+
+Regular drop-in classes require three confirmed children. At 7 AM America/New_York on class day, the protected job closes existing payment links, rechecks confirmed (`scheduled`/`attended`) registrations, and cancels under-enrolled occurrences. Saved interest and waitlists do not count. Any occurrence in `class_series_programs` is excluded, including Jamie's five-session series. A payment that wins the class row lock before cancellation is re-counted; three registrations retain the class.
+
+GitHub Actions runs the website job at 7 AM Eastern with a purpose-bound `CLASS_MINIMUM_TRIGGER_TOKEN`. Manual dispatch defaults to preview. The token is derived server-side from the existing email transport credential; no provider credential is exposed in workflow logs. Run logs contain counts and record IDs, never recipient details or signed customer links.
+
+The existing family audit/outbox table `membership_events` stores records with action `class_minimum_cancellation`. No schema migration is needed. Deterministic per-registration/per-occurrence IDs prevent duplicate notices. Emails use provider idempotency plus durable delivery state; an ambiguous delivery more than 23 hours old requires operator review rather than risking a second send.
+
+Each signed private link opens a public confirmation page without requiring login. GET is read-only, including email scanner visits. Only a same-origin POST selects an option. The link has access only to that cancellation, with minimal display fields and no family details. A compare-and-set decision and short processing lease prevent simultaneous refund/transfer decisions. Refunds use a deterministic Square idempotency key and verify order, payment, location, environment, currency, refundable balance and the frozen selected-date price. A mixed basket refunds only the cancelled occurrence. The source booking is cancelled after Square accepts a pending/completed refund.
+
+Transfers reserve capacity through the installed atomic checkout-hold RPC, using a transfer-specific request distinct from payable checkouts. The transfer creates no Square order or charge, promotes saved interest when present, cancels the original registration, records the destination ID, and releases the hold. A full, cancelled, past, or already-booked target leaves the refund choice available. An interrupted accepted selection can be retried with the same option; job retries recover incomplete choices. Transferred credits remain traceable to the original paid checkout if the new date is cancelled again.
+
+A target is the same class on the following calendar week, subject to space and the same minimum. At term end or where that week is unavailable, the email offers a refund only. Unsupported legacy/manual payment evidence fails visibly for staff review; it never invents a refundable amount or charges a card.
+
+Validation: `node --test tests/class-cancellations.test.mjs tests/class-checkout.test.mjs`, class/series/webhook regressions, lint, typecheck, production build. Never confirm a real family's selection during release verification.
+
+Service-day revenue follows a transferred credit to the destination occurrence and links the promoted registration to the original payment. Named cancellation refunds are allocated to that cancelled date before remaining shared-order refunds are allocated, preserving unrelated dates in the same basket.

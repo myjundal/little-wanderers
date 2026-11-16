@@ -143,7 +143,7 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
   };
   if (!sessions.length) return null;
   return <section id="class-date-booking" className={styles.booking} aria-label="Choose class dates and pay">
-    <header><p className={styles.eyebrow}>November 16 – December 17</p><h2>Choose your dates & pay</h2><p>Open to all families. Pick any combination of classes and dates for the child selected above, then pay once.</p><p>No classes on Thanksgiving, November 26. Ms. Jamie’s art series has its own registration below.</p></header>
+    <header><p className={styles.eyebrow}>November 16 – December 17</p><h2>Choose your dates & pay</h2><p>Open to all families. Pick any combination of classes and dates for the child selected above, then pay once.</p><p>No classes on Thanksgiving, November 26. Ms. Jamie’s art series has its own registration below.</p><p>Regular drop-in classes need at least 3 confirmed children. We check at 7:00 AM Eastern on class day. If the minimum is not met, we’ll email options to move to the following week or receive a refund.</p></header>
     <div className={styles.dateGroups}>{groups.map(group => <fieldset key={group.title} disabled={locked || busy || restoring} className={styles.dateGroup}>
       <legend>{group.title} <span>{money(group.dates[0].price_cents)} / class</span></legend>
       <p>{time(group.dates[0].start_time)}–{time(group.dates[0].end_time)} · Eastern{group.dates[0].age_range ? ` · Ages ${group.dates[0].age_range}` : ''}{group.dates[0].instructor_name ? ` · ${group.dates[0].instructor_name}` : ''}</p>

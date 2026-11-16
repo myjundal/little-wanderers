@@ -139,3 +139,14 @@ test('a mixed class-date checkout uses its actual per-date prices and is not cou
   input.classCheckouts[0].status='completed';input.classCheckouts[0].payload.line_items[0].base_price_money.amount=2999;
   assert.equal(report(input,'2026-11-17',evidence).complete,false);
 });
+test('class transfers move their paid allocation to the new date without duplicate or unlinked registration revenue',()=>{
+ const input=empty();input.classes=[{id:'old',title:'Spanish',start_time:'2026-11-16T15:30:00Z',status:'cancelled'},{id:'new',title:'Spanish',start_time:'2026-11-23T15:30:00Z',status:'scheduled'},{id:'art',title:'Art',start_time:'2026-11-19T15:00:00Z',status:'scheduled'}];
+ input.registrations=[{id:'original',class_id:'old',person_id:'child',status:'cancelled',attendance_status:'cancelled'},{id:'moved',class_id:'new',person_id:'child',status:'scheduled',attendance_status:'unknown'},{id:'art-r',class_id:'art',person_id:'child',status:'scheduled',attendance_status:'unknown'}];
+ input.classCheckouts=[{id:'sale',kind:'class',status:'completed',environment:'production',order_id:'order',expected_amount_cents:5000,payload:{request:{person_id:'child',items:[{class_id:'old',quantity:1},{class_id:'art',quantity:1}]},line_items:[{quantity:'1',base_price_money:{amount:2500,currency:'USD'}},{quantity:'1',base_price_money:{amount:2500,currency:'USD'}}]}}];
+ input.classCancellationEvents=[{id:'event',notes:JSON.stringify({version:1,checkout_id:'sale',person_id:'child',class_id:'old',state:'transferred',target_class_id:'new',target_registration_id:'moved',amount_cents:2500})}];
+ const evidence=receipt({service_total_cents:5000,payments:[{id:'p',amount_cents:5000,refunded_cents:0,paid_at:'2026-11-12T15:00:00Z'}]});
+ assert.equal(report(input,'2026-11-16',evidence).net_cents,0);const moved=report(input,'2026-11-23',evidence);assert.equal(moved.net_cents,2500);assert.equal(moved.rows.length,1);assert.equal(moved.complete,true);
+ // A refund for only Spanish must not reduce the unrelated art date's paid revenue.
+ input.classCancellationEvents[0].notes=JSON.stringify({version:1,checkout_id:'sale',person_id:'child',class_id:'old',state:'refunded',amount_cents:2500});input.registrations=input.registrations.filter(r=>r.id!=='moved');
+ evidence.payments[0].refunded_cents=2500;const art=report(input,'2026-11-19',evidence);assert.equal(art.net_cents,2500);assert.equal(art.refunded_cents,0);const old=report(input,'2026-11-16',evidence);assert.equal(old.rows[0].refunded_cents,2500);assert.equal(old.net_cents,0);
+});

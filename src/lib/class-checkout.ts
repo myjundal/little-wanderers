@@ -9,10 +9,11 @@ export type ClassCheckout = {
   expected_amount_cents: number; status: string; order_id: string | null; payment_url: string | null;
   payment_link_id: string | null; created_at: string; hold_expires_at: string;
   payload: {
-    request: { person_id: string; items: Array<{ class_id: string; quantity: number }> };
+    request: { person_id: string; items: Array<{ class_id: string; quantity: number }>; class_transfer_event_id?: string };
     assignments: Array<{ class_id: string; person_id: string }>;
     line_items: Array<Record<string, unknown>>; provider_request?: Record<string, unknown>;
     summary?: { registration_ids: string[]; registration_count: number; total_price_cents: number };
+    class_transfer_event_id?: string;
     pricing?: ClassDateQuote;
   };
 };
@@ -62,6 +63,7 @@ export async function startClassCheckout(db: SupabaseClient, input: { householdI
     p_user: input.userId, p_role: 'customer', p_request: input.request,
   })) as ClassCheckout;
   assertEnvironment(attempt);
+  if (attempt.payload.class_transfer_event_id || attempt.payload.request.class_transfer_event_id) throw new Error('Your class transfer is being processed. Please use your cancellation email.');
   if (attempt.payload.assignments.length !== input.request.items.length || attempt.payload.assignments.some(row => row.person_id !== input.request.person_id)
     || (attempt.payload.pricing?.subtotal_cents ?? attempt.expected_amount_cents) !== quote.subtotal_cents
     || (attempt.payload.pricing && attempt.expected_amount_cents !== attempt.payload.pricing.total_cents)) throw new Error('Class selection or price changed. Close the pending checkout and try again.');
@@ -108,6 +110,7 @@ export async function startClassCheckout(db: SupabaseClient, input: { householdI
 type Payment = { id: string; order_id?: string; location_id?: string; status?: string; amount_money?: { amount?: number; currency?: string }; refunded_money?: { amount?: number }; tip_money?: { amount?: number }; created_at?: string; updated_at?: string };
 /** Redirects, browser totals, and webhook payloads alone never prove payment. */
 export async function reconcileClassCheckout(db: SupabaseClient, attempt: ClassCheckout) {
+  if ((attempt.payload.class_transfer_event_id || attempt.payload.request.class_transfer_event_id)) throw new Error('Your class transfer is being processed. Please use your cancellation email.');
   const cfg = assertEnvironment(attempt);
   if (['completed', 'needs_review', 'cancelled'].includes(attempt.status) || !attempt.order_id) return attempt;
   const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(attempt.order_id)}`);
@@ -147,6 +150,7 @@ export async function reconcileClassCheckout(db: SupabaseClient, attempt: ClassC
 
 /** Close the live Square page before releasing temporary checkout capacity. */
 export async function closeClassCheckout(db: SupabaseClient, attempt: ClassCheckout) {
+  if ((attempt.payload.class_transfer_event_id || attempt.payload.request.class_transfer_event_id)) throw new Error('Your class transfer is being processed. Please use your cancellation email.');
   const cfg = assertEnvironment(attempt);
   if (['completed', 'needs_review', 'cancelled'].includes(attempt.status)) return attempt;
   if (!attempt.order_id) {
@@ -183,6 +187,7 @@ export async function cleanupClassCheckouts(db: SupabaseClient) {
   }));
 }
 export function publicClassCheckout(attempt: ClassCheckout | null) {
+  if ((attempt?.payload.class_transfer_event_id || attempt?.payload.request.class_transfer_event_id)) return null;
   return attempt ? { id: attempt.id, status: attempt.status, payment_url: attempt.payment_url ? assertSquarePaymentUrl(attempt.payment_url) : null,
     total_price_cents: attempt.expected_amount_cents, person_id: attempt.payload.request.person_id,
     class_ids: attempt.payload.request.items.map(item => item.class_id), expires_at: attempt.hold_expires_at, summary: attempt.payload.summary ?? null } : null;
