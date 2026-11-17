@@ -47,10 +47,10 @@ test('five-session paid series is allocated on each real session date, conservin
   const input = empty(); input.classes = [11, 12, 13, 14, 15].map((n, i) => ({ id: String(i), title: 'Art', status: 'scheduled', start_time: `2026-11-${n}T22:00:00Z` }));
   input.series = [{ id: 'series', class_ids: ['4', '2', '1', '0', '3'], child_ids: ['child'], status: 'paid', environment: 'production', amount_cents: 10003, square_order_id: 'order' }];
   const evidence = receipt({ service_total_cents: 10003, payments: [{ id: 'p', amount_cents: 10003, refunded_cents: 0, paid_at: '2026-11-01T15:00:00Z' }] });
-  const totals = input.classes.map(session => report(input, session.start_time.slice(0, 10), evidence).net_cents);
+  const totals = input.classes.map(session => report(input, session.start_time.slice(0, 10), evidence).gross_net_cents);
   assert.deepEqual(totals, [2001, 2001, 2001, 2000, 2000]); assert.equal(totals.reduce((a, b) => a + b), 10003);
   input.classes[1].status = 'cancelled';
-  assert.equal(report(input, '2026-11-12', evidence).net_cents, 0); assert.equal(report(input, '2026-11-13', evidence).net_cents, 2001);
+  assert.equal(report(input, '2026-11-12', evidence).net_cents, 0); assert.equal(report(input, '2026-11-13', evidence).gross_net_cents, 2001);
 });
 test('membership-covered admissions and sandbox transactions do not create production revenue', () => {
   const input = data(); input.bookings[0].payment_environment = 'sandbox'; input.visits = [{ ...visit, square_environment: 'sandbox' }, { ...visit, id: 'member', square_order_id: null, square_environment: null, payment_status: 'covered', price_cents: 1600 }];
@@ -133,7 +133,7 @@ test('a mixed class-date checkout uses its actual per-date prices and is not cou
   input.classCheckouts=[{id:'basket',kind:'class',status:'completed',environment:'production',order_id:'order',expected_amount_cents:5500,payload:{request:{person_id:'child',items:[{class_id:'music',quantity:1},{class_id:'yoga',quantity:1}]},line_items:[{quantity:'1',base_price_money:{amount:3000,currency:'USD'}},{quantity:'1',base_price_money:{amount:2500,currency:'USD'}}]}}];
   const evidence=receipt({service_total_cents:5500,payments:[{id:'mixed-payment',amount_cents:5500,refunded_cents:0,paid_at:'2026-11-11T18:00:00Z'}]});
   const music=report(input,'2026-11-17',evidence),yoga=report(input,'2026-11-18',evidence);
-  assert.equal(music.net_cents,3000);assert.equal(yoga.net_cents,2500);assert.equal(music.prepaid_cents,3000);assert.equal(yoga.rows.length,1);
+  assert.equal(music.net_cents,900);assert.equal(yoga.net_cents,750);assert.equal(music.prepaid_cents,900);assert.equal(yoga.rows.length,1);
   assert.equal(music.complete,true);assert.equal(yoga.complete,true);
   input.classCheckouts[0].status='needs_review';assert.equal(report(input,'2026-11-17',evidence).net_cents,0);
   input.classCheckouts[0].status='completed';input.classCheckouts[0].payload.line_items[0].base_price_money.amount=2999;
@@ -145,8 +145,8 @@ test('class transfers move their paid allocation to the new date without duplica
  input.classCheckouts=[{id:'sale',kind:'class',status:'completed',environment:'production',order_id:'order',expected_amount_cents:5000,payload:{request:{person_id:'child',items:[{class_id:'old',quantity:1},{class_id:'art',quantity:1}]},line_items:[{quantity:'1',base_price_money:{amount:2500,currency:'USD'}},{quantity:'1',base_price_money:{amount:2500,currency:'USD'}}]}}];
  input.classCancellationEvents=[{id:'event',notes:JSON.stringify({version:1,checkout_id:'sale',person_id:'child',class_id:'old',state:'transferred',target_class_id:'new',target_registration_id:'moved',amount_cents:2500})}];
  const evidence=receipt({service_total_cents:5000,payments:[{id:'p',amount_cents:5000,refunded_cents:0,paid_at:'2026-11-12T15:00:00Z'}]});
- assert.equal(report(input,'2026-11-16',evidence).net_cents,0);const moved=report(input,'2026-11-23',evidence);assert.equal(moved.net_cents,2500);assert.equal(moved.rows.length,1);assert.equal(moved.complete,true);
+ assert.equal(report(input,'2026-11-16',evidence).net_cents,0);const moved=report(input,'2026-11-23',evidence);assert.equal(moved.net_cents,750);assert.equal(moved.rows.length,1);assert.equal(moved.complete,true);
  // A refund for only Spanish must not reduce the unrelated art date's paid revenue.
  input.classCancellationEvents[0].notes=JSON.stringify({version:1,checkout_id:'sale',person_id:'child',class_id:'old',state:'refunded',amount_cents:2500});input.registrations=input.registrations.filter(r=>r.id!=='moved');
- evidence.payments[0].refunded_cents=2500;const art=report(input,'2026-11-19',evidence);assert.equal(art.net_cents,2500);assert.equal(art.refunded_cents,0);const old=report(input,'2026-11-16',evidence);assert.equal(old.rows[0].refunded_cents,2500);assert.equal(old.net_cents,0);
+ evidence.payments[0].refunded_cents=2500;const art=report(input,'2026-11-19',evidence);assert.equal(art.net_cents,750);assert.equal(art.refunded_cents,0);const old=report(input,'2026-11-16',evidence);assert.equal(old.rows[0].refunded_cents,2500);assert.equal(old.net_cents,0);
 });

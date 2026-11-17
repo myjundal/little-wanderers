@@ -1,3 +1,4 @@
+export const CLASS_OWNER_SHARE_PERCENT = 30;
 export type RevenueCategory = 'open_play' | 'walk_in' | 'party' | 'class' | 'cafe' | 'gift_card' | 'membership' | 'retail' | 'other';
 export const revenueCategories: Record<RevenueCategory, string> = { open_play: 'Open Play', walk_in: 'Walk-in admission', party: 'Parties', class: 'Classes', cafe: 'Café', gift_card: 'Gift cards', membership: 'Memberships', retail: 'Retail & passes', other: 'Other Square sales' };
 export const revenueDay = (value: string | Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
@@ -207,7 +208,7 @@ export function revenueServices(data: RevenueSources) {
 
 export function calculateRevenue(services: RevenueService[], evidence: Map<string, RevenueEvidence>, date: string, sourceIssues: string[] = [], sources?: RevenueSources) {
   if (!validRevenueDate(date)) throw new Error('Choose a valid date.');
-  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0, pending_payment_cents: 0, payment_check: null as 'payment_unconfirmed' | 'visit_unconfirmed' | null, payment_details: [] as { id: string; date: string; received_cents: number; refunded_cents: number; net_cents: number }[] }));
+  const rows = services.map(service => ({ ...service, issues: [...service.issues], received_cents: 0, refunded_cents: 0, redeemed_cents: 0, prepaid_cents: 0, same_day_cents: 0, later_paid_cents: 0, tax_cents: 0, tip_cents: 0, due_cents: 0, net_cents: 0, gross_net_cents: 0, gross_prepaid_cents: 0, gross_same_day_cents: 0, gross_later_paid_cents: 0, instructor_share_cents: 0, pending_payment_cents: 0, payment_check: null as 'payment_unconfirmed' | 'visit_unconfirmed' | null, payment_details: [] as { id: string; date: string; received_cents: number; refunded_cents: number; net_cents: number }[] }));
   const orderIds = new Set(rows.flatMap(row => row.charges.filter(charge => row.date === date
     || (row.category === 'party' && evidence.get(charge.order_id)?.payments.some(payment => day(payment.paid_at) === date))).map(charge => charge.order_id)));
   for (const id of orderIds) {
@@ -260,6 +261,24 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     }
     if (row.issues.length || row.cancelled) { row.prepaid_cents = 0; row.same_day_cents = 0; row.later_paid_cents = 0; }
   }
+  // Receipt amounts stay intact. Only recognized class revenue is split;
+  // calculate the day's 30% once, then distribute exact cents across its rows.
+  for (const row of rows) {
+    row.gross_net_cents = row.net_cents;
+    row.gross_prepaid_cents = row.prepaid_cents;
+    row.gross_same_day_cents = row.same_day_cents;
+    row.gross_later_paid_cents = row.later_paid_cents;
+  }
+  const classRows = selected.filter(row => row.category === 'class' && row.gross_net_cents > 0).sort((a, b) => a.id.localeCompare(b.id));
+  const classGross = classRows.reduce((total, row) => total + row.gross_net_cents, 0);
+  const classOwner = Number((BigInt(classGross) * BigInt(CLASS_OWNER_SHARE_PERCENT) + BigInt(50)) / BigInt(100));
+  const classShares = allocateRevenue(classOwner, classRows.map(row => row.gross_net_cents));
+  classRows.forEach((row, index) => {
+    row.net_cents = classShares[index];
+    row.instructor_share_cents = row.gross_net_cents - row.net_cents;
+    [row.prepaid_cents, row.same_day_cents, row.later_paid_cents] = allocateRevenue(row.net_cents,
+      [row.gross_prepaid_cents, row.gross_same_day_cents, row.gross_later_paid_cents]);
+  });
   const partyRows = selected.filter(row => row.category === 'party' && row.recognition !== 'unallocated_party');
   const partyReceipts = rows.filter(row => row.category === 'party').flatMap(row => row.payment_details.filter(payment => payment.date === date).map(payment => ({ ...payment, service_id: row.id, service_date: row.recognition === 'unallocated_party' ? null : row.date, label: row.label, review: row.issues.length > 0 || row.cancelled })));
   const partyReview = partyReceipts.some(payment => payment.review);
@@ -302,7 +321,7 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
   } : null;
   return { date, timezone: 'America/New_York', complete: !issues.length && !partyReview && !selected.some(row => row.issues.length || row.payment_check), issues, categories, rows: selected,
     admission: admissionSummary, visitor_stats: visitorStats,
-    net_cents: sum('net_cents'), prepaid_cents: sum('prepaid_cents'), same_day_cents: sum('same_day_cents'), later_paid_cents: sum('later_paid_cents'), due_cents: sum('due_cents'),
+    net_cents: sum('net_cents'), gross_net_cents: selected.reduce((total, row) => total + row.gross_net_cents, 0), prepaid_cents: sum('prepaid_cents'), same_day_cents: sum('same_day_cents'), later_paid_cents: sum('later_paid_cents'), due_cents: sum('due_cents'),
     visited_cents: selected.filter(row => row.attendance === 'visited').reduce((sum, row) => sum + row.net_cents, 0),
     reserved_cents: selected.filter(row => row.attendance === 'reserved' || row.attendance === 'unknown').reduce((sum, row) => sum + row.net_cents, 0),
     sales_cents: selected.filter(row => row.attendance === 'sale').reduce((sum, row) => sum + row.net_cents, 0),
@@ -312,6 +331,7 @@ export function calculateRevenue(services: RevenueService[], evidence: Map<strin
     party_receipts: partyReceipts,
     party_received_today_cents: partyReceipts.reduce((sum, payment) => sum + payment.received_cents, 0),
     unallocated_party_cents: selected.filter(row => row.recognition === 'unallocated_party').reduce((sum, row) => sum + row.received_cents - row.refunded_cents - row.redeemed_cents, 0),
+    class_gross_cents: classGross, class_owner_cents: classOwner, class_instructor_cents: classGross - classOwner, class_owner_percent: CLASS_OWNER_SHARE_PERCENT, class_instructor_percent: 100 - CLASS_OWNER_SHARE_PERCENT,
     class_cents: selected.filter(row => row.category === 'class').reduce((sum, row) => sum + row.net_cents, 0),
     unallocated_class_cents: selected.filter(row => row.recognition === 'unallocated_class').reduce((sum, row) => sum + row.received_cents - row.refunded_cents - row.redeemed_cents, 0),
     redeemed_cents: selected.reduce((sum, row) => sum + row.redeemed_cents, 0),
