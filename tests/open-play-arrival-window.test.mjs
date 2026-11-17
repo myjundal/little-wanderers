@@ -31,7 +31,7 @@ function reservationHarness() {
   const Component = loadModule('src/components/soft-opening/SoftOpeningReservation.tsx', {
     react, 'next/link': 'a', 'next/image': 'img', './soft-opening.module.css': {},
     '@/lib/open-play-reservations': policy, '@/lib/child-age': { parseChildAge: () => null }, '@/lib/soft-opening-pricing': { softOpeningAmount: () => 1600 },
-  }, { React, Intl }).default;
+  }, { React, Intl, Date: class extends Date { constructor(...args) { if (args.length) super(...args); else super('2026-11-16T18:00:00Z'); } } }).default;
   return { state, render() { index=0; return Component({ previewData: data, publicBooking: true }); } };
 }
 test('4–5 PM selection requires explicit 6 PM closing acknowledgment and resets it when the window changes', async () => {
