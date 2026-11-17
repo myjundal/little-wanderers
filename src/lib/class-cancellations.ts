@@ -5,7 +5,7 @@ import { sendResendEmail } from '@/lib/email-campaigns';
 import { closeClassCheckout, type ClassCheckout } from '@/lib/class-checkout';
 import { classChoiceNotificationEmail } from '@/lib/admin-notifications';
 
-export const MINIMUM_CLASS_REGISTRATIONS = 3;
+export const MINIMUM_CLASS_REGISTRATIONS = 2;
 const ACTION = 'class_minimum_cancellation';
 const OWNER = '5054a175-2ba6-4023-a289-a9b0635ccc5f';
 type Session = { id: string; title: string; status: string; start_time: string; end_time: string | null; capacity: number | null; price_cents: number; schedule_note: string | null };
@@ -112,7 +112,7 @@ export function classCancellationEmail(id: string, n: ClassCancellation) {
   const link = (choice: string) => { const u = new URL(base); u.searchParams.set('choice', choice); return u.toString(); };
   const button = (url: string, label: string, color: string) => `<a href="${escape(url)}" style="display:inline-block;padding:14px 20px;margin:6px 8px 6px 0;background:${color};color:white;text-decoration:none;border-radius:10px;font-weight:bold">${escape(label)}</a>`;
   return { to: n.recipient, subject: `${n.title}: class cancelled — choose next week or a refund`, idempotencyKey: `class-minimum-${id}`,
-    html: `<!doctype html><html><body style="font:16px/1.6 Arial,sans-serif;color:#3f355a;padding:24px"><main style="max-width:620px;margin:auto"><h1 style="font-size:24px">A change to your class</h1><p>Hi there,</p><p>We're sorry, but <strong>${escape(n.title)} on ${escape(classCancellationTime(n.start_time))} (Eastern)</strong> is cancelled because fewer than 3 children have confirmed registration. We need at least 3 children to run this class.</p><p>Please choose the option that works best for your family:</p>${n.target_start_time ? `<p><strong>Move to next week:</strong> ${escape(classCancellationTime(n.target_start_time))} (Eastern). Your ${money(n.amount_cents)} payment will carry over, with no additional charge. The new date is subject to space and the same 3-child minimum.</p>${button(link('transfer'), 'Move to next week', '#604290')}` : '<p>There is no available class next week, so a refund is available.</p>'}<p><strong>Refund:</strong> Receive ${money(n.amount_cents)} for this cancelled class back to your original payment method. Any other classes in your purchase are unchanged. Your bank may take time to post the refund.</p>${button(link('refund'), `Get a ${money(n.amount_cents)} refund`, '#486a67')}<p>The buttons open a confirmation page. Nothing changes until you confirm your choice, and we will not move your booking without your selection.</p><p>For future regular drop-in classes, we check confirmed registration at 7:00 AM Eastern on the day of class. If fewer than 3 children are registered, the class is cancelled and we'll email the same transfer or refund options.</p><p>Thank you for understanding. Reply to this email if you need help.<br>Sojung &amp; Little Wanderers</p></main></body></html>` };
+    html: `<!doctype html><html><body style="font:16px/1.6 Arial,sans-serif;color:#3f355a;padding:24px"><main style="max-width:620px;margin:auto"><h1 style="font-size:24px">A change to your class</h1><p>Hi there,</p><p>We're sorry, but <strong>${escape(n.title)} on ${escape(classCancellationTime(n.start_time))} (Eastern)</strong> is cancelled because fewer than 2 children have confirmed registration. We need at least 2 children to run this class.</p><p>Please choose the option that works best for your family:</p>${n.target_start_time ? `<p><strong>Move to next week:</strong> ${escape(classCancellationTime(n.target_start_time))} (Eastern). Your ${money(n.amount_cents)} payment will carry over, with no additional charge. The new date is subject to space and the same 2-child minimum.</p>${button(link('transfer'), 'Move to next week', '#604290')}` : '<p>There is no available class next week, so a refund is available.</p>'}<p><strong>Refund:</strong> Receive ${money(n.amount_cents)} for this cancelled class back to your original payment method. Any other classes in your purchase are unchanged. Your bank may take time to post the refund.</p>${button(link('refund'), `Get a ${money(n.amount_cents)} refund`, '#486a67')}<p>The buttons open a confirmation page. Nothing changes until you confirm your choice, and we will not move your booking without your selection.</p><p>For future regular drop-in classes, we check confirmed registration at 7:00 AM Eastern on the day of class. If fewer than 2 children are registered, the class is cancelled and we'll email the same transfer or refund options.</p><p>Thank you for understanding. Reply to this email if you need help.<br>Sojung &amp; Little Wanderers</p></main></body></html>` };
 }
 export async function runClassMinimumCancellations(db: SupabaseClient, input: { dryRun: boolean; classId?: string; now?: Date }) {
   const now = input.now ?? new Date();
@@ -125,7 +125,7 @@ export async function runClassMinimumCancellations(db: SupabaseClient, input: { 
   for (const session of candidates) {
     try {
     const initial = checked(await db.from('class_registrations').select('id,status').eq('class_id', session.id).in('status', ['scheduled', 'attended'])) ?? [];
-    if (initial.length >= 3 || initial.some(r => r.status === 'attended')) { results.push({ class_id: session.id, action: 'run', confirmed: initial.length }); continue; }
+    if (initial.length >= MINIMUM_CLASS_REGISTRATIONS || initial.some(r => r.status === 'attended')) { results.push({ class_id: session.id, action: 'run', confirmed: initial.length }); continue; }
     // Close in-flight payment links before deciding: a racing completed payment must count.
     if (!input.dryRun) {
       const open = checked(await db.from('square_checkout_attempts').select('*').eq('kind', 'class').eq('environment', cfg.environment).in('status', ['creating', 'open'])) as ClassCheckout[];
@@ -151,11 +151,11 @@ export async function runClassMinimumCancellations(db: SupabaseClient, input: { 
     if (input.dryRun) continue;
     // Persist the durable outbox before hiding the occurrence; a retry can recover either step.
     for (const n of notices) { const r = await db.from('membership_events').insert({ id: n.id, household_id: n.notice.household_id, action: ACTION, notes: JSON.stringify(n.notice), created_by_user_id: OWNER, created_by_role: 'owner' }); if (r.error && r.error.code !== '23505') throw Error(r.error.message); }
-    const changed = checked(await db.from('classes').update({ status: 'cancelled', schedule_note: `${session.schedule_note || ''} Cancelled: fewer than 3 confirmed registrations. Families may choose next week or a refund.`.trim() }).eq('id', session.id).eq('status', 'scheduled').select('id').maybeSingle());
+    const changed = checked(await db.from('classes').update({ status: 'cancelled', schedule_note: `${session.schedule_note || ''} Cancelled: fewer than 2 confirmed registrations. Families may choose next week or a refund.`.trim() }).eq('id', session.id).eq('status', 'scheduled').select('id').maybeSingle());
     if (changed) {
       regs = checked(await db.from('class_registrations').select('*').eq('class_id', session.id).in('status', ['scheduled', 'attended'])) as Registration[];
       // A checkout that won the class row lock just before cancellation still counts.
-      if (regs.length >= 3 || regs.some(r => r.status === 'attended')) { checked(await db.from('classes').update({ status: 'scheduled', schedule_note: session.schedule_note }).eq('id', session.id).eq('status', 'cancelled')); results.push({ class_id: session.id, action: 'retained_after_payment_race' }); }
+      if (regs.length >= MINIMUM_CLASS_REGISTRATIONS || regs.some(r => r.status === 'attended')) { checked(await db.from('classes').update({ status: 'scheduled', schedule_note: session.schedule_note }).eq('id', session.id).eq('status', 'cancelled')); results.push({ class_id: session.id, action: 'retained_after_payment_race' }); }
       else for (const reg of regs) {
         if (notices.some(n => n.notice.registration_id === reg.id) || history.some(e => e.id === eventId(reg.id, session.id))) continue;
         const extra = await makeNotice(reg);
