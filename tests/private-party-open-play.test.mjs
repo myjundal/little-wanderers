@@ -113,3 +113,21 @@ test('customer and staff calendars derive a private closure, and customer POST r
  const response=await route.POST(request);assert.equal(response.status,409);assert.equal((await response.json()).code,'private_party');assert.equal(writes,0);assert.equal(familySaves,0);
  failAvailability=true;assert.equal((await route.POST(request)).status,500);assert.equal(writes,0);assert.equal(familySaves,0);
 });
+
+
+test('November 22 owner schedule closes Open Play at 3 PM; other private dates retain 4 PM closing', () => {
+ const block=availability.privatePartyWindow(iso('2026-11-22',14));
+ assert.equal(block.starts_at,iso('2026-11-22',15));assert.equal(block.ends_at,iso('2026-11-22',18));
+ assert.equal(availability.overlapsPrivateParty({starts_at:iso('2026-11-22',13),ends_at:iso('2026-11-22',14)},[block]),false);
+ assert.equal(availability.overlapsPrivateParty({starts_at:iso('2026-11-22',15),ends_at:iso('2026-11-22',16)},[block]),true);
+ assert.equal(availability.privatePartyWindow(iso('2026-11-21',15)).starts_at,iso('2026-11-21',16));
+ assert.equal(availability.privatePartyWindow(iso('2026-11-29',15)).starts_at,iso('2026-11-29',16));
+});
+
+test('November 22 last 1–2 PM arrival remains bookable while hidden later windows reject direct reservations', async t => {
+ const h=await fixture();t.after(()=>h.db.close());await h.party('2026-11-22',true);
+ const last=await h.slot('2026-11-22',13);await h.reserve(last);
+ for(const hour of [14,15,16,17]){
+  const slot=await h.slot('2026-11-22',hour,'hidden');await assert.rejects(h.reserve(slot),/not open|private party/);
+ }
+});

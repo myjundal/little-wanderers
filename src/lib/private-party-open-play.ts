@@ -7,7 +7,9 @@ type VisitWindow = { id: string; starts_at: string; ends_at: string };
 
 export function privatePartyWindow(partyStart: string): PrivatePartyDay {
   const date = getPartyDateKey(partyStart);
-  return { date, starts_at: toPartyDateTimeIso(date, 16), ends_at: toPartyDateTimeIso(date, 18) };
+  // Owner-requested November 22 schedule: last arrival 1–2 PM, public close 3 PM.
+  const closingHour = date === '2026-11-22' ? 15 : 16;
+  return { date, starts_at: toPartyDateTimeIso(date, closingHour), ends_at: toPartyDateTimeIso(date, 18) };
 }
 
 export function overlapsPrivateParty(slot: Pick<VisitWindow, 'starts_at' | 'ends_at'>, days: PrivatePartyDay[]) {

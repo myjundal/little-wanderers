@@ -17,6 +17,7 @@ export default function PublicOpenPlayCalendar({ slots, unavailable = false }: {
   const label = start.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
   const currentSlots = slots.filter(slot => dayKey(slot.starts_at) === date);
   const privateClosing = currentSlots.find(slot => slot.closing_at)?.closing_at;
+  const lastArrival = currentSlots.filter(slot => !slot.is_closed).at(-1);
   const selected = currentSlots.find(slot => slot.id === selectedId);
   function moveMonth(amount: number) {
     const next = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + amount, 1, 12));
@@ -34,8 +35,8 @@ export default function PublicOpenPlayCalendar({ slots, unavailable = false }: {
       })}</div><p className={styles.small}>Choose an available date. All times are Eastern.</p>
     </div>
     <div className={styles.card} aria-live="polite"><span className={styles.eyebrow}>ARRIVAL WINDOW</span><h2>{dateLabel(date)}</h2>{privateClosing && <p role="status">Open Play ends at {timeLabel(privateClosing)} on this date for a private party. Please finish your visit by then.</p>}<div className={styles.times}>{currentSlots.map(slot => <button type="button" key={slot.id} disabled={slot.is_closed || slot.is_full} aria-pressed={selectedId === slot.id} className={selectedId === slot.id ? styles.selected : ''} onClick={() => setSelectedId(slot.id)}><strong>{timeLabel(slot.starts_at)}–{timeLabel(slot.ends_at)}</strong><small>{slot.is_private_party_blocked ? 'Private party' : slot.is_closed ? 'Closed' : `(${slot.remaining_children}/${slot.capacity_children}) spots left${slot.is_full ? ' · Full' : ''}`}</small></button>)}</div>
-      <p className={styles.small}><strong>ARRIVAL WINDOW · UNLIMITED STAY until closing.</strong> Once you arrive, enjoy unlimited play until closing. The last arrival window is 4–5 PM; we close at 6 PM. Reservations are highly recommended on weekends because capacity is limited; walk-ins are welcome when space allows.</p>
-      {selected && isLastOpenPlayArrival(selected) && <p className={styles.notice} role="status"><strong>{LAST_OPEN_PLAY_ARRIVAL_NOTICE}</strong></p>}
+      <p className={styles.small}><strong>ARRIVAL WINDOW · UNLIMITED STAY until closing.</strong> Once you arrive, enjoy unlimited play until closing. {privateClosing ? <>The last arrival window on this date is {lastArrival ? `${timeLabel(lastArrival.starts_at)}–${timeLabel(lastArrival.ends_at)}` : 'unavailable'}; Open Play closes at {timeLabel(privateClosing)}.</> : <>The last arrival window is 4–5 PM; we close at 6 PM.</>} Reservations are highly recommended on weekends because capacity is limited; walk-ins are welcome when space allows.</p>
+      {selected && !privateClosing && isLastOpenPlayArrival(selected) && <p className={styles.notice} role="status"><strong>{LAST_OPEN_PLAY_ARRIVAL_NOTICE}</strong></p>}
       {selected ? <><Link className={styles.primary} href={`/login?next=${encodeURIComponent(`/landing/open-play?slot=${selected.id}`)}`}>Continue to reserve →</Link><p className={styles.small}>Sign in or create a free account to save this arrival window. No membership needed. Your spot is confirmed after you finish reserving.</p></> : <p className={styles.small}>Browse freely, then choose an arrival time. You’ll sign in or create a free account when you’re ready to reserve.</p>}
     </div>
   </section>;
