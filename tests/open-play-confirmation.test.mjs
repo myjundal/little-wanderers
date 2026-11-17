@@ -170,3 +170,9 @@ test('4–5 PM confirmation repeats 6 PM closing while earlier visits retain unl
  const privateHtml=h.renderOpenPlayConfirmation({...late,closingTime:'2026-11-16T21:00:00Z'}).html;
  assert.match(privateHtml,/Open Play ends at 4:00 PM/);assert.doesNotMatch(privateHtml,/We close at 6 PM/);
 });
+
+
+test('November 22 confirmation uses the special 3 PM private closing and keeps the 1–2 PM arrival window', () => {
+ const h=harness();const {html}=h.renderOpenPlayConfirmation({...input,startTime:'2026-11-22T18:00:00Z',endTime:'2026-11-22T19:00:00Z',closingTime:'2026-11-22T20:00:00Z'});
+ assert.match(html,/Open Play ends at 3:00 PM/);assert.match(html,/1:00 PM–2:00 PM/);assert.match(html,/finish your visit by then/);assert.doesNotMatch(html,/close at 6 PM/);
+});

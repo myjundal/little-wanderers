@@ -49,3 +49,13 @@ test('public calendar drops 5–6 PM windows after November 16 even when they ar
  const {loadPublicOpenPlaySlots}=loadModule('src/lib/public-open-play.ts',{'@/lib/open-play-reservations':constants,'@/lib/private-party-open-play':{...privacy,readPrivatePartyDays:async()=>[]}});
  const result=await loadPublicOpenPlaySlots(admin);assert.equal(result.length,1);assert.equal(result[0].id,slot.id);
 });
+
+
+test('November 22 calendar shows final 1–2 PM arrival and 3 PM closing without the usual 6 PM message', () => {
+ const closing='2026-11-22T20:00:00.000Z';
+ const slots=[9,10,11,12,13].map(hour=>({...slot,id:'nov22-'+hour,starts_at:`2026-11-22T${hour+5}:00:00Z`,ends_at:`2026-11-22T${hour+6}:00:00Z`,remaining_children:6,is_closed:false,is_full:false,closing_at:closing}));
+ const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{'@/lib/open-play-reservations':constants,react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
+ const html=renderToStaticMarkup(React.createElement(Calendar,{slots}));
+ assert.match(html,/Sunday, November 22/);assert.match(html,/Open Play ends at 3 PM/);assert.match(html,/last arrival window on this date is 1 PM–2 PM/);
+ assert.doesNotMatch(html,/we close at 6 PM|last arrival window is 4–5 PM/);
+});
