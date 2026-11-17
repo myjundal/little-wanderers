@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { SOFT_OPENING_START_DATE } from '@/lib/open-play-reservations';
+import { isOpenPlayArrivalAvailable, SOFT_OPENING_START_DATE } from '@/lib/open-play-reservations';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
 import { reservationAdmissionLabel, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
 
@@ -182,14 +182,15 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
     return map;
   }, [reservations]);
 
+  const arrivalSlots = useMemo(() => slots.filter(isOpenPlayArrivalAvailable), [slots]);
   const selectedDaySlots = useMemo(
-    () => slots.filter((slot) => easternYmd(slot.starts_at) === selectedDate),
-    [selectedDate, slots]
+    () => arrivalSlots.filter((slot) => easternYmd(slot.starts_at) === selectedDate),
+    [selectedDate, arrivalSlots]
   );
-  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? selectedDaySlots[0] ?? null;
+  const selectedSlot = selectedDaySlots.find((slot) => slot.id === selectedSlotId) ?? selectedDaySlots[0] ?? null;
   const selectedWeek = getWeekRange(selectedDate);
 
-  const calendarSlots = useMemo<CalendarSlot[]>(() => slots.map((slot) => {
+  const calendarSlots = useMemo<CalendarSlot[]>(() => arrivalSlots.map((slot) => {
     const slotReservations = reservationsBySlot.get(slot.id) ?? [];
     const active = slotReservations.filter((reservation) => reservation.status !== 'cancelled');
     const childCount = active.reduce((sum, reservation) => sum + Number(reservation.child_count ?? 0), 0);
@@ -211,11 +212,11 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
         : `${formatWindow(slot.starts_at, slot.ends_at)} ${childCount}/${slot.capacity_children}`,
       status: slotStatus,
     };
-  }), [reservationsBySlot, slots]);
+  }), [reservationsBySlot, arrivalSlots]);
 
   const selectedDayReservations = useMemo(() => reservations
-    .filter((reservation) => selectedDaySlots.some((slot) => slot.id === reservation.slot_id))
-    .sort((a, b) => new Date(a.slot?.starts_at ?? a.created_at).getTime() - new Date(b.slot?.starts_at ?? b.created_at).getTime()), [reservations, selectedDaySlots]);
+    .filter((reservation) => slots.some((slot) => slot.id === reservation.slot_id && easternYmd(slot.starts_at) === selectedDate))
+    .sort((a, b) => new Date(a.slot?.starts_at ?? a.created_at).getTime() - new Date(b.slot?.starts_at ?? b.created_at).getTime()), [reservations, slots, selectedDate]);
   const selectedDayTotals = reservationTotals(selectedDayReservations);
   const allTotals = reservationTotals(reservations);
 
@@ -318,7 +319,7 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
         <section style={{ border: '1px solid #e8dfef', borderRadius: 18, background: '#fffdf9', padding: 16 }}>
           <p style={{ margin: 0, color: '#6d6480' }}>Loading Open Play reservations...</p>
         </section>
-      ) : slots.length === 0 ? (
+      ) : arrivalSlots.length === 0 ? (
         <section style={{ border: '1px solid #f0d89b', borderRadius: 18, background: '#fff8e6', padding: 16 }}>
           <strong style={{ color: '#6b4d12' }}>No Open Play windows yet.</strong>
           <p style={{ margin: '8px 0 0', color: '#6d6480' }}>Seed the November–December Open Play windows in Supabase first.</p>
