@@ -1,6 +1,6 @@
 # Minimum enrollment cancellation
 
-Regular drop-in classes require three confirmed children. At 7 AM America/New_York on class day, the protected job closes existing payment links, rechecks confirmed (`scheduled`/`attended`) registrations, and cancels under-enrolled occurrences. Saved interest and waitlists do not count. Any occurrence in `class_series_programs` is excluded, including Jamie's five-session series. A payment that wins the class row lock before cancellation is re-counted; three registrations retain the class.
+Regular drop-in classes require two confirmed children. At 7 AM America/New_York on class day, the protected job closes existing payment links, rechecks confirmed (`scheduled`/`attended`) registrations, and cancels under-enrolled occurrences. Saved interest and waitlists do not count. Any occurrence in `class_series_programs` is excluded, including Jamie's five-session series. A payment that wins the class row lock before cancellation is re-counted; two registrations retain the class.
 
 GitHub Actions runs the website job at 7 AM Eastern with a purpose-bound `CLASS_MINIMUM_TRIGGER_TOKEN`. Manual dispatch defaults to preview. The token is derived server-side from the existing email transport credential; no provider credential is exposed in workflow logs. Run logs contain counts and record IDs, never recipient details or signed customer links.
 
