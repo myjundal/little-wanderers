@@ -36,3 +36,7 @@
 .explanation { margin: 16px 0 0; color: #776d87; font-size: 13px; line-height: 1.8; }
 .metric strong small { display: inline; margin-left: 6px; font-size: 13px; letter-spacing: 0; }
 .method.panel > summary { font-size: 15px; }
+
+.classSplit { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.classSplit .ownerShare strong { color: #5e437b; }
+@media(max-width:520px) { .classSplit { grid-template-columns: 1fr; gap: 20px; }.classSplit > div { padding: 0; border-left: none; } }

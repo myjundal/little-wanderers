@@ -13,13 +13,13 @@ function report(data,payment,date,existing=[]){const services=allocateCatalogCla
 test('POS full-series purchase belongs to every real class date once, never entirely to purchase day',()=>{
  const data=sources(),payment=receipt();
  assert.equal(report(data,payment,'2026-11-10').net_cents,0);
- for(const date of dates){const r=report(data,payment,date);assert.equal(r.class_cents,3000);assert.equal(r.prepaid_cents,3000);assert.equal(r.due_cents,0);assert.equal(r.complete,true);}
- assert.equal(dates.reduce((sum,date)=>sum+report(data,payment,date).class_cents,0),15000);
+ for(const date of dates){const r=report(data,payment,date);assert.equal(r.class_gross_cents,3000);assert.equal(r.class_cents,900);assert.equal(r.net_cents,900);assert.equal(r.rows[0].gross_prepaid_cents,3000);assert.equal(r.due_cents,0);assert.equal(r.complete,true);}
+ assert.equal(dates.reduce((sum,date)=>sum+report(data,payment,date).class_gross_cents,0),15000);
 });
 test('discounts, remainder cents, refunds and a moved date conserve the actual paid amount',()=>{
  const data=sources(),payment=receipt({service_total_cents:28003,items:[{label:'Series for siblings',category:'class',catalog_object_id:'variation',amount_cents:28003}],payments:[{id:'p',amount_cents:28003,refunded_cents:1000,paid_at:'2026-11-10T15:00:00Z'}]});
- const amounts=dates.map(date=>report(data,payment,date).class_cents);assert.equal(amounts.reduce((a,b)=>a+b),27003);assert.equal(Math.max(...amounts)-Math.min(...amounts),1);
- data.classes[1].start_time='2026-11-20T22:00:00Z';assert.equal(report(data,payment,dates[1]).class_cents,0);assert.equal(report(data,payment,'2026-11-20').class_cents,amounts[1]);
+ const amounts=dates.map(date=>report(data,payment,date).class_gross_cents);assert.equal(amounts.reduce((a,b)=>a+b),27003);assert.equal(Math.max(...amounts)-Math.min(...amounts),1);
+ data.classes[1].start_time='2026-11-20T22:00:00Z';assert.equal(report(data,payment,dates[1]).class_gross_cents,0);assert.equal(report(data,payment,'2026-11-20').class_gross_cents,amounts[1]);
 });
 test('unselected weekly dates, missing mappings and ambiguous programs stay as unallocated prepayment',()=>{
  const payment=receipt();
@@ -29,16 +29,16 @@ test('unselected weekly dates, missing mappings and ambiguous programs stay as u
 });
 test('existing website class allocations win over catalog discovery without duplicate revenue',()=>{
  const data=sources(),payment=receipt();const existing=dates.map((date,i)=>({id:`website-${i}`,date,category:'class',label:'Website series',expected_cents:3000,attendance:'reserved',cancelled:false,charges:[{order_id:'pos-order',amount_cents:3000}],issues:[]}));
- const r=report(data,payment,dates[0],existing);assert.equal(r.rows.length,1);assert.equal(r.class_cents,3000);assert.equal(r.complete,true);
+ const r=report(data,payment,dates[0],existing);assert.equal(r.rows.length,1);assert.equal(r.class_gross_cents,3000);assert.equal(r.class_cents,900);assert.equal(r.net_cents,900);assert.equal(r.complete,true);
 });
 test('mixed café/class receipt uses café payment day and class session days without changing the total',()=>{
  const data=sources(),payment=receipt({service_total_cents:15500,items:[...receipt().items,{label:'Latte',category:'cafe',amount_cents:500}],payments:[{id:'p',amount_cents:15500,refunded_cents:0,paid_at:'2026-11-10T15:00:00Z'}]});
- const paid=report(data,payment,'2026-11-10');assert.equal(paid.net_cents,500);assert.equal(paid.class_cents,0);
- assert.equal(dates.reduce((sum,date)=>sum+report(data,payment,date).net_cents,paid.net_cents),15500);
+ const paid=report(data,payment,'2026-11-10');assert.equal(paid.net_cents,500);assert.equal(paid.class_gross_cents,0);
+ assert.equal(dates.reduce((sum,date)=>sum+report(data,payment,date).gross_net_cents,paid.gross_net_cents),15500);
 });
 test('one explicit standalone session works, cancelled sessions require review, unpaid POS orders create no customer debt',()=>{
  const data=sources();data.classPrograms=[];data.classMappings=[{entity_key:'class-0',variation_id:'variation',program_key:null}];
- assert.equal(report(data,receipt(),dates[0]).class_cents,15000);
+ assert.equal(report(data,receipt(),dates[0]).class_gross_cents,15000);
  data.classes[0].status='cancelled';const cancelled=report(data,receipt(),dates[0]);assert.equal(cancelled.net_cents,0);assert.equal(cancelled.review_count,1);
  data.classes[0].status='scheduled';const unpaid=report(data,receipt({payments:[]}),dates[0]);assert.equal(unpaid.due_cents,0);assert.equal(unpaid.rows.length,0);
 });
@@ -71,5 +71,5 @@ test('later class report discovers earlier POS receipts even when there are no p
   if(url.endsWith('/v2/payments/payment'))return Response.json({payment:{id:'payment',order_id:'pos-order',location_id:'test-location',status:'COMPLETED',amount_money:money(15000),created_at:'2026-11-10T15:00:00Z'}});
   throw Error('Unexpected provider request '+url);
  }}).load('src/lib/service-day-revenue-data.ts');
- const r=await loader.getServiceDayRevenue(admin,'2026-11-19');assert.equal(r.class_cents,3000);assert.equal(r.prepaid_cents,3000);assert.equal(r.complete,true);assert(!calls.some(([path])=>path==='/v2/orders/pos-order'));
+ const r=await loader.getServiceDayRevenue(admin,'2026-11-19');assert.equal(r.class_gross_cents,3000);assert.equal(r.class_cents,900);assert.equal(r.net_cents,900);assert.equal(r.rows[0].gross_prepaid_cents,3000);assert.equal(r.complete,true);assert(!calls.some(([path])=>path==='/v2/orders/pos-order'));
 });
