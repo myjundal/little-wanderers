@@ -1,4 +1,5 @@
 'use client';
+import { startVisiblePolling } from '@/lib/visible-polling';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
@@ -178,37 +179,29 @@ export default function StaffCheckinPage() {
       const launch = readPendingAdmissionPos(window.sessionStorage.getItem(PENDING_ADMISSION_POS_KEY));
       if (launch) { pendingLaunch.current = launch; setPendingPosId(launch.id); }
     } catch { /* The server also restores this operator's current pending sale. */ }
-    void resumePayments();
+    if (!document.hidden) void resumePayments();
     // Initial load and Square return are handled once; callbacks are idempotent on the server.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const resume = () => {
-      if (!pendingLaunch.current && !squarePosCallback(window.location.search)) return;
+    return startVisiblePolling(async () => {
+      await resumePayments();
       setDeskRefresh(value => value + 1);
-      void resumePayments();
-    };
-    const visible = () => { if (document.visibilityState === 'visible') resume(); };
-    window.addEventListener('pageshow', resume);
-    window.addEventListener('focus', resume);
-    document.addEventListener('visibilitychange', visible);
-    return () => { window.removeEventListener('pageshow', resume); window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', visible); };
-    // Refresh saved visits and counts when returning from the Square app.
+    }, 60000, { immediate: false });
+    // Refresh other operators' visits while in use, including on tab/Square return.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!pendingPosId) return;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void resumePayments(true);
-    }, 15000);
-    return () => window.clearInterval(timer);
-    // Check only the pending receipt; refresh the desk after a terminal result.
+    return startVisiblePolling(() => resumePayments(true), 15000, { immediate: false });
+    // Pending receipts retain their faster verification without reloading the desk.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPosId]);
 
   useEffect(() => {
+    if (document.hidden) return;
     const controller = new AbortController();
     setDeskLoading(true);
     setDeskError('');

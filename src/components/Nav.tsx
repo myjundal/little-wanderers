@@ -1,14 +1,7 @@
 import { PastelHeader } from '@/components/pastel/PastelPrimitives';
-import { getCurrentUserRole, isStaffRole } from '@/lib/authz';
 
-export default async function Nav() {
-  const identity = await getCurrentUserRole();
-
-  return (
-    <PastelHeader
-      isAuthenticated={Boolean(identity.user)}
-      dashboardHref={isStaffRole(identity.role) ? '/staff/dashboard' : identity.roles.includes('instructor') ? '/teaching' : undefined}
-      accessLabel={isStaffRole(identity.role) || identity.roles.includes('instructor') ? 'My dashboard' : undefined}
-    />
-  );
+export default function Nav() {
+  // Resolve identity when opening the account, so public browsing/prefetching
+  // can use static HTML without an auth and role lookup on every request.
+  return <PastelHeader dashboardHref="/account" accessLabel="My account" />;
 }

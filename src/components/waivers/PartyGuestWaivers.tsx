@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import { startVisiblePolling } from '@/lib/visible-polling';
 type Item = { household_id: string; guardian_name: string; email: string; children: string[]; status: string; expires_at: string };
 export default function PartyGuestWaivers({ partyId }: { partyId: string }) {
   const [data, setData] = useState<{ guest_url: string; qr_data_url: string; items: Item[]; truncated: boolean } | null>(null);
@@ -11,10 +12,10 @@ export default function PartyGuestWaivers({ partyId }: { partyId: string }) {
     setData(null); setCopied(false);
   }, [partyId]);
   useEffect(() => {
-    const timer = window.setInterval(() => setRefresh(value => value + 1), 30000);
-    return () => window.clearInterval(timer);
+    return startVisiblePolling(() => setRefresh(value => value + 1), 30000, { immediate: false });
   }, []);
   useEffect(() => {
+    if (document.hidden) return;
     const controller = new AbortController();
     setError('');
     void fetch(`/api/admin/party-bookings/${partyId}/waivers`, { cache: 'no-store', signal: controller.signal }).then(async response => {

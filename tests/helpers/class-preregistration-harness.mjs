@@ -10,6 +10,21 @@ export function loadModule(filename, mocks = {}, globals = {}) {
   }).outputText;
   vm.runInNewContext(source, {
     exports, require: name => {
+      if (!(name in mocks) && name === '@/lib/visible-polling') return {
+        startVisiblePolling: (refresh, interval, { immediate = true } = {}) => {
+          const run = () => { if (!globals.document?.hidden) void refresh(); };
+          const timer = globals.window?.setInterval?.(run, interval);
+          // Component tests exercise refresh results; the scheduler and browser
+          // lifecycle are exercised with real event targets in vercel-usage.test.
+          if (interval === 60000) {
+            globals.window?.addEventListener?.('focus', run);
+            globals.document?.addEventListener?.('visibilitychange', run);
+          }
+          if (immediate) run();
+          return () => { globals.window?.clearInterval?.(timer); };
+        },
+      };
+      if (!(name in mocks) && name === 'next/cache') return { revalidateTag() {} };
       if (!(name in mocks)) throw new Error(`Unexpected import: ${name}`);
       return mocks[name];
     },

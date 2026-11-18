@@ -1,5 +1,7 @@
 'use client';
 
+import { startVisiblePolling } from '@/lib/visible-polling';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type SendCounts = {
@@ -316,11 +318,7 @@ export default function CampaignAdmin() {
   }, [load, loadTags]);
 
   useEffect(() => {
-    const refresh = window.setInterval(() => {
-      void load({ preserveDraft: true, silent: true });
-    }, 10000);
-
-    return () => window.clearInterval(refresh);
+    return startVisiblePolling(() => load({ preserveDraft: true, silent: true }), 30000, { immediate: false });
   }, [load]);
 
   useEffect(() => {

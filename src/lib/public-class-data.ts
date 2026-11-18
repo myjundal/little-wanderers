@@ -54,12 +54,18 @@ const readPublicClasses = unstable_cache(async (): Promise<PublicClassItem[]> =>
     schedule_note: item.schedule_note ?? null,
     schedule_label: item.schedule_label ?? null,
   }));
-}, ['public-class-catalog-v2'], { revalidate: 60 });
+}, ['public-class-catalog-v3'], { revalidate: 300, tags: ['public-class-catalog'] });
+
+// Share metadata only. Seat counts stay live, and API failures must propagate.
+export async function getPublicClassCatalog(limit = 200): Promise<PublicClassItem[]> {
+  const now = Date.parse(earliestClassTime());
+  return (await readPublicClasses()).filter(item => Date.parse(item.start_time) >= now).slice(0, limit);
+}
 
 export async function getPublicClasses(limit = 80): Promise<PublicClassItem[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
   try {
-    return (await readPublicClasses()).slice(0, limit);
+    return await getPublicClassCatalog(limit);
   } catch {
     return [];
   }

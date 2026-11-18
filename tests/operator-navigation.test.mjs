@@ -151,16 +151,23 @@ test('administration page exposes only role-appropriate tools', async () => {
 });
 
 
-test('public page account link also returns operators and instructors to My dashboard', async () => {
-  for (const role of ['owner', 'staff', 'instructor']) {
+test('public header is static and account navigation resolves the current identity on demand', async () => {
+  for (const role of ['owner', 'admin', 'staff', 'instructor', 'user', null]) {
     const Header = function Header() {};
     const Page = loadModule('src/components/Nav.tsx', {
       '@/components/pastel/PastelPrimitives': { PastelHeader: Header },
       '@/lib/authz': { getCurrentUserRole: async () => ({ user: { id: 'signed-in' }, role, roles: [role] }), isStaffRole: value => ['owner', 'staff'].includes(value) },
     }, { React }).default;
     const result = await Page();
-    assert.equal(result.props.accessLabel, 'My dashboard');
-    assert.equal(result.props.dashboardHref, role === 'instructor' ? '/teaching' : '/staff/dashboard');
+    assert.equal(result.props.accessLabel, 'My account');
+    assert.equal(result.props.dashboardHref, '/account');
+    const account = loadModule('src/app/account/route.ts', {
+      '@/lib/authz': { getCurrentUserRole: async () => ({ user: role ? { id: 'signed-in' } : null, role, roles: role ? [role] : [] }), isStaffRole: value => ['owner', 'admin', 'staff'].includes(value) },
+    });
+    const response = await account.GET(new Request('https://example.test/account'));
+    assert.equal(new URL(response.headers.get('location')).pathname, role === null ? '/login'
+      : role === 'instructor' ? '/teaching' : role === 'user' ? '/landing' : '/staff/dashboard');
+    assert.match(response.headers.get('cache-control'), /private, no-store/);
   }
 });
 

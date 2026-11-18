@@ -1,4 +1,5 @@
 import { requireClassManagementContext } from '@/lib/authz';
+import { revalidateTag } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,10 +174,15 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
     if (originalError) return Response.json({ ok: false, error: originalError.message }, { status: 500 });
 
     const primary = await context.admin.from('classes').update(parsed.data).eq('id', params.id);
+    // A later series write can fail after this first write has succeeded.
+    if (!primary.error) revalidateTag('public-class-catalog');
     if (primary.error) {
       if (isMissingDurationColumn(primary.error.message)) {
         const fallback = await context.admin.from('classes').update(parsed.dataWithoutDuration).eq('id', params.id);
-        if (!fallback.error) return Response.json({ ok: true });
+        if (!fallback.error) {
+          revalidateTag('public-class-catalog');
+          return Response.json({ ok: true });
+        }
         return Response.json({ ok: false, error: fallback.error.message }, { status: 500 });
       }
       if (isMissingClassDetailColumn(primary.error.message)) {
@@ -240,6 +246,7 @@ export async function PATCH(req: Request, { params: pendingParams }: { params: P
       }
     }
 
+    revalidateTag('public-class-catalog');
     return Response.json({ ok: true });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';
@@ -266,6 +273,7 @@ export async function DELETE(_req: Request, { params: pendingParams }: { params:
 
     const { error } = await context.admin.from('classes').delete().eq('id', params.id);
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+    revalidateTag('public-class-catalog');
     return Response.json({ ok: true });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown error';

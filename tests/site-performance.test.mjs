@@ -22,7 +22,7 @@ function cacheFixture() {
   };
 }
 
-test('public class metadata is cached for a minute and never reads registrations', async () => {
+test('public class metadata is cached for five minutes and never reads registrations', async () => {
   const cache = cacheFixture();
   const tables = [];
   const admin = { from(table) {
@@ -42,7 +42,7 @@ test('public class metadata is cached for a minute and never reads registrations
   assert.equal('booked_count' in first[0], false);
   await api.getPublicClasses(80);
   assert.equal(tables.length, 1);
-  cache.advance(61);
+  cache.advance(301);
   await api.getPublicClasses(60);
   assert.equal(tables.length, 2);
 });
@@ -167,6 +167,13 @@ function crowdHarness(showStatus = true, showHours = false) {
     removeEventListener: (_name, listener) => visibilityListeners.delete(listener),
   };
   const component = loadModule('src/components/crowd/CrowdLevelCard.tsx', {
+    '@/lib/visible-polling': { startVisiblePolling: (refresh, ms) => {
+      void refresh();
+      const timer = ++nextTimer;
+      timers.set(timer, { fn: refresh, ms });
+      visibilityListeners.add(refresh);
+      return () => { timers.delete(timer); visibilityListeners.delete(refresh); };
+    } },
     react: { useState: initial => { const index = cursor++; if (!(index in values)) values[index] = typeof initial === 'function' ? initial() : initial;
       return [values[index], value => { values[index] = value; if (index === 1) loadingUpdates.push(value); }]; },
       useEffect: callback => { effects.push(callback); } },
@@ -180,7 +187,7 @@ function crowdHarness(showStatus = true, showHours = false) {
   const cleanups = effects.splice(0).map(effect => effect()).filter(Boolean);
   return { requests, document, cleanup: cleanups.length ? () => cleanups.forEach(cleanup => cleanup()) : undefined,
     loadingUpdates, render, setTime: value => { currentTime = Date.parse(value); },
-    poll: () => [...timers.values()].find(timer => timer.ms === 10000).fn(),
+    poll: () => [...timers.values()].find(timer => timer.ms === 60000).fn(),
     clockTick: () => [...timers.values()].find(timer => timer.ms === 60000).fn(),
     reveal: () => visibilityListeners.forEach(listener => listener()),
     resolve: async () => { release(Response.json({ ok: true, occupancy: 7, capacity: 80 })); await new Promise(resolve => setImmediate(resolve)); },

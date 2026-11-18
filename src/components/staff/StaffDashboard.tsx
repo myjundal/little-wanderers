@@ -1,4 +1,6 @@
 'use client';
+
+import { startVisiblePolling } from '@/lib/visible-polling';
 import PartyPrivacyEditor from '@/components/staff/PartyPrivacyEditor';
 import { PARTY_PRIVACY_UPDATED_EVENT } from '@/lib/private-party-open-play';
 
@@ -568,8 +570,9 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
   }, [view]);
 
   useEffect(() => {
-    load();
-  }, [load, refreshKey]);
+    if (view !== 'occupancy' && view !== 'overview') { void load(); return; }
+    return startVisiblePolling(load, 30000);
+  }, [load, refreshKey, view]);
 
   const mutateOccupancy = async (action: 'increment' | 'decrement' | 'reset', amount = 1, notes?: string) => {
     const res = await fetch('/api/admin/occupancy', {

@@ -41,7 +41,7 @@ test('anonymous API returns only approved messages without counts, percentages, 
   for (const count of [0, 8, 9, 25, 26, 27, 35, 36, 80]) {
     const response = await route({ count }).GET();
     assert.equal(response.status, 200);
-    assert.match(response.headers.get('cache-control'), /no-store/);
+    assert.match(response.headers.get('cache-control'), /s-maxage=30/);
     const payload = await response.json();
     assert.deepEqual(Object.keys(payload).sort(), ['description', 'label', 'ok', 'status']);
     assert.deepEqual(payload, JSON.parse(JSON.stringify(crowd.publicCrowdMessage(crowd.publicCrowdStatus(occupancy.normalizeCrowdLevel(null, count))))));
@@ -56,6 +56,7 @@ test('closed hours skip the crowd read and missing or failed reads never claim r
   for (const input of [{ fail: true }, { source: null }]) {
     const response = await route(input).GET();
     assert.equal(response.status, 503);
+    assert.match(response.headers.get('cache-control'), /no-store/);
     assert.deepEqual(await response.json(), JSON.parse(JSON.stringify(unavailable)));
   }
 });
