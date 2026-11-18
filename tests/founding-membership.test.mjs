@@ -285,9 +285,9 @@ test('pre-opening free visits require a production reservation; paid access requ
 test('provider reconciliation does not grant access for an unpaid invoice and is retryable after persistence failure', async t => {
   const { db, admin } = await database(t); await prepare(admin);
   await db.query("update founding_memberships set status='active',square_customer_id='customer',square_card_id='card',square_subscription_id='sub',start_date='2026-11-03'");
-  let status = 'UNPAID';
+  let status = 'UNPAID'; let actions = [];
   const service = modules(async url => {
-    if (url.includes('/subscriptions/')) return Response.json({ subscription: { id: 'sub', status: 'ACTIVE', customer_id: 'customer', location_id: 'test-location', start_date: '2026-11-03', charged_through_date: '2026-12-02', invoice_ids: ['invoice'] } });
+    if (url.includes('/subscriptions/')) return Response.json({ subscription: { id: 'sub', status: 'ACTIVE', customer_id: 'customer', location_id: 'test-location', start_date: '2026-11-03', charged_through_date: '2026-12-02', invoice_ids: ['invoice'], actions } });
     return Response.json({ invoice: { subscription_id: 'sub', location_id: 'test-location', status, primary_recipient: { customer_id: 'customer' }, payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: 5000, currency: 'USD' } }] } });
   }).load('src/lib/founding-square.ts');
   await service.syncFoundingSubscription(admin, 'sub'); assert.equal((await db.query('select paid_through from founding_memberships')).rows[0].paid_through, null);
@@ -301,6 +301,9 @@ test('provider reconciliation does not grant access for an unpaid invoice and is
   assert.equal((await db.query('select paid_through from founding_memberships')).rows[0].paid_through, null);
   await service.syncFoundingSubscription(admin, 'sub'); await service.syncFoundingSubscription(admin, 'sub');
   assert.equal((await db.query('select paid_through::text from founding_memberships')).rows[0].paid_through, '2026-12-02');
+  actions = [{ type: 'CHANGE_BILLING_ANCHOR_DATE', effective_date: '2026-11-30', monthly_billing_anchor_date: 30 }];
+  await service.syncFoundingSubscription(admin, 'sub');
+  assert.equal((await db.query('select paid_through::text from founding_memberships')).rows[0].paid_through, '2026-11-30');
   await db.query("update founding_memberships set status='canceled'");
   await service.syncFoundingSubscription(admin, 'sub'); assert.equal((await db.query('select status from founding_memberships')).rows[0].status, 'canceled');
   status = 'REFUNDED'; await service.syncFoundingSubscription(admin, 'sub'); assert.equal((await db.query('select paid_through from founding_memberships')).rows[0].paid_through, null);
@@ -533,7 +536,7 @@ test('historical activation freezes a current Square start, charges one full mon
     const path = new URL(url).pathname;
     if (path === '/v2/cards/card') return Response.json({ card: { id: 'card', customer_id: 'customer', enabled: true } });
     if (path === '/v2/subscriptions/search') return Response.json({ subscriptions: [] });
-    if (path === '/v2/subscriptions/sub' && options.method === 'GET') return Response.json({ subscription: { id: 'sub', invoice_ids: ['inv'], monthly_billing_anchor_date: Number(today.slice(8)) }, actions: scheduled ? [action] : [] });
+    if (path === '/v2/subscriptions/sub' && options.method === 'GET') return Response.json({ subscription: { id: 'sub', customer_id: 'customer', location_id: 'test-location', card_id: 'card', start_date: today, status: 'ACTIVE', invoice_ids: ['inv'], monthly_billing_anchor_date: Number(today.slice(8)), actions: scheduled ? [action] : [] } });
     if (path === '/v2/invoices/inv') return Response.json({ invoice: { subscription_id: 'sub', primary_recipient: { customer_id: 'customer' }, status: 'PAID', payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: 5000, currency: 'USD' } }] } });
     const body = JSON.parse(options.body); writes.push({path,body});
     if (body.object) return Response.json({ catalog_object: { id: body.object.type === 'SUBSCRIPTION_PLAN' ? 'plan' : 'variation' } });
@@ -551,8 +554,7 @@ test('historical activation freezes a current Square start, charges one full mon
   const saved = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
   assert.equal(saved.status,'active'); assert.equal(saved.start_date,visit); assert.equal(saved.paid_through,dates.addMonths(visit,1));
   const subscriptionCalls=writes.filter(w=>w.path==='/v2/subscriptions');
-  assert.equal(subscriptionCalls.length,2);
-  assert.deepEqual(subscriptionCalls[0].body,subscriptionCalls[1].body);
+  assert.equal(subscriptionCalls.length,1);
   assert.equal(subscriptionCalls[0].body.start_date,today);
   assert.equal(subscriptionCalls[0].body.monthly_billing_anchor_date,Number(today.slice(8)));
   assert.equal(writes.find(w=>w.body.object?.type==='SUBSCRIPTION_PLAN_VARIATION').body.object.subscription_plan_variation_data.phases[0].pricing.price_money.amount,5000);
@@ -600,3 +602,44 @@ test('owner POST rejects stale amount and missing capability before any activati
   const post=amount=>api.POST(new Request('https://example.test/api/admin/founding-memberships',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:ids.household,startDate:'2026-11-11',expectedAmountCents:amount,firstVisitConfirmed:true,confirmation:'START MONTHLY BILLING'})}));
   assert.equal((await post(6000)).status,409);permitted=false;assert.equal((await post(5000)).status,403);assert.equal(calls,0);
 });
+
+for (const scenario of ['scheduled nested action', 'explicit effective date', 'read after response', 'wrong effective date', 'unpaid invoice', 'wrong subscription']) {
+  test(`interrupted historical activation: ${scenario}`, async t => {
+    const { db, admin } = await database(t); const row = await prepare(admin);
+    const dates = modules().load('src/lib/founding-membership.ts');
+    const today = dates.easternDate(), visit = dates.easternDate(new Date(Date.now() - 2 * 86400000));
+    const renewal = dates.addMonths(visit, 1), anchor = Number(visit.slice(8));
+    await db.query("update founding_memberships set status='activating',start_date=$1,square_customer_id='customer',square_card_id='card',square_subscription_id='sub'", [visit]);
+    const action = { type: 'CHANGE_BILLING_ANCHOR_DATE', effective_date: renewal, monthly_billing_anchor_date: anchor };
+    let changed = false; const writes = [];
+    const service = loadSquareModules({
+      mocks: { '@/lib/founding-billing-activation': { verifyFoundingBillingCard: async () => ({}), freezeFoundingSquareStart: async () => today } },
+      fetch: async (url, options) => {
+        const path = new URL(url).pathname;
+        const subscription = { id: 'sub', customer_id: scenario === 'wrong subscription' ? 'other' : 'customer', location_id: 'test-location', card_id: 'card', start_date: today, status: 'ACTIVE', invoice_ids: ['inv'], monthly_billing_anchor_date: Number(today.slice(8)), actions: scenario === 'scheduled nested action' || changed ? [{ ...action, ...(scenario === 'wrong effective date' ? { effective_date: dates.addMonths(renewal, 1) } : {}) }] : [] };
+        if (options.method === 'GET' && path === '/v2/subscriptions/sub') return Response.json({ subscription });
+        if (path === '/v2/invoices/inv') return Response.json({ invoice: { subscription_id: 'sub', primary_recipient: { customer_id: 'customer' }, status: scenario === 'unpaid invoice' ? 'UNPAID' : 'PAID', payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: scenario === 'unpaid invoice' ? 0 : 5000, currency: 'USD' } }] } });
+        writes.push({ path, body: JSON.parse(options.body) });
+        if (path.endsWith('/billing-anchor')) {
+          changed = true;
+          if (scenario === 'read after response') return Response.json({ subscription });
+          return Response.json({ subscription, actions: [{ ...action, ...(scenario === 'wrong effective date' ? { effective_date: dates.addMonths(renewal, 1) } : {}) }] });
+        }
+        throw Error('Unexpected financial write: ' + path);
+      },
+    }).load('src/lib/founding-square.ts');
+    const enrollment = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1', [row.id])).rows[0].value;
+    const activation = () => service.activateFounding(admin, enrollment, visit, { ownerAuthorized: true, ownerUserId: ids.user });
+    if (scenario === 'wrong effective date') await assert.rejects(activation(), /renewal date needs confirmation/);
+    else if (scenario === 'unpaid invoice') await assert.rejects(activation(), /first payment is not confirmed/);
+    else if (scenario === 'wrong subscription') await assert.rejects(activation(), /verify the Square subscription/);
+    else await activation();
+    const saved = (await db.query('select status,paid_through::text from founding_memberships where id=$1', [row.id])).rows[0];
+    const success = ['scheduled nested action', 'explicit effective date', 'read after response'].includes(scenario);
+    assert.equal(saved.status, success ? 'active' : 'activating');
+    if (success) assert.equal(saved.paid_through, renewal);
+    assert.ok(writes.every(w => w.path === '/v2/subscriptions/sub/billing-anchor'));
+    assert.equal(writes.length, ['scheduled nested action', 'unpaid invoice', 'wrong subscription'].includes(scenario) ? 0 : 1);
+    for (const write of writes) assert.deepEqual(write.body, { monthly_billing_anchor_date: anchor, effective_date: renewal });
+  });
+}
