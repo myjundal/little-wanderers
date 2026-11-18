@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import {loadSquareModules,localSquareAdmin,ids} from './helpers/admission-pos-harness.mjs';
 import {loadModule} from './helpers/class-preregistration-harness.mjs';
@@ -288,4 +289,19 @@ test('historical admission status is read-only and validates dates before databa
  assert.equal((await api.GET(new Request('https://example.test?date=2026-02-30'))).status,400);assert.equal(reads,0);
  const response=await api.GET(new Request('https://example.test?date=2026-11-01'));const result=await response.json();
  assert.equal(result.date,'2026-11-01');assert.equal(result.enabled,false);assert.equal(reconciliations,0);assert.equal(result.pending_sales.length,0);assert.equal(response.status,200);
+});
+
+
+test('an unfinished same-day online checkout permits attendance but blocks a second POS sale before preparation', async t => {
+ const {db,admin}=await database(t);
+ const slot=crypto.randomUUID(), booking=crypto.randomUUID();
+ await db.query('insert into open_play_reservation_slots values($1,$2)',[slot,new Date().toISOString()]);
+ await db.query("insert into open_play_reservations(id,household_id,slot_id,child_ids,status,payment_choice,payment_status,payment_environment,square_order_id,amount_cents,created_at) values($1,$2,$3,$4,'reserved','now','due','sandbox','unfinished-order',2600,now())",[booking,ids.household,slot,[ids.person,sibling]]);
+ const m=modules(async()=>Response.json({order:{id:'unfinished-order',reference_id:`op_${booking}`,location_id:'test-location',state:'DRAFT'}}));
+ await m.load('src/lib/soft-opening-payments.ts').reconcileOpenPlayPayments(admin,ids.household,{allowPending:true});
+ await assert.rejects(m.load('src/lib/square-admission-pos.ts').startAdmissionPos(admin,[checkin,sibling],ids.user),/pending/);
+ assert.equal((await db.query('select count(*)::int n from admission_pos_sales')).rows[0].n,0);
+ await db.query("update open_play_reservation_slots set starts_at=starts_at-interval '1 day' where id=$1",[slot]);
+ const launch=await m.load('src/lib/square-admission-pos.ts').startAdmissionPos(admin,[checkin,sibling],ids.user);
+ assert.ok(launch.url); // An old abandoned checkout cannot block today's arrival.
 });

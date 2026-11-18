@@ -104,7 +104,7 @@ export default function GuestWaiverForm() {
           <legend>Child {index + 1}</legend>
           <label>Child first name<input className={styles.name} required maxLength={100} value={child.first_name} onChange={e => setChildren(previous => previous.map((c, i) => i === index ? { ...c, first_name: e.target.value } : c))} /></label>
           <label>Child last name<input className={styles.name} required maxLength={100} value={child.last_name} onChange={e => setChildren(previous => previous.map((c, i) => i === index ? { ...c, last_name: e.target.value } : c))} /></label>
-          <label>Birthday (MM/DD/YYYY)<input className={styles.name} inputMode="numeric" required placeholder="MM/DD/YYYY" maxLength={10} value={child.birthdate} onChange={e => setChildren(previous => previous.map((c, i) => i === index ? { ...c, birthdate: formatBirthdateInput(e.target.value) } : c))} /></label>
+          <label>Birthday (MM/DD/YY or MM/DD/YYYY)<input className={styles.name} inputMode="numeric" required placeholder="MM/DD/YY or MM/DD/YYYY" maxLength={10} value={child.birthdate} onChange={e => setChildren(previous => previous.map((c, i) => i === index ? { ...c, birthdate: formatBirthdateInput(e.target.value) } : c))} /></label>
           {children.length > 1 && <button type="button" onClick={() => setChildren(previous => previous.filter((_, i) => i !== index))}>Remove child</button>}
         </fieldset>)}
         {children.length < 10 && <button type="button" onClick={() => setChildren(previous => [...previous, emptyChild()])}>Add another child</button>}

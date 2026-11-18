@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!isUuid(String(body?.person_id ?? ''))) return Response.json({ ok: false, error: 'A valid person_id is required.' }, { status: 400 });
   const person = await context.admin.from('people').select('household_id').eq('id',body.person_id).maybeSingle();
   if (person.error) return Response.json({ok:false,error:'Unable to verify admission payment.'},{status:503});
-  if (person.data) { try { await reconcileOpenPlayPayments(context.admin,person.data.household_id); } catch { return Response.json({ok:false,error:'Online admission payment needs review before check-in. Please verify it before collecting payment.'},{status:503}); } }
+  if (person.data) { try { await reconcileOpenPlayPayments(context.admin,person.data.household_id, { allowPending: true }); } catch { return Response.json({ok:false,error:'Online admission payment needs review before check-in. Please verify it before collecting payment.'},{status:503}); } }
   // A QR identifies one person. Ignore caller-provided prices, headcounts and audit identity.
   const { data, error } = await context.admin.rpc('checkin_person', {
     p_person_id: body.person_id, p_staff_user_id: context.user.id, p_staff_role: context.role,

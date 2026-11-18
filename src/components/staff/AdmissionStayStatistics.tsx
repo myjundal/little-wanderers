@@ -17,7 +17,7 @@ export default function AdmissionStayStatistics({ refreshKey }: { refreshKey: nu
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    setReport(null);
+    setReport(previous => previous?.start === start && previous.end === end ? previous : null);
     void (async () => {
       try {
         const response = await fetch(`/api/admin/admission/stays?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { cache: 'no-store', signal: controller.signal });
@@ -57,7 +57,7 @@ export default function AdmissionStayStatistics({ refreshKey }: { refreshKey: nu
       <label>From<input type="date" value={start} max={end} onChange={event => setStart(event.target.value)} /></label>
       <label>To<input type="date" value={end} min={start} max={admissionDate(new Date().toISOString())} onChange={event => setEnd(event.target.value)} /></label>
     </div>
-    {loading && <p role="status">Loading visit durations…</p>}
+    {loading && !report && <p role="status">Loading visit durations…</p>}
     {error && <p role="alert">{error}</p>}
     {report && <>
       <div className={styles.metrics}>

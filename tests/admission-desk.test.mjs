@@ -122,7 +122,7 @@ test('search and direct family lookup include confirmed alternate-profile bookin
   assert.equal((await apiHarness({ reservationRows: Array.from({ length: 501 }, () => booking) }).get('?q=Family')).status, 503);
 });
 
-function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', prepaid = false, homeScreen = false, initialVisits = [], confirmationResult = { status: 'confirmed', family_link: 'linked', household_id: family.id } } = {}) {
+function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false, pending = false, squareEnabled = true, checkinCode = '', covered = false, initialSearch = '', role = 'owner', verifyFailure = false, deskItems, failCheckout = false, syncStatus = 'pending', holdDesk = false, prepaid = false, homeScreen = false, initialVisits = [], confirmationResult = { status: 'confirmed', family_link: 'linked', household_id: family.id } } = {}) {
   const hooks = [], effects = [], requests = [], navigations = [], listeners = {};
   let cursor = 0, tree, visits = initialVisits, timers = [], refreshes = 0, saleOpen = false, holdRead = false, holdSync = false;
   const storage = new Map(), intervals = [], heldReads = [];
@@ -139,6 +139,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const fetch = async (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : undefined;
     requests.push({ url, body });
+    if (url.includes('/desk') && holdDesk) { holdDesk = false; await new Promise(resolve => heldReads.push(resolve)); }
     if (url.includes('/desk')) return Response.json({ ok: true, date: '2026-11-11', items: deskItems ?? [{ ...deskFamily, waiver_status: waiver }] });
     if (url === '/api/admin/admission/confirm') return Response.json({ ok: true, ...confirmationResult });
     if (url === '/api/admin/admission/checkout') {
@@ -186,7 +187,7 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
   const nodes = () => { const all = []; const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; all.push(node); walk(node.props?.children); }; walk(tree); return all; };
   const label = node => { if (Array.isArray(node)) return node.map(label).join(''); if (node == null || typeof node === 'boolean') return ''; if (typeof node !== 'object') return String(node); return label(node.props?.children); };
   const button = text => nodes().find(node => node.type === 'button' && (node.props['aria-label'] ?? label(node)).includes(text));
-  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, intervals, resume: () => listeners.focus(), visible: () => listeners.visibilitychange(), poll: () => intervals.find(timer => timer.ms === 15000)?.fn(), holdNextSync: () => { holdSync = true; }, holdNextRead: () => { holdRead = true; }, releaseReads: () => { for (const resolve of heldReads.splice(0)) resolve(); }, setSyncStatus: value => { syncStatus = value; }, setWaiver: value => { waiver = value; } };
+  return { render, flush, nodes, button, requests, text: () => label(tree), visits: () => visits, navigations, intervals, resume: () => listeners.focus(), visible: () => listeners.visibilitychange(), poll: () => intervals.find(timer => timer.ms === 15000)?.fn(), holdNextDesk: () => { holdDesk = true; }, holdNextSync: () => { holdSync = true; }, holdNextRead: () => { holdRead = true; }, releaseReads: () => { for (const resolve of heldReads.splice(0)) resolve(); }, setSyncStatus: value => { syncStatus = value; }, setWaiver: value => { waiver = value; } };
 }
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
@@ -661,4 +662,26 @@ test('check out without time sends an explicit choice, prevents repeat checkout,
   assert.ok(h.text().includes('Total due: $16.00'));
   assert.equal(h.button('Check out family'), undefined);
   assert.equal(h.button('Check out without time'), undefined);
+});
+
+
+test('slow background payment refresh preserves visitor selection and leaves entry controls usable', async () => {
+  const h = uiHarness(); await choose(h);
+  h.button('Select everyone remaining').props.onClick(); await h.flush();
+  h.holdNextRead(); h.resume(); await h.flush();
+  assert.equal(h.button('Check in 2').props.disabled, false);
+  assert.ok(!h.text().includes('Loading families'));
+  h.releaseReads(); await h.flush();
+  assert.equal(h.button('Check in 2').props.disabled, false);
+});
+
+test('slow background family refresh keeps the arrival board mounted', async () => {
+  const h = uiHarness(); await choose(h);
+  h.holdNextDesk(); h.resume();
+  const refreshing = h.flush();
+  await new Promise(resolve => setImmediate(resolve)); h.render();
+  assert.ok(h.button('Choose family'));
+  assert.ok(!h.text().includes('Loading families'));
+  h.releaseReads(); await refreshing; await h.flush();
+  assert.ok(h.button('Choose family'));
 });

@@ -1,3 +1,4 @@
+import { reconcileOpenPlayPayments } from '@/lib/soft-opening-payments';
 import { getAdmissionPrepayments } from '@/lib/admission-prepayments';
 import { readInfantSiblingAdmission } from '@/lib/infant-sibling-admission';
 import type {SupabaseClient} from '@supabase/supabase-js';
@@ -32,6 +33,9 @@ export async function startAdmissionPos(admin:SupabaseClient,checkinIds:string[]
    return {id:launched.id,pending:true,url:null};
  }
  const pricing = await readInfantSiblingAdmission(admin, checkinIds, config.environment);
+ // Entry may be recorded with an unfinished online checkout. Counter collection
+ // still verifies that checkout before freezing or launching another charge.
+ await reconcileOpenPlayPayments(admin, pricing.householdId);
  const advance = await getAdmissionPrepayments(admin,pricing.visits.map(visit=>({...visit,household_id:pricing.householdId})),config.environment);
  if (advance.some(visit=>checkinIds.includes(visit.id) && visit.payment_status==='prepaid')) throw new Error('Admission is already prepaid. Refresh before collecting payment.');
  // UI excludes free infants. Freeze their underlying unpaid rows with the rest
