@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { addMonths, easternDate, foundingMonthlyCents, FOUNDING_TERMS_VERSION, type FoundingEnrollment } from '@/lib/founding-membership';
+import { addMonths, easternDate, foundingMonthlyCents, acceptedFoundingTerms, type FoundingEnrollment } from '@/lib/founding-membership';
 import { squareEnvironment, squareRequest, squareConfig } from '@/lib/square-client';
 import { createHash } from 'node:crypto';
 
@@ -26,30 +26,44 @@ export async function foundingFirstVisit(admin: SupabaseClient, enrollment: Foun
 
 export async function foundingBillingDetails(admin: SupabaseClient, enrollment: FoundingEnrollment, now = new Date()) {
   const firstVisit = await foundingFirstVisit(admin, enrollment, now);
-  const start = enrollment.status === 'activating' ? enrollment.start_date : firstVisit;
+  const start = enrollment.status === 'activating' ? (await readFrozenFoundingStart(admin, enrollment) ?? enrollment.start_date) : easternDate(now);
   let error: string | null = null;
   if (!['pending', 'activating'].includes(enrollment.status)) error = 'This membership is already started or is not available for activation.';
-  else if (!enrollment.square_card_id || !enrollment.square_customer_id || enrollment.terms_version !== FOUNDING_TERMS_VERSION) error = 'Current billing authorization and a saved card are required.';
+  else if (!enrollment.square_card_id || !enrollment.square_customer_id || !acceptedFoundingTerms(enrollment.terms_version)) error = 'Current billing authorization and a saved card are required.';
   else if (!start || !firstVisit) error = 'Check in an enrolled child before starting billing.';
-  else if (start !== firstVisit) error = 'The saved start date does not match the first membership visit. Review this membership before retrying.';
+  else if (start < firstVisit) error = 'The billing start cannot be before the first membership visit.';
   else if (start > easternDate(now)) error = 'The first membership visit must have occurred already.';
-  else if (enrollment.status !== 'activating' && addMonths(start, 1) <= easternDate(now)) error = 'The first billing period has already ended. Review this membership before starting billing.';
+
   const amount = start ? foundingMonthlyCents(enrollment.birthdates, start, enrollment.pricing_tier) : null;
   return { first_visit_date: firstVisit, start_date: start, amount_cents: amount, next_billing_date: start ? addMonths(start, 1) : null, error };
 }
 
-/** Persist the exact provider start before any write to Square. First visit remains the local anchor. */
+function activationEventId(enrollmentId: string) {
+  const digest = createHash('sha256').update(`founding-billing-activation-v1:${enrollmentId}`).digest('hex');
+  return `${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-8${digest.slice(17,20)}-${digest.slice(20,32)}`;
+}
+
+/** Reading a review never changes the frozen charge date. */
+export async function readFrozenFoundingStart(admin: SupabaseClient, enrollment: FoundingEnrollment) {
+  const record = await admin.from('membership_events').select('notes').eq('id', activationEventId(enrollment.id)).maybeSingle();
+  if (record.error) throw Error('Unable to verify frozen billing parameters.');
+  if (!record.data) return null;
+  const value = JSON.parse(record.data.notes);
+  if (![1, 2].includes(value.version) || value.enrollment_id !== enrollment.id || value.environment !== enrollment.environment || !/^\d{4}-\d{2}-\d{2}$/.test(value.square_start_date)) throw Error('Frozen billing parameters need review.');
+  return value.square_start_date as string;
+}
+
+/** Freeze the owner's activation day before any provider write, including retries. */
 export async function freezeFoundingSquareStart(admin: SupabaseClient, enrollment: FoundingEnrollment, ownerId: string, proposedDate: string) {
-  const digest = createHash('sha256').update(`founding-billing-activation-v1:${enrollment.id}`).digest('hex');
-  const id = `${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-8${digest.slice(17,20)}-${digest.slice(20,32)}`;
-  const notes = JSON.stringify({ version: 1, enrollment_id: enrollment.id, environment: enrollment.environment, first_visit_date: enrollment.start_date, square_start_date: proposedDate });
+  const existing = await readFrozenFoundingStart(admin, enrollment);
+  if (existing) return existing;
+  const id = activationEventId(enrollment.id);
+  const notes = JSON.stringify({ version: 2, billing_policy: 'activation_date', enrollment_id: enrollment.id, environment: enrollment.environment, square_start_date: proposedDate });
   const saved = await admin.from('membership_events').insert({ id, household_id: enrollment.household_id, action: 'billing_activation_parameters', notes, created_by_user_id: ownerId, created_by_role: 'owner' });
   if (saved.error && saved.error.code !== '23505') throw Error('Unable to freeze billing parameters. No Square subscription was requested.');
-  const record = await admin.from('membership_events').select('notes').eq('id', id).single();
-  if (record.error) throw Error('Unable to verify frozen billing parameters.');
-  const value = JSON.parse(record.data.notes);
-  if (value.version !== 1 || value.enrollment_id !== enrollment.id || value.environment !== enrollment.environment || value.first_visit_date !== enrollment.start_date || !/^\d{4}-\d{2}-\d{2}$/.test(value.square_start_date)) throw Error('Frozen billing parameters need review.');
-  return value.square_start_date as string;
+  const date = await readFrozenFoundingStart(admin, enrollment);
+  if (!date) throw Error('Unable to verify frozen billing parameters.');
+  return date;
 }
 
 /** Read-only provider checks. Search is a POST endpoint but creates nothing. */

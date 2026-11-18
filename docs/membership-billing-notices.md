@@ -13,7 +13,7 @@ onward remains due on a later run. Older visits require an explicit reviewed
 batch. Each notice includes the enrolled children, first membership visit date,
 and monthly price, and says Square will send a receipt after processing payment.
 
-Only production enrollments with accepted first-visit billing terms, saved card,
+Only production enrollments with accepted first-visit or activation-day billing terms, saved card,
 and an actual enrolled child's admission check-in qualify. A visit before the
 enrollment date, a reservation, or an adult-only check-in is insufficient.
 Cancelled, incomplete and complimentary memberships are excluded. Missing
@@ -47,3 +47,5 @@ Resend key requires reprovisioning this job token. Manual workflow runs default
 to a preview; nightly runs send only due, not-yet-notified memberships.
 
 Validation: `node --test tests/membership-billing-notices.test.mjs`.
+
+Billing notices explain that the first payment starts when the owner activates billing, and the next payment is one calendar month later. A visit itself does not start a charge.

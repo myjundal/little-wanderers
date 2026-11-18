@@ -221,20 +221,24 @@ checks the confirmation, types START MONTHLY BILLING and clicks the separate fin
 button. GET/review cannot activate, and POST checks the exact reviewed amount/date
 again. Nothing in check-in or the email scheduler calls activation.
 
-Square rejects a past subscription start. For a delayed first activation within
-the initial billing period, preserve the actual first visit locally, freeze the
-provider's current start date in membership_events before any external write, and
-use the existing stable catalog/subscription keys. The initial Square subscription
-uses today's billing day to take the full first-month amount. After verifying the
-first invoice is fully paid for exactly the authorized amount, schedule the next
-renewal on the original first-visit day. The helper accepts the verified future
-anchor-change action returned by Square and reuses it after uncertain responses.
-Paid coverage is bounded by that scheduled renewal. A missed activation older
-than one whole billing period requires separate review. Retrying keeps the same
-frozen parameters and never creates a second independent subscription.
+## Activation-day billing — November 17, 2026
 
-Validated with a synthetic Square Sandbox card: a past start was rejected; a
-current start charged the full synthetic $1, and changing the renewal anchor
-scheduled December 11 after a November 11 visit / November 13 activation, with
-one invoice. The synthetic subscription was canceled. No production subscription
-or payment was created during verification.
+The owner now starts billing on the actual activation day in America/New_York,
+regardless of when the first visit occurred. The first visit remains an eligibility
+check. The next renewal is one calendar month after activation, including month-end
+clamping. An old missed first visit does not shorten the first paid month.
+
+New authorizations use `2026-11-17-activation-date`; previously accepted
+`2026-11-03-first-visit` authorizations remain usable without moving the charge
+earlier than that family authorized. Existing consent snapshots remain unchanged.
+
+Freeze the activation day before the provider request. Create an immediate Square
+subscription without explicit start_date or monthly_billing_anchor_date. Square
+Sandbox confirmed that this returns the local activation day and a full monthly
+period with no scheduled anchor-change action, including after UTC midnight.
+Do not schedule a change back to the first-visit day.
+
+Retries retrieve an already saved provider ID, preserve its original charge date,
+and create no second subscription. Conflicting legacy renewal actions or provider
+identity mismatches block activation and require review; do not silently remove
+Square anchor actions or claim those interrupted subscriptions were repaired.

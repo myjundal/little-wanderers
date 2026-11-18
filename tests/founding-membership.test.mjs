@@ -40,7 +40,7 @@ async function database(t) {
   return { db, admin: localSquareAdmin(db) };
 }
 async function prepare(admin, input = profile(), overrides = {}) {
-  const result = await admin.rpc('prepare_founding_membership', { p_user: ids.user, p_household: ids.household, p_environment: 'sandbox', p_profile: input, p_terms: 'test terms', p_version: '2026-11-03-first-visit', p_amount: 5000, p_tier: 'public', ...overrides });
+  const result = await admin.rpc('prepare_founding_membership', { p_user: ids.user, p_household: ids.household, p_environment: 'sandbox', p_profile: input, p_terms: 'test terms', p_version: '2026-11-17-activation-date', p_amount: 5000, p_tier: 'public', ...overrides });
   if (result.error) throw new Error(result.error.message);
   return result.data;
 }
@@ -235,7 +235,7 @@ test('billing stays closed without the separate flag and refuses missing, future
   const disabled = modules(() => { calls++; throw new Error('Forbidden'); }).load('src/lib/founding-square.ts');
   await assert.rejects(disabled.activateFounding(admin, enrollment, ''), /Billing is disabled/);
   const enabled = modules(() => { calls++; throw new Error('Forbidden'); }, { FOUNDING_BILLING_ENABLED: 'true' }).load('src/lib/founding-square.ts');
-  for (const date of ['', '2099-01-01', '2000-01-01', '2026-02-30']) await assert.rejects(enabled.activateFounding(admin, enrollment, date), /first membership visit day/);
+  for (const date of ['', '2099-01-01', '2000-01-01', '2026-02-30']) await assert.rejects(enabled.activateFounding(admin, enrollment, date), /activation day/);
   assert.equal(calls, 0);
   assert.equal((await db.query('select start_date from founding_memberships')).rows[0].start_date, null);
 });
@@ -248,7 +248,7 @@ test('activation freezes the explicit date, uses stable idempotency, and encodes
   const mod = modules(async (url, options) => {
     const body = JSON.parse(options.body); calls.push({ path: new URL(url).pathname, body });
     if (body.object) return Response.json({ catalog_object: { id: body.object.type === 'SUBSCRIPTION_PLAN' ? 'plan' : 'variation' } });
-    return Response.json({ subscription: { id: 'subscription', customer_id: 'customer', start_date: body.start_date } });
+    return Response.json({ subscription: { id: 'subscription', customer_id: 'customer', start_date: modules().load('src/lib/founding-membership.ts').easternDate() } });
   }, { FOUNDING_BILLING_ENABLED: 'true' });
   const today = mod.load('src/lib/founding-membership.ts').easternDate();
   await db.query("update founding_memberships set status='pending',square_customer_id='customer',square_card_id='card'");
@@ -259,9 +259,9 @@ test('activation freezes the explicit date, uses stable idempotency, and encodes
   assert.equal(saved.status, 'active'); assert.equal(saved.start_date, today); assert.equal(saved.square_subscription_id, 'subscription');
   assert.equal(calls[1].body.object.subscription_plan_variation_data.phases[0].pricing.price_money.amount, 6000);
   assert.equal(saved.sibling_cents,1000); assert.equal(saved.amount_cents,6000);
-  assert.equal(calls[2].body.start_date, today); assert.equal(calls[2].body.card_id, 'card'); assert.equal(calls[1].body.object.subscription_plan_variation_data.can_prorate, false);
+  assert.equal(calls[2].body.start_date, undefined); assert.equal(calls[2].body.monthly_billing_anchor_date, undefined); assert.equal(calls[2].body.card_id, 'card'); assert.equal(calls[1].body.object.subscription_plan_variation_data.can_prorate, false);
   await service.activateFounding(admin, saved, today); assert.equal(calls.length, 3);
-  await assert.rejects(service.activateFounding(admin, { ...saved, status: 'activating' }, '2099-01-01'), /first membership visit day/);
+  await assert.rejects(service.activateFounding(admin, { ...saved, status: 'activating' }, '2099-01-01'), /activation day/);
 });
 
 test('pre-opening free visits require a production reservation; paid access requires a paid term and enrolled child', async t => {
@@ -303,7 +303,7 @@ test('provider reconciliation does not grant access for an unpaid invoice and is
   assert.equal((await db.query('select paid_through::text from founding_memberships')).rows[0].paid_through, '2026-12-02');
   actions = [{ type: 'CHANGE_BILLING_ANCHOR_DATE', effective_date: '2026-11-30', monthly_billing_anchor_date: 30 }];
   await service.syncFoundingSubscription(admin, 'sub');
-  assert.equal((await db.query('select paid_through::text from founding_memberships')).rows[0].paid_through, '2026-11-30');
+  assert.equal((await db.query('select paid_through::text from founding_memberships')).rows[0].paid_through, '2026-12-02');
   await db.query("update founding_memberships set status='canceled'");
   await service.syncFoundingSubscription(admin, 'sub'); assert.equal((await db.query('select status from founding_memberships')).rows[0].status, 'canceled');
   status = 'REFUNDED'; await service.syncFoundingSubscription(admin, 'sub'); assert.equal((await db.query('select paid_through from founding_memberships')).rows[0].paid_through, null);
@@ -323,7 +323,7 @@ test('enrollment routes authenticate, validate every family field and consent, a
   assert.equal((await anonymous.GET()).status, 401);
   assert.equal((await anonymous.POST({ json: async () => ({}) })).status, 401);
   const api = route({ id: ids.user, email: contact.email });
-  const input = { ...profile(), sourceId:'cnon:test-secret-token',consent:true,birthdaysConfirmed:true,termsVersion:'2026-11-03-first-visit',pricingTier:'public' };
+  const input = { ...profile(), sourceId:'cnon:test-secret-token',consent:true,birthdaysConfirmed:true,termsVersion:'2026-11-17-activation-date',pricingTier:'public' };
   const post = patch => api.POST({ json: async () => ({ ...input, ...patch }) });
   assert.equal((await post({pricingTier:'waitlist'})).status,409);
   for (const patch of [{ consent:false }, { birthdaysConfirmed:false }, { phone:'123' }, { adultFirstName:'' }, { city:'' }, { state:'ZZ' }, { children:[] }, { children:[{...profile().children[0],birthdate:'12/40/2023'}] }, { email:'other@example.test' }, { termsVersion:'old' }]) assert.equal((await post(patch)).status, 400);
@@ -368,7 +368,7 @@ test('phone-only authentication enrolls the same user and family with contact em
   assert.equal(data.account.email, null);
   assert.equal(data.account.phone, '+18605550123');
   assert.equal(data.household.phone, '+18605550123');
-  const post = tier => api.POST({ json: async () => ({ ...profile(), sourceId: 'cnon:test', consent: true, birthdaysConfirmed: true, termsVersion: '2026-11-03-first-visit', pricingTier: tier }) });
+  const post = tier => api.POST({ json: async () => ({ ...profile(), sourceId: 'cnon:test', consent: true, birthdaysConfirmed: true, termsVersion: '2026-11-17-activation-date', pricingTier: tier }) });
   await db.exec("update founding_membership_settings set phase='waitlist' where environment='sandbox'");
   assert.equal((await post('waitlist')).status, 403);
   await db.exec("update founding_membership_settings set phase='public' where environment='sandbox'");
@@ -455,12 +455,14 @@ test('check-in patch preserves the production environment argument, paid admissi
 });
 
 
-test('membership authorizations retain first-visit billing and ongoing open play benefits', () => {
+test('membership authorizations explain activation-day billing and ongoing open play benefits', () => {
   const lib = modules().load('src/lib/founding-membership.ts');
-  assert.equal(lib.FOUNDING_TERMS_VERSION, '2026-11-03-first-visit');
+  assert.equal(lib.FOUNDING_TERMS_VERSION, '2026-11-17-activation-date');
   for (const tier of ['waitlist', 'public', 'regular']) {
     const terms = lib.membershipTerms(tier);
     assert.match(terms, /first membership visit/);
+    assert.match(terms, /billing date is the day my first payment is started/);
+    assert.match(terms, /one calendar month later/);
     assert.match(terms, /Open play visits/);
     assert.match(terms, /saving my card does not start billing/);
     assert.doesNotMatch(terms, /announced soft opening date|A soft opening visit is included/);
@@ -484,16 +486,16 @@ test('first-visit activation rejects old consent and gives each family an indepe
       const body = JSON.parse(options.body);
       if (body.object) return Response.json({ catalog_object: { id: body.object.type === 'SUBSCRIPTION_PLAN' ? 'plan' : 'variation' } });
       subscriptions.push(body);
-      return Response.json({ subscription: { id: `sub-${body.customer_id}`, customer_id: body.customer_id, start_date: body.start_date } });
+      return Response.json({ subscription: { id: `sub-${body.customer_id}`, customer_id: body.customer_id, start_date: visitDate } });
     },
   }).load('src/lib/founding-square.ts');
-  await assert.rejects(service.activateFounding(admin, { ...enrolled(first), terms_version: '2026-11-03-tiers' }, visitDate), /accept the current first-visit billing terms/);
+  await assert.rejects(service.activateFounding(admin, { ...enrolled(first), terms_version: '2026-11-03-tiers' }, visitDate), /accept the current membership billing terms/);
   assert.equal(subscriptions.length, 0);
   await service.activateFounding(admin, enrolled(first), visitDate);
   assert.equal((await db.query('select start_date from founding_memberships where id=$1', [second.id])).rows[0].start_date, null);
   visitDate = '2026-11-06'; activeCustomer = second.id;
   await service.activateFounding(admin, enrolled(second), visitDate);
-  assert.deepEqual(subscriptions.map(row => [row.start_date, row.monthly_billing_anchor_date]), [['2026-11-04', 4], ['2026-11-06', 6]]);
+  assert.ok(subscriptions.every(row => row.start_date === undefined && row.monthly_billing_anchor_date === undefined));
   assert.equal((await db.query('select start_date::text from founding_memberships where id=$1', [first.id])).rows[0].start_date, '2026-11-04');
 });
 
@@ -522,45 +524,27 @@ test('billing capability is a server-owned, environment-specific grant', () => {
   assert.equal(prod.ownerFoundingBillingEnabled({ app_metadata: { founding_billing_activation: { production: true } } }), true);
 });
 
-test('historical activation freezes a current Square start, charges one full month, and recovers an uncertain renewal-date change', async t => {
+test('a missed first visit bills on the activation day and never changes the Square anchor', async t => {
   const { db, admin } = await database(t); const row = await prepare(admin);
-  const dates = modules().load('src/lib/founding-membership.ts');
-  const today = dates.easternDate();
-  const visit = dates.easternDate(new Date(Date.now() - 2 * 86400000));
-  const consent = new Date(Date.now() - 3 * 86400000).toISOString();
-  await db.query("update founding_memberships set status='pending',square_customer_id='customer',square_card_id='card',consent_at=$1", [consent]);
+  const dates = modules().load('src/lib/founding-membership.ts'), today = dates.easternDate();
+  const visit = dates.easternDate(new Date(Date.now()-40*86400000));
+  await db.query("update founding_memberships set status='pending',square_customer_id='customer',square_card_id='card',consent_at=$1", [visit+'T10:00:00Z']);
   await db.query("insert into checkins(person_id,household_id,checked_in_at,source,square_environment) values($1,$2,$3,'staff_manual','sandbox')", [childId,ids.household,visit+'T15:00:00Z']);
-  let scheduled = false; let anchorCalls = 0; const writes = [];
-  const action = { type: 'CHANGE_BILLING_ANCHOR_DATE', effective_date: dates.addMonths(visit,1), monthly_billing_anchor_date: Number(visit.slice(8)) };
-  const provider = async (url, options) => {
-    const path = new URL(url).pathname;
-    if (path === '/v2/cards/card') return Response.json({ card: { id: 'card', customer_id: 'customer', enabled: true } });
-    if (path === '/v2/subscriptions/search') return Response.json({ subscriptions: [] });
-    if (path === '/v2/subscriptions/sub' && options.method === 'GET') return Response.json({ subscription: { id: 'sub', customer_id: 'customer', location_id: 'test-location', card_id: 'card', start_date: today, status: 'ACTIVE', invoice_ids: ['inv'], monthly_billing_anchor_date: Number(today.slice(8)), actions: scheduled ? [action] : [] } });
-    if (path === '/v2/invoices/inv') return Response.json({ invoice: { subscription_id: 'sub', primary_recipient: { customer_id: 'customer' }, status: 'PAID', payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: 5000, currency: 'USD' } }] } });
-    const body = JSON.parse(options.body); writes.push({path,body});
-    if (body.object) return Response.json({ catalog_object: { id: body.object.type === 'SUBSCRIPTION_PLAN' ? 'plan' : 'variation' } });
-    if (path.endsWith('/billing-anchor')) { scheduled = true; anchorCalls++; return Response.json({ errors: [{ code: 'TEMPORARY_ERROR' }] }, { status: 503 }); }
-    if (path === '/v2/subscriptions') return Response.json({ subscription: { id: 'sub', customer_id: 'customer', start_date: body.start_date } });
-    throw Error('Unexpected endpoint '+path);
-  };
-  const service = loadSquareModules({ fetch: provider }).load('src/lib/founding-square.ts');
-  let enrollment = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
-  const options = { ownerAuthorized: true, ownerUserId: ids.user };
-  await assert.rejects(service.activateFounding(admin,enrollment,visit,options), /Square request/);
-  enrollment = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
-  assert.equal(enrollment.status,'activating'); assert.equal(enrollment.square_subscription_id,'sub');
-  await service.activateFounding(admin,enrollment,visit,options);
-  const saved = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
-  assert.equal(saved.status,'active'); assert.equal(saved.start_date,visit); assert.equal(saved.paid_through,dates.addMonths(visit,1));
-  const subscriptionCalls=writes.filter(w=>w.path==='/v2/subscriptions');
-  assert.equal(subscriptionCalls.length,1);
-  assert.equal(subscriptionCalls[0].body.start_date,today);
-  assert.equal(subscriptionCalls[0].body.monthly_billing_anchor_date,Number(today.slice(8)));
-  assert.equal(writes.find(w=>w.body.object?.type==='SUBSCRIPTION_PLAN_VARIATION').body.object.subscription_plan_variation_data.phases[0].pricing.price_money.amount,5000);
-  assert.equal(anchorCalls,1);
-  const record=JSON.parse((await db.query("select notes from membership_events where action='billing_activation_parameters'")).rows[0].notes);
-  assert.equal(record.first_visit_date,visit); assert.equal(record.square_start_date,today);
+  const writes=[];
+  const service=modules(async(url,options)=>{const path=new URL(url).pathname,body=JSON.parse(options.body);writes.push({path,body});
+    if(body.object)return Response.json({catalog_object:{id:body.object.type==='SUBSCRIPTION_PLAN'?'plan':'variation'}});
+    if(path==='/v2/subscriptions')return Response.json({subscription:{id:'sub',customer_id:'customer',start_date:today}});
+    throw Error('Unexpected write');
+  }).load('src/lib/founding-square.ts');
+  const enrollment=(await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
+  const review=await modules().load('src/lib/founding-billing-activation.ts').foundingBillingDetails(admin,enrollment);
+  assert.equal(review.first_visit_date,visit);assert.equal(review.start_date,today);assert.equal(review.next_billing_date,dates.addMonths(today,1));assert.equal(review.error,null);
+  await service.activateFounding(admin,enrollment,today,{ownerAuthorized:true,ownerUserId:ids.user});
+  const saved=(await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
+  assert.equal(saved.status,'active');assert.equal(saved.start_date,today);
+  const sub=writes.find(w=>w.path==='/v2/subscriptions').body;assert.equal(sub.start_date,undefined);assert.equal(sub.monthly_billing_anchor_date,undefined);
+  assert.ok(writes.every(w=>!w.path.endsWith('/billing-anchor')));
+  const params=JSON.parse((await db.query("select notes from membership_events where action='billing_activation_parameters'")).rows[0].notes);assert.equal(params.version,2);assert.equal(params.square_start_date,today);
 });
 
 test('read-only review blocks disabled cards and any existing live subscription, including later pages', async () => {
@@ -603,43 +587,39 @@ test('owner POST rejects stale amount and missing capability before any activati
   assert.equal((await post(6000)).status,409);permitted=false;assert.equal((await post(5000)).status,403);assert.equal(calls,0);
 });
 
-for (const scenario of ['scheduled nested action', 'explicit effective date', 'read after response', 'wrong effective date', 'unpaid invoice', 'wrong subscription']) {
-  test(`interrupted historical activation: ${scenario}`, async t => {
-    const { db, admin } = await database(t); const row = await prepare(admin);
-    const dates = modules().load('src/lib/founding-membership.ts');
-    const today = dates.easternDate(), visit = dates.easternDate(new Date(Date.now() - 2 * 86400000));
-    const renewal = dates.addMonths(visit, 1), anchor = Number(visit.slice(8));
-    await db.query("update founding_memberships set status='activating',start_date=$1,square_customer_id='customer',square_card_id='card',square_subscription_id='sub'", [visit]);
-    const action = { type: 'CHANGE_BILLING_ANCHOR_DATE', effective_date: renewal, monthly_billing_anchor_date: anchor };
-    let changed = false; const writes = [];
-    const service = loadSquareModules({
-      mocks: { '@/lib/founding-billing-activation': { verifyFoundingBillingCard: async () => ({}), freezeFoundingSquareStart: async () => today } },
-      fetch: async (url, options) => {
-        const path = new URL(url).pathname;
-        const subscription = { id: 'sub', customer_id: scenario === 'wrong subscription' ? 'other' : 'customer', location_id: 'test-location', card_id: 'card', start_date: today, status: 'ACTIVE', invoice_ids: ['inv'], monthly_billing_anchor_date: Number(today.slice(8)), actions: scenario === 'scheduled nested action' || changed ? [{ ...action, ...(scenario === 'wrong effective date' ? { effective_date: dates.addMonths(renewal, 1) } : {}) }] : [] };
-        if (options.method === 'GET' && path === '/v2/subscriptions/sub') return Response.json({ subscription });
-        if (path === '/v2/invoices/inv') return Response.json({ invoice: { subscription_id: 'sub', primary_recipient: { customer_id: 'customer' }, status: scenario === 'unpaid invoice' ? 'UNPAID' : 'PAID', payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: scenario === 'unpaid invoice' ? 0 : 5000, currency: 'USD' } }] } });
-        writes.push({ path, body: JSON.parse(options.body) });
-        if (path.endsWith('/billing-anchor')) {
-          changed = true;
-          if (scenario === 'read after response') return Response.json({ subscription });
-          return Response.json({ subscription, actions: [{ ...action, ...(scenario === 'wrong effective date' ? { effective_date: dates.addMonths(renewal, 1) } : {}) }] });
-        }
-        throw Error('Unexpected financial write: ' + path);
-      },
-    }).load('src/lib/founding-square.ts');
-    const enrollment = (await db.query('select to_jsonb(f) value from founding_memberships f where id=$1', [row.id])).rows[0].value;
-    const activation = () => service.activateFounding(admin, enrollment, visit, { ownerAuthorized: true, ownerUserId: ids.user });
-    if (scenario === 'wrong effective date') await assert.rejects(activation(), /renewal date needs confirmation/);
-    else if (scenario === 'unpaid invoice') await assert.rejects(activation(), /first payment is not confirmed/);
-    else if (scenario === 'wrong subscription') await assert.rejects(activation(), /verify the Square subscription/);
-    else await activation();
-    const saved = (await db.query('select status,paid_through::text from founding_memberships where id=$1', [row.id])).rows[0];
-    const success = ['scheduled nested action', 'explicit effective date', 'read after response'].includes(scenario);
-    assert.equal(saved.status, success ? 'active' : 'activating');
-    if (success) assert.equal(saved.paid_through, renewal);
-    assert.ok(writes.every(w => w.path === '/v2/subscriptions/sub/billing-anchor'));
-    assert.equal(writes.length, ['scheduled nested action', 'unpaid invoice', 'wrong subscription'].includes(scenario) ? 0 : 1);
-    for (const write of writes) assert.deepEqual(write.body, { monthly_billing_anchor_date: anchor, effective_date: renewal });
+for (const scenario of ['paid existing subscription', 'earlier renewal change', 'wrong customer']) {
+  test(`activation-day recovery: ${scenario}`, async t => {
+    const {db,admin}=await database(t);const row=await prepare(admin);
+    const dates=modules().load('src/lib/founding-membership.ts'),today=dates.easternDate();
+    await db.query("update founding_memberships set status='activating',start_date=$1,square_customer_id='customer',square_card_id='card',square_subscription_id='sub'",[today]);
+    const writes=[];
+    const service=loadSquareModules({mocks:{'@/lib/founding-billing-activation':{verifyFoundingBillingCard:async()=>({})}},fetch:async(url,options)=>{
+      const path=new URL(url).pathname;
+      if(options.method==='GET'&&path==='/v2/subscriptions/sub')return Response.json({subscription:{id:'sub',customer_id:scenario==='wrong customer'?'other':'customer',location_id:'test-location',card_id:'card',status:'ACTIVE',start_date:today,actions:scenario==='earlier renewal change'?[{type:'CHANGE_BILLING_ANCHOR_DATE',monthly_billing_anchor_date:Number(today.slice(8))===1?2:1,effective_date:dates.addMonths(today,1)}]:[]}});
+      writes.push(path);throw Error('Unexpected financial write');
+    }}).load('src/lib/founding-square.ts');
+    const e=(await db.query('select to_jsonb(f) value from founding_memberships f where id=$1',[row.id])).rows[0].value;
+    if(scenario==='wrong customer')await assert.rejects(service.activateFounding(admin,e,today,{ownerAuthorized:true}),/verify the Square subscription/);
+    else if(scenario==='earlier renewal change')await assert.rejects(service.activateFounding(admin,e,today,{ownerAuthorized:true}),/renewal-date change needs Square review/);
+    else await service.activateFounding(admin,e,today,{ownerAuthorized:true});
+    assert.deepEqual(writes,[]);
+    assert.equal((await db.query('select status from founding_memberships')).rows[0].status,scenario==='paid existing subscription'?'active':'activating');
   });
 }
+
+
+test('provider identity review searches only this family and never exposes a different customer', async () => {
+  const e={id:'enrollment',status:'activating',environment:'sandbox',square_subscription_id:'saved',square_customer_id:'customer',square_card_id:'card'};
+  const calls=[];
+  const service=loadSquareModules({fetch:async(url,options)=>{
+    calls.push({method:options.method,path:new URL(url).pathname});
+    if(options.method==='GET')return Response.json({subscription:{id:'saved',customer_id:'other',location_id:'test-location'}});
+    const body=JSON.parse(options.body);assert.deepEqual(body.query.filter,{customer_ids:['customer'],location_ids:['test-location']});
+    return Response.json({subscriptions:[{id:'private-other',customer_id:'other',location_id:'test-location',card_id:'card'},{id:'owned',customer_id:'customer',location_id:'test-location',card_id:'card',status:'ACTIVE',start_date:'2026-11-17'}]});
+  }}).load('src/lib/founding-square.ts');
+  const review=await service.foundingSubscriptionReview(e);
+  assert.equal(review.identity_verified,false);assert.equal(review.checks.customer_matches,false);
+  assert.deepEqual(Array.from(review.matching_subscriptions,s=>s.id),['owned']);
+  assert.equal(JSON.stringify(review).includes('private-other'),false);
+  assert.deepEqual(calls.map(c=>c.method),['GET','POST']);
+});

@@ -21,7 +21,8 @@ export async function GET(req: Request) {
       if (details.error) return Response.json({ ok: false, error: details.error }, { status: 409, headers });
       const card = await verifyFoundingBillingCard(row.data as FoundingEnrollment);
       const subscription = await foundingSubscriptionReview(row.data as FoundingEnrollment);
-      return Response.json({ ok: true, review: { enrollment_id: row.data.id, ...details, ...card, subscription }, billing_enabled: ownerFoundingBillingEnabled(context.user), charges_executed: false }, { headers });
+      const activationBlocked = Boolean(subscription && (!subscription.identity_verified || ('actions' in subscription && subscription.actions?.some(a => a.type === 'CHANGE_BILLING_ANCHOR_DATE' && a.monthly_billing_anchor_date !== Number(details.start_date?.slice(8))))));
+      return Response.json({ ok: true, review: { enrollment_id: row.data.id, ...details, ...card, subscription, activation_blocked: activationBlocked }, billing_enabled: ownerFoundingBillingEnabled(context.user), charges_executed: false }, { headers });
     } catch (error) { return Response.json({ ok: false, error: error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Unable to verify the saved card and existing subscriptions. No billing has been started.' }, { status: 503, headers }); }
   }
   const result = await context.admin.from('founding_memberships').select('id,status,pricing_tier,base_cents,sibling_cents,amount_cents,start_date,card_last4,created_at,household:households(name,email,phone)').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
     await activateFounding(context.admin, result.data, input.data.startDate, { ownerAuthorized: true, ownerUserId: context.user.id });
     return Response.json({ ok: true }, { headers });
   } catch (error) {
-    const message = error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Square could not confirm activation. Retry this family using the same first-visit date.';
+    const message = error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Square could not confirm activation. Review this family before retrying; do not take a separate payment.';
     return Response.json({ ok: false, error: message }, { status: 503, headers });
   }
 }
