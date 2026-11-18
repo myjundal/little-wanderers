@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addMonths, easternDate, foundingMonthlyCents, acceptedFoundingTerms, type FoundingEnrollment } from '@/lib/founding-membership';
-import { squareEnvironment, squareRequest, squareConfig } from '@/lib/square-client';
+import { squareEnvironment, squareRequest, squareConfig, squareCustomerMatches } from '@/lib/square-client';
 import { createHash } from 'node:crypto';
 
 /** app_metadata is written only by the auth administrator, never by a customer. */
@@ -71,7 +71,7 @@ export async function verifyFoundingBillingCard(enrollment: FoundingEnrollment) 
   const { locationId, environment } = squareConfig();
   if (enrollment.environment !== environment || !enrollment.square_card_id || !enrollment.square_customer_id) throw Error('A saved card in the current Square environment is required.');
   const { card } = await squareRequest<{ card: { id: string; customer_id?: string; enabled?: boolean; last_4?: string; card_brand?: string } }>(`/v2/cards/${encodeURIComponent(enrollment.square_card_id)}`);
-  if (!card || card.id !== enrollment.square_card_id || card.customer_id !== enrollment.square_customer_id || card.enabled !== true) throw Error('The saved card is unavailable. Ask the family to update its card before starting billing.');
+  if (!card || card.id !== enrollment.square_card_id || !await squareCustomerMatches(card.customer_id, enrollment.square_customer_id) || card.enabled !== true) throw Error('The saved card is unavailable. Ask the family to update its card before starting billing.');
   if (enrollment.status === 'pending') {
     let cursor: string | undefined;
     let pages = 0;

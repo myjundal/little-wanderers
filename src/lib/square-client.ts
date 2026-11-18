@@ -103,3 +103,11 @@ export function assertSquarePaymentUrl(value: string | undefined) {
   }
   return value;
 }
+
+/** Square can return a surviving customer ID after merging directory profiles. */
+export async function squareCustomerMatches(actual: string | undefined | null, expected: string | undefined | null) {
+  if (!actual || !expected) return false;
+  if (actual === expected) return true;
+  const [left, right] = await Promise.all([actual, expected].map(id => squareRequest<{ customer: { id: string } }>(`/v2/customers/${encodeURIComponent(id)}`)));
+  return Boolean(left.customer?.id && left.customer.id === right.customer?.id);
+}
