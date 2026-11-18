@@ -24,7 +24,7 @@ test('phone-only member can reserve an enrolled child with zero admission and co
   const writes = [], background = [];
   const admin = { from(table) {
     let inserted;
-    const q = { select() { return q; }, eq() { return q; }, gt() { return q; }, limit() { return q; },
+    const q = { select() { return q; }, eq() { return q; }, neq() { return q; }, gt() { return q; }, limit() { return q; },
       insert(row) { inserted = row; writes.push(row); return q; },
       async maybeSingle() { return { error: null, data: table === 'open_play_reservation_slots' ? { id: slotId, starts_at: '2099-11-11T14:00:00Z', ends_at: '2099-11-11T15:00:00Z', status: 'open', capacity_children: 5 } : inserted ? { id: 'reservation', ...inserted } : null }; },
     }; return q;

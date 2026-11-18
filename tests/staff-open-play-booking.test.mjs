@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadSquareModules} from './helpers/admission-pos-harness.mjs';
 const family='10000000-0000-4000-8000-000000000001',child='20000000-0000-4000-8000-000000000001',slotId='30000000-0000-4000-8000-000000000001';
-function harness({existing=false,slotStatus='open',capacityError=false,member=true,startsAt='2099-11-11T14:00:00Z',endsAt='2099-11-11T15:00:00Z'}={}){
+function harness({existing=false,existingSlot=slotId,slotStatus='open',capacityError=false,member=true,startsAt='2099-11-11T14:00:00Z',endsAt='2099-11-11T15:00:00Z'}={}){
  const writes=[];
- const db={from(table){let row;
-  const q={select(){return q;},eq(){return q;},gt(){return q;},limit(){return q;},maybeSingle(){return q;},single(){return q;},insert(value){row=value;writes.push(value);return q;},then(resolve){resolve({data:row?{id:'reservation',...row}:table==='households'?{email:'parent@example.test'}:table==='open_play_reservation_slots'?{id:slotId,status:slotStatus,starts_at:startsAt,ends_at:endsAt}:existing?[{id:'existing'}]:[],error:row&&capacityError?{code:'23514'}:null});}};return q;
+ const db={from(table){let row;const filters=[];
+  const q={select(){return q;},eq(k,v){filters.push([k,v]);return q;},neq(){return q;},gt(){return q;},limit(){return q;},maybeSingle(){return q;},single(){return q;},insert(value){row=value;writes.push(value);return q;},then(resolve){resolve({data:row?{id:'reservation',...row}:table==='households'?{email:'parent@example.test'}:table==='open_play_reservation_slots'?{id:slotId,status:slotStatus,starts_at:startsAt,ends_at:endsAt}:existing&&filters.every(([k,v])=>k!=='slot_id'||v===existingSlot)?[{id:'existing'}]:[],error:row&&capacityError?{code:'23514'}:null});}};return q;
  }};
  const api=loadSquareModules({mocks:{'@/lib/open-play-reservations':{...loadSquareModules().load('src/lib/open-play-reservations.ts'),isUuid:v=>/^[0-9a-f-]{36}$/.test(v),SOFT_OPENING_START:'2099-11-11',SOFT_OPENING_END:'2100-01-01'},'@/lib/soft-opening-family':{readSoftOpeningFamily:async()=>({children:[{id:child}],memberships:member?[{child_ids:[child],status:'pending',start_date:null,paid_through:null}]:[]})}}}).load('src/lib/staff-open-play.ts');
  return {writes,create:patch=>api.createStaffOpenPlayReservation(db,family,'staff',{slot_id:slotId,child_ids:[child],adult_count:2,...patch})};
@@ -13,7 +13,7 @@ function harness({existing=false,slotStatus='open',capacityError=false,member=tr
 test('owner booking saves named family children, server-calculated membership admission and staff audit identity',async()=>{
  for(const member of [true,false]){const h=harness({member});const saved=await h.create();assert.equal(saved.household_id,family);assert.equal(saved.created_by_user_id,'staff');assert.equal(saved.child_count,1);assert.equal(saved.adult_count,2);assert.equal(saved.amount_cents,member?0:1600);assert.equal(saved.payment_status,member?'covered':'due');assert.equal(saved.payment_choice,member?'membership':'counter');}
 });
-test('forged children, duplicate ids, invalid adults, closed windows and existing future bookings cannot create a booking',async()=>{
+test('forged children, duplicate ids, invalid adults, closed windows and duplicate arrival windows cannot create a booking',async()=>{
  for(const [options,patch] of [[{},{child_ids:['40000000-0000-4000-8000-000000000001']}],[{},{child_ids:[child,child]}],[{},{adult_count:3}],[{slotStatus:'closed'},{}],[{existing:true},{}]]){const h=harness(options);await assert.rejects(h.create(patch));assert.equal(h.writes.length,0);}
 });
 test('database capacity races return a useful error without billing or alternate booking writes',async()=>{
@@ -25,3 +25,5 @@ test('family booking route authenticates an owner before accessing any submitted
 });
 
 test('owner cannot create a new arrival reservation at 5 PM or later even if its slot was reopened', async()=>{const h=harness({startsAt:'2099-11-11T22:00:00Z',endsAt:'2099-11-11T23:00:00Z'});await assert.rejects(h.create(),/no longer available/);assert.equal(h.writes.length,0);});
+
+test('owner can add another visit for a family with an upcoming reservation',async()=>{const h=harness({existing:true,existingSlot:"30000000-0000-4000-8000-000000000002"});await h.create();assert.equal(h.writes.length,1);});
