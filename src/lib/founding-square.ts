@@ -7,7 +7,7 @@ import { addMonths, easternDate, foundingMonthlyCents, foundingPhases, isDate, M
 
 type Card = { id: string; customer_id?: string; enabled?: boolean; reference_id?: string; card_brand?: string; last_4?: string };
 type AnchorAction = { type?: string; effective_date?: string; monthly_billing_anchor_date?: number };
-type Subscription = { monthly_billing_anchor_date?: number; id: string; customer_id?: string; location_id?: string; card_id?: string; start_date?: string; status?: string; canceled_date?: string; charged_through_date?: string; invoice_ids?: string[] };
+type Subscription = { monthly_billing_anchor_date?: number; id: string; customer_id?: string; location_id?: string; card_id?: string; start_date?: string; status?: string; canceled_date?: string; charged_through_date?: string; invoice_ids?: string[]; actions?: AnchorAction[] };
 
 export function foundingCardConfig(databaseEnabled = false) {
   const config = squareConfig();
@@ -92,26 +92,35 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
   }
   if (!enrollment.start_date || enrollment.start_date !== startDate) throw new Error('Retry using the originally confirmed first-visit date.');
   const squareStartDate = options.ownerUserId ? await freezeFoundingSquareStart(admin, enrollment, options.ownerUserId, wasPending ? easternDate() : startDate) : startDate;
-  const phases = foundingPhases(enrollment.birthdates, startDate, enrollment.pricing_tier).map((phase, ordinal) => ({ ...phase, ordinal }));
-  const plan = await squareRequest<{ catalog_object: { id: string } }>('/v2/catalog/object', 'POST', {
-    idempotency_key: `fp-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN', id: '#founding-plan', present_at_all_locations: true, subscription_plan_data: { name: enrollment.pricing_tier === 'regular' ? 'Little Wanderers Monthly Membership' : 'Little Wanderers Founding Membership', all_items: true } },
-  });
-  const variation = await squareRequest<{ catalog_object: { id: string } }>('/v2/catalog/object', 'POST', {
-    idempotency_key: `fv-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN_VARIATION', id: '#founding-monthly', present_at_all_locations: true, subscription_plan_variation_data: { name: MEMBERSHIP_PRICES[enrollment.pricing_tier].label, subscription_plan_id: plan.catalog_object.id, can_prorate: false, phases } },
-  });
-  const result = await squareRequest<{ subscription: Subscription }>('/v2/subscriptions', 'POST', {
-    idempotency_key: `fs-${enrollment.id}`, location_id: config.locationId,
-    customer_id: enrollment.square_customer_id, card_id: enrollment.square_card_id,
-    plan_variation_id: variation.catalog_object.id, start_date: squareStartDate, timezone: 'America/New_York',
-    monthly_billing_anchor_date: Number(squareStartDate.slice(8)),
-  });
-  if (!result.subscription?.id || result.subscription.start_date !== squareStartDate || result.subscription.customer_id !== enrollment.square_customer_id) throw new Error('Unable to verify the Square subscription. Retry with the same first-visit date.');
+  let subscription: Subscription;
+  if (enrollment.square_subscription_id) {
+    // Once the provider ID is saved, recovery must never create another subscription.
+    const state = await squareRequest<{ subscription: Subscription }>(`/v2/subscriptions/${encodeURIComponent(enrollment.square_subscription_id)}?include=actions`);
+    subscription = state.subscription;
+    if (subscription?.id !== enrollment.square_subscription_id || subscription.location_id !== config.locationId || subscription.card_id !== enrollment.square_card_id || subscription.status !== 'ACTIVE' || subscription.canceled_date) throw Error('The existing Square subscription needs review. No additional subscription has been requested.');
+  } else {
+    const phases = foundingPhases(enrollment.birthdates, startDate, enrollment.pricing_tier).map((phase, ordinal) => ({ ...phase, ordinal }));
+    const plan = await squareRequest<{ catalog_object: { id: string } }>('/v2/catalog/object', 'POST', {
+      idempotency_key: `fp-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN', id: '#founding-plan', present_at_all_locations: true, subscription_plan_data: { name: enrollment.pricing_tier === 'regular' ? 'Little Wanderers Monthly Membership' : 'Little Wanderers Founding Membership', all_items: true } },
+    });
+    const variation = await squareRequest<{ catalog_object: { id: string } }>('/v2/catalog/object', 'POST', {
+      idempotency_key: `fv-${enrollment.id}`, object: { type: 'SUBSCRIPTION_PLAN_VARIATION', id: '#founding-monthly', present_at_all_locations: true, subscription_plan_variation_data: { name: MEMBERSHIP_PRICES[enrollment.pricing_tier].label, subscription_plan_id: plan.catalog_object.id, can_prorate: false, phases } },
+    });
+    const result = await squareRequest<{ subscription: Subscription }>('/v2/subscriptions', 'POST', {
+      idempotency_key: `fs-${enrollment.id}`, location_id: config.locationId,
+      customer_id: enrollment.square_customer_id, card_id: enrollment.square_card_id,
+      plan_variation_id: variation.catalog_object.id, start_date: squareStartDate, timezone: 'America/New_York',
+      monthly_billing_anchor_date: Number(squareStartDate.slice(8)),
+    });
+    subscription = result.subscription;
+  }
+  if (!subscription?.id || subscription.start_date !== squareStartDate || subscription.customer_id !== enrollment.square_customer_id) throw new Error('Unable to verify the Square subscription. Retry with the same first-visit date.');
   if (squareStartDate !== startDate) {
-    await updateFounding(admin, enrollment.id, { square_subscription_id: result.subscription.id });
-    await alignHistoricalBilling(enrollment, result.subscription.id, startDate);
+    await updateFounding(admin, enrollment.id, { square_subscription_id: subscription.id });
+    await alignHistoricalBilling(enrollment, subscription.id, startDate);
     await updateFounding(admin, enrollment.id, { paid_through: addMonths(startDate, 1) });
   }
-  const patch = { square_subscription_id: result.subscription.id, status: 'active', amount_cents: foundingMonthlyCents(enrollment.birthdates, startDate, enrollment.pricing_tier) };
+  const patch = { square_subscription_id: subscription.id, status: 'active', amount_cents: foundingMonthlyCents(enrollment.birthdates, startDate, enrollment.pricing_tier) };
   await updateFounding(admin, enrollment.id, patch);
   return { ...enrollment, ...patch };
 }
@@ -122,7 +131,7 @@ async function alignHistoricalBilling(enrollment: FoundingEnrollment, subscripti
   let actions: AnchorAction[] = [];
   for (let attempt = 0; attempt < 4; attempt++) {
     const state = await squareRequest<{ subscription: Subscription; actions?: AnchorAction[] }>(`/v2/subscriptions/${encodeURIComponent(subscriptionId)}?include=actions`);
-    subscription = state.subscription; actions = state.actions ?? [];
+    subscription = state.subscription; actions = subscription.actions ?? state.actions ?? [];
     if (subscription.invoice_ids?.length) break;
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
@@ -135,10 +144,23 @@ async function alignHistoricalBilling(enrollment: FoundingEnrollment, subscripti
   if (invoice.status !== 'PAID' || requests[0].total_completed_amount_money?.currency !== 'USD' || requests[0].total_completed_amount_money.amount !== expected) throw Error('The first payment is not confirmed yet. Retry this same activation after Square confirms payment.');
   const anchor = Number(firstVisit.slice(8));
   const scheduled = (items: AnchorAction[]) => items.some(a => a.type === 'CHANGE_BILLING_ANCHOR_DATE' && a.monthly_billing_anchor_date === anchor && a.effective_date === addMonths(firstVisit, 1));
+  if (actions.some(a => a.type === 'CHANGE_BILLING_ANCHOR_DATE' && (a.monthly_billing_anchor_date !== anchor || a.effective_date !== addMonths(firstVisit, 1)))) throw Error('The existing renewal-date change needs review. The first payment is recorded; no additional subscription has been requested.');
   if (subscription?.monthly_billing_anchor_date !== anchor && !scheduled(actions)) {
-    const changed = await squareRequest<{ subscription: Subscription; actions?: AnchorAction[] }>(`/v2/subscriptions/${encodeURIComponent(subscriptionId)}/billing-anchor`, 'POST', { monthly_billing_anchor_date: anchor });
-    if (changed.subscription?.monthly_billing_anchor_date !== anchor && !scheduled(changed.actions ?? [])) throw Error('The first payment is recorded, but the renewal date needs confirmation. Retry this same activation.');
+    const changed = await squareRequest<{ subscription: Subscription; actions?: AnchorAction[] }>(`/v2/subscriptions/${encodeURIComponent(subscriptionId)}/billing-anchor`, 'POST', { monthly_billing_anchor_date: anchor, effective_date: addMonths(firstVisit, 1) });
+    const confirmed = scheduled(changed.actions ?? changed.subscription?.actions ?? []);
+    if (!confirmed) {
+      const latest = await squareRequest<{ subscription: Subscription }>(`/v2/subscriptions/${encodeURIComponent(subscriptionId)}?include=actions`);
+      if (!scheduled(latest.subscription?.actions ?? [])) throw Error('The first payment is recorded, but the renewal date needs confirmation. Retry this same activation.');
+    }
   }
+}
+
+/** Read-only provider confirmation for an interrupted owner activation. */
+export async function foundingSubscriptionReview(enrollment: FoundingEnrollment) {
+  if (!enrollment.square_subscription_id) return null;
+  const { subscription } = await squareRequest<{ subscription: Subscription }>(`/v2/subscriptions/${encodeURIComponent(enrollment.square_subscription_id)}?include=actions`);
+  if (subscription.id !== enrollment.square_subscription_id || subscription.customer_id !== enrollment.square_customer_id || subscription.location_id !== squareConfig().locationId) throw Error('The existing Square subscription needs review.');
+  return { status: subscription.status, start_date: subscription.start_date, monthly_billing_anchor_date: subscription.monthly_billing_anchor_date, charged_through_date: subscription.charged_through_date, actions: (subscription.actions ?? []).map(a => ({ type: a.type, effective_date: a.effective_date, monthly_billing_anchor_date: a.monthly_billing_anchor_date })) };
 }
 
 export async function cancelFounding(admin: SupabaseClient, enrollment: FoundingEnrollment) {
@@ -176,7 +198,7 @@ export async function syncFoundingSubscription(admin: SupabaseClient, subscripti
     if (invoice.subscription_id !== enrollment.square_subscription_id || invoice.location_id !== config.locationId || invoice.primary_recipient?.customer_id !== enrollment.square_customer_id) throw new Error('Square invoice mismatch.');
     if (invoice.status === 'PAID' && invoice.payment_requests?.length && invoice.payment_requests.every(request => request.computed_amount_money?.currency === 'USD' && request.total_completed_amount_money?.currency === 'USD' && (request.computed_amount_money.amount ?? 0) > 0 && request.computed_amount_money.amount === request.total_completed_amount_money.amount)) {
       paidThrough = subscription.charged_through_date ?? paidThrough;
-      for (const action of actions ?? []) if (action.type === 'CHANGE_BILLING_ANCHOR_DATE' && action.effective_date && paidThrough && action.effective_date < paidThrough) paidThrough = action.effective_date;
+      for (const action of subscription.actions ?? actions ?? []) if (action.type === 'CHANGE_BILLING_ANCHOR_DATE' && action.effective_date && paidThrough && action.effective_date < paidThrough) paidThrough = action.effective_date;
     } else if (['REFUNDED', 'PARTIALLY_REFUNDED'].includes(invoice.status ?? '')) paidThrough = null;
   }
   await updateFounding(admin, enrollment.id, {

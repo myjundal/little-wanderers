@@ -1,5 +1,5 @@
 import { requireOwnerContext } from '@/lib/authz';
-import { activateFounding, foundingCardConfig } from '@/lib/founding-square';
+import { activateFounding, foundingCardConfig, foundingSubscriptionReview } from '@/lib/founding-square';
 import { foundingBillingDetails, ownerFoundingBillingEnabled, verifyFoundingBillingCard } from '@/lib/founding-billing-activation';
 import { squareEnvironment, squareRequest } from '@/lib/square-client';
 import type { FoundingEnrollment } from '@/lib/founding-membership';
@@ -20,7 +20,8 @@ export async function GET(req: Request) {
       const details = await foundingBillingDetails(context.admin, row.data as FoundingEnrollment);
       if (details.error) return Response.json({ ok: false, error: details.error }, { status: 409, headers });
       const card = await verifyFoundingBillingCard(row.data as FoundingEnrollment);
-      return Response.json({ ok: true, review: { enrollment_id: row.data.id, ...details, ...card }, billing_enabled: ownerFoundingBillingEnabled(context.user), charges_executed: false }, { headers });
+      const subscription = await foundingSubscriptionReview(row.data as FoundingEnrollment);
+      return Response.json({ ok: true, review: { enrollment_id: row.data.id, ...details, ...card, subscription }, billing_enabled: ownerFoundingBillingEnabled(context.user), charges_executed: false }, { headers });
     } catch (error) { return Response.json({ ok: false, error: error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Unable to verify the saved card and existing subscriptions. No billing has been started.' }, { status: 503, headers }); }
   }
   const result = await context.admin.from('founding_memberships').select('id,status,pricing_tier,base_cents,sibling_cents,amount_cents,start_date,card_last4,created_at,household:households(name,email,phone)').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
