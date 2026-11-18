@@ -595,6 +595,7 @@ for (const scenario of ['paid existing subscription', 'earlier renewal change', 
     const writes=[];
     const service=loadSquareModules({mocks:{'@/lib/founding-billing-activation':{verifyFoundingBillingCard:async()=>({})}},fetch:async(url,options)=>{
       const path=new URL(url).pathname;
+      if(path.startsWith('/v2/customers/'))return Response.json({customer:{id:path.split('/').at(-1)}});
       if(options.method==='GET'&&path==='/v2/subscriptions/sub')return Response.json({subscription:{id:'sub',customer_id:scenario==='wrong customer'?'other':'customer',location_id:'test-location',card_id:'card',status:'ACTIVE',start_date:today,actions:scenario==='earlier renewal change'?[{type:'CHANGE_BILLING_ANCHOR_DATE',monthly_billing_anchor_date:Number(today.slice(8))===1?2:1,effective_date:dates.addMonths(today,1)}]:[]}});
       writes.push(path);throw Error('Unexpected financial write');
     }}).load('src/lib/founding-square.ts');
@@ -613,6 +614,7 @@ test('provider identity review searches only this family and never exposes a dif
   const calls=[];
   const service=loadSquareModules({fetch:async(url,options)=>{
     calls.push({method:options.method,path:new URL(url).pathname});
+    if(new URL(url).pathname.startsWith('/v2/customers/'))return Response.json({customer:{id:new URL(url).pathname.endsWith('/other')?'other':'customer'}});
     if(options.method==='GET')return Response.json({subscription:{id:'saved',customer_id:'other',location_id:'test-location'}});
     const body=JSON.parse(options.body);assert.deepEqual(body.query.filter,{customer_ids:['customer'],location_ids:['test-location']});
     return Response.json({subscriptions:[{id:'private-other',customer_id:'other',location_id:'test-location',card_id:'card'},{id:'owned',customer_id:'customer',location_id:'test-location',card_id:'card',status:'ACTIVE',start_date:'2026-11-17'}]});
@@ -621,5 +623,16 @@ test('provider identity review searches only this family and never exposes a dif
   assert.equal(review.identity_verified,false);assert.equal(review.checks.customer_matches,false);
   assert.deepEqual(Array.from(review.matching_subscriptions,s=>s.id),['owned']);
   assert.equal(JSON.stringify(review).includes('private-other'),false);
-  assert.deepEqual(calls.map(c=>c.method),['GET','POST']);
+  assert.equal(calls.filter(c=>c.path==='/v2/subscriptions/search').length,1);
+});
+
+
+test('merged Square customer IDs must resolve to the same provider customer', async () => {
+  const calls=[];
+  const service=loadSquareModules({fetch:async(url,options)=>{calls.push({path:new URL(url).pathname,method:options.method});const id=new URL(url).pathname.split('/').at(-1);return Response.json({customer:{id:['old','merged'].includes(id)?'merged':id}});}}).load('src/lib/square-client.ts');
+  assert.equal(await service.squareCustomerMatches('old','merged'),true);
+  assert.equal(await service.squareCustomerMatches('other','merged'),false);
+  assert.equal(await service.squareCustomerMatches('merged','merged'),true);
+  assert.equal(await service.squareCustomerMatches(undefined,'merged'),false);
+  assert.ok(calls.every(c=>c.method==='GET'&&c.path.startsWith('/v2/customers/')));
 });
