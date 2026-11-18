@@ -62,6 +62,9 @@ export default function StaffCheckinPage() {
   const pendingLaunch = useRef<PendingAdmissionPos | null>(null);
   const resumeBusy = useRef(false);
   const paymentRequest = useRef(0);
+  const deskLoadedKey = useRef('');
+  const deskInteraction = useRef(false);
+  deskInteraction.current = busy || checkingIn || !!checkingOut || connectingCustomer || !!completion;
   const [pendingPosId, setPendingPosId] = useState('');
   const groups = admissionGroups(visits);
   const selected = groups.find(group => group.id === activeFamily);
@@ -74,10 +77,9 @@ export default function StaffCheckinPage() {
     }
   }, []);
 
-  async function refreshPayments() {
+  async function refreshPayments(background = false) {
     const request = ++paymentRequest.current;
-    setLoading(true);
-    setPaymentsReady(false);
+    if (!background) { setLoading(true); setPaymentsReady(false); }
     try {
       const response = await fetch('/api/admin/admission/pos', { cache: 'no-store' });
       const result = await response.json();
@@ -104,6 +106,9 @@ export default function StaffCheckinPage() {
         }
       }
       return currentVisits;
+    } catch (error) {
+      if (request === paymentRequest.current) setPaymentsReady(false);
+      throw error;
     } finally { if (request === paymentRequest.current) setLoading(false); }
   }
 
@@ -149,13 +154,13 @@ export default function StaffCheckinPage() {
     } finally { callbackBusy.current = false; setBusy(false); }
   }
 
-  async function resumePayments(pendingOnly = false) {
+  async function resumePayments(pendingOnly = false, background = false) {
     if (resumeBusy.current || checkinBusy.current || checkoutBusy.current) return;
     resumeBusy.current = true;
     try {
       const callback = squarePosCallback(window.location.search);
       if (callback?.status === 'ok') { await verifyReturn(); return; }
-      if (!pendingOnly) await refreshPayments();
+      if (!pendingOnly) await refreshPayments(background);
       const launch = pendingLaunch.current;
       if (!launch) return;
       const response = await fetch('/api/admin/admission/pos', { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -186,7 +191,8 @@ export default function StaffCheckinPage() {
 
   useEffect(() => {
     return startVisiblePolling(async () => {
-      await resumePayments();
+      if (deskInteraction.current) return;
+      await resumePayments(false, true);
       setDeskRefresh(value => value + 1);
     }, 60000, { immediate: false });
     // Refresh other operators' visits while in use, including on tab/Square return.
@@ -203,7 +209,9 @@ export default function StaffCheckinPage() {
   useEffect(() => {
     if (document.hidden) return;
     const controller = new AbortController();
-    setDeskLoading(true);
+    const key = `${query.trim()}|${deskDate}`;
+    const background = deskLoadedKey.current === key;
+    if (!background) setDeskLoading(true);
     setDeskError('');
     const timer = window.setTimeout(async () => {
       try {
@@ -217,9 +225,9 @@ export default function StaffCheckinPage() {
           if (!response.ok || !payments.ok) throw new Error(payments.error || 'Unable to load check-in history.');
           history = payments.visits ?? [];
         }
-        if (!controller.signal.aborted) { setFamilies(result.items); setDatedVisits(history); setTruncated(result.truncated); }
+        if (!controller.signal.aborted) { deskLoadedKey.current = key; setFamilies(result.items); setDatedVisits(history); setTruncated(result.truncated); }
       } catch (error) {
-        if (!controller.signal.aborted) { setFamilies([]); setDeskError(error instanceof Error ? error.message : 'Unable to load families.'); }
+        if (!controller.signal.aborted) { if (!background) setFamilies([]); setDeskError(error instanceof Error ? error.message : 'Unable to load families.'); }
       } finally { if (!controller.signal.aborted) setDeskLoading(false); }
     }, query ? 250 : 0);
     return () => { controller.abort(); window.clearTimeout(timer); };

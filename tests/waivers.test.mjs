@@ -96,3 +96,21 @@ test('check-in only uses authenticated staff identity and never trusts QR-suppli
   assert.equal(args.p_staff_role, 'staff');
   assert.equal(Object.keys(args).length, 5);
 });
+
+
+test('check-in allows an unpaid online reservation while preserving server waiver and duplicate checks', async () => {
+  let options, called = false;
+  const api = loadModule('src/app/api/checkin/route.ts', {
+    '@/lib/infant-sibling-admission': {}, '@/lib/square-client': {},
+    '@/lib/soft-opening-payments': { reconcileOpenPlayPayments: async (_db, household, value) => { assert.equal(household, 'family'); options = value; } },
+    '@/lib/authz': { requireStaffContext: async () => ({ ok: true, user: { id: 'staff' }, role: 'staff', admin: {
+      from: () => ({ select(){ return this; }, eq(){ return this; }, maybeSingle: async () => ({ data: { household_id: 'family' }, error: null }) }),
+      rpc: async () => { called = true; return { data: { ok: false, code: 'already_checked_in' } }; },
+    } }) },
+    '@/lib/waiver-content': content,
+    '@/lib/open-play-reservations': { isUuid: () => true },
+  });
+  const response = await api.POST({ json: async () => ({ person_id: 'person' }) });
+  assert.equal(options.allowPending, true); assert.equal(called, true);
+  assert.equal((await response.json()).code, 'already_checked_in');
+});

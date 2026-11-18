@@ -1,3 +1,4 @@
+import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { squareConfig, squareRequest, squareSiteUrl, assertSquarePaymentUrl, assertUsd, type SquareOrder } from '@/lib/square-client';
 export type OpenPlayPayment = {
@@ -98,13 +99,22 @@ export async function startOpenPlayPayment(db: SupabaseClient, r: OpenPlayPaymen
     checked(await db.from('open_play_reservations').update({ square_order_id: link.order_id, square_payment_link_id: link.id, payment_url: url }).eq('id', r.id).eq('status', 'reserved').select('id').single());
     return { paid: false, url };
 }
-export async function reconcileOpenPlayPayments(db: SupabaseClient, householdId: string) {
-    const rows = checked(await db.from('open_play_reservations').select('*').eq('household_id', householdId).eq('payment_choice', 'now').eq('status', 'reserved').in('payment_status', ['due', 'paid']).eq('payment_environment', squareConfig().environment).limit(10)) as OpenPlayPayment[];
-    for (const row of rows) {
-        if (!row.square_order_id)
+export async function reconcileOpenPlayPayments(db: SupabaseClient, householdId: string, { allowPending = false }: { allowPending?: boolean } = {}) {
+    const today = getPartyDateKey(new Date());
+    const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+    const rows = checked(await db.from('open_play_reservations').select('*').eq('household_id', householdId).eq('payment_choice', 'now').eq('status', 'reserved').in('payment_status', ['due', 'paid']).eq('payment_environment', squareConfig().environment).limit(101)) as (OpenPlayPayment & { slot_id: string })[];
+    if (rows.length > 100) throw new Error('Too many online checkouts to verify. Contact the owner.');
+    if (!rows.length) return;
+    const slots = checked(await db.from('open_play_reservation_slots').select('id').in('id', rows.map(row => row.slot_id))
+        .gte('starts_at', toPartyDateTimeIso(today, 0)).lt('starts_at', toPartyDateTimeIso(tomorrow, 0))) as { id: string }[];
+    const todaySlots = new Set(slots.map(slot => slot.id));
+    for (const row of rows.filter(row => todaySlots.has(row.slot_id))) {
+        if (!row.square_order_id) {
+            if (allowPending) continue;
             throw new Error('Online checkout is still being prepared; verify before collecting payment');
+        }
         const current = await verifyOpenPlayPayment(db, row);
-        if (current.payment_status !== 'paid')
+        if (current.payment_status !== 'paid' && !allowPending)
             throw new Error('Online checkout is still pending. Complete or close it before collecting counter payment.');
     }
 }

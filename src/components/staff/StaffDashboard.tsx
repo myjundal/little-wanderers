@@ -524,8 +524,8 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
     });
   }, [partyBookings]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
     setMessage(null);
 
     try {
@@ -571,7 +571,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
 
   useEffect(() => {
     if (view !== 'occupancy' && view !== 'overview') { void load(); return; }
-    return startVisiblePolling(load, 30000);
+    return startVisiblePolling(() => load(true), 30000);
   }, [load, refreshKey, view]);
 
   const mutateOccupancy = async (action: 'increment' | 'decrement' | 'reset', amount = 1, notes?: string) => {
@@ -917,7 +917,7 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
       </section>
 
       <div id="manual-family-registration">
-        <StaffFamilyRegistration onSaved={load} />
+        <StaffFamilyRegistration onSaved={() => load()} />
       </div>
 
         </>

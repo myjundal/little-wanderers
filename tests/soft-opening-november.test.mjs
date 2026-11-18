@@ -36,10 +36,15 @@ test('check-in uses $16/$10 for counter visits and consumes only named, same-dat
  }
 });
 test('an abandoned online checkout blocks counter collection until it is reconciled',async()=>{
- const r={id:crypto.randomUUID(),amount_cents:1600,payment_choice:'now',payment_status:'due',square_order_id:'open-order',payment_environment:'sandbox',created_at:new Date().toISOString()};
+ const r={id:crypto.randomUUID(),amount_cents:1600,payment_choice:'now',payment_status:'due',slot_id:'today-slot',square_order_id:'open-order',payment_environment:'sandbox',created_at:new Date().toISOString()};
  const {load}=loadSquareModules({fetch:async()=>Response.json({order:{id:r.square_order_id,reference_id:`op_${r.id}`,location_id:'test-location',state:'DRAFT'}})});
- const flow=load('src/lib/soft-opening-payments.ts');const q={select(){return q;},eq(){return q;},in(){return q;},limit(){return q;},then(resolve){resolve({data:[r],error:null});}};
- await assert.rejects(flow.reconcileOpenPlayPayments({from:()=>q},'family'),/pending/);
+ const flow=load('src/lib/soft-opening-payments.ts');
+ const db={from(table){const q={select(){return q;},eq(){return q;},in(){return q;},gte(){return q;},lt(){return q;},limit(){return q;},then(resolve){resolve({data:table==='open_play_reservation_slots'?[{id:r.slot_id}]:[r],error:null});}};return q;}};
+ await assert.rejects(flow.reconcileOpenPlayPayments(db,'family'),/pending/);
+ await flow.reconcileOpenPlayPayments(db,'family',{allowPending:true});
+ r.square_order_id=null;
+ await flow.reconcileOpenPlayPayments(db,'family',{allowPending:true});
+ await assert.rejects(flow.reconcileOpenPlayPayments(db,'family'),/being prepared/);
 });
 
 test('infant siblings are included through six months; only attending siblings count',()=>{
