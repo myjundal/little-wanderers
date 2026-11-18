@@ -4,6 +4,7 @@ import { PARTY_PRIVACY_UPDATED_EVENT } from '@/lib/private-party-open-play';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { startVisiblePolling } from '@/lib/visible-polling';
 import PartyGuestWaivers from '@/components/waivers/PartyGuestWaivers';
 import PartyScheduleEditor, { type PartySchedule } from '@/components/staff/PartyScheduleEditor';
 import { getPartyDateKey, PARTY_TIME_ZONE } from '@/lib/party-config';
@@ -68,9 +69,8 @@ export default function PartyManagement({ canEditSchedule = false }: { canEditSc
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
-    const timer = window.setInterval(() => void load(controller.signal), 30000);
-    return () => { controller.abort(); window.clearInterval(timer); };
+    const stopPolling = startVisiblePolling(() => load(controller.signal), 30000);
+    return () => { controller.abort(); stopPolling(); };
   }, [load]);
 
   useEffect(() => {

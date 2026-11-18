@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { revalidateTag } from 'next/cache';
 import { requireStaffContext, requireClassManagementContext } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
@@ -241,6 +242,7 @@ export async function POST(req: Request) {
     }
 
     await insertClasses(context.admin, parsedItems);
+    revalidateTag('public-class-catalog');
     const items = await loadClasses(context.admin);
     return Response.json({ ok: true, items, created_count: parsedItems.length });
   } catch (e: unknown) {

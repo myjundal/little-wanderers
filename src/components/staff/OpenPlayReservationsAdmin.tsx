@@ -1,5 +1,7 @@
 'use client';
 
+import { startVisiblePolling } from '@/lib/visible-polling';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isOpenPlayArrivalAvailable, SOFT_OPENING_START_DATE } from '@/lib/open-play-reservations';
 import AvailabilityCalendar, { type CalendarSlot } from '@/components/calendar/AvailabilityCalendar';
@@ -169,7 +171,7 @@ export default function OpenPlayReservationsAdmin({ canManage, onCheckIn, onRese
   }, []);
 
   useEffect(() => {
-    void load();
+    return startVisiblePolling(load, 60000);
   }, [load]);
 
   const reservationsBySlot = useMemo(() => {

@@ -44,7 +44,7 @@ export function PastelHeader({ isAuthenticated = false, dashboardHref, accessLab
     </nav>
     <div className={styles.headerActions}>
       <Link className={styles.reserveButton} href="/open-play">Reserve Open Play</Link>
-      <Link className={styles.accountLink} href={dashboardHref ?? (isAuthenticated ? '/landing' : '/login')}>{accessLabel ?? (isAuthenticated ? 'My account' : 'Sign in')}</Link>
+      <Link className={styles.accountLink} prefetch={dashboardHref === '/account' ? false : undefined} href={dashboardHref ?? (isAuthenticated ? '/landing' : '/login')}>{accessLabel ?? (isAuthenticated ? 'My account' : 'Sign in')}</Link>
     </div>
   </header>;
 }

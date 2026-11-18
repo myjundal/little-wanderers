@@ -1,5 +1,7 @@
 'use client';
 
+import { startVisiblePolling } from '@/lib/visible-polling';
+
 import { CLASS_START_NOTE, CLASS_PRE_REGISTRATION_NOTE, classSizeLabel } from '@/lib/class-config';
 import { parseChildAge } from '@/lib/child-age';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -261,13 +263,12 @@ export default function ClassSchedulePage() {
       setLoading(true);
       setMessage(null);
     }
-    const requestKey = Date.now();
 
     try {
       const [classRes, myRes, profileRes] = await Promise.all([
-        fetch(`/api/classes?limit=200&ts=${requestKey}`, { cache: 'no-store' }),
-        fetch(`/api/classes/my?ts=${requestKey}`, { cache: 'no-store' }),
-        fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' }),
+        fetch('/api/classes?limit=200', { cache: 'no-store' }),
+        fetch('/api/classes/my', { cache: 'no-store' }),
+        fetch('/api/family/profile', { cache: 'no-store' }),
       ]);
 
       const classJson = await classRes.json();
@@ -329,12 +330,12 @@ export default function ClassSchedulePage() {
   }, []);
 
   useEffect(() => {
-    load();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void load(false);
+    let first = true;
+    return startVisiblePolling(() => {
+      const request = load(first);
+      first = false;
+      return request;
     }, 60000);
-
-    return () => window.clearInterval(interval);
   }, [load]);
 
   useEffect(() => {

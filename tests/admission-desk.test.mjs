@@ -452,13 +452,13 @@ test('failed checkout keeps the active visitors and displays an actionable error
   assert.ok(h.text().includes('Unable to record checkout'));
 });
 
-test('ordinary desk use has no automatic full refresh and returning without a Square sale preserves selection', async () => {
+test('ordinary desk refreshes on return and preserves the selected visitors', async () => {
   const h = uiHarness(); await choose(h);
   h.button('Select everyone remaining').props.onClick(); await h.flush();
   const before = h.requests.length;
   h.resume(); h.visible(); await h.flush();
-  assert.equal(h.requests.length, before);
-  assert.equal(h.intervals.length, 0);
+  assert.ok(h.requests.length > before);
+  assert.ok(h.intervals.some(timer => timer.ms === 60000));
   assert.equal(h.button('Check in 2').props.disabled, false);
 });
 
@@ -467,7 +467,7 @@ test('pending Square polling waits 15 seconds and leaves checkout enabled during
   const h = uiHarness({ pending: true, initialVisits }); await h.flush();
   assert.equal(h.button('Check out family (2)').props.disabled, false);
   assert.ok(h.intervals.some(timer => timer.ms === 15000));
-  assert.ok(!h.intervals.some(timer => timer.ms === 5000 || timer.ms === 60000));
+  assert.ok(!h.intervals.some(timer => timer.ms === 5000));
   const before = h.requests.filter(request => !request.body).length;
   h.holdNextSync(); h.poll(); await h.flush();
   assert.equal(h.requests.filter(request => !request.body).length, before);

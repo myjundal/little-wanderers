@@ -1,6 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import { startVisiblePolling } from '@/lib/visible-polling';
 import { useEffect, useState } from 'react';
 import type { PublicCrowdPayload } from '@/lib/public-crowd';
 import styles from './CrowdLevelCard.module.css';
@@ -45,7 +46,7 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
       if (inFlight || document.hidden) return;
       inFlight = true;
       try {
-        const res = await fetch(`/api/crowd-level?ts=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
+        const res = await fetch('/api/crowd-level', { signal: controller.signal });
         const json = (await res.json()) as CrowdPayload;
 
         if (!alive) return;
@@ -67,15 +68,12 @@ export default function CrowdLevelCard({ compact = false, style, showHours = tru
       }
     };
 
-    load();
-    const interval = window.setInterval(load, 10_000);
-    document.addEventListener('visibilitychange', load);
+    const stopPolling = startVisiblePolling(load, 60_000);
 
     return () => {
       alive = false;
       controller.abort();
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', load);
+      stopPolling();
     };
   }, [showStatus]);
 
