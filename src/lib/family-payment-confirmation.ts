@@ -8,6 +8,7 @@ import { applyFoundingAdmissionCoverage } from '@/lib/founding-admission-coverag
 import { admissionIsIncluded, admissionIsPaid } from '@/lib/admission-payment-status';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { reconcilePaidFamily, type FamilyLinkResult } from '@/lib/paid-family-reconciliation';
+import { syncFoundingSubscription } from '@/lib/founding-square';
 
 const checked = <T>(result: { data: T; error: unknown }) => { if (result.error) throw new Error('Unable to confirm family payment. Refresh and retry.'); return result.data as NonNullable<T>; };
 export async function confirmFamilyPayment(admin: SupabaseClient, requestedId: string, actor: string, now = new Date(), allowIncoming = true, expectedTarget?: string): Promise<{ status: string; family_link: string; household_id: string; payment_status?: string }> {
@@ -48,6 +49,24 @@ export async function confirmFamilyPayment(admin: SupabaseClient, requestedId: s
   if (visits.some(visit => (visit.household_id && visit.household_id !== householdId) || (visit.square_environment ?? 'production') !== environment))
     return { status: 'review', family_link: 'none', household_id: householdId };
   const prepaid = await getAdmissionPrepayments(admin, visits.map(visit => ({ ...visit, household_id: householdId })), environment);
+  const dueChildren = new Set(prepaid.filter(visit => children.has(visit.person_id) && visit.payment_status === 'due').map(visit => visit.person_id));
+  if (dueChildren.size) {
+    // Activation can finish before Square's paid-invoice webhook reaches us.
+    // Recover the existing paid term; this never creates a payment or subscription.
+    const enrollments = checked(await admin.from('founding_memberships').select('*').eq('household_id', householdId)
+      .eq('environment', environment).eq('status', 'active').limit(101));
+    if (enrollments.length > 100) throw new Error('Membership history needs review. Do not collect again.');
+    for (const enrollment of enrollments) {
+      if (!enrollment.square_subscription_id || !enrollment.start_date || enrollment.start_date > today
+        || (enrollment.paid_through && enrollment.paid_through >= today)
+        || !enrollment.child_ids?.some((id: string) => dueChildren.has(id))) continue;
+      await syncFoundingSubscription(admin, enrollment.square_subscription_id);
+      const refreshed = checked(await admin.from('founding_memberships').select('paid_through').eq('id', enrollment.id).single());
+      // An unresolved membership invoice needs review, never a second entry charge.
+      if (!refreshed.paid_through || refreshed.paid_through < today)
+        return { status: 'review', family_link: 'none', household_id: householdId };
+    }
+  }
   const covered = await applyFoundingAdmissionCoverage(admin, prepaid, people, environment);
   const priced = projectInfantSiblingAdmission(covered, people, environment).filter(visit => children.has(visit.person_id));
   if (priced.some(visit => visit.payment_status === 'review')) return { status: 'review', family_link: 'none', household_id: householdId };
