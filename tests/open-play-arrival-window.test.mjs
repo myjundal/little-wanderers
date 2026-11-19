@@ -66,6 +66,6 @@ test('a preserved 4–5 PM reservation on a private-party date shows change inst
  h.state[0].reservations=[{id:'saved',status:'reserved',slot:late,child_count:1,adult_count:1,payment_choice:'counter',payment_status:'due',amount_cents:1600}];
  h.state[0].private_party_days=[{date:'2026-11-16',starts_at:'2026-11-16T21:00Z',ends_at:'2026-11-16T23:00Z'}];
  const html=renderToStaticMarkup(h.render());
- assert.match(html,/Your reserved arrival overlaps a private party/);
+ assert.match(html,/Your reserved arrival overlaps this date’s private-party closure/);
  assert.doesNotMatch(html,/Your arrival window is 4–5 PM. We close at 6 PM/);
 });

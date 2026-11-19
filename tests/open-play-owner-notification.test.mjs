@@ -32,7 +32,7 @@ function reservationHarness({ failInsert = false, failEmail = false, failConfirm
     const q = { select() { return q; }, insert(row) { writes.push(row); inserted = true; return q; },
       async maybeSingle() { return { data: table === 'households' ? { phone: 'saved-contact-phone', email: 'contact@example.test' } : table === 'open_play_reservation_slots' ? slot : inserted && !failInsert ? { ...writes.at(-1), id: 'reservation' } : null, error: failInsert && inserted ? { code: '23514', message: 'Full' } : null }; },
     };
-    for (const method of ['eq', 'gt', 'limit']) q[method] = () => q;
+    for (const method of ['eq', 'neq', 'gt', 'limit']) q[method] = () => q;
     return q;
   } };
   const api = loadModule('src/app/api/open-play-reservations/route.ts', {

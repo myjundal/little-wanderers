@@ -173,16 +173,16 @@ export async function POST(req: Request) {
 
     const { data: existingActive, error: existingActiveError } = await context.admin
       .from('open_play_reservations')
-      .select('id,slot:open_play_reservation_slots!inner(ends_at)')
+      .select('id')
       .eq('household_id', context.householdId)
-      .eq('status', 'reserved')
-      .gt('slot.ends_at', new Date().toISOString())
+      .eq('slot_id', slotId)
+      .neq('status', 'cancelled')
       .limit(1)
       .maybeSingle();
 
     if (existingActiveError) throw new Error(existingActiveError.message);
     if (existingActive) {
-      return NextResponse.json({ ok: false, error: 'You already have an Open Play reservation. Please cancel it before choosing another time.' }, { status: 409, headers: NO_STORE_HEADERS });
+      return NextResponse.json({ ok: false, error: 'You already have a reservation for this arrival window. Choose another date or time to book an additional visit.' }, { status: 409, headers: NO_STORE_HEADERS });
     }
 
     const { data: slot, error: slotError } = await context.admin

@@ -12,12 +12,12 @@ export async function createStaffOpenPlayReservation(db: SupabaseClient, househo
   const [family, slot, existing, household] = await Promise.all([
     readSoftOpeningFamily(db, householdId),
     db.from('open_play_reservation_slots').select(OPEN_PLAY_SLOT_SELECT).eq('id', input.slot_id!).eq('is_soft_opening', true).maybeSingle(),
-    db.from('open_play_reservations').select('id,slot:open_play_reservation_slots!inner(ends_at)').eq('household_id', householdId).eq('status', 'reserved').gt('slot.ends_at', new Date().toISOString()).limit(1),
+    db.from('open_play_reservations').select('id').eq('household_id', householdId).eq('slot_id', input.slot_id!).neq('status', 'cancelled').limit(1),
     db.from('households').select('email').eq('id', householdId).maybeSingle(),
   ]);
   if (slot.error || existing.error || household.error) throw new Error('Unable to verify this reservation. Please refresh.');
   if (!household.data) throw new Error('Family not found.');
-  if (existing.data?.length) throw new Error('This family already has an upcoming Open Play reservation. Cancel it before choosing another time.');
+  if (existing.data?.length) throw new Error('This family already has a reservation for this arrival window. Choose another date or time to add a visit.');
   if (!slot.data || slot.data.status !== 'open' || !isOpenPlayArrivalAvailable(slot.data) || new Date(slot.data.starts_at) < new Date(SOFT_OPENING_START) || new Date(slot.data.starts_at) >= new Date(SOFT_OPENING_END) || new Date(slot.data.ends_at) <= new Date()) throw new Error('This arrival window is no longer available.');
   if (ids.some(id => !family.children.some(child => child.id === id))) throw new Error('Choose children belonging to this family.');
   const amount = softOpeningAmount(ids, family.memberships, getPartyDateKey(new Date(slot.data.starts_at)), family.children);
