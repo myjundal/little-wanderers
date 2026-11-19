@@ -67,6 +67,43 @@ test('a completed old merge never confirms a new unpaid visit', async () => {
   assert.equal(result.status, 'pending'); assert.equal(f.db.checkins.at(-1).payment_status, 'due');
 });
 
+test('confirmation recovers a missing or expired membership term only from a fully paid existing Square invoice', async () => {
+  for (const paidThrough of [null, '2026-11-14']) {
+    const f = fixture(); f.db.checkins[1].payment_status = 'due';
+    f.db.founding_memberships.push({ id: 'enrollment', household_id: 'source', environment: 'production', status: 'active',
+      child_ids: ['guest-child'], square_subscription_id: 'sub', square_customer_id: 'customer', square_card_id: 'card',
+      start_date: '2026-11-14', paid_through: paidThrough, created_at: '2026-11-01T12:00:00Z' });
+    const before = structuredClone(f.db.checkins), calls = [];
+    const modules = loadSquareModules({ env: { SQUARE_ENVIRONMENT: 'production' }, fetch: async (url, options) => {
+      calls.push({ url, method: options.method }); assert.equal(options.method, 'GET');
+      if (url.includes('/subscriptions/')) return Response.json({ subscription: { id: 'sub', customer_id: 'customer', location_id: 'test-location', status: 'ACTIVE', charged_through_date: '2026-12-14', invoice_ids: ['invoice'] } });
+      assert.ok(url.endsWith('/invoices/invoice'));
+      return Response.json({ invoice: { subscription_id: 'sub', location_id: 'test-location', status: 'PAID', primary_recipient: { customer_id: 'customer' }, payment_requests: [{ computed_amount_money: { amount: 5000, currency: 'USD' }, total_completed_amount_money: { amount: 5000, currency: 'USD' } }] } });
+    } });
+    const result = await modules.load('src/lib/family-payment-confirmation.ts').confirmFamilyPayment(f.admin, 'source', 'staff', now);
+    assert.equal(result.status, 'confirmed'); assert.equal(result.payment_status, 'included');
+    assert.equal(f.db.founding_memberships[0].paid_through, '2026-12-14');
+    assert.deepEqual(f.db.checkins, before); assert.equal(calls.length, 2);
+  }
+});
+
+test('an unpaid or failed membership verification cannot approve admission or request another payment', async () => {
+  for (const invoiceStatus of ['UNPAID', 'FAILED']) {
+    const f = fixture(); f.db.checkins[1].payment_status = 'due';
+    f.db.founding_memberships.push({ id: 'enrollment', household_id: 'source', environment: 'production', status: 'active', child_ids: ['guest-child'], square_subscription_id: 'sub', square_customer_id: 'customer', start_date: '2026-11-14', paid_through: null });
+    const modules = loadSquareModules({ env: { SQUARE_ENVIRONMENT: 'production' }, fetch: async (url, options) => {
+      assert.equal(options.method, 'GET');
+      if (invoiceStatus === 'FAILED') throw new Error('Square unavailable');
+      if (url.includes('/subscriptions/')) return Response.json({ subscription: { id: 'sub', customer_id: 'customer', location_id: 'test-location', status: 'ACTIVE', charged_through_date: '2026-12-14', invoice_ids: ['invoice'] } });
+      return Response.json({ invoice: { subscription_id: 'sub', location_id: 'test-location', status: 'UNPAID', primary_recipient: { customer_id: 'customer' } } });
+    } });
+    const run = () => modules.load('src/lib/family-payment-confirmation.ts').confirmFamilyPayment(f.admin, 'source', 'staff', now);
+    if (invoiceStatus === 'FAILED') await assert.rejects(run(), /Square unavailable/);
+    else assert.equal((await run()).status, 'review');
+    assert.equal(f.db.founding_memberships[0].paid_through, null); assert.equal(f.db.checkins[1].payment_status, 'due');
+  }
+});
+
 test('staff authorization and a valid family ID are required; client payment assertions are ignored', async () => {
   for (const status of [401, 403]) {
     let called = false;
