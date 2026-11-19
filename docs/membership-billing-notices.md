@@ -49,3 +49,9 @@ to a preview; nightly runs send only due, not-yet-notified memberships.
 Validation: `node --test tests/membership-billing-notices.test.mjs`.
 
 Billing notices explain that the first payment starts when the owner activates billing, and the next payment is one calendar month later. A visit itself does not start a charge.
+
+Records excluded for owner review remain visible in the private preview and the
+workflow's aggregate `review` count. They produce a warning annotation, rather
+than failing an otherwise successful run every night. Authentication/HTTP errors,
+runner errors, delivery failures and unfinished pending work still fail the job.
+This classification does not authorize sending review records or reset sent notices.
