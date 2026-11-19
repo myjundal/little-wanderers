@@ -42,6 +42,10 @@ jobs:
               raise SystemExit('Website membership email job returned HTTP ' + str(error.code))
           allowed = ['ok', 'dry_run', 'checked_at', 'eligible', 'sent', 'already_sent', 'in_progress', 'review', 'failures', 'pending', 'charges_executed']
           print(json.dumps({key: result.get(key) for key in allowed}, indent=2))
-          if not result.get('ok') or result.get('review') or result.get('failures') or result.get('pending'):
+          # Review records are deliberately excluded from automatic sending.
+          # They require owner attention, not a failed mail-delivery alert.
+          if result.get('review'):
+              print('::warning title=Membership review needed::Records requiring owner review were skipped. See the private membership email preview; completed notices were not resent.')
+          if not result.get('ok') or result.get('failures') or result.get('pending'):
               raise SystemExit(2)
           PY
