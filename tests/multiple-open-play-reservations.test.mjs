@@ -13,7 +13,7 @@ const otherSlotId = '10000000-0000-4000-8000-000000000002';
 const slot = { id: slotId, starts_at: '2026-11-19T14:00:00Z', ends_at: '2026-11-19T15:00:00Z', status: 'open', capacity_children: 6, remaining_children: 5 };
 class FixedDate extends Date { constructor(...args) { super(...(args.length ? args : ['2026-11-18T14:00:00Z'])); } static now() { return Date.parse('2026-11-18T14:00:00Z'); } }
 
-function apiHarness(existingSlot) {
+function apiHarness(existingSlot, familyError = null) {
   const writes = [], background = [];
   const admin = { from(table) {
     const filters = [];
@@ -33,7 +33,7 @@ function apiHarness(existingSlot) {
     '@/lib/households': { getLatestHouseholdIdForUser: async () => 'family' },
     '@/lib/soft-opening-access': { getSoftOpeningAccessForUser: async () => ({ allowed: true }) },
     '@/lib/open-play-reservations': { ...policy, getReservationOccupancy: async () => ({ children: 0, total: 0 }) },
-    '@/lib/soft-opening-family': { saveSoftOpeningFamily: async () => ({ childIds: ['child'], memberships: [], guardianName: 'Parent', children: [{name:'Child'}] }) },
+    '@/lib/soft-opening-family': { saveSoftOpeningFamily: async () => { if (familyError) throw familyError; return { childIds: ['child'], memberships: [], guardianName: 'Parent', children: [{name:'Child'}] }; } },
     '@/lib/soft-opening-pricing': { softOpeningAmount: () => 1600 },
     '@/lib/open-play-quote': {}, '@/lib/party-config': loadModule('src/lib/party-config.ts'),
     '@/lib/private-party-open-play': { readPrivatePartyDays: async () => [], overlapsPrivateParty: () => false },
@@ -66,7 +66,7 @@ test('all upcoming visits remain visible alongside the booking form, with indepe
   const Component = loadModule('src/components/soft-opening/SoftOpeningReservation.tsx', {
     react:{...React,useEffect(){},useCallback:fn=>fn,useState:initial=>{const index=i++;return [state[index]??initial,next=>{state[index]=typeof next==='function'?next(state[index]):next;}];}},
     'next/link':'a','next/image':'img','./soft-opening.module.css':{},'@/lib/open-play-reservations':policy,
-    '@/lib/child-age':{parseChildAge:()=>null},'@/lib/soft-opening-pricing':{softOpeningAmount:()=>1600},
+    '@/lib/birthdate':loadModule('src/lib/birthdate.ts'),'@/lib/open-play-birthdate':{parseOpenPlayBirthdate:value=>loadModule('src/lib/birthdate.ts').parseBirthdate(value ?? '')},'@/lib/soft-opening-pricing':{softOpeningAmount:()=>1600},
   }, {React,Intl,Date:FixedDate,fetch:async(url,options)=>{requests.push([url,options]);return Response.json(options?{ok:true}:data);}}).default;
   const tree=Component({previewData:data,publicBooking:true}); const html=renderToStaticMarkup(tree);
   assert.ok(html.indexOf('Thursday, November 19') < html.indexOf('Friday, November 20'));
@@ -108,4 +108,10 @@ test('database allows multiple future visits and preserves duplicates, capacity,
   await db.query("insert into party_bookings(id,start_time,status,is_private) values($1,'2026-11-20T21:00Z','confirmed',true)",[crypto.randomUUID()]);
   const blocked=(await db.query("select id from open_play_reservation_slots where starts_at='2026-11-20T21:00Z'")).rows[0].id;
   await assert.rejects(db.query('insert into open_play_reservations(slot_id,household_id,child_count,adult_count) values($1,$2,1,1)',[blocked,other]),/private party/);
+});
+
+test('invalid birthday feedback returns a correctable request error before reservation or notification writes', async () => {
+  const h = apiHarness(null, Object.assign(new Error('Please enter the actual birthday.'), {code:'invalid_birthdate'}));
+  const response = await h.post(); assert.equal(response.status, 400); assert.match((await response.json()).error, /birthday/);
+  assert.equal(h.writes.length, 0); assert.equal(h.background.length, 0);
 });

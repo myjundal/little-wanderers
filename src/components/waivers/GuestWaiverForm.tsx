@@ -94,6 +94,7 @@ export default function GuestWaiverForm() {
       <section className={styles.card}>
         <h2>Your family</h2>
         <label>Parent or legal guardian’s email<input className={styles.name} type="email" autoComplete="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} /></label>
+        <p>If you reserved Open Play, use the same email as your reservation.</p>
         <div className={styles.fields}>
           <label>Guardian first name<input className={styles.name} autoComplete="given-name" required maxLength={100} value={firstName} onChange={e => setFirstName(e.target.value)} /></label>
           <label>Guardian last name<input className={styles.name} autoComplete="family-name" required maxLength={100} value={lastName} onChange={e => setLastName(e.target.value)} /></label>

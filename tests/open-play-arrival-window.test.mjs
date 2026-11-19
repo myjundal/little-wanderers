@@ -30,7 +30,7 @@ function reservationHarness() {
   const react = { ...React, useEffect() {}, useCallback: fn => fn, useState(initial) { const i=index++; if (!(i in state)) state[i]=initial; return [state[i], next=>{state[i]=typeof next==='function'?next(state[i]):next;}]; } };
   const Component = loadModule('src/components/soft-opening/SoftOpeningReservation.tsx', {
     react, 'next/link': 'a', 'next/image': 'img', './soft-opening.module.css': {},
-    '@/lib/open-play-reservations': policy, '@/lib/child-age': { parseChildAge: () => null }, '@/lib/soft-opening-pricing': { softOpeningAmount: () => 1600 },
+    '@/lib/open-play-reservations': policy, '@/lib/birthdate': loadModule('src/lib/birthdate.ts'), '@/lib/open-play-birthdate': { parseOpenPlayBirthdate: value => loadModule('src/lib/birthdate.ts').parseBirthdate(value ?? '') }, '@/lib/soft-opening-pricing': { softOpeningAmount: () => 1600 },
   }, { React, Intl, Date: class extends Date { constructor(...args) { if (args.length) super(...args); else super('2026-11-16T18:00:00Z'); } } }).default;
   return { state, render() { index=0; return Component({ previewData: data, publicBooking: true }); } };
 }

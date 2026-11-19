@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { getLatestHouseholdIdForUser } from '@/lib/households';
 import { isFamilyManagerRole } from '@/lib/family-roles';
+import { parseOpenPlayBirthdate } from '@/lib/open-play-birthdate';
 import { getWaiverStatus, WAIVER_STATUS_SELECT, WAIVER_VALIDITY_DAYS } from '@/lib/waivers';
 import { WAIVER_VERSION, WAIVER_TITLE, WAIVER_PARAGRAPHS, WAIVER_AGREEMENTS, WAIVER_SIGNATURE_TEXT } from '@/lib/waiver-content';
 
@@ -52,6 +53,9 @@ export async function POST(req: Request) {
     }
     const children = ctx.people.filter(person => person.role === 'child');
     if (!children.length) return json({ ok: false, error: 'Please add your children in My Info/People before signing.' }, 400);
+    if (children.some(child => !parseOpenPlayBirthdate(child.birthdate))) {
+      return json({ ok: false, error: 'Please correct each child’s birthday in My Info/People before signing. Birthdays cannot be blank or in the future.' }, 400);
+    }
     // Refuse stale forms when another caregiver has changed the family profile.
     if (body.family_revision !== familyRevision(children) || !Array.isArray(body.child_ids) || body.child_ids.length !== children.length || !children.every(child => body.child_ids.includes(child.id))) {
       return json({ ok: false, error: 'Your family profile changed. Reload and review the children before signing.' }, 409);

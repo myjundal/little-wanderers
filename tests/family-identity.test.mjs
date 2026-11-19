@@ -47,6 +47,22 @@ test('reconciliation preserves original signature and people, maps only signed c
   await reconcileGuestWaiverFamily(admin, 'waiver'); assert.equal(db.staff_family_search_aliases.length, 1);
   assert.ok(admin.writes.every(write => ['waivers', 'party_guest_waivers', 'staff_family_search_aliases'].includes(write.table)));
 });
+test('a reserved and paid family receives its matching guest waiver without the guest logging in or changing payment', async () => {
+  const { db, snapshot, admin } = fixture();
+  db.open_play_reservations.push({ id: 'reserved', household_id: target, child_ids: ['child'], payment_status: 'paid', amount_cents: 1600, square_order_id: 'verified-order' });
+  db.checkins.push({ id: 'adult-visit', household_id: target, person_id: 'adult', payment_status: 'covered', price_cents: 0 });
+  const reservations = structuredClone(db.open_play_reservations), visits = structuredClone(db.checkins), members = structuredClone(db.household_members);
+  assert.equal(db.waivers[0].signed_by_user_id, null);
+  assert.equal((await reconcileGuestWaiverFamily(admin, 'waiver')).status, 'linked');
+  assert.equal(db.waivers[0].household_id, target);
+  assert.deepEqual(db.waivers[0].covered_person_ids, ['child']);
+  assert.deepEqual(db.waivers[0].agreement_snapshot.children, snapshot.children);
+  assert.equal(db.waivers[0].signed_by_user_id, null);
+  assert.deepEqual(db.open_play_reservations, reservations);
+  assert.deepEqual(db.checkins, visits);
+  assert.deepEqual(db.household_members, members);
+  assert.ok(admin.writes.every(write => ['waivers', 'party_guest_waivers', 'staff_family_search_aliases'].includes(write.table)));
+});
 test('a failed directory write can retry from its saved reconciliation audit', async () => {
   const { db, admin } = fixture(); admin.failNext('staff_family_search_aliases');
   // The initial alias read fails before writing anything.
