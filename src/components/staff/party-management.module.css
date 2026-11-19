@@ -11,6 +11,7 @@
 .tabs button { text-align: left; display: grid; gap: 6px; }
 .tabs button[aria-pressed="true"] { background: #eee3fc; border: 2px solid #9065c4; }
 .tabs span { font-weight: 500; }
+.tabs .privateBadge { justify-self: start; padding: 3px 9px; border: 1px solid #d9c8f7; border-radius: 999px; background: #f3ebff; color: #5f3da4; font-size: 12px; line-height: 1.4; font-weight: 800; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .card { padding: 24px; border: 1px solid #e0d3ed; border-radius: 22px; background: #fffdf9; min-width: 0; }
 .card h3 { font-size: 24px; margin: 8px 0 12px; overflow-wrap: anywhere; }
