@@ -85,10 +85,6 @@ export default function GuestWaiverForm() {
     <h1>Guest family waiver</h1>
     <p>A parent or legal guardian can sign here. <strong>No account or membership is needed.</strong></p>
     <p>Enter your family’s details, review the waiver, and sign below. This does not subscribe you to marketing.</p>
-    {!complete && <section className={styles.card}>
-      <h2>Already reserved or paid for Open Play?</h2>
-      <p><Link href="/login?next=/landing/waiver">Open your family’s waiver</Link> using the same account as your reservation. Your waiver will stay with your booked family.</p>
-    </section>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {complete ? <section className={styles.success}>
       <h2>Waiver saved</h2><p>Your family waiver is on file. Tell the front desk your name or email when you arrive.</p>
@@ -98,6 +94,7 @@ export default function GuestWaiverForm() {
       <section className={styles.card}>
         <h2>Your family</h2>
         <label>Parent or legal guardian’s email<input className={styles.name} type="email" autoComplete="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} /></label>
+        <p>If you reserved Open Play, use the same email as your reservation.</p>
         <div className={styles.fields}>
           <label>Guardian first name<input className={styles.name} autoComplete="given-name" required maxLength={100} value={firstName} onChange={e => setFirstName(e.target.value)} /></label>
           <label>Guardian last name<input className={styles.name} autoComplete="family-name" required maxLength={100} value={lastName} onChange={e => setLastName(e.target.value)} /></label>

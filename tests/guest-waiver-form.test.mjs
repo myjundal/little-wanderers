@@ -48,6 +48,9 @@ function harness({ failFirst = false } = {}) {
 test('guest sees the complete family and signature form immediately, with no verification step', () => {
   const h = harness();
   assert.match(h.text(), /Guardian first name/); assert.match(h.text(), /Child first name/); assert.match(h.text(), /Electronic signature/);
+  assert.match(h.text(), /No account or membership is needed/);
+  assert.match(h.text(), /use the same email as your reservation/);
+  assert.doesNotMatch(h.text(), /Open your family’s waiver|using the same account as your reservation/);
   assert.doesNotMatch(h.text(), /Email my waiver code|Six-digit|Verify email|Email verified/);
   assert.equal(h.requests.length, 0);
 });
