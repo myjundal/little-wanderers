@@ -1368,7 +1368,10 @@ export default function StaffDashboard({ view = 'overview', canManageClasses = f
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                  <strong style={{ color: '#4f3f82' }}>{item.household_name}</strong>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <strong style={{ color: '#4f3f82' }}>{item.household_name}</strong>
+                    {item.is_private && <span style={{ padding: '3px 9px', border: '1px solid #d9c8f7', borderRadius: 999, background: '#f3ebff', color: '#5f3da4', fontSize: 12, lineHeight: 1.4, fontWeight: 800 }}>Private</span>}
+                  </span>
                   <span style={{ color: item.status === 'confirmed' ? '#2f7a47' : item.status === 'cancelled' ? '#8a3f6b' : '#87631d', fontWeight: 700, textTransform: 'capitalize' }}>{partyStatusLabel(item, partyNow)}</span>
                 </div>
                 {hasCancellationRequest(item) && <div style={{ marginTop: 6, color: '#8a3f6b', fontWeight: 700 }}>Cancellation requested</div>}

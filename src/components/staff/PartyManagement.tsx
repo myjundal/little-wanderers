@@ -121,6 +121,7 @@ export default function PartyManagement({ canEditSchedule = false }: { canEditSc
       <div className={styles.tabs} aria-label="Choose a party">
         {parties.map(party => <button type="button" key={party.id} disabled={busy} aria-pressed={party.id === selected?.id} onClick={() => { setSelectedId(party.id); setError(''); setMessage(''); }}>
           <strong>{time(party.start_time)} – {time(party.end_time)}</strong><span>{party.birthday_child_name || party.household_name}</span>
+          {party.is_private && <span className={styles.privateBadge}>Private</span>}
         </button>)}
       </div>
       {selected && <div className={styles.workspace}>
