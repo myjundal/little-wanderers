@@ -313,7 +313,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, reservation, waiver_url: `/landing/waiver?reservation=${reservation.id}` }, { headers: NO_STORE_HEADERS });
   } catch (e: unknown) {
     const rawMessage = e instanceof Error ? e.message : 'unknown error';
-    const status = isMissingOpenPlayReservationTable(rawMessage) ? 503 : 500;
+    const status = (e as { code?: string })?.code === 'invalid_birthdate' ? 400 : isMissingOpenPlayReservationTable(rawMessage) ? 503 : 500;
     return NextResponse.json({ ok: false, error: formatOpenPlayReservationError(rawMessage) }, { status, headers: NO_STORE_HEADERS });
   }
 }

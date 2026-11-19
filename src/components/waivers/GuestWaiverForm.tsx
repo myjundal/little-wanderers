@@ -85,6 +85,10 @@ export default function GuestWaiverForm() {
     <h1>Guest family waiver</h1>
     <p>A parent or legal guardian can sign here. <strong>No account or membership is needed.</strong></p>
     <p>Enter your family’s details, review the waiver, and sign below. This does not subscribe you to marketing.</p>
+    {!complete && <section className={styles.card}>
+      <h2>Already reserved or paid for Open Play?</h2>
+      <p><Link href="/login?next=/landing/waiver">Open your family’s waiver</Link> using the same account as your reservation. Your waiver will stay with your booked family.</p>
+    </section>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {complete ? <section className={styles.success}>
       <h2>Waiver saved</h2><p>Your family waiver is on file. Tell the front desk your name or email when you arrive.</p>

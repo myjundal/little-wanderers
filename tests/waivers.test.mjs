@@ -31,9 +31,9 @@ test('explicit non-expiring records stay completed without renewal dates and sti
   assert.equal(waivers.getWaiverStatus([{ ...signed, waiver_expires_at: null }], later).status, 'expired');
 });
 
-function harness({ user = { id: 'guardian', email: 'parent@example.test' }, role = 'primary_caregiver', saveError = null, readError = null } = {}) {
+function harness({ user = { id: 'guardian', email: 'parent@example.test' }, role = 'primary_caregiver', saveError = null, readError = null, birthdate = '2023-01-01' } = {}) {
   const writes = [];
-  const children = [{ id: 'child', first_name: 'Child', last_name: 'Family', role: 'child', birthdate: '2023-01-01' }];
+  const children = [{ id: 'child', first_name: 'Child', last_name: 'Family', role: 'child', birthdate }];
   const admin = { from(table) {
     const q = { select() { return q; }, eq() { return q; }, order() { return q; }, limit() { return q; },
       insert(row) { writes.push(row); return Promise.resolve({ error: saveError }); },
@@ -47,6 +47,7 @@ function harness({ user = { id: 'guardian', email: 'parent@example.test' }, role
     '@/lib/supabase/admin': { createAdminSupabaseClient: () => admin },
     '@/lib/households': { getLatestHouseholdIdForUser: async () => 'family' },
     '@/lib/family-roles': { isFamilyManagerRole: value => ['primary_caregiver', 'caregiver'].includes(value) },
+    '@/lib/open-play-birthdate': { parseOpenPlayBirthdate: value => loadModule('src/lib/birthdate.ts').parseBirthdate(value ?? '') },
     '@/lib/waivers': waivers, '@/lib/waiver-content': content,
   });
   const body = { version: content.WAIVER_VERSION, family_revision: crypto.createHash('sha256').update(JSON.stringify(children)).digest('hex'), signature: 'Parent Family', is_guardian: true, electronic_consent: true, photo_consent: false, child_ids: ['child'], agreements: Object.fromEntries(content.WAIVER_AGREEMENTS.map(item => [item.id, true])) };
@@ -113,4 +114,11 @@ test('check-in allows an unpaid online reservation while preserving server waive
   const response = await api.POST({ json: async () => ({ person_id: 'person' }) });
   assert.equal(options.allowPending, true); assert.equal(called, true);
   assert.equal((await response.json()).code, 'already_checked_in');
+});
+
+test('account waiver refuses blank, impossible or future birthdays before saving a signed receipt', async () => {
+  for (const birthdate of [null, '2999-11-26', '2024-02-30']) {
+    const h = harness({ birthdate }); const response = await h.post();
+    assert.equal(response.status, 400); assert.match((await response.json()).error, /birthday/); assert.equal(h.writes.length, 0);
+  }
 });

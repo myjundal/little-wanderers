@@ -17,6 +17,7 @@ async function setup(t){
  create table founding_memberships(household_id uuid,child_ids jsonb,status text,start_date date,paid_through date,environment text);`);
  await db.query('insert into memberships values($1,$2,null,null,$3,null,null,false,$4)',[gift.id,gift.household_id,'production',JSON.stringify(gift.covered_person_ids)]);
  await db.query("insert into people values($1,$2,'Child','Family','2023-01-01','child',now()),($3,$2,'Parent','Family',null,'adult',now())",[ids.person,ids.household,ids.user]);
+ await db.exec('alter table people add column notes text');
  return {db,admin:localSquareAdmin(db)};
 }
 test('complimentary family books future Open Play for zero; another child remains chargeable',async t=>{
@@ -61,11 +62,11 @@ test('household gift covers children added after the lifetime grant, but not ano
 
 test('adding the first child to a precreated complimentary family is free in that same request',async t=>{
  const {admin,db}=await setup(t);const m=modules();
- await db.exec("create table households(id uuid,role text,email text,name text); alter table people alter column id set default gen_random_uuid(); alter table people add column notes text; alter table people add column gender text;");
+ await db.exec("create table households(id uuid,role text,email text,name text); alter table people alter column id set default gen_random_uuid(); alter table people add column if not exists notes text; alter table people add column gender text;");
  await db.query('delete from people where role=$1',['child']);
  await db.query('update memberships set covered_person_ids=$1',[JSON.stringify([ids.user])]);
  await db.query('insert into households(id) values($1)',[ids.household]);
- const saved=await m.load('src/lib/soft-opening-family.ts').saveSoftOpeningFamily(admin,ids.household,{id:ids.user,email:'parent@example.test'},{guardian_first_name:'Parent',guardian_last_name:'Family',children:[{new_id:ids.otherPerson,name:'First Child',age:2,age_unit:'years'}]});
+ const saved=await m.load('src/lib/soft-opening-family.ts').saveSoftOpeningFamily(admin,ids.household,{id:ids.user,email:'parent@example.test'},{guardian_first_name:'Parent',guardian_last_name:'Family',children:[{new_id:ids.otherPerson,name:'First Child',birthdate:'2024-01-01'}]});
  assert.equal(m.load('src/lib/soft-opening-pricing.ts').softOpeningAmount(saved.childIds,saved.memberships,'2036-11-14',saved.children),0);
  assert.deepEqual(Array.from(saved.memberships[0].child_ids),[ids.otherPerson]);
 });

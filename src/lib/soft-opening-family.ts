@@ -2,25 +2,28 @@ import { readComplimentaryMembership } from '@/lib/complimentary-membership';
 import { isUuid } from '@/lib/open-play-reservations';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrimaryGuardianProfile, ensureGuardianProfile } from '@/lib/family-profile';
-import { parseChildAge } from '@/lib/child-age';
+import { isEstimatedOpenPlayBirthdate, parseOpenPlayBirthdate } from '@/lib/open-play-birthdate';
 import { squareEnvironment } from '@/lib/square-client';
 export async function readSoftOpeningFamily(db: SupabaseClient, householdId: string) {
     const [guardian, children, founding, complimentary] = await Promise.all([
         getPrimaryGuardianProfile(db, householdId),
-        db.from('people').select('id,first_name,last_name,birthdate').eq('household_id', householdId).eq('role', 'child').order('created_at'),
+        db.from('people').select('id,first_name,last_name,birthdate,notes').eq('household_id', householdId).eq('role', 'child').order('created_at'),
         db.from('founding_memberships').select('child_ids,status,start_date,paid_through').eq('household_id', householdId).eq('environment', squareEnvironment()).in('status', ['pending', 'activating', 'scheduled', 'active', 'canceling', 'canceled']),
         readComplimentaryMembership(db, householdId),
     ]);
     if (children.error || founding.error)
         throw new Error('Unable to load family details.');
-    return { guardian, children: children.data ?? [], memberships: [...(founding.data ?? []), ...(complimentary ? [{ child_ids: (children.data ?? []).map(child => child.id), status: 'complimentary', start_date: null, paid_through: null }] : [])] };
+    // Notes stay private; clients receive only the birthday confirmation flag.
+    const roster = (children.data ?? []).map(({ notes, ...child }) => ({ ...child,
+        birthdate_needs_confirmation: isEstimatedOpenPlayBirthdate(notes) || !parseOpenPlayBirthdate(child.birthdate),
+    }));
+    return { guardian, children: roster, memberships: [...(founding.data ?? []), ...(complimentary ? [{ child_ids: roster.map(child => child.id), status: 'complimentary', start_date: null, paid_through: null }] : [])] };
 }
 export type SoftOpeningPersonInput = {
     id?: string;
     new_id?: string;
     name?: string;
-    age?: string | number;
-    age_unit?: string;
+    birthdate?: string;
 };
 export async function saveSoftOpeningFamily(db: SupabaseClient, householdId: string, user: {
     id: string;
@@ -49,16 +52,10 @@ export async function saveSoftOpeningFamily(db: SupabaseClient, householdId: str
         const name = (child.name ?? [existing?.first_name, existing?.last_name].filter(Boolean).join(' ')).trim().replace(/\s+/g, ' ');
         if (!name || name.length > 80)
             throw new Error('Please enter each child’s name.');
-        const age = parseChildAge(child.age, child.age_unit);
-        if (!existing?.birthdate && !age)
-            throw new Error('Please enter each child’s age in years or months.');
-        let birthdate = existing?.birthdate;
-        if (!birthdate && age) {
-            const d = new Date();
-            d.setUTCMonth(d.getUTCMonth() - age.months);
-            birthdate = d.toISOString().slice(0, 10);
-        }
-        return { existing, name, birthdate, age, newId: child.new_id };
+        const birthdate = parseOpenPlayBirthdate(child.birthdate ?? (existing?.birthdate_needs_confirmation ? null : existing?.birthdate));
+        if (!birthdate)
+            throw Object.assign(new Error('Please enter each child’s actual birthday (MM/DD/YYYY). Future dates and age estimates cannot be used for check-in.'), { code: 'invalid_birthdate' });
+        return { existing, name, birthdate, newId: child.new_id };
     });
     if (new Set(entries.filter(e => e.existing).map(e => e.existing!.id)).size !== entries.filter(e => e.existing).length)
         throw new Error('Choose each child only once.');
@@ -68,12 +65,19 @@ export async function saveSoftOpeningFamily(db: SupabaseClient, householdId: str
     await ensureGuardianProfile({ admin: db, householdId, userId: user.id, email: user.email, firstName, lastName });
     for (const e of entries) {
         const [first, ...rest] = e.name.split(' ');
-        const row = { first_name: first, last_name: rest.join(' ') || null, birthdate: e.birthdate, ...(!e.existing?.birthdate ? { notes: `Approximate age ${e.age!.label} entered for Open Play. Update birthday in My Info/People.` } : {}) };
+        // Retain original private notes, including the old estimate, in the audit.
+        let confirmationNotes: string | undefined;
+        if (e.existing?.birthdate_needs_confirmation) {
+            const previous = await db.from('people').select('notes').eq('id', e.existing.id).eq('household_id', householdId).single();
+            if (previous.error || !previous.data) throw new Error('Unable to confirm the saved birthday. Please try again.');
+            confirmationNotes = `Birthday confirmed by signed-in caregiver during Open Play booking: ${e.birthdate} on ${new Date().toISOString()}. Previous birthday: ${e.existing.birthdate ?? 'not provided'}. Previous notes: ${previous.data.notes ?? ''}`;
+        }
+        const row = { first_name: first, last_name: rest.join(' ') || null, birthdate: e.birthdate, ...(confirmationNotes ? { notes: confirmationNotes } : {}) };
         const query = e.existing ? db.from('people').update(row).eq('id', e.existing.id).eq('household_id', householdId).eq('role', 'child') : db.from('people').insert({ ...row, ...(e.newId ? { id: e.newId } : {}), household_id: householdId, role: 'child', gender: null });
         const result = await query.select('id').single();
         if (result.error || !result.data)
             throw new Error('Unable to save your family details. Please try again.');
         ids.push(result.data.id);
     }
-    return { childIds: ids, memberships: family.memberships.map(membership => membership.status === 'complimentary' ? { ...membership, child_ids: ids } : membership), guardianName: `${firstName} ${lastName}`, children: entries.map((e, index) => ({ id: ids[index], name: e.name, birthdate: e.birthdate, ageLabel: e.age?.label })) };
+    return { childIds: ids, memberships: family.memberships.map(membership => membership.status === 'complimentary' ? { ...membership, child_ids: ids } : membership), guardianName: `${firstName} ${lastName}`, children: entries.map((e, index) => ({ id: ids[index], name: e.name, birthdate: e.birthdate })) };
 }
