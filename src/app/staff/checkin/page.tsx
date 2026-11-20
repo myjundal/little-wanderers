@@ -426,6 +426,7 @@ export default function StaffCheckinPage() {
     : !paymentsReady ? 'Admission status could not be loaded. Refresh payment status before checking in.'
     : !peopleIds.length ? 'Select the children and adults who are visiting.' : '';
   const familyVisits = visits.filter(visit => visit.household_id === activeFamily);
+  const departedPayment = !!selected && familyVisits.length > 0 && familyVisits.every(admissionCheckedOut);
   const notCheckedIn = family?.people.filter(person => !familyVisits.some(visit => visit.person_id === person.id)) ?? [];
 
   function selectDeskDate(date: string) {
@@ -448,7 +449,7 @@ export default function StaffCheckinPage() {
     const due = todayVisits.filter(visit => visit.payment_status === 'due').reduce((total, visit) => total + visit.price_cents, 0);
     const settled = todayVisits.length > 0 && todayVisits.every(visit => ['paid','prepaid','walkin_paid','terminal_paid','covered','included','membership'].includes(visit.payment_status));
     const reservationPaid = booked && ['paid_online','paid_counter','paid_or_included'].includes(booked.admission_status ?? '');
-    const payment = review ? 'Check Square receipt' : pending ? 'Checking payment' : due > 0 ? `${money(due)} due`
+    const payment = review ? 'Check Square receipt' : pending ? 'Checking payment' : due > 0 ? (departed ? `Verify receipt · ${money(due)}` : `${money(due)} due`)
       : reservationPaid || (settled && todayVisits.some(visit=>['paid','prepaid','walkin_paid','terminal_paid'].includes(visit.payment_status))) ? 'Paid'
       : booked?.admission_status === 'included' || (settled && !booked) ? 'Included'
       : booked?.admission_status === 'review' ? 'Check payment' : booked?.admission_status === 'pending' ? 'Checking payment'
@@ -557,8 +558,8 @@ export default function StaffCheckinPage() {
         {groups.map(group => <option key={group.id} value={group.id}>{group.name} — {money(group.total)}</option>)}
       </select></label>
       {selected ? <><ul>{selected.visits.map(visit => <li key={visit.id}>{visit.name} — {money(visit.price_cents)}</li>)}</ul>
-        <p style={{ fontSize: 28 }}><strong>Total due: {money(selected.total)}</strong></p>
-        <p>Check in everyone visiting before payment. Membership, prepaid admission, and included adults are already applied.</p>
+        <p style={{ fontSize: 28 }}><strong>{departedPayment ? 'Unlinked admission' : 'Total due'}: {money(selected.total)}</strong></p>
+        {departedPayment ? <p role="status">This family has checked out. A payment made directly in Square may still need to be connected. <a href="#admission-help">Find and connect the existing receipt before collecting again.</a></p> : <p>Check in everyone visiting before payment. Membership, prepaid admission, and included adults are already applied.</p>}
         {!!peopleIds.length && <p>Check in the selected visitors first to include them in this payment.</p>}
         <button style={button} disabled={!enabled || entriesLocked || !!peopleIds.length} onClick={() => void takePayment()}>{busy ? 'Checking with Square…' : `Pay ${money(selected.total)} in Square`}</button>
         <p><a href="#admission-help">Already paid directly in Square? Connect the receipt below.</a></p>

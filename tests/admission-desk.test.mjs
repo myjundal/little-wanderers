@@ -417,7 +417,7 @@ test('Square return keeps occupancy available, refreshes its count and never rec
   }
 });
 
-test('checked-in families stay in the same results with checkout and retain their unpaid balance', async () => {
+test('checked-out families keep the recorded balance and direct staff to verify a Square receipt', async () => {
   const h = uiHarness(); await choose(h);
   h.button('Select everyone remaining').props.onClick(); await h.flush();
   await h.button('Check in 2').props.onClick(); await h.flush();
@@ -436,7 +436,11 @@ test('checked-in families stay in the same results with checkout and retain thei
   assert.ok(h.text().includes('Checked out'));
   assert.equal(familyCard().props['data-arrival-state'], 'checked-out');
   assert.equal(h.button('Check out family'), undefined);
-  assert.ok(h.text().includes('Total due: $16.00'));
+  assert.ok(h.text().includes('Unlinked admission: $16.00'));
+  assert.ok(h.text().includes('Verify receipt · $16.00'));
+  assert.ok(h.text().includes('Find and connect the existing receipt before collecting again.'));
+  assert.equal(h.visits().find(visit => visit.person_id === 'child').payment_status, 'due');
+  assert.equal(h.requests.filter(request => request.body?.checkin_ids && request.url === '/api/admin/admission/pos').length, 0);
   assert.equal(h.requests.filter(request => request.url === '/api/admin/admission/checkout').length, 1);
   assert.equal(h.requests.filter(request => request.url === '/api/checkin').length, 2);
   assert.ok(h.text().includes('Family checked out.'));
@@ -659,7 +663,7 @@ test('check out without time sends an explicit choice, prevents repeat checkout,
   assert.ok(h.visits().every(visit => visit.checked_out === true && visit.checked_out_at === null));
   assert.ok(h.text().includes('Departure time unknown'));
   assert.ok(h.text().includes('Excluded from stay statistics'));
-  assert.ok(h.text().includes('Total due: $16.00'));
+  assert.ok(h.text().includes('Unlinked admission: $16.00'));
   assert.equal(h.button('Check out family'), undefined);
   assert.equal(h.button('Check out without time'), undefined);
 });
@@ -684,4 +688,24 @@ test('slow background family refresh keeps the arrival board mounted', async () 
   assert.ok(!h.text().includes('Loading families'));
   h.releaseReads(); await refreshing; await h.flush();
   assert.ok(h.button('Choose family'));
+});
+
+
+test('unknown-time departed balances need receipt verification while paid departures remain Paid', async () => {
+  for (const status of ['due', 'paid']) {
+    const h = uiHarness({ initialVisits: people.map(person => ({ id: `visit-${person.id}`, person_id: person.id,
+      household_id: family.id, household_name: family.name, name: person.first_name,
+      checked_in_at: '2026-11-11T15:00:00Z', checked_out: true, checked_out_at: null,
+      price_cents: person.role === 'child' ? 1600 : 0, payment_status: person.role === 'child' ? status : 'covered' })) });
+    await h.flush();
+    await h.button('Open family / payment').props.onClick();
+    await h.flush();
+    const card = h.nodes().find(node => node.type === 'article' && node.props['data-family-id'] === family.id);
+    assert.equal(card.props['data-arrival-state'], 'checked-out');
+    assert.equal(h.text().includes('Verify receipt · $16.00'), status === 'due');
+    assert.equal(h.text().includes('Unlinked admission: $16.00'), status === 'due');
+    assert.equal(h.visits().find(visit => visit.person_id === 'child').payment_status, status);
+    assert.equal(h.navigations.length, 0);
+    if (status === 'paid') assert.ok(h.text().includes('Paid'));
+  }
 });
