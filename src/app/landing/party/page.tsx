@@ -13,7 +13,6 @@ import {
   getPartySlotFromStart,
   isPartyBookingDate,
   isPartyRangeAvailable,
-  isVisiblePartyCalendarSlot,
   PARTY_BOOKING_START_DATE,
   PARTY_BOOKING_START_LABEL,
   PARTY_BOOKING_SLOTS,
@@ -23,7 +22,7 @@ import {
 } from '@/lib/party-config';
 import { PARTY_FINAL_DETAILS, PARTY_TIME_POLICY, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
-import { startVisiblePolling } from '@/lib/visible-polling';
+import { startReturnRefresh } from '@/lib/return-refresh';
 
 type PartyBooking = {
   id: string;
@@ -146,6 +145,7 @@ export default function PartyPage() {
   const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
   const finalizingPaymentRef = useRef(false);
   const loadRevision = useRef(0);
+  const calendarRevision = useRef(0);
   const [checkout, setCheckout] = useState<{ id: string; status: string; payment_url: string | null; start_time: string; end_time: string } | null>(null);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
@@ -161,26 +161,39 @@ export default function PartyPage() {
   const startIso = useMemo(() => toPartyDateTimeIso(form.party_date, selectedSlotOption.startHour), [form.party_date, selectedSlotOption.startHour]);
   const endIso = useMemo(() => toPartyDateTimeIso(form.party_date, selectedSlotOption.endHour), [form.party_date, selectedSlotOption.endHour]);
 
-  const load = useCallback(async (background = false) => {
-    const revision = ++loadRevision.current;
-    if (!background) {
-      setLoading(true);
+  const refreshCalendar = useCallback(async () => {
+    const revision = ++calendarRevision.current;
+    try {
+      const response = await fetch('/api/party-bookings/calendar', { cache: 'no-store' });
+      const result = await response.json();
+      if (revision !== calendarRevision.current) return;
+      if (!response.ok || !result.ok) throw new Error('Calendar unavailable');
+      setBookedSlots(result.items ?? []);
+      setCalendarReady(true);
+      setLoadError(null);
+    } catch {
+      if (revision !== calendarRevision.current) return;
       setCalendarReady(false);
+      setLoadError('Could not refresh the party calendar. Please reload before choosing a time.');
     }
+  }, []);
+
+  const load = useCallback(async () => {
+    const revision = ++loadRevision.current;
+    setLoading(true);
+    setCalendarReady(false);
     const requestKey = Date.now();
     const supabase = createBrowserSupabaseClient();
     try {
       const authPromise = supabase.auth.getUser();
       // A public calendar read can start before account-specific requests finish.
-      const calendarPromise = fetch(`/api/party-bookings/calendar?ts=${requestKey}`, { cache: 'no-store' })
-        .then(async (res) => ({ res, json: await res.json() }))
-        .catch(() => null);
+      const calendarPromise = refreshCalendar();
       const profilePromise = authPromise.then(async ({ data }) => {
         if (!data.user?.id) return null;
         return fetch(`/api/family/profile?ts=${requestKey}`, { cache: 'no-store' })
           .then((res) => res.json()).catch(() => null);
       }).catch(() => null);
-      const [bookingsRes, authRes, calendar] = await Promise.all([
+      const [bookingsRes, authRes] = await Promise.all([
         fetch(`/api/party-bookings?ts=${requestKey}`, { cache: 'no-store' }),
         authPromise,
         calendarPromise,
@@ -194,15 +207,6 @@ export default function PartyPage() {
       } else {
         setItems((bookingsJson.items ?? []) as PartyBooking[]);
         setCheckout(bookingsJson.checkout ?? null);
-      }
-      if (calendar?.res.ok && calendar.json.ok) {
-        setBookedSlots(calendar.json.items ?? []);
-        setCalendarReady(true);
-        setLoadError(null);
-      }
-      else {
-        setCalendarReady(false);
-        setLoadError('Could not refresh the party calendar. Please reload before choosing a time.');
       }
       // Prefilling names must not hold up the calendar or booking form.
       void profilePromise.then((profileJson) => {
@@ -220,15 +224,16 @@ export default function PartyPage() {
     } finally {
       if (revision === loadRevision.current) setLoading(false);
     }
-  }, []);
+  }, [refreshCalendar]);
 
   useEffect(() => {
     const activeLoads = loadRevision;
+    const activeCalendars = calendarRevision;
     void load();
     // Returning from the dashboard must pick up cancellations and schedule edits.
-    const stop = startVisiblePolling(() => load(true), 60000, { immediate: false });
-    return () => { stop(); ++activeLoads.current; };
-  }, [load]);
+    const stop = startReturnRefresh(refreshCalendar);
+    return () => { stop(); ++activeLoads.current; ++activeCalendars.current; };
+  }, [load, refreshCalendar]);
 
   const checkDeposit = useCallback(async (id: string, cancel = false) => {
     if (finalizingPaymentRef.current) return;
@@ -366,11 +371,10 @@ export default function PartyPage() {
         const day = d.getUTCDay();
         if (day !== 5 && day !== 6 && day !== 0) continue;
         const dayStr = d.toISOString().slice(0, 10);
-        const blockedRanges = [...bookedSlots, ...items.filter(item => item.status !== 'cancelled')];
         for (const slot of getPartyBookingSlotOptionsForDate(dayStr)) {
           const start = toPartyDateTimeIso(dayStr, slot.startHour);
           const end = toPartyDateTimeIso(dayStr, slot.endHour);
-          if (!isPartyRangeAvailable(start, end, blockedRanges)) continue;
+          if (!isPartyRangeAvailable(start, end, bookedSlots)) continue;
           generated.push({
             id: `avail-${dayStr}-${slot.value}`,
             start,
@@ -382,29 +386,16 @@ export default function PartyPage() {
       }
       return generated;
     })(),
-    ...bookedSlots
-      .filter(
-        (slot) =>
-          !items.some(
-            (item) =>
-              item.status !== 'cancelled' &&
-              Math.abs(new Date(item.start_time).getTime() - new Date(slot.start_time).getTime()) < 60_000
-          )
-      )
-      .map((slot) => ({
-      id: `booked-${slot.id}`,
-      start: slot.start_time,
-      end: slot.end_time,
-      label: 'Reserved slot',
-      status: 'booked' as const,
-      })),
-    ...items.filter((item) => item.status !== 'cancelled' && isVisiblePartyCalendarSlot(item.start_time)).map((item) => ({
-      id: `mine-${item.id}`,
-      start: item.start_time,
-      end: item.end_time,
-      label: 'My party',
-      status: 'mine' as const,
-    })),
+    ...bookedSlots.map((slot): CalendarSlot => {
+      const mine = items.some(item => item.id === slot.id);
+      return {
+        id: `${mine ? 'mine' : 'booked'}-${slot.id}`,
+        start: slot.start_time,
+        end: slot.end_time,
+        label: mine ? 'My party' : 'Reserved slot',
+        status: mine ? 'mine' : 'booked',
+      };
+    }),
   ];
 
   const selectSlot = (slot: CalendarSlot) => {

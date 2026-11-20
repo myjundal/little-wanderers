@@ -15,7 +15,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 
 async function harness() {
   const hooks = [], effects = [], cleanups = [], requests = [], polls = [];
-  let cursor = 0, tree, items = original, failed = false, delayNext = false, release;
+  let cursor = 0, tree, items = original, failed = false, delayNext = false, release, authReads = 0;
   const memo = (read, deps) => {
     const index = cursor++;
     if (!hooks[index] || deps.some((dep, i) => !Object.is(dep, hooks[index].deps[i]))) hooks[index] = { value: read(), deps };
@@ -39,9 +39,9 @@ async function harness() {
     react, 'next/link': 'a', 'next/image': 'img',
     '@/components/calendar/AvailabilityCalendar': 'calendar', '@/components/ui/ActionToast': () => null,
     '@/lib/party-config': config, '@/lib/party-info': info,
-    '@/lib/supabase/browser': { createBrowserSupabaseClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'parent' } } }) } }) },
-    '@/lib/visible-polling': { startVisiblePolling: (refresh, interval, options) => {
-      const poll = { refresh, interval, options, stopped: false }; polls.push(poll);
+    '@/lib/supabase/browser': { createBrowserSupabaseClient: () => ({ auth: { getUser: async () => { authReads++; return { data: { user: { id: 'parent' } } }; } } }) },
+    '@/lib/return-refresh': { startReturnRefresh: (refresh) => {
+      const poll = { refresh, stopped: false }; polls.push(poll);
       return () => { poll.stopped = true; };
     } },
   }, { React: react, Date: Clock, window: { location: { search: '' } },
@@ -70,6 +70,7 @@ async function harness() {
   render(); await flush(); render();
   return {
     polls, requests, render, all,
+    get authReads() { return authReads; },
     get slots() { return all(node => node.type === 'calendar')[0].props.slots; },
     update(next) { items = next; }, fail(value) { failed = value; },
     delay() { delayNext = true; }, release() { release(); },
@@ -80,15 +81,18 @@ async function harness() {
 
 test('returning from the dashboard removes Nov 28 and Nov 29 afternoon cancellations and preserves only Sunday morning', async () => {
   const h = await harness();
-  assert.equal(h.polls[0].interval, 60000);
-  assert.equal(h.polls[0].options.immediate, false);
   assert.equal(h.slots.filter(slot => slot.status === 'mine').length, 3);
+  const initialRequests = h.requests.length;
+  const initialAuthReads = h.authReads;
   h.all(node => node.type === 'input' && node.props.type === 'date')[0].props.onChange({ target: { value: '2026-12-13' } });
   h.render();
   h.update(cancelled);
   const refreshing = h.polls[0].refresh(); h.render();
   assert.equal(h.all(node => node.type === 'input' && node.props.type === 'date').length, 1); // Background refresh keeps the form mounted.
   await refreshing; h.render();
+  assert.equal(h.requests.length, initialRequests + 1);
+  assert.equal(h.authReads, initialAuthReads);
+  assert.ok(h.requests.at(-1).startsWith('/api/party-bookings/calendar'));
   assert.equal(h.all(node => node.type === 'input' && node.props.type === 'date')[0].props.value, '2026-12-13');
   assert.deepEqual(Array.from(h.slots.filter(slot => slot.status === 'mine'), slot => slot.id), ['mine-sunday-am']);
   for (const [date, hour, available] of [['2026-11-28', 10, true], ['2026-11-28', 15, true], ['2026-11-29', 10, false], ['2026-11-29', 15, true]]) {
@@ -108,6 +112,34 @@ test('a delayed old response cannot restore a cancelled party or its original sc
   assert.equal(mine[0].start, config.toPartyDateTimeIso('2026-11-29', 11));
   assert.equal(mine[0].end, config.toPartyDateTimeIso('2026-11-29', 14));
   h.cleanup();
+});
+
+test('return events make no idle requests, coalesce duplicates, throttle rapid switches and remove listeners', async () => {
+  let now = 0, calls = 0, release;
+  const document = Object.assign(new EventTarget(), { hidden: false });
+  // Deliberately provide no timer APIs: this subscription must not poll.
+  const window = new EventTarget();
+  const { startReturnRefresh } = loadModule('src/lib/return-refresh.ts', {}, {
+    document, window, Date: class extends Date { static now() { return now; } },
+  });
+  const stop = startReturnRefresh(() => { calls++; return new Promise(resolve => { release = resolve; }); });
+  window.dispatchEvent(new Event('focus'));
+  assert.equal(calls, 0);
+  now = 3600000;
+  await flush(); assert.equal(calls, 0); // Leaving a page open does no work.
+  document.hidden = true; document.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(calls, 0);
+  document.hidden = false; document.dispatchEvent(new Event('visibilitychange'));
+  window.dispatchEvent(new Event('focus')); window.dispatchEvent(new Event('pageshow'));
+  assert.equal(calls, 1);
+  now += 60000; window.dispatchEvent(new Event('focus')); assert.equal(calls, 1);
+  release(); await flush();
+  window.dispatchEvent(new Event('focus')); assert.equal(calls, 2);
+  release(); await flush();
+  now += 100; window.dispatchEvent(new Event('focus')); assert.equal(calls, 2);
+  stop(); now += 60000;
+  window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(calls, 2);
 });
 
 test('an unsuccessful background refresh disables stale availability and recovers on the next refresh', async () => {
