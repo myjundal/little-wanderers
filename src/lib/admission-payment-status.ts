@@ -1,4 +1,4 @@
-export type AdmissionPayment = { payment_status: string; price_cents: number; infant_sibling_free?: boolean };
+export type AdmissionPayment = { payment_status: string; price_cents: number; infant_sibling_free?: boolean; checked_out?: boolean; checked_out_at?: string | null };
 export const admissionIsPaid = (status: string) => ['paid', 'prepaid', 'walkin_paid', 'terminal_paid'].includes(status);
 export const admissionIsIncluded = (status: string) => ['covered', 'included', 'membership'].includes(status);
 export function admissionPaymentLabel(visit: AdmissionPayment) {
@@ -8,7 +8,10 @@ export function admissionPaymentLabel(visit: AdmissionPayment) {
   if (visit.payment_status === 'prepaid') return 'Paid in advance';
   if (admissionIsPaid(visit.payment_status)) return 'Paid';
   if (admissionIsIncluded(visit.payment_status)) return 'Included';
-  if (visit.payment_status === 'due' && visit.price_cents > 0) return `$${(visit.price_cents / 100).toFixed(2)} due`;
+  if (visit.payment_status === 'due' && visit.price_cents > 0) {
+    const amount = `$${(visit.price_cents / 100).toFixed(2)}`;
+    return visit.checked_out || visit.checked_out_at ? `${amount} · Verify Square receipt` : `${amount} due`;
+  }
   return 'Payment status needs review';
 }
 export type ReservationAdmissionStatus = 'paid_online' | 'paid_counter' | 'paid_or_included' | 'included' | 'due' | 'pending' | 'review';
