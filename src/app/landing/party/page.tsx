@@ -23,6 +23,7 @@ import {
 } from '@/lib/party-config';
 import { PARTY_FINAL_DETAILS, PARTY_TIME_POLICY, PARTY_WHAT_WE_PROVIDE } from '@/lib/party-info';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { startVisiblePolling } from '@/lib/visible-polling';
 
 type PartyBooking = {
   id: string;
@@ -137,12 +138,14 @@ export default function PartyPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'warning' | 'error' } | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [bookedSlots, setBookedSlots] = useState<{ id: string; start_time: string; end_time: string }[]>([]);
   const [calendarReady, setCalendarReady] = useState(false);
   const [requestingCancelId, setRequestingCancelId] = useState<string | null>(null);
   const finalizingPaymentRef = useRef(false);
+  const loadRevision = useRef(0);
   const [checkout, setCheckout] = useState<{ id: string; status: string; payment_url: string | null; start_time: string; end_time: string } | null>(null);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(getDefaultPartyDate());
@@ -158,9 +161,12 @@ export default function PartyPage() {
   const startIso = useMemo(() => toPartyDateTimeIso(form.party_date, selectedSlotOption.startHour), [form.party_date, selectedSlotOption.startHour]);
   const endIso = useMemo(() => toPartyDateTimeIso(form.party_date, selectedSlotOption.endHour), [form.party_date, selectedSlotOption.endHour]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setCalendarReady(false);
+  const load = useCallback(async (background = false) => {
+    const revision = ++loadRevision.current;
+    if (!background) {
+      setLoading(true);
+      setCalendarReady(false);
+    }
     const requestKey = Date.now();
     const supabase = createBrowserSupabaseClient();
     try {
@@ -180,6 +186,7 @@ export default function PartyPage() {
         calendarPromise,
       ]);
       const bookingsJson = await bookingsRes.json();
+      if (revision !== loadRevision.current) return;
       setIsAuthenticated(Boolean(authRes.data.user?.id));
       if (!bookingsRes.ok || !bookingsJson.ok) {
         if (bookingsRes.status === 401) setItems([]);
@@ -191,24 +198,36 @@ export default function PartyPage() {
       if (calendar?.res.ok && calendar.json.ok) {
         setBookedSlots(calendar.json.items ?? []);
         setCalendarReady(true);
+        setLoadError(null);
       }
-      else setMessage('Could not refresh the party calendar. Please reload before choosing a time.');
+      else {
+        setCalendarReady(false);
+        setLoadError('Could not refresh the party calendar. Please reload before choosing a time.');
+      }
       // Prefilling names must not hold up the calendar or booking form.
       void profilePromise.then((profileJson) => {
+        if (revision !== loadRevision.current) return;
         if (profileJson?.ok && profileJson.guardian) {
           setGuardianFirstName((prev) => prev || profileJson.guardian.first_name || '');
           setGuardianLastName((prev) => prev || profileJson.guardian.last_name || '');
         }
       });
     } catch {
-      setMessage('Could not load party bookings. Please reload and try again.');
+      if (revision === loadRevision.current) {
+        setCalendarReady(false);
+        setLoadError('Could not load party bookings. Please reload and try again.');
+      }
     } finally {
-      setLoading(false);
+      if (revision === loadRevision.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
+    const activeLoads = loadRevision;
+    void load();
+    // Returning from the dashboard must pick up cancellations and schedule edits.
+    const stop = startVisiblePolling(() => load(true), 60000, { immediate: false });
+    return () => { stop(); ++activeLoads.current; };
   }, [load]);
 
   const checkDeposit = useCallback(async (id: string, cancel = false) => {
@@ -429,7 +448,7 @@ export default function PartyPage() {
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#4f3f82' }}>Birthday Parties at Little Wanderers</h1>
       <p style={{ color: '#6f628d', marginTop: 8 }}>Celebrate your little one with a calm, playful, space-inspired birthday experience designed for young children and their caregivers.</p>
 
-      {message && <p role="status" style={{ marginTop: 12 }}>{message}</p>}
+      {(loadError || message) && <p role="status" style={{ marginTop: 12 }}>{loadError || message}</p>}
       {checkout && ['creating', 'open', 'needs_review'].includes(checkout.status) && <section style={{ margin: '16px 0', padding: 20, border: '2px solid #bda1db', borderRadius: 16, background: '#fff' }} aria-label="Pending party deposit">
         <h2>Your party deposit</h2><p>{formatPartySummary(checkout.start_time, checkout.end_time)}</p>
         <p>{checkout.status === 'needs_review' ? 'Payment needs staff review. Please contact us before paying again.' : 'Complete your $150 deposit to confirm this party date. Checkout holds last 30 minutes.'}</p>
