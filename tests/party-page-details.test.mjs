@@ -40,6 +40,7 @@ test('party page opens this month and uses the real room photo and flexible thre
     '@/lib/party-config': config,
     '@/lib/party-info': partyInfo,
     '@/lib/supabase/browser': {},
+    '@/lib/return-refresh': {},
   }, { React, Date: clock(now) }).default;
   const html = renderToStaticMarkup(React.createElement(Page));
   assert.ok(html.includes('November 2026'));

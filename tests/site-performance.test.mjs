@@ -253,10 +253,11 @@ function partyLoadHarness({ failCalendar = false } = {}) {
     '@/components/calendar/AvailabilityCalendar': 'calendar', '@/components/ui/ActionToast': () => null,
     '@/lib/party-config': config, '@/lib/party-info': loadModule('src/lib/party-info.ts'),
     '@/lib/supabase/browser': { createBrowserSupabaseClient: () => ({ auth: { getUser: () => auth } }) },
+    '@/lib/return-refresh': {},
   }, { React: react, fetch: (url) => new Promise((resolve, reject) => { requests.push({ url, resolve, reject }); }) }).default;
   const render = () => { cursor = 0; return Page(); };
   const initial = render();
-  const loading = callbacks[0]();
+  const loading = callbacks[1]();
   return { state, requests, initial, render, loading, resolveAuth,
     finish: async () => {
       requests.find(r => r.url.includes('/calendar')).resolve(Response.json({ ok: !failCalendar, items: [] }, { status: failCalendar ? 503 : 200 }));
@@ -287,6 +288,6 @@ test('failed party availability finishes loading without offering unknown times'
   h.resolveAuth({ data: { user: null } });
   await h.finish();
   assert.equal(h.state[2], false);
-  assert.match(h.state[4], /Could not refresh the party calendar/);
+  assert.match(walk(h.render(), node => node.props?.role === 'status').props.children, /Could not refresh the party calendar/);
   assert.equal(walk(h.render(), node => node.type === 'calendar').props.slots.some(slot => slot.status === 'available'), false);
 });
