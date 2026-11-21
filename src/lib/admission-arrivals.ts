@@ -5,7 +5,7 @@ import type { ReservationAdmissionStatus } from '@/lib/admission-payment-status'
 export type DeskPerson = { id: string; first_name: string | null; last_name: string | null; role: string; birthdate: string | null };
 export type DeskReservation = { id: string; child_count: number; adult_count: number; child_ids?: string[] | null; status?: string; amount_cents?: number; admission_status?: ReservationAdmissionStatus; slot: { label: string; starts_at: string; ends_at: string } };
 export type DeskFamily = { id: string; name: string | null; email: string | null; phone: string | null; people: DeskPerson[]; waiver_status: string; reservations: DeskReservation[] };
-export type ArrivalCard = { family: DeskFamily; reservation?: DeskReservation; completed: boolean; checkedChildren: number; expectedChildren: number; completedAt: number };
+export type ArrivalCard = { family: DeskFamily; reservation?: DeskReservation; arrived: boolean; completed: boolean; checkedChildren: number; expectedChildren: number; arrivedAt: number };
 export type ArrivalGroup = { key: string; starts_at: string; ends_at: string; cards: ArrivalCard[]; ages: Array<{ age: number | null; count: number }>; children: number };
 
 export function childAgeOn(birthdate: string | null | undefined, date: string): number | null {
@@ -23,14 +23,15 @@ function reservedIds(reservation: DeskReservation) {
 }
 
 export function familyArrival(family: DeskFamily, visits: AdmissionVisit[], date: string, reservation?: DeskReservation): ArrivalCard {
-  const arrived = new Set(visits.filter(visit => visit.household_id === family.id && visit.checked_in_at && admissionDate(visit.checked_in_at) === date).map(visit => visit.person_id));
+  const familyVisits = visits.filter(visit => visit.household_id === family.id && visit.checked_in_at && admissionDate(visit.checked_in_at) === date);
+  const arrived = new Set(familyVisits.map(visit => visit.person_id));
+  const childVisits = familyVisits.filter(visit => family.people.some(person => person.id === visit.person_id && person.role === 'child'));
   const ids = reservation ? reservedIds(reservation) : family.people.filter(person => person.role === 'child').map(person => person.id);
   const checkedChildren = ids.length ? ids.filter(id => arrived.has(id) && family.people.some(person => person.id === id && person.role === 'child')).length
     : family.people.filter(person => person.role === 'child' && arrived.has(person.id)).length;
   const expectedChildren = reservation?.child_count ?? Math.max(family.people.filter(person => person.role === 'child').length, 1);
-  const completedIds = ids.length ? ids : family.people.filter(person => person.role === 'child').map(person => person.id);
-  const completedAt = Math.max(0, ...visits.filter(visit => visit.household_id === family.id && completedIds.includes(visit.person_id) && visit.checked_in_at && admissionDate(visit.checked_in_at) === date).map(visit => Date.parse(visit.checked_in_at!)));
-  return { family, reservation, checkedChildren, expectedChildren, completed: checkedChildren >= expectedChildren, completedAt };
+  const arrivedAt = childVisits.length ? Math.min(...childVisits.map(visit => Date.parse(visit.checked_in_at!))) : 0;
+  return { family, reservation, arrived: childVisits.length > 0, checkedChildren, expectedChildren, completed: checkedChildren >= expectedChildren, arrivedAt };
 }
 
 export function arrivalGroups(families: DeskFamily[], visits: AdmissionVisit[], date: string) {
@@ -55,12 +56,12 @@ export function arrivalGroups(families: DeskFamily[], visits: AdmissionVisit[], 
       groups.set(key, group);
     }
   }
-  // Keep waiting families stable. A newly completed family moves after earlier arrivals.
-  const completedLast = (a: ArrivalCard, b: ArrivalCard) => Number(a.completed) - Number(b.completed) || (a.completed ? a.completedAt - b.completedAt : 0);
+  // A family has arrived once any child checks in, even when siblings stay home.
+  const arrivedLast = (a: ArrivalCard, b: ArrivalCard) => Number(a.arrived) - Number(b.arrived) || (a.arrived ? a.arrivedAt - b.arrivedAt : 0);
   const windows = [...groups.values()].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
   for (const group of windows) {
-    group.cards.sort(completedLast);
+    group.cards.sort(arrivedLast);
     group.ages.sort((a, b) => (a.age ?? Infinity) - (b.age ?? Infinity));
   }
-  return { windows, walkins: walkins.sort(completedLast) };
+  return { windows, walkins: walkins.sort(arrivedLast) };
 }

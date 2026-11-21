@@ -455,7 +455,7 @@ export default function StaffCheckinPage() {
       : booked?.admission_status === 'review' ? 'Check payment' : booked?.admission_status === 'pending' ? 'Checking payment'
       : booked?.admission_status === 'due' ? 'Pay at desk' : '';
     const children = item.people.filter(person => person.role === 'child' && (!card.reservation?.child_ids?.length || card.reservation.child_ids.includes(person.id))).map(personName).join(', ');
-    return <article key={card.reservation?.id ?? item.id} data-family-id={item.id} data-arrival-state={departed ? 'checked-out' : card.completed ? 'checked-in' : card.checkedChildren ? 'partial' : 'waiting'} className={`${styles.familyRow} ${horizontal ? styles.familyCard : ''} ${departed ? styles.checkedOut : card.completed ? styles.checkedIn : styles.waiting} ${activeFamily === item.id ? styles.selectedFamily : ''}`}>
+    return <article key={card.reservation?.id ?? item.id} data-family-id={item.id} data-arrival-state={departed ? 'checked-out' : card.arrived ? 'checked-in' : 'waiting'} className={`${styles.familyRow} ${horizontal ? styles.familyCard : ''} ${departed ? styles.checkedOut : card.arrived ? styles.checkedIn : styles.waiting} ${activeFamily === item.id ? styles.selectedFamily : ''}`}>
       <div className={horizontal ? styles.cardArrivalTime : styles.arrivalTime}>{booked ? <><strong>{timeLabel(booked.slot.starts_at)}</strong>{query.trim() && <span>{new Date(booked.slot.starts_at).toLocaleDateString('en-US', {timeZone:'America/New_York',month:'short',day:'numeric'})}</span>}</> : <span>Walk-in</span>}</div>
       <div className={styles.familySummary}>
         <h3>{item.name || personName(item.people.find(person => person.role === 'adult') || item.people[0] || { id: '', first_name: 'Family', last_name: null, role: '', birthdate: null })}</h3>
@@ -508,9 +508,9 @@ export default function StaffCheckinPage() {
         {truncated && <p>Many matches found. Enter a more specific name or email to narrow the list.</p>}
         {!families.length && !deskError && <p>{query.trim() ? 'No families found. Try another name, email, or phone.' : 'No reservations or visitors on this date. Search by name to find a family.'}</p>}
         {query.trim() ? <div className={styles.familyList}>{families.map(item => renderFamilyCard(familyArrival(item, boardVisits, deskDate)))}</div> : <div ref={arrivalBoard} className={styles.arrivalBoard}>
-          {board.windows.length > 0 && <p className={styles.boardNote}>Times are Eastern. Swipe across each row. Families with all reserved children checked in turn green and move to the end.</p>}
+          {board.windows.length > 0 && <p className={styles.boardNote}>Times are Eastern. Swipe across each row. Families turn green and move to the end once any child checks in.</p>}
           {board.windows.map(group => <section key={group.key} className={styles.arrivalWindow} aria-label={`${timeLabel(group.starts_at)} arrival window`}>
-            <div className={styles.windowHeading}><h3>{timeLabel(group.starts_at)}–{timeLabel(group.ends_at)}</h3><span>{group.cards.length} {group.cards.length === 1 ? 'family' : 'families'} · {group.children} {group.children === 1 ? 'child' : 'children'} reserved · {group.cards.filter(card => !card.completed).length} waiting</span></div>
+            <div className={styles.windowHeading}><h3>{timeLabel(group.starts_at)}–{timeLabel(group.ends_at)}</h3><span>{group.cards.length} {group.cards.length === 1 ? 'family' : 'families'} · {group.children} {group.children === 1 ? 'child' : 'children'} reserved · {group.cards.filter(card => !card.arrived).length} waiting</span></div>
             <div className={styles.ageSummary} aria-label="Reserved children by age"><strong>Reserved ages</strong>{group.ages.map(bucket => <span key={bucket.age ?? 'unknown'}>{bucket.age === null ? 'Age missing' : `${bucket.age}yr old`}: {bucket.count}</span>)}</div>
             <div data-arrival-scroll className={styles.arrivalCards} tabIndex={0} role="region" aria-label={`${timeLabel(group.starts_at)} reserved families`}>{group.cards.map(card => renderFamilyCard(card, true))}</div>
           </section>)}

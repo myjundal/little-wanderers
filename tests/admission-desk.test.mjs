@@ -575,6 +575,17 @@ test('arrival cards show per-window ages and a newly checked-in family turns gre
  assert.ok(h.text().includes('0yr old: 1'));assert.ok(h.text().includes('0 waiting'));
 });
 
+test('one checked-in child marks a two-child reservation and search result as arrived without adding the absent sibling',async()=>{
+ const sibling={...people[0],id:'sibling',first_name:'Sibling'};
+ const reserved={...booking,child_ids:['child','sibling'],child_count:2,slot:{label:'Open Play',starts_at:'2026-11-11T15:00:00Z',ends_at:'2026-11-11T16:00:00Z'}};
+ const h=uiHarness({deskItems:[{...deskFamily,people:[...people,sibling],reservations:[reserved]}],initialVisits:[{id:'one-child',person_id:'child',household_id:family.id,name:'Sam',checked_in_at:'2026-11-11T15:05:00Z',payment_status:'covered',price_cents:0}]});
+ await h.flush();
+ const card=()=>h.nodes().find(n=>n.type==='article'&&n.props['data-family-id']===family.id);
+ assert.equal(card().props['data-arrival-state'],'checked-in');assert.ok(h.text().includes('1/2 children checked in'));assert.ok(h.text().includes('0 waiting'));
+ h.nodes().find(n=>n.props?.id==='family-search').props.onChange({target:{value:'Family'}});await h.flush();
+ assert.equal(card().props['data-arrival-state'],'checked-in');assert.equal(h.visits().length,1);assert.equal(h.requests.filter(r=>r.url==='/api/checkin').length,0);
+});
+
 
 test('date arrows and calendar load the chosen day and keep historical check-in actions disabled', async () => {
   const h = uiHarness({ initialVisits: [{ id: 'old-visit', person_id: 'child', household_id: family.id, household_name: family.name, name: 'Sam', checked_in_at: '2026-11-10T15:00:00Z', checked_out_at: '2026-11-10T16:00:00Z', price_cents: 0, payment_status: 'covered' }] });
