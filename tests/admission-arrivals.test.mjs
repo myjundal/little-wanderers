@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {loadSquareModules} from './helpers/admission-pos-harness.mjs';
-const {arrivalGroups,childAgeOn}=loadSquareModules().load('src/lib/admission-arrivals.ts');
+const {arrivalGroups,childAgeOn,familyArrival}=loadSquareModules().load('src/lib/admission-arrivals.ts');
 const day='2026-11-12',start='2026-11-12T14:00:00Z',end='2026-11-12T15:00:00Z';
 const person=(id,birthdate,role='child')=>({id,first_name:id,last_name:null,birthdate,role});
 const family=(id,children,options={})=>({id,name:id,email:null,phone:null,waiver_status:'completed',people:[...children,person(id+'-parent',null,'adult')],reservations:[{id:id+'-reservation',child_ids:children.map(x=>x.id),child_count:children.length,adult_count:1,slot:{starts_at:start,ends_at:end,label:'Open Play'}}],...options});
@@ -19,18 +19,30 @@ test('time windows sort chronologically and count only reserved children, includ
  assert.deepEqual(JSON.parse(JSON.stringify(windows[0].ages)),[{age:0,count:1},{age:1,count:1},{age:null,count:1}]);
  assert.equal(windows[1].children,1);
 });
-test('partial arrivals and adult-only arrivals stay in front; a newly completed family moves to the very end',()=>{
+test('one checked-in child marks a reserved family arrived and moves it behind waiting families',()=>{
  const first=family('new',[person('a','2025-01-01'),person('b','2023-01-01')]),older=family('already',[person('c','2024-01-01')]),waiting=family('waiting',[person('d','2024-01-01')]);
- const visits=[visit('already','c'),visit('new','a'),visit('new','new-parent')];
+ const visits=[visit('already','c'),visit('new','a','2026-11-12T14:15:00Z'),visit('new','new-parent')];
  let cards=arrivalGroups([first,older,waiting],visits,day).windows[0].cards;
- assert.deepEqual(Array.from(cards,c=>c.family.id),['new','waiting','already']);assert.equal(cards[0].checkedChildren,1);assert.equal(cards[0].completed,false);
+ assert.deepEqual(Array.from(cards,c=>c.family.id),['waiting','already','new']);assert.equal(cards.at(-1).checkedChildren,1);assert.equal(cards.at(-1).completed,false);assert.equal(cards.at(-1).arrived,true);
  cards=arrivalGroups([first,older,waiting],[...visits,visit('new','b','2026-11-12T14:30:00Z')],day).windows[0].cards;
  assert.deepEqual(Array.from(cards,c=>c.family.id),['waiting','already','new']);assert.equal(cards.at(-1).completed,true);
- const adultOnly=arrivalGroups([waiting],[visit('waiting','waiting-parent')],day).windows[0].cards[0];assert.equal(adultOnly.completed,false);
+ const adultOnly=arrivalGroups([waiting],[visit('waiting','waiting-parent')],day).windows[0].cards[0];assert.equal(adultOnly.arrived,false);assert.equal(adultOnly.completed,false);
 });
 test('another day or family does not complete a card; departed families remain completed and walk-ins remain visible',()=>{
  const f=family('reserved',[person('a','2023-01-01')]),walkin=family('walkin',[person('w','2024-01-01')],{reservations:[]});
  let board=arrivalGroups([f,walkin],[visit('reserved','a','2026-11-12T02:00:00Z'),visit('other','a')],day);
- assert.equal(board.windows[0].cards[0].completed,false);assert.equal(board.walkins.length,1);
- board=arrivalGroups([f],[{...visit('reserved','a'),checked_out_at:'2026-11-12T16:00:00Z'}],day);assert.equal(board.windows[0].cards[0].completed,true);
+ assert.equal(board.windows[0].cards[0].arrived,false);assert.equal(board.windows[0].cards[0].completed,false);assert.equal(board.walkins.length,1);
+ board=arrivalGroups([f],[{...visit('reserved','a'),checked_out_at:'2026-11-12T16:00:00Z'}],day);assert.equal(board.windows[0].cards[0].arrived,true);assert.equal(board.windows[0].cards[0].completed,true);
+});
+test('a family with several children is arrived in search and walk-ins when only one attends',()=>{
+ const f=family('siblings',[person('a','2023-01-01'),person('b','2024-01-01')],{reservations:[]});
+ const visits=[visit('siblings','a')];
+ const search=familyArrival(f,visits,day),walkin=arrivalGroups([f],visits,day).walkins[0];
+ for(const card of [search,walkin]){assert.equal(card.arrived,true);assert.equal(card.checkedChildren,1);assert.equal(card.expectedChildren,2);assert.equal(card.completed,false);}
+});
+test('a checked-in sibling identifies the family arrival without changing named reservation attendance',()=>{
+ const f=family('siblings',[person('a','2023-01-01'),person('b','2024-01-01')]);
+ f.reservations[0].child_ids=['a'];f.reservations[0].child_count=1;
+ const card=arrivalGroups([f],[visit('siblings','b')],day).windows[0].cards[0];
+ assert.equal(card.arrived,true);assert.equal(card.checkedChildren,0);assert.equal(card.completed,false);
 });
