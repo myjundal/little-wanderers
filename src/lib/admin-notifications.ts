@@ -71,6 +71,28 @@ function getWebsiteNotificationEmail() {
   return process.env.WEBSITE_NOTIFICATION_EMAIL?.trim() || DEFAULT_WEBSITE_NOTIFICATION_EMAIL;
 }
 
+export function giftCardPurchaseNotificationEmail(input: {
+  orderId: string; amountCents: number; paidAt: string;
+  buyerEmail?: string | null; receiptUrl?: string | null;
+}) {
+  return {
+    to: getWebsiteNotificationEmail(),
+    subject: `Gift card purchased: ${formatPrice(input.amountCents)}`,
+    html: renderOperationalNotification({
+      title: 'Little Wanderers gift card purchase completed',
+      rows: [
+        ['Gift card purchase', formatPrice(input.amountCents)],
+        ['Paid (Eastern)', new Date(input.paidAt).toLocaleString('en-US', { timeZone: 'America/New_York' })],
+        ['Buyer email', input.buyerEmail],
+        ['Status', 'Payment completed'],
+        ['Order ID', input.orderId],
+      ],
+      ctaHref: input.receiptUrl,
+      ctaLabel: 'View Square receipt',
+    }),
+  };
+}
+
 export function classChoiceNotificationEmail(input: {
   eventId: string; outcome: 'transferred' | 'refunded'; familyName: string | null;
   familyEmail: string; childName: string | null; classTitle: string;

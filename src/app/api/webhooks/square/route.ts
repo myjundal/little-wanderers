@@ -16,6 +16,7 @@ import { sendDueMembershipNotifications } from '@/lib/membership-notifications';
 import { verifyAdmissionPos, type PosSale } from '@/lib/square-admission-pos';
 import { squareRequest, type SquareOrder } from '@/lib/square-client';
 import { reconcileClassCheckout, type ClassCheckout } from '@/lib/class-checkout';
+import { notifyGiftCardOrder } from '@/lib/gift-card-notifications';
 
 const SUPA = () =>
   createClient(
@@ -46,6 +47,20 @@ export async function POST(req: NextRequest) {
   }
 
   const eventType = payload?.type ?? '';
+  // Gift-card activity events also cover purchases made on Square's hosted
+  // eGift page. Use the same order key as payment events to send only once.
+  if (eventType === 'gift_card.activity.created') {
+    const activity = payload?.data?.object?.gift_card_activity;
+    const details = activity?.type === 'ACTIVATE' ? activity.activate_activity_details : activity?.type === 'LOAD' ? activity.load_activity_details : null;
+    if (details?.order_id) {
+      try {
+        const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(details.order_id)}`);
+        if (order.id !== details.order_id) throw new Error('Gift card order mismatch');
+        await notifyGiftCardOrder(supa, order);
+      } catch { return new Response('Gift card notification pending', { status: 503 }); }
+    }
+    return new Response('Gift card activity received', { status: 200 });
+  }
   const partyInvoiceId = payload?.data?.object?.invoice?.id;
   if (typeof partyInvoiceId === 'string' && eventType.startsWith('invoice.')) {
     const party = await supa.from('party_bookings').select('*').eq('square_environment', squareEnvironment()).eq('square_invoice_id', partyInvoiceId).maybeSingle();
@@ -64,6 +79,8 @@ export async function POST(req: NextRequest) {
       let reference = typeof posPayment.note === 'string' ? posPayment.note : '';
       if (!reference.startsWith('LW admission ')) {
         const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(posPayment.order_id)}`);
+        if (order.id !== posPayment.order_id) throw new Error('Payment order mismatch');
+        await notifyGiftCardOrder(supa, order);
         reference = order.line_items?.find(item => item.note?.startsWith('LW admission '))?.note ?? '';
       }
       const match = /^LW admission ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(reference);
