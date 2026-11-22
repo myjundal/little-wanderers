@@ -192,6 +192,21 @@ function uiHarness({ waiver = 'completed', failPerson = '', failRefresh = false,
 
 async function choose(h) { await h.flush(); await h.button('Choose family').props.onClick(); await h.flush(); }
 
+test('child names include completed ages and follow the selected visit date across a birthday', async () => {
+  const h = uiHarness({ deskItems: [{ ...deskFamily, people: [
+    { ...people[0], birthdate: '2024-11-11' },
+    { ...people[0], id: 'baby', first_name: 'Baby', birthdate: '2026-05-01' },
+    { ...people[0], id: 'unknown', first_name: 'Unknown', birthdate: null },
+    { ...people[1], birthdate: '1990-01-01' },
+  ] }] });
+  await h.flush();
+  assert.ok(h.text().includes('Sam Family(2), Baby Family(0), Unknown Family, Alex Family'));
+  h.button('Previous day').props.onClick(); await h.flush();
+  assert.ok(h.text().includes('Sam Family(1), Baby Family(0), Unknown Family, Alex Family'));
+  h.button('Next day').props.onClick(); await h.flush();
+  assert.ok(h.text().includes('Sam Family(2), Baby Family(0), Unknown Family, Alex Family'));
+});
+
 test('family search cards show reservation date and time in Eastern time and identify families without bookings', async () => {
   const h = uiHarness({ deskItems: [
     { ...deskFamily, name: 'Alondra Gardner', reservations: [{ ...booking, slot: { label: 'Open Play', starts_at: '2026-11-12T00:30:00Z', ends_at: '2026-11-12T02:00:00Z' } }] },
