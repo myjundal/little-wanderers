@@ -70,7 +70,7 @@ export type SquareOrder = {
   net_amount_due_money?: SquareMoney;
   tenders?: Array<{ payment_id?: string; customer_id?: string }>;
   created_at?: string;
-  line_items?: Array<{note?:string}>;
+  line_items?: Array<{ note?: string; item_type?: string; total_money?: SquareMoney }>;
   fulfillments?: Array<{ digital_details?: { recipient?: { customer_id?: string; email_address?: string; phone_number?: string } }; pickup_details?: { recipient?: { customer_id?: string; email_address?: string; phone_number?: string } } }>;
 };
 export type SquareInvoice = {
