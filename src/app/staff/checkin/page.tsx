@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StaffToolNav from '@/components/staff/StaffToolNav';
 import StaffDashboard from '@/components/staff/StaffDashboard';
-import { arrivalGroups, familyArrival, type ArrivalCard, type DeskPerson, type DeskFamily } from '@/lib/admission-arrivals';
+import { arrivalGroups, familyArrival, childAgeOn, type ArrivalCard, type DeskPerson, type DeskFamily } from '@/lib/admission-arrivals';
 import { admissionDate, admissionTime, stayLabel, stayMinutes } from '@/lib/admission-stays';
 import { admissionPaymentLabel, reservationAdmissionLabel } from '@/lib/admission-payment-status';
 import AdmissionStayStatistics from '@/components/staff/AdmissionStayStatistics';
@@ -12,7 +12,11 @@ import AdmissionHelp from '@/components/staff/AdmissionHelp';
 import { admissionCheckedOut, admissionGroups, squarePosCallback, readPendingAdmissionPos, PENDING_ADMISSION_POS_KEY, type AdmissionVisit, type PendingAdmissionPos } from '@/lib/admission-pos-ui';
 import styles from './checkin.module.css';
 
-const personName = (person: DeskPerson) => [person.first_name, person.last_name].filter(Boolean).join(' ') || 'Unnamed visitor';
+const personName = (person: DeskPerson) => {
+  const name = [person.first_name, person.last_name].filter(Boolean).join(' ') || 'Unnamed visitor';
+  const age = person.role === 'child' ? childAgeOn(person.birthdate, admissionDate(new Date().toISOString())) : null;
+  return age === null ? name : `${name}(${age})`;
+};
 const timeLabel = (value: string) => new Date(value).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
 const dateLabel = (value: string) => new Date(value).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
