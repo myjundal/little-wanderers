@@ -10,7 +10,7 @@ export async function GET() {
   const context = await requireRevenueContext();
   if (!context.ok) return context.response;
   try { return Response.json({ ok: true, status: await giftCardWebhookStatus() }, { headers }); }
-  catch { return Response.json({ ok: false, error: 'Unable to verify Square gift card webhook configuration.' }, { status: 503, headers }); }
+  catch (error) { return Response.json({ ok: false, error: 'Unable to verify Square gift card webhook configuration.', reason: error instanceof Error ? error.message : 'Verification pending.' }, { status: 503, headers }); }
 }
 
 /** Personal owner only: preserve the existing subscription/key and optionally
@@ -27,5 +27,5 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, result: await notifyGiftCardPayment(context.admin, input.payment_id), charges_executed: false }, { headers });
     }
     return Response.json({ ok: false, error: 'Invalid action.' }, { status: 400, headers });
-  } catch { return Response.json({ ok: false, error: 'Gift card notification setup or delivery pending.' }, { status: 503, headers }); }
+  } catch (error) { return Response.json({ ok: false, error: 'Gift card notification setup or delivery pending.', reason: error instanceof Error ? error.message : 'Verification pending.' }, { status: 503, headers }); }
 }

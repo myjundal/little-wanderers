@@ -87,8 +87,8 @@ export async function notifyGiftCardPayment(admin: SupabaseClient, paymentId: st
 type Subscription = { id: string; enabled?: boolean; notification_url?: string; event_types?: string[]; signature_key?: string };
 const events = ['payment.created', 'payment.updated', 'gift_card.activity.created'];
 export async function giftCardWebhookStatus() {
-  const expected = process.env.SQUARE_WEBHOOK_URL?.trim();
-  if (squareConfig().environment !== 'production' || !expected) throw new Error('Production Square webhook URL is required.');
+  const expected = process.env.SQUARE_WEBHOOK_URL?.trim() || new URL('/api/webhooks/square', process.env.NEXT_PUBLIC_SITE_URL || 'https://www.thelittlewanderers.com').href;
+  if (squareConfig().environment !== 'production') throw new Error('Production Square access is required.');
   let cursor: string | undefined;
   const subscriptions: Subscription[] = [];
   do {
