@@ -10,7 +10,8 @@ const fields = {
   bookings: ['open_play_reservations', 'id,slot_id,household_id,child_ids,child_count,status,payment_status,payment_environment,amount_cents,square_order_id'],
   slots: ['open_play_reservation_slots', 'id,starts_at'],
   visits: ['checkins', 'id,person_id,household_id,checked_in_at,price_cents,payment_status,square_environment,square_order_id'],
-  parties: ['party_bookings', 'id,birthday_child_name,start_time,status,price_quote_cents,square_environment,square_order_id,deposit_paid_cents,balance_paid_cents,payment_review_required,attendance_finalized_at'],
+  parties: ['party_bookings', 'id,household_id,birthday_child_name,start_time,status,price_quote_cents,square_environment,square_order_id,deposit_paid_cents,balance_paid_cents,payment_review_required,attendance_finalized_at'],
+  partyReceiptLinks: ['membership_events', 'id,household_id,created_by_user_id,created_by_role,notes'],
   series: ['class_series_sales', 'id,class_ids,child_ids,status,environment,amount_cents,square_order_id'],
   classes: ['classes', 'id,title,start_time,status'],
   registrations: ['class_registrations', 'id,class_id,person_id,status,attendance_status'],
@@ -35,6 +36,7 @@ export async function loadRevenueSources(admin: SupabaseClient) {
         let query = admin.from(table).select(select).order(cursorField).limit(500);
         if (key === 'classCheckouts') query = query.eq('kind', 'class').eq('environment', 'production').in('status', ['completed', 'needs_review']);
         if (key === 'classCancellationEvents') query = query.eq('action', 'class_minimum_cancellation');
+        if (key === 'partyReceiptLinks') query = query.eq('action', 'party_receipt_link');
         if (key === 'classMappings') query = query.eq('kind', 'class').eq('environment', 'production');
         if (cursor) query = query.gt(cursorField, cursor);
         const { data, error } = await query;

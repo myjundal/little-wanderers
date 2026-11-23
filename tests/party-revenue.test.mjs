@@ -110,3 +110,106 @@ test('collection day does not require unrelated balance receipts from a differen
   const result = calculateRevenue(services, new Map([['invoice', deposit]]), '2026-11-01');
   assert.equal(result.complete, true); assert.equal(result.party_received_today_cents, 10000);
 });
+
+const family = 'party-family';
+const receiptLink = (extra = {}, event = {}) => ({ id: 'owner-audit', household_id: family,
+  created_by_user_id: '5054a175-2ba6-4023-a289-a9b0635ccc5f', created_by_role: 'owner',
+  notes: JSON.stringify({ version: 1, environment: 'production', party_booking_id: id, order_id: 'balance', amount_cents: 35000, ...extra }), ...event });
+const separatePayments = () => [
+  receipt({ service_total_cents: 30000, items: [{ label: 'Party invoice', category: 'party', amount_cents: 30000 }], payments: [payment(15000)] }),
+  receipt({ order_id: 'balance', service_total_cents: 35000, items: [{ label: 'Private party', category: 'party', amount_cents: 35000 }], payments: [payment(35000, `${date}T18:00:00Z`)] }),
+];
+function linkedSources() { return { ...sources(party({ household_id: family, price_quote_cents: 50000 })), partyReceiptLinks: [receiptLink()] }; }
+
+test('owner link preserves original deposit, recognizes separate POS balance once, and closes the full quote', () => {
+  const data = linkedSources(), receipts = separatePayments();
+  data.partyReceiptLinks.push(receiptLink());
+  const services = allocatePartyRevenue(allocatePartyRevenue(revenueServices(data), receipts, data), receipts, data);
+  assert.equal(services.length, 1); assert.equal(services[0].charges.length, 2);
+  const result = report(data, receipts);
+  assert.equal(result.complete, true); assert.equal(result.party_cents, 50000); assert.equal(result.party_due_cents, 0);
+  assert.equal(result.prepaid_cents, 15000); assert.equal(result.same_day_cents, 35000);
+  assert.equal(result.unallocated_party_cents, 0); assert.equal(result.party_receipts.length, 1);
+  assert.equal(result.rows[0].payment_details.length, 2);
+});
+
+test('saved POS balance follows rescheduling and later refunds without inventing debt or new payments', () => {
+  const data = linkedSources(), receipts = separatePayments();
+  data.parties[0].start_time = '2026-11-21T20:00:00Z';
+  receipts[1].payments[0].refunded_cents = 5000;
+  assert.equal(report(data, receipts).net_cents, 0);
+  const moved = report(data, receipts, '2026-11-21');
+  assert.equal(moved.party_cents, 45000); assert.equal(moved.prepaid_cents, 45000);
+  assert.equal(moved.party_due_cents, 0); assert.equal(moved.refunded_cents, 5000);
+});
+
+test('a saved link alone cannot establish that a POS balance was paid', () => {
+  const data = linkedSources();
+  const result = report(data, [separatePayments()[0]]);
+  assert.equal(result.party_cents, 0); assert.equal(result.complete, false);
+  assert(result.rows[0].issues.some(issue => /receipt verification is unavailable/.test(issue)));
+});
+
+test('other staff and other owners cannot supply party revenue links', () => {
+  for (const event of [{ created_by_role: 'staff' }, { created_by_user_id: 'another-owner' }]) {
+    const data = linkedSources(); data.partyReceiptLinks = [receiptLink({}, event)];
+    const result = report(data, separatePayments());
+    assert.equal(result.party_cents, 15000); assert.equal(result.unallocated_party_cents, 35000);
+  }
+});
+
+test('conflicting saved links, sandbox links and cross-family links fail closed', () => {
+  for (const extra of [{ environment: 'sandbox' }, { amount_cents: -1 }, { party_booking_id: 'not-a-uuid' }]) {
+    const data = linkedSources(); data.partyReceiptLinks = [receiptLink(extra)];
+    assert.throws(() => report(data, separatePayments()), /Saved party receipt/);
+  }
+  const cross = linkedSources(); cross.partyReceiptLinks = [receiptLink({}, { household_id: 'another-family' })];
+  assert.throws(() => report(cross, separatePayments()), /family or environment/);
+  const conflict = linkedSources(); conflict.partyReceiptLinks.push(receiptLink({ amount_cents: 10000 }));
+  assert.throws(() => report(conflict, separatePayments()), /links disagree/);
+});
+
+test('saved allocations cannot silently absorb changed receipts or contradictory provider booking IDs', () => {
+  const mismatch = separatePayments(); mismatch[1].items[0].amount_cents = 34000;
+  const result = report(linkedSources(), mismatch);
+  assert.equal(result.party_cents, 0); assert.equal(result.complete, false);
+  assert(result.rows[0].issues.some(issue => /owner-reviewed allocation/.test(issue)));
+  const conflict = separatePayments(); conflict[1].party_booking_id = 'another-booking';
+  assert.equal(report(linkedSources(), conflict).party_cents, 0);
+});
+
+test('explicit owner link keeps mixed café lines outside the party allocation', () => {
+  const receipts = separatePayments();
+  receipts[1].service_total_cents += 500;
+  receipts[1].items.push({ label: 'Latte', category: 'cafe', amount_cents: 500 });
+  receipts[1].payments[0].amount_cents += 500;
+  const result = report(linkedSources(), receipts);
+  assert.equal(result.party_cents, 50000); assert.equal(result.net_cents, 50500);
+  assert.equal(result.categories.find(row => row.category === 'cafe').net_cents, 500);
+});
+
+test('a saved balance is fetched on its service day even when absent from payment-day listing and history', async () => {
+  const filters = [];
+  const admin = { from(table) { let action; const q = { select() { return q; }, order() { return q; }, limit() { return q; },
+    eq(k, v) { if (k === 'action') { action = v; filters.push(v); } return q; }, in() { return q; },
+    then(resolve) { resolve({ data: table === 'party_bookings' ? linkedSources().parties : table === 'membership_events' && action === 'party_receipt_link' ? [receiptLink()] : [], error: null }); } }; return q; } };
+  const calls = [];
+  const loader = loadSquareModules({ env: { SQUARE_ENVIRONMENT: 'production' }, fetch: async url => {
+    calls.push(new URL(url).pathname);
+    if (url.endsWith('/v2/orders/search')) return Response.json({ orders: [] });
+    if (new URL(url).pathname === '/v2/payments') return Response.json({ payments: [] });
+    const order = new URL(url).pathname.split('/').at(-1);
+    if (url.includes('/v2/orders/')) {
+      const amount = order === 'invoice' ? 30000 : 35000;
+      return Response.json({ order: { id: order, location_id: 'test-location', total_money: money(amount), line_items: [{ name: 'Private party', total_money: money(amount) }], tenders: [{ payment_id: 'paid-' + order }] } });
+    }
+    if (url.includes('/v2/payments/')) {
+      const invoice = url.endsWith('paid-invoice');
+      return Response.json({ payment: { id: invoice ? 'paid-invoice' : 'paid-balance', order_id: invoice ? 'invoice' : 'balance', location_id: 'test-location', status: 'COMPLETED', amount_money: money(invoice ? 15000 : 35000), created_at: '2026-11-01T16:00:00Z' } });
+    }
+    throw Error('Unexpected provider request');
+  } }).load('src/lib/service-day-revenue-data.ts');
+  const result = await loader.getServiceDayRevenue(admin, date);
+  assert.equal(result.party_cents, 50000); assert.equal(result.party_due_cents, 0); assert.equal(result.complete, true);
+  assert(calls.includes('/v2/orders/balance')); assert(filters.includes('party_receipt_link'));
+});

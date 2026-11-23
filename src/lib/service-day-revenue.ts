@@ -13,7 +13,7 @@ const included = (status: string) => ['covered', 'included', 'membership'].inclu
 
 export type RevenueBooking = { id: string; slot_id: string; household_id: string; child_ids: string[]; child_count: number; status: string; payment_status: string; payment_environment: string | null; amount_cents: number; square_order_id: string | null };
 export type RevenueVisit = { id: string; person_id: string; household_id: string | null; checked_in_at: string; price_cents: number; payment_status: string; square_environment: string | null; square_order_id: string | null };
-export type RevenueParty = { id: string; birthday_child_name?: string | null; start_time: string; status: string; price_quote_cents: number | null; square_environment: string | null; square_order_id: string | null; deposit_paid_cents: number | null; balance_paid_cents: number | null; payment_review_required: boolean | null; attendance_finalized_at: string | null };
+export type RevenueParty = { id: string; household_id?: string; birthday_child_name?: string | null; start_time: string; status: string; price_quote_cents: number | null; square_environment: string | null; square_order_id: string | null; deposit_paid_cents: number | null; balance_paid_cents: number | null; payment_review_required: boolean | null; attendance_finalized_at: string | null };
 export type RevenueSeries = { id: string; class_ids: string[]; child_ids: string[]; status: string; environment: string; amount_cents: number; square_order_id: string | null };
 export type RevenueClass = { id: string; title: string; start_time: string; status: string };
 export type RevenueClassProgram = { id: string; title: string; class_ids: string[] };
@@ -26,6 +26,7 @@ export type RevenueSources = {
   series: RevenueSeries[]; classes: RevenueClass[]; registrations: RevenueRegistration[];
   classCheckouts?: RevenueClassCheckout[];
   classCancellationEvents?: { id: string; notes: string }[];
+  partyReceiptLinks?: { id: string; household_id: string; created_by_user_id: string; created_by_role: string; notes: string }[];
   classPrograms?: RevenueClassProgram[]; classMappings?: RevenueClassMapping[];
   people?: { id: string; role: string | null }[];
 };
