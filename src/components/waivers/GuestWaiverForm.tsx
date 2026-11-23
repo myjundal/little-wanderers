@@ -128,7 +128,6 @@ export default function GuestWaiverForm() {
         {error && <p role="alert" className={styles.error}>{error}</p>}
       </section>
     </form>}
-    {!complete && <><p>Already have an account? <Link href="/login?next=/landing/waiver">Sign in to your family waiver</Link>.</p>
-      <p><button type="button" disabled={busy || !ready} onClick={() => void resetGuest()}>Start a new waiver · clear this screen</button></p></>}
+    {!complete && <p>Already have an account? <Link href="/login?next=/landing/waiver">Sign in to your family waiver</Link>.</p>}
   </main>;
 }
