@@ -15,3 +15,15 @@
 .main button { cursor: pointer; }
 .main button:disabled { cursor: wait; opacity: 0.6; }
 @media (max-width: 500px) { .main { padding: 18px; } .card { padding: 18px; } }
+
+.hint { color: #64586f; font-size: .9rem; line-height: 1.5; }
+.draftOptions { padding: 4px 0; }
+.draftOptions .check { margin-bottom: 8px; }
+.fieldError { display: block; margin: 4px 0 16px; color: #8c2330; font-weight: 600; font-size: .9rem; line-height: 1.5; }
+.name[aria-invalid="true"] { border: 2px solid #a42d3b; margin-bottom: 4px; }
+.legalText summary { cursor: pointer; color: #573982; font-weight: 700; padding: 12px 0; text-decoration: underline; text-underline-offset: 3px; }
+.legalText h3 { font-size: 1rem; }
+.main input, .legalText, .main section { scroll-margin-top: 32px; }
+.main :focus-visible { outline: 3px solid #65469c; outline-offset: 4px; }
+.error a { color: inherit; text-decoration: underline; }
+.error li { margin: 10px 0; }
