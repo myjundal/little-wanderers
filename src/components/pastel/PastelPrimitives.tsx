@@ -40,7 +40,6 @@ export function PastelHeader({ isAuthenticated = false, dashboardHref, accessLab
     </Link>
     <nav className={styles.navOnlyFaq} aria-label="Main navigation">
       <Link href="/pricing">Pricing</Link><Link href="/classes">Classes</Link><Link href="/party">Parties</Link><Link href="/visit-us">Visit us</Link>
-      <Link href="/waiver">Sign waiver</Link>
       <PublicMoreMenu />
     </nav>
     <div className={styles.headerActions}>

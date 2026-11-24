@@ -65,14 +65,13 @@ test('all upcoming visits remain visible alongside the booking form, with indepe
   let i=0; const requests=[];
   const Component = loadModule('src/components/soft-opening/SoftOpeningReservation.tsx', {
     react:{...React,useEffect(){},useCallback:fn=>fn,useState:initial=>{const index=i++;return [state[index]??initial,next=>{state[index]=typeof next==='function'?next(state[index]):next;}];}},
-    'next/link':'a','next/image':'img','./soft-opening.module.css':{},'@/lib/open-play-reservations':policy,
+    '@/components/waivers/BookingWaiverNextStep': () => null, 'next/link':'a','next/image':'img','./soft-opening.module.css':{},'@/lib/open-play-reservations':policy,
     '@/lib/birthdate':loadModule('src/lib/birthdate.ts'),'@/lib/open-play-birthdate':{parseOpenPlayBirthdate:value=>loadModule('src/lib/birthdate.ts').parseBirthdate(value ?? '')},'@/lib/soft-opening-pricing':{softOpeningAmount:()=>1600},
   }, {React,Intl,Date:FixedDate,fetch:async(url,options)=>{requests.push([url,options]);return Response.json(options?{ok:true}:data);}}).default;
   const tree=Component({previewData:data,publicBooking:true}); const html=renderToStaticMarkup(tree);
   assert.ok(html.indexOf('Thursday, November 19') < html.indexOf('Friday, November 20'));
   const links=nodes(tree).filter(n=>n.type==='a').map(n=>n.props.href);
-  assert.ok(links.includes('/landing/waiver?reservation=first'));
-  assert.ok(links.includes('/landing/waiver?reservation=second'));
+  assert.ok(!links.some(href => href.startsWith('/landing/waiver'))); // Preview never prompts for a real signature.
   assert.ok(!links.includes('/landing/waiver?reservation=cancelled'));
   assert.equal(nodes(tree).filter(n=>n.type==='form').length,1);
   assert.match(html,/You can reserve multiple visits/);

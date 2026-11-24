@@ -81,8 +81,8 @@ function componentHarness({ paymentStatus, estimatedBirthday = false } = {}) {
   const state=[],effects=[],requests=[],navigations=[];let i=0,mounted=false;
   const Component=loadModule('src/components/soft-opening/SoftOpeningReservation.tsx',{
     react:{...React,useState(initial){const n=i++;if(!(n in state))state[n]=initial;return[state[n],value=>{state[n]=typeof value==='function'?value(state[n]):value;}];},useCallback:fn=>fn,useEffect:fn=>{if(!mounted)effects.push(fn);}},
-    'next/link':'a','next/image':()=>null,'./soft-opening.module.css':{},'@/lib/birthdate':formatting,'@/lib/open-play-birthdate':birthdates,'@/lib/open-play-reservations':policy,'@/lib/soft-opening-pricing':{softOpeningAmount:()=>1600},
-  },{React,Intl,crypto:{randomUUID:()=>ids.otherPerson},window:{location:{search:paymentStatus?'?payment=returned&reservation=reserved':'',assign:value=>navigations.push(value)}},fetch:async(url,options)=>{requests.push({url,options});if(url.includes('/payment'))return Response.json({ok:true,reservation:{payment_status:paymentStatus}});return Response.json(data);}}).default;
+    '@/components/waivers/BookingWaiverNextStep': () => null, 'next/link':'a','next/image':()=>null,'./soft-opening.module.css':{},'@/lib/birthdate':formatting,'@/lib/open-play-birthdate':birthdates,'@/lib/open-play-reservations':policy,'@/lib/soft-opening-pricing':{softOpeningAmount:()=>1600},
+  },{React,Intl,crypto:{randomUUID:()=>ids.otherPerson},window:{history:{replaceState(){}},scrollTo(){},location:{href:'https://example.test/landing/open-play',search:paymentStatus?'?payment=returned&reservation=reserved':'',assign:value=>navigations.push(value)}},fetch:async(url,options)=>{requests.push({url,options});if(url.includes('/payment'))return Response.json({ok:true,reservation:{payment_status:paymentStatus}});return Response.json(data);}}).default;
   return {state,requests,navigations,render(){i=0;const tree=Component({publicBooking:true});mounted=true;effects.splice(0).forEach(fn=>fn());return tree;}};
 }
 
@@ -107,6 +107,6 @@ test('Square return continues only after verified payment; pending confirmation 
   for(const paymentStatus of ['due','paid','covered']) {
     const h=componentHarness({paymentStatus});h.render();await new Promise(setImmediate);
     if(paymentStatus==='due'){assert.equal(h.navigations.length,0);assert.match(h.state[2],/payment confirmation is still pending/);assert.match(h.state[2],/Do not pay again/);}
-    else assert.deepEqual(h.navigations,['/landing/waiver?reservation=reserved']);
+    else { assert.deepEqual(h.navigations,[]); assert.equal(h.state[13],'reserved'); assert.match(h.state[3],/Your visit is reserved/); const tree=h.render(); assert.ok(nodes(tree).some(n=>n.props.promptKey==='reserved'&&n.props.returnTo==='/landing/open-play')); }
   }
 });
