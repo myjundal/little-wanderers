@@ -21,7 +21,7 @@ export function validateGuestWaiver(draft: WaiverDraft): FormIssue[] {
     if (!child.last_name.trim()) add(`child-${index}-last`, `Enter Child ${index + 1}’s last name.`);
     if (!parseBirthdate(child.birthdate)) add(`child-${index}-birthday`, `Enter Child ${index + 1}’s birthday as MM/DD/YY or MM/DD/YYYY, with a date that is not in the future.`);
   });
-  if (!draft.agreed) add('all-agreements', 'Please review and agree to all statements below.');
+  if (!draft.agreed) add('all-agreements', 'Please review all statements and check the agreement box.');
   if (!['yes', 'no'].includes(draft.photo)) add('photo', 'Choose Yes or No for photo permission. Either choice is welcome.');
   if (draft.signature.trim().length < 2) add('signature', 'Type your full legal name to sign.');
   return issues;
