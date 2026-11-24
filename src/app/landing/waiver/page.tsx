@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { WAIVER_VERSION, WAIVER_TITLE, WAIVER_PARAGRAPHS, WAIVER_AGREEMENTS, WAIVER_SIGNATURE_TEXT } from '@/lib/waiver-content';
+import WaiverAgreements from '@/components/waivers/WaiverAgreements';
+import { WAIVER_VERSION, WAIVER_TITLE, WAIVER_PARAGRAPHS, WAIVER_SIGNATURE_TEXT, getWaiverConsent } from '@/lib/waiver-content';
 import type { WaiverStatusDetails } from '@/lib/waivers';
 import styles from './waiver.module.css';
 
@@ -15,9 +16,7 @@ export default function WaiverPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [renew, setRenew] = useState(false);
-  const [guardian, setGuardian] = useState(false);
-  const [electronic, setElectronic] = useState(false);
-  const [agreements, setAgreements] = useState<Record<string, boolean>>({});
+  const [agreed, setAgreed] = useState(false);
   const [photo, setPhoto] = useState('');
   const [signature, setSignature] = useState('');
 
@@ -35,15 +34,16 @@ export default function WaiverPage() {
   async function sign(event: React.FormEvent) {
     event.preventDefault();
     if (!data || saving) return;
+    if (!agreed || !['yes', 'no'].includes(photo)) { setError('Please agree to all statements and choose Yes or No for photo permission.'); return; }
     setSaving(true); setError('');
     try {
       const response = await fetch('/api/waivers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: WAIVER_VERSION, family_revision: data.family_revision, child_ids: data.children.map(child => child.id), signature, is_guardian: guardian, electronic_consent: electronic, photo_consent: photo === 'yes', agreements }),
+        body: JSON.stringify({ version: WAIVER_VERSION, family_revision: data.family_revision, child_ids: data.children.map(child => child.id), signature, ...getWaiverConsent(agreed), photo_consent: photo === 'yes' }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      setData({ ...data, waiver: result.waiver }); setRenew(false);
+      setData({ ...data, waiver: result.waiver }); setRenew(false); setAgreed(false); setPhoto(''); setSignature('');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save your waiver.'); }
     finally { setSaving(false); }
@@ -72,11 +72,7 @@ export default function WaiverPage() {
           <h2>{WAIVER_TITLE}</h2>
           {WAIVER_PARAGRAPHS.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
         </section>
-        <section className={styles.card}>
-          <h2>Required agreements</h2>
-          <label className={styles.check}><input type="checkbox" required checked={guardian} onChange={event => setGuardian(event.target.checked)} />I am the parent or legal guardian of all children listed above.</label>
-          {WAIVER_AGREEMENTS.map(item => <label key={item.id} className={styles.check}><input type="checkbox" required checked={agreements[item.id] ?? false} onChange={event => setAgreements({ ...agreements, [item.id]: event.target.checked })} />{item.text}</label>)}
-        </section>
+        <WaiverAgreements checked={agreed} onChange={setAgreed} />
         <fieldset className={styles.card}>
           <legend>Photo/marketing preference</legend>
           <p>May Little Wanderers use photos or videos of your child for social media, website, or marketing purposes?</p>
@@ -88,7 +84,6 @@ export default function WaiverPage() {
           <p>{WAIVER_SIGNATURE_TEXT}</p>
           <label htmlFor="signature">Your full legal name</label>
           <input className={styles.name} id="signature" autoComplete="name" required minLength={2} maxLength={150} value={signature} onChange={event => setSignature(event.target.value)} />
-          <label className={styles.check}><input type="checkbox" required checked={electronic} onChange={event => setElectronic(event.target.checked)} />I agree to use this typed name as my electronic signature for this waiver.</label>
           <p>The date and time of signing will be recorded when you submit.</p>
           <button className={styles.submit} disabled={saving} type="submit">{saving ? 'Saving signed waiver…' : 'Sign and submit waiver'}</button>
           {error && <p role="alert" className={styles.error}>{error}</p>}

@@ -16,8 +16,9 @@ function harness({ failFirst = false, storage = new Map() } = {}) {
   const birthdate = loadModule('src/lib/birthdate.ts');
   const content = loadModule('src/lib/waiver-content.ts');
   const formHelper = loadModule('src/lib/guest-waiver-form.ts', { zod: { z }, '@/lib/birthdate': birthdate, '@/lib/waiver-content': content });
+  const Agreements = loadModule('src/components/waivers/WaiverAgreements.tsx', { '@/lib/waiver-content': content, '@/app/landing/waiver/waiver.module.css': {} }, { React }).default;
   const Form = loadModule('src/components/waivers/GuestWaiverForm.tsx', {
-    react, 'next/link': 'a', '@/lib/birthdate': birthdate, '@/lib/guest-waiver-form': formHelper,
+    react, 'next/link': 'a', './WaiverAgreements': Agreements, '@/lib/birthdate': birthdate, '@/lib/guest-waiver-form': formHelper,
     '@/lib/waiver-content': loadModule('src/lib/waiver-content.ts'), '@/app/landing/waiver/waiver.module.css': {},
   }, { React: react, crypto,
     window: { location: { search: '?party=2af2cb2b-db0b-4d28-bfa2-fb23d50c00bc' }, scrollTo() {}, sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } },
@@ -28,8 +29,8 @@ function harness({ failFirst = false, storage = new Map() } = {}) {
     },
   }).default;
   const render = () => { cursor = 0; tree = Form(); effects.splice(0).forEach(fn => fn()); };
-  const all = () => { const found = []; const visit = node => { if (Array.isArray(node)) return node.forEach(visit); if (!React.isValidElement(node)) return; found.push(node); visit(node.props.children); }; visit(tree); return found; };
-  const text = node => Array.isArray(node) ? node.map(text).join('') : React.isValidElement(node) ? text(node.props.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : '';
+  const all = () => { const found = []; const visit = node => { if (Array.isArray(node)) return node.forEach(visit); if (!React.isValidElement(node)) return; found.push(node); if (typeof node.type === 'function') visit(node.type(node.props)); else visit(node.props.children); }; visit(tree); return found; };
+  const text = node => Array.isArray(node) ? node.map(text).join('') : React.isValidElement(node) ? text(typeof node.type === 'function' ? node.type(node.props) : node.props.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : '';
   const field = (label, value) => {
     const node = all().find(node => node.type === 'label' && text(node).startsWith(label));
     const input = React.Children.toArray(node.props.children).find(child => child.type === 'input');
@@ -108,7 +109,7 @@ test('personal device opt-in restores only family details and never restores sig
   const saved = JSON.parse(h.storage.get(key));
   assert.equal(saved.family.email, 'parent@example.test');
   assert.equal(saved.family.children[0].first_name, 'Sam');
-  for (const sensitive of ['signature', 'agreements', 'guardian', 'electronic', 'photo']) assert.equal(sensitive in saved.family, false);
+  for (const sensitive of ['signature', 'agreed', 'agreements', 'guardian', 'electronic', 'photo']) assert.equal(sensitive in saved.family, false);
   const restored = harness({ storage: h.storage });
   await new Promise(resolve => setImmediate(resolve)); restored.render();
   assert.match(restored.text(), /unfinished family details were restored/);
@@ -124,4 +125,27 @@ test('successful signing removes the saved family draft', async () => {
   assert.ok([...h.storage.keys()].some(key => key.startsWith('lw_guest_waiver_draft:')));
   await h.submit(); h.render();
   assert.ok(![...h.storage.keys()].some(key => key.startsWith('lw_guest_waiver_draft:')));
+});
+
+
+test('one explicit agreement covers every required statement and can be revoked without changing photo preference', async () => {
+  const h = harness(); h.fill();
+  const consent = () => h.all().filter(node => node.type === 'input' && node.props.type === 'checkbox' && node.props.required);
+  assert.equal(consent().length, 1);
+  assert.match(h.text(), /I agree to all statements below/);
+  assert.match(h.text(), /I am the parent or legal guardian/);
+  assert.match(h.text(), /typed name as my electronic signature/);
+  consent()[0].props.onChange({ target: { checked: false } }); h.render();
+  await h.submit(); h.render();
+  assert.equal(h.requests.length, 0);
+  assert.ok(h.all().some(node => node.type === 'a' && node.props.href === '#all-agreements'));
+  assert.ok(h.all().some(node => node.type === 'input' && node.props.type === 'radio' && node.props.checked));
+  consent()[0].props.onChange({ target: { checked: true } }); h.render();
+  await h.submit();
+  const body = h.requests[0].body;
+  assert.equal(body.is_guardian, true);
+  assert.equal(body.electronic_consent, true);
+  assert.equal(body.photo_consent, false);
+  assert.equal(Object.keys(body.agreements).length, 7);
+  assert.ok(Object.values(body.agreements).every(value => value === true));
 });

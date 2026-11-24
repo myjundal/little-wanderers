@@ -22,3 +22,9 @@ export const WAIVER_AGREEMENTS = [
   { id: 'validity', text: 'I understand this waiver is valid for 90 days from today.' },
 ] as const;
 export const WAIVER_SIGNATURE_TEXT = 'By typing my full legal name below, I confirm that I have read, understood, and agreed to this waiver.';
+
+/** Expand one explicit acknowledgement into the existing per-statement evidence. */
+export function getWaiverConsent(agreed: boolean) {
+  return { is_guardian: agreed, electronic_consent: agreed,
+    agreements: Object.fromEntries(WAIVER_AGREEMENTS.map(item => [item.id, agreed])) };
+}

@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { parseBirthdate } from '@/lib/birthdate';
-import { WAIVER_AGREEMENTS, WAIVER_VERSION } from '@/lib/waiver-content';
+import { WAIVER_VERSION } from '@/lib/waiver-content';
 
 export type ChildDraft = { first_name: string; last_name: string; birthdate: string };
 export type FamilyDraft = { email: string; firstName: string; lastName: string; phone: string; children: ChildDraft[] };
-export type WaiverDraft = FamilyDraft & { guardian: boolean; electronic: boolean; agreements: Record<string, boolean>; photo: string; signature: string };
+export type WaiverDraft = FamilyDraft & { agreed: boolean; photo: string; signature: string };
 export type FormIssue = { id: string; message: string };
 
 export function validateGuestWaiver(draft: WaiverDraft): FormIssue[] {
@@ -21,14 +21,9 @@ export function validateGuestWaiver(draft: WaiverDraft): FormIssue[] {
     if (!child.last_name.trim()) add(`child-${index}-last`, `Enter Child ${index + 1}’s last name.`);
     if (!parseBirthdate(child.birthdate)) add(`child-${index}-birthday`, `Enter Child ${index + 1}’s birthday as MM/DD/YY or MM/DD/YYYY, with a date that is not in the future.`);
   });
-  if (!draft.guardian) add('guardian', 'Confirm that you are the parent or legal guardian.');
-  const agreementNames: Record<string, string> = { risk: 'play risks', supervision: 'supervision', illness: 'illness policy', materials: 'sensory materials', cameras: 'security cameras', release: 'release of liability', validity: '90-day validity' };
-  WAIVER_AGREEMENTS.forEach(item => {
-    if (!draft.agreements[item.id]) add(`agreement-${item.id}`, `Review and check the ${agreementNames[item.id]} agreement.`);
-  });
+  if (!draft.agreed) add('all-agreements', 'Please review and agree to all statements below.');
   if (!['yes', 'no'].includes(draft.photo)) add('photo', 'Choose Yes or No for photo permission. Either choice is welcome.');
   if (draft.signature.trim().length < 2) add('signature', 'Type your full legal name to sign.');
-  if (!draft.electronic) add('electronic', 'Confirm that your typed name is your electronic signature.');
   return issues;
 }
 
