@@ -78,7 +78,9 @@ export default function SoftOpeningReservation({ previewData, publicBooking = fa
     const [closingConfirmed, setClosingConfirmed] = useState(false);
     const preview = Boolean(previewData);
     const [confirmedReservation, setConfirmedReservation] = useState('');
-    const completeBooking = useCallback((id: string) => {
+    const [verifiedPayments, setVerifiedPayments] = useState<Record<string, string>>({});
+    const completeBooking = useCallback((id: string, paymentStatus?: string) => {
+        if (paymentStatus) setVerifiedPayments(current => ({ ...current, [id]: paymentStatus }));
         setConfirmedReservation(id);
         setSuccess('Your visit is reserved. We look forward to welcoming your family!');
         setBusy(false);
@@ -94,10 +96,21 @@ export default function SoftOpeningReservation({ previewData, publicBooking = fa
     } let active = true; fetch(reservationsUrl, { cache: 'no-store' }).then(r => r.json()).then(json => { if (active)
         populate(json); }).catch(() => { if (active)
         setError('Unable to load reservations. Please refresh to try again.'); }); return () => { active = false; }; }, [previewData, reservationsUrl, populate]);
-    useEffect(() => { if (preview)
-        return; const params = new URLSearchParams(window.location.search); const id = params.get('reservation'); if (params.get('payment') !== 'returned' || !id)
-        return; setBusy(true); fetch(`/api/open-play-reservations/${encodeURIComponent(id)}/payment`, { cache: 'no-store' }).then(r => r.json()).then(json => { if (!json.ok)
-        throw new Error(json.error); if (!['paid', 'covered'].includes(json.reservation?.payment_status)) throw new Error('Your visit is reserved, but payment confirmation is still pending. Do not pay again. Refresh this page to check again or ask the front desk for help.'); completeBooking(id); }).catch(e => { setError(e.message); setBusy(false); }); }, [preview, completeBooking]);
+    const confirmPayment = useCallback(async (id: string) => {
+        const response = await fetch(`/api/open-play-reservations/${encodeURIComponent(id)}/payment`, { cache: 'no-store' });
+        const json = await response.json();
+        if (!response.ok || !json.ok) throw new Error(json.error || 'Unable to confirm payment. Please try again.');
+        if (!['paid', 'covered'].includes(json.reservation?.payment_status)) throw new Error('Your visit is reserved, but payment confirmation is still pending. Do not pay again. Refresh this page to check again or ask the front desk for help.');
+        completeBooking(id, json.reservation.payment_status);
+    }, [completeBooking]);
+    useEffect(() => {
+        if (preview) return;
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('reservation');
+        if (params.get('payment') !== 'returned' || !id) return;
+        setBusy(true);
+        void confirmPayment(id).catch(e => { setError(e.message); setBusy(false); });
+    }, [preview, confirmPayment]);
     const slots = (data?.slots ?? []).filter(s => dayKey(s.starts_at) >= earliestDate && dayKey(s.starts_at) === date);
     const privateDay = data?.private_party_days?.find(day => day.date === date);
     const lastArrival = slots.filter(slot => !slot.is_closed && (!privateDay || Date.parse(slot.ends_at) <= Date.parse(privateDay.starts_at))).at(-1);
@@ -108,7 +121,7 @@ export default function SoftOpeningReservation({ previewData, publicBooking = fa
     const pricingChildren = participating.map((child, i) => ({ id: child.id ?? `new-${i}`, birthdate: parseOpenPlayBirthdate(child.birthdate) }));
     const birthdaysReady = pricingChildren.every(child => Boolean(child.birthdate));
     const amount = softOpeningAmount(pricingChildren.map(child => child.id), data?.family?.memberships ?? [], date, pricingChildren);
-    const reservations = (data?.reservations ?? []).filter(r => r.status === 'reserved' && r.slot && new Date(r.slot.ends_at) > new Date()).sort((a, b) => Date.parse(a.slot!.starts_at) - Date.parse(b.slot!.starts_at));
+    const reservations = (data?.reservations ?? []).map(row => verifiedPayments[row.id] ? { ...row, payment_status: verifiedPayments[row.id] } : row).filter(r => r.status === 'reserved' && r.slot && new Date(r.slot.ends_at) > new Date()).sort((a, b) => Date.parse(a.slot!.starts_at) - Date.parse(b.slot!.starts_at));
     function patchChild(index: number, patch: Partial<Child>) { setChildren(cs => cs.map((c, i) => i === index ? { ...c, ...patch } : c)); }
     async function pay(id: string) { setBusy(true); setError(''); try {
         const response = await fetch(`/api/open-play-reservations/${id}/payment`, { method: 'POST' });
@@ -116,7 +129,7 @@ export default function SoftOpeningReservation({ previewData, publicBooking = fa
         if (!response.ok || !json.ok)
             throw new Error(json.error);
         if (json.url) window.location.assign(json.url);
-        else completeBooking(id);
+        else await confirmPayment(id);
     }
     catch (e) {
         setError(e instanceof Error ? e.message : 'Please try again.');
