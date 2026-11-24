@@ -11,7 +11,15 @@ type Data = { children: Child[]; family_revision: string; can_sign: boolean; wai
 
 export default function WaiverPage() {
   const [reservation, setReservation] = useState(false);
-  useEffect(() => { setReservation(Boolean(new URLSearchParams(window.location.search).get('reservation'))); }, []);
+  const [returnTo, setReturnTo] = useState('/landing');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasReservation = Boolean(params.get('reservation'));
+    setReservation(hasReservation);
+    const destination = params.get('return_to');
+    setReturnTo(destination && ['/landing/open-play', '/landing/soft-opening', '/landing/classschedule'].includes(destination)
+      ? destination : hasReservation ? '/landing/open-play' : '/landing');
+  }, []);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -50,16 +58,16 @@ export default function WaiverPage() {
   }
 
   return <main className={styles.main}>
-    <Link href="/landing">← My dashboard</Link>
-    {reservation && <p>Your visit is reserved. Complete your waiver before arrival. <Link href="/landing/soft-opening">View my reservation</Link></p>}
+    <Link href={returnTo}>{returnTo === '/landing' ? '← My dashboard' : '← My reservations'}</Link>
+    {reservation && <p>Your visit is reserved. {data?.waiver.status === 'completed' ? 'Your family waiver is complete.' : 'Complete your waiver before arrival.'} <Link href={returnTo}>View my reservation</Link></p>}
     <h1>Family waiver</h1>
     <p>A parent or legal guardian must complete this waiver for all participating children before entering Little Wanderers. Valid for 90 days, unless replaced by an updated waiver.</p>
     {error && <div role="alert" className={styles.error}>{error} {!data && <button onClick={() => void load()}>Try again</button>}</div>}
     {!data && !error && <p role="status">Loading your family…</p>}
     {data?.waiver.status === 'completed' && !renew ? <section className={styles.success}>
       <h2>Waiver completed</h2>
-      <p>Your family waiver is saved. Expires {new Date(data.waiver.expiresAt!).toLocaleString('en-US', { timeZone: 'America/New_York' })} (Eastern).</p>
-      <p><Link href="/landing">Back to my dashboard</Link></p>
+      <p>Your family waiver is saved. {data.waiver.expiresAt ? <>Expires {new Date(data.waiver.expiresAt).toLocaleString('en-US', { timeZone: 'America/New_York' })} (Eastern).</> : 'You’re ready for check-in.'}</p>
+      <p><Link href={returnTo}>{returnTo === '/landing' ? 'Back to my dashboard' : 'Back to my reservations'} →</Link></p>
       {data.can_sign && <button onClick={() => setRenew(true)}>Review and renew waiver</button>}
     </section> : data && <>
       <section className={styles.card}>

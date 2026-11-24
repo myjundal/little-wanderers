@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import BookingWaiverNextStep from '@/components/waivers/BookingWaiverNextStep';
 import { CLASS_TERM_END_AT, CLASS_HOLIDAY_DATE } from '@/lib/class-config';
 import styles from './class-registration.module.css';
 import type { ClassDateQuote } from '@/lib/class-date-pricing';
@@ -162,6 +163,10 @@ export default function ClassDateBooking({ classes, registrations, selectedChild
       {locked ? <><p><strong>Checkout total: {money(checkout!.total_price_cents)}</strong></p>{checkout?.payment_url && checkout.status === 'open' && <a href={checkout.payment_url} className={styles.payButton}>Continue to secure payment</a>}<p>Your place is confirmed after payment. Complete this checkout or close it before choosing different dates.</p>{checkout?.status !== 'needs_review' && <div className={styles.cartActions}><button type="button" disabled={busy} onClick={() => { void request({ mode: 'finalize', checkout_id: checkout!.id }).then(applyCheckout).catch(reason => setError(reason.message)); }}>Check payment</button><button type="button" disabled={busy} onClick={() => void close()}>Close unpaid checkout & change dates</button></div>}</>
         : <>{Boolean(currentQuote?.discount_cents) && <p>20% ballet sibling discount: −{money(currentQuote!.discount_cents)}</p>}<div className={styles.cartTotal}><span>{selectedSessions.length} date(s)</span><strong>Total {money(total)}</strong></div><button type="button" className={styles.payButton} disabled={busy || restoring || !selectedSessions.length} onClick={() => void start()}>{busy ? 'Preparing secure payment…' : restoring ? 'Checking pending payment…' : authenticated ? `Pay now to confirm your seat · ${money(total)}` : 'Sign in / create account to pay'}</button><button type="button" disabled={busy || restoring || !selectedSessions.length} onClick={() => void start(true)}>Pay at counter</button><p>Only completed payment confirms your place. If your plans change, no payment is required. You may pay at the studio before class, subject to availability; choosing pay on arrival does not reserve a seat.</p></>}
       {notice && <p role="status" className={styles.confirmation}>{notice}</p>}
+      {authenticated && (checkout?.status === 'completed' || registrations.some(reg => ['scheduled', 'attended'].includes(reg.status) && sessions.some(row => row.id === reg.class?.id && Date.parse(row.end_time) > Date.now()))) && <BookingWaiverNextStep key={checkout?.status === 'completed' ? checkout.id : 'existing'}
+        returnTo="/landing/classschedule"
+        promptKey={checkout?.status === 'completed' ? checkout.id : undefined}
+      />}
       {error && <p role="alert" className={styles.error}>{error}</p>}
     </div>
   </section>;

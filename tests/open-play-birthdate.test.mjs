@@ -75,15 +75,17 @@ test('new children use the submitted actual birthday, and existing confirmed bir
 });
 
 function nodes(tree) { const all=[];function walk(n){if(Array.isArray(n))return n.forEach(walk);if(!React.isValidElement(n))return;all.push(n);walk(n.props.children);}walk(tree);return all; }
-function componentHarness({ paymentStatus, estimatedBirthday = false } = {}) {
+function componentHarness({ paymentStatus, estimatedBirthday = false, staleReservation = false, lateReservationRead = false, alreadyPaid = false } = {}) {
   const slot={id:'slot',starts_at:'2026-11-20T14:00Z',ends_at:'2026-11-20T15:00Z',remaining_children:6,capacity_children:6,is_closed:false,is_full:false};
   const data={ok:true,slots:[slot],reservations:[],family:{guardian:{first_name:'Parent',last_name:'Family'},memberships:[],children:[{id:ids.person,first_name:'Taylor',last_name:'Example',birthdate:'2024-02-14',birthdate_needs_confirmation:estimatedBirthday}]}};
+  if(staleReservation) data.reservations=[{id:'reserved',slot_id:'slot',slot,status:'reserved',payment_status:'due',payment_choice:'now',amount_cents:1600,child_count:1,adult_count:1}];
+  let releaseReservations;
   const state=[],effects=[],requests=[],navigations=[];let i=0,mounted=false;
   const Component=loadModule('src/components/soft-opening/SoftOpeningReservation.tsx',{
     react:{...React,useState(initial){const n=i++;if(!(n in state))state[n]=initial;return[state[n],value=>{state[n]=typeof value==='function'?value(state[n]):value;}];},useCallback:fn=>fn,useEffect:fn=>{if(!mounted)effects.push(fn);}},
-    'next/link':'a','next/image':()=>null,'./soft-opening.module.css':{},'@/lib/birthdate':formatting,'@/lib/open-play-birthdate':birthdates,'@/lib/open-play-reservations':policy,'@/lib/soft-opening-pricing':{softOpeningAmount:()=>1600},
-  },{React,Intl,crypto:{randomUUID:()=>ids.otherPerson},window:{location:{search:paymentStatus?'?payment=returned&reservation=reserved':'',assign:value=>navigations.push(value)}},fetch:async(url,options)=>{requests.push({url,options});if(url.includes('/payment'))return Response.json({ok:true,reservation:{payment_status:paymentStatus}});return Response.json(data);}}).default;
-  return {state,requests,navigations,render(){i=0;const tree=Component({publicBooking:true});mounted=true;effects.splice(0).forEach(fn=>fn());return tree;}};
+    '@/components/waivers/BookingWaiverNextStep': () => null, 'next/link':'a','next/image':()=>null,'./soft-opening.module.css':{},'@/lib/birthdate':formatting,'@/lib/open-play-birthdate':birthdates,'@/lib/open-play-reservations':policy,'@/lib/soft-opening-pricing':{softOpeningAmount:()=>1600},
+  },{React,Intl,Date:class extends Date {constructor(...args){super(...(args.length?args:['2026-11-19T14:00:00Z']));}},crypto:{randomUUID:()=>ids.otherPerson},window:{history:{replaceState(){}},scrollTo(){},location:{href:'https://example.test/landing/open-play',search:paymentStatus&&!alreadyPaid?'?payment=returned&reservation=reserved':'',assign:value=>navigations.push(value)}},fetch:async(url,options)=>{requests.push({url,options});if(url.includes('/payment'))return Response.json(options?.method==='POST'?{ok:true,paid:true,url:null}:{ok:true,reservation:{payment_status:paymentStatus}});if(lateReservationRead)return new Promise(resolve=>{releaseReservations=()=>resolve(Response.json(data));});return Response.json(data);}}).default;
+  return {state,requests,navigations,releaseReservations:()=>releaseReservations(),render(){i=0;const tree=Component({publicBooking:true});mounted=true;effects.splice(0).forEach(fn=>fn());return tree;}};
 }
 
 test('booking shows and submits real birthdays; legacy estimates are blank and block submission until corrected', async () => {
@@ -107,6 +109,31 @@ test('Square return continues only after verified payment; pending confirmation 
   for(const paymentStatus of ['due','paid','covered']) {
     const h=componentHarness({paymentStatus});h.render();await new Promise(setImmediate);
     if(paymentStatus==='due'){assert.equal(h.navigations.length,0);assert.match(h.state[2],/payment confirmation is still pending/);assert.match(h.state[2],/Do not pay again/);}
-    else assert.deepEqual(h.navigations,['/landing/waiver?reservation=reserved']);
+    else { assert.deepEqual(h.navigations,[]); assert.equal(h.state[13],'reserved'); assert.match(h.state[3],/Your visit is reserved/); const tree=h.render(); assert.ok(nodes(tree).some(n=>n.props.promptKey==='reserved'&&n.props.returnTo==='/landing/open-play')); }
   }
+});
+
+
+test('verified Square payment overrides stale reservation reads in either response order and removes Pay now', async () => {
+  for(const lateReservationRead of [false,true]) {
+    const h=componentHarness({paymentStatus:'paid',staleReservation:true,lateReservationRead});
+    h.render();await new Promise(setImmediate);
+    if(lateReservationRead){h.releaseReservations();await new Promise(setImmediate);}
+    const tree=h.render();const html=renderToStaticMarkup(tree);
+    assert.match(html,/Paid online/);assert.doesNotMatch(html,/Online payment pending/);
+    assert.equal(nodes(tree).some(n=>n.type==='button'&&n.props.children==='Pay now'),false);
+    assert.deepEqual(h.navigations,[]);
+  }
+});
+
+test('an already-settled Pay now response verifies and repairs the reservation display without another payment', async () => {
+  const h=componentHarness({paymentStatus:'paid',staleReservation:true,alreadyPaid:true});
+  h.render();await new Promise(setImmediate);const before=h.render();
+  nodes(before).find(n=>n.type==='button'&&n.props.children==='Pay now').props.onClick();
+  await new Promise(setImmediate);
+  const after=h.render();assert.match(renderToStaticMarkup(after),/Paid online/);
+  assert.equal(nodes(after).some(n=>n.type==='button'&&n.props.children==='Pay now'),false);
+  assert.equal(h.requests.filter(r=>r.url.includes('/payment')&&r.options?.method==='POST').length,1);
+  assert.equal(h.requests.filter(r=>r.url.includes('/payment')&&!r.options?.method).length,1);
+  assert.deepEqual(h.navigations,[]);
 });
