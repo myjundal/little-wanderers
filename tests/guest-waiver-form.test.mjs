@@ -132,7 +132,7 @@ test('one explicit agreement covers every required statement and can be revoked 
   const h = harness(); h.fill();
   const consent = () => h.all().filter(node => node.type === 'input' && node.props.type === 'checkbox' && node.props.required);
   assert.equal(consent().length, 1);
-  assert.match(h.text(), /I agree to all statements below/);
+  assert.match(h.text(), /I agree to all statements above/);
   assert.match(h.text(), /I am the parent or legal guardian/);
   assert.match(h.text(), /typed name as my electronic signature/);
   consent()[0].props.onChange({ target: { checked: false } }); h.render();
