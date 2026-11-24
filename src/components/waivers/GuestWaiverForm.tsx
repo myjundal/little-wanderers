@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import WaiverAgreements from './WaiverAgreements';
 import { readFamilyDraft, validateGuestWaiver, type ChildDraft } from '@/lib/guest-waiver-form';
 import { formatBirthdateInput } from '@/lib/birthdate';
-import { WAIVER_VERSION, WAIVER_TITLE, WAIVER_PARAGRAPHS, WAIVER_AGREEMENTS, WAIVER_SIGNATURE_TEXT } from '@/lib/waiver-content';
+import { WAIVER_VERSION, WAIVER_TITLE, WAIVER_PARAGRAPHS, WAIVER_SIGNATURE_TEXT, getWaiverConsent } from '@/lib/waiver-content';
 import styles from '@/app/landing/waiver/waiver.module.css';
 
 const emptyChild = (): ChildDraft => ({ first_name: '', last_name: '', birthdate: '' });
@@ -23,9 +24,7 @@ export default function GuestWaiverForm() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [children, setChildren] = useState<ChildDraft[]>([emptyChild()]);
-  const [guardian, setGuardian] = useState(false);
-  const [electronic, setElectronic] = useState(false);
-  const [agreements, setAgreements] = useState<Record<string, boolean>>({});
+  const [agreed, setAgreed] = useState(false);
   const [photo, setPhoto] = useState('');
   const [signature, setSignature] = useState('');
   const [complete, setComplete] = useState(false);
@@ -41,7 +40,7 @@ export default function GuestWaiverForm() {
   const draftKey = useRef('');
   const draftExpires = useRef(0);
   const family = { email, firstName, lastName, phone, children };
-  const issues = validationAttempt ? validateGuestWaiver({ ...family, guardian, electronic, agreements, photo, signature }) : [];
+  const issues = validationAttempt ? validateGuestWaiver({ ...family, agreed, photo, signature }) : [];
   const fieldProps = (id: string) => ({ id, 'aria-invalid': issues.some(issue => issue.id === id) || undefined,
     'aria-describedby': issues.some(issue => issue.id === id) ? `${id}-error` : undefined });
   const fieldError = (id: string) => {
@@ -96,14 +95,14 @@ export default function GuestWaiverForm() {
   async function sign(event: React.FormEvent) {
     event.preventDefault();
     if (!ready || saving.current) return;
-    if (validateGuestWaiver({ ...family, guardian, electronic, agreements, photo, signature }).length) {
+    if (validateGuestWaiver({ ...family, agreed, photo, signature }).length) {
       setValidationAttempt(value => value + 1); return;
     }
     saving.current = true; setBusy(true); setError('');
     try {
       const result = await post({ mode: 'submit', submission_id: submissionId.current, email, party_id: party || null, version: WAIVER_VERSION,
         first_name: firstName, last_name: lastName, phone, children, signature,
-        is_guardian: guardian, electronic_consent: electronic, photo_consent: photo === 'yes' ? true : photo === 'no' ? false : null, agreements });
+        ...getWaiverConsent(agreed), photo_consent: photo === 'yes' ? true : photo === 'no' ? false : null });
       clearDraft(); setSaveDraft(false); setComplete(true); setExpiresAt(result.expires_at); window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save your waiver.'); }
     finally { saving.current = false; setBusy(false); }
@@ -116,7 +115,7 @@ export default function GuestWaiverForm() {
     submissionId.current = crypto.randomUUID(); remember(submissionId.current);
     draftExpires.current = Date.now() + 7200000;
     setComplete(false); setExpiresAt(''); setEmail(''); setChildren([emptyChild()]);
-    setFirstName(''); setLastName(''); setPhone(''); setSignature(''); setPhoto(''); setGuardian(false); setElectronic(false); setAgreements({}); setError('');
+    setFirstName(''); setLastName(''); setPhone(''); setSignature(''); setPhoto(''); setAgreed(false); setError('');
     try { await post({ mode: 'end_session', submission_id: previousId }); }
     catch { setError('Please close this tab before the next guest starts.'); }
     finally { saving.current = false; setBusy(false); }
@@ -167,14 +166,10 @@ export default function GuestWaiverForm() {
       </section>
       <section className={styles.card}>
         <h2>2. Review &amp; agree</h2>
-        <p>Please read the full waiver, then confirm each agreement below.</p>
+        <p>Please read the full waiver and all statements below before agreeing.</p>
         <details className={styles.legalText}><summary>Read the full waiver</summary><h3>{WAIVER_TITLE}</h3>{WAIVER_PARAGRAPHS.map(text => <p key={text}>{text}</p>)}</details>
       </section>
-      <section className={styles.card}>
-        <h2>Required agreements</h2><p className={styles.hint}>Check each statement after reviewing it. All are required.</p>
-        <label className={styles.check}><input {...fieldProps("guardian")} type="checkbox" required checked={guardian} onChange={e => setGuardian(e.target.checked)} /><span>I am the parent or legal guardian of all children listed above.{fieldError("guardian")}</span></label>
-        {WAIVER_AGREEMENTS.map(item => <label className={styles.check} key={item.id}><input {...fieldProps(`agreement-${item.id}`)} type="checkbox" required checked={agreements[item.id] ?? false} onChange={e => setAgreements({ ...agreements, [item.id]: e.target.checked })} /><span>{item.text}{fieldError(`agreement-${item.id}`)}</span></label>)}
-      </section>
+      <WaiverAgreements checked={agreed} onChange={setAgreed} error={issues.find(issue => issue.id === 'all-agreements')?.message} />
       <fieldset className={styles.card}><legend>Photo/marketing preference</legend><p>May Little Wanderers use photos or videos of your child for social media, website, or marketing purposes?</p>
         <label className={styles.check}><input {...fieldProps("photo")} type="radio" name="photo" required checked={photo === 'yes'} onChange={() => setPhoto('yes')} />Yes, I give permission</label>
         <label className={styles.check}><input type="radio" name="photo" required aria-describedby={issues.some(issue => issue.id === 'photo') ? 'photo-error' : undefined} checked={photo === 'no'} onChange={() => setPhoto('no')} />No, I do not give permission</label>{fieldError("photo")}
@@ -182,7 +177,6 @@ export default function GuestWaiverForm() {
       </fieldset>
       <section className={styles.card}><h2>3. Electronic signature</h2><p>{WAIVER_SIGNATURE_TEXT}</p>
         <label>Your full legal name<input className={styles.name} {...fieldProps("signature")} autoComplete="name" required minLength={2} maxLength={150} value={signature} onChange={e => setSignature(e.target.value)} />{fieldError("signature")}</label>
-        <label className={styles.check}><input {...fieldProps("electronic")} type="checkbox" required checked={electronic} onChange={e => setElectronic(e.target.checked)} /><span>I agree to use this typed name as my electronic signature for this waiver.{fieldError("electronic")}</span></label>
         <p>The date and time of signing will be recorded when you submit. Valid for 90 days unless replaced by an updated waiver.</p>
         <button className={styles.submit} type="submit" disabled={busy || !ready}>{busy ? 'Saving signed waiver…' : 'Sign and submit waiver'}</button>
         {error && <p role="alert" className={styles.error}>{error}</p>}

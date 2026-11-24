@@ -27,3 +27,6 @@
 .main :focus-visible { outline: 3px solid #65469c; outline-offset: 4px; }
 .error a { color: inherit; text-decoration: underline; }
 .error li { margin: 10px 0; }
+
+.agreementList { padding-left: 24px; }
+.agreementList li { margin: 14px 0; }
