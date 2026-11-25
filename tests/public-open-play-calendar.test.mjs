@@ -6,6 +6,19 @@ import {loadModule} from './helpers/class-preregistration-harness.mjs';
 const privacy=loadModule('src/lib/private-party-open-play.ts',{'@/lib/party-config':loadModule('src/lib/party-config.ts')});
 const constants=loadModule('src/lib/open-play-reservations.ts');
 const slot={id:'available',starts_at:'2026-11-14T14:00:00Z',ends_at:'2026-11-14T15:00:00Z',status:'open',capacity_children:7,capacity_total:12,notes:'PRIVATE',created_by_user_id:'PRIVATE'};
+test('only explicitly published slot notices reach guests and appear beside the arrival window', async () => {
+ const notice='A birthday party is scheduled from 10 AM to 1 PM on November 29.';
+ assert.equal(constants.getOpenPlayBookingNotice('PRIVATE\nPublic notice: '+notice+'\nPRIVATE'),notice);
+ assert.equal(constants.getOpenPlayBookingNotice('PRIVATE'),null);
+ const windows=[{...slot,notes:'PRIVATE\nPublic notice: '+notice+'\nPRIVATE'}];
+ const admin={from(table){const q={select(){return q},eq(){return q},neq(){return q},gte(){return q},lt(){return q},gt(){return q},order(){return q},range(){return Promise.resolve({data:[],error:null})},then(resolve){return resolve({data:table==='open_play_reservation_slots'?windows:[],error:null})}};return q}};
+ const {loadPublicOpenPlaySlots}=loadModule('src/lib/public-open-play.ts',{'@/lib/open-play-reservations':constants,'@/lib/private-party-open-play':{...privacy,readPrivatePartyDays:async()=>[]}});
+ const slots=await loadPublicOpenPlaySlots(admin);
+ assert.equal(slots[0].booking_notice,notice);
+ assert.doesNotMatch(JSON.stringify(slots),/PRIVATE/);
+ const Calendar=loadModule('src/components/soft-opening/PublicOpenPlayCalendar.tsx',{'@/lib/open-play-reservations':constants,react:React,'next/link':'a','./public-open-play.module.css':{}},{React,Intl}).default;
+ assert.match(renderToStaticMarkup(React.createElement(Calendar,{slots})),/birthday party is scheduled from 10 AM to 1 PM/);
+});
 test('public availability exposes only calendar fields, honors closure and total capacity, and pages reservations',async()=>{
  const ranges=[];const admin={from(){const q={select(){return q;},eq(){return q;},neq(){return q;},gte(key,value){assert.equal(value,constants.PUBLIC_OPEN_PLAY_START);return q;},lt(){return q;},gt(){return q;},in(){return q;},order(){return q;},range(start,end){ranges.push([start,end]);return Promise.resolve({data:start===0?Array.from({length:500},()=>({slot_id:'full',child_count:0,adult_count:1,email:'PRIVATE'})):[{slot_id:'available',child_count:2,adult_count:2}],error:null});},then(resolve){resolve({data:[slot,{...slot,id:'closed',status:'closed'},{...slot,id:'full'}],error:null});}};return q;}};
  const {loadPublicOpenPlaySlots}=loadModule('src/lib/public-open-play.ts',{'@/lib/open-play-reservations':constants,'@/lib/private-party-open-play':{...privacy,readPrivatePartyDays:async()=>[]}});
