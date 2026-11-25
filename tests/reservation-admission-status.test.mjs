@@ -8,12 +8,12 @@ const reservation = { id: 'r', household_id: 'family', child_ids: ['child'], pay
 const checkin = { id: 'c', household_id: 'family', person_id: 'child', payment_status: 'paid', price_cents: 1600, square_environment: 'production', checked_in_at: '2026-11-11T15:00:00Z' };
 test('prepaid and legacy paid admissions never appear due even when their original price is retained', () => {
   for (const payment_status of ['paid', 'prepaid', 'walkin_paid', 'terminal_paid']) assert.ok(!admissionPaymentLabel({ payment_status, price_cents: 1600 }).includes('due'));
-  assert.equal(admissionPaymentLabel({ payment_status: 'prepaid', price_cents: 0 }), 'Paid in advance');
+  assert.equal(admissionPaymentLabel({ payment_status: 'prepaid', price_cents: 0 }), 'Paid');
   assert.equal(admissionPaymentLabel({ payment_status: 'due', price_cents: 1600 }), '$16.00 due');
 });
 test('a reservation originally payable at counter uses the recorded same-day Square payment', () => {
   const status = reservationAdmissionStatus(reservation, [checkin], 'production');
-  assert.equal(status, 'paid_counter'); assert.ok(reservationAdmissionLabel(status).includes('do not collect again'));
+  assert.equal(status, 'paid_counter'); assert.equal(reservationAdmissionLabel(status), 'Paid');
   assert.equal(reservation.payment_status, 'due'); // Presentation never rewrites billing.
 });
 test('online payment and membership states stay explicit and environment isolation is preserved', () => {
@@ -43,4 +43,25 @@ test('a frozen Square checkout is pending rather than another admission due',()=
  assert.equal(reservationAdmissionStatus(reservation,[{...checkin,payment_status:'pending'}],'production'),'pending');
  assert.equal(reservationAdmissionStatus(reservation,[{...checkin,payment_status:'review'}],'production'),'review');
  for(const payment_status of ['pending','review'])assert.ok(!admissionPaymentLabel({payment_status,price_cents:1600}).includes('due'));
+});
+
+
+test('membership coverage stays distinct from receipts, included adults, free infants and unpaid visits', () => {
+  const member = { payment_status: 'covered', price_cents: 0, membership_applied: true };
+  assert.equal(admissionPaymentLabel(member), 'Membership');
+  assert.equal(admissionPaymentLabel({ ...member, membership_applied: false, founding_membership_applied: true }), 'Membership');
+  assert.equal(admissionPaymentLabel({ payment_status: 'membership', price_cents: 0 }), 'Membership');
+  assert.equal(admissionPaymentLabel({ payment_status: 'covered', price_cents: 0 }), 'Included');
+  assert.equal(admissionPaymentLabel({ payment_status: 'covered', price_cents: 0, infant_sibling_free: true }), 'Infant admission included');
+  for (const payment_status of ['paid', 'prepaid', 'walkin_paid', 'terminal_paid'])
+    assert.equal(admissionPaymentLabel({ ...member, payment_status, price_cents: 1600 }), 'Paid');
+  assert.equal(admissionPaymentLabel({ ...member, payment_status: 'due', price_cents: 1600 }), '$16.00 due');
+  assert.equal(reservationAdmissionStatus({ ...reservation, payment_status: 'covered', payment_choice: 'membership' }, [], 'production'), 'membership');
+  assert.equal(reservationAdmissionLabel('membership'), 'Membership');
+  assert.equal(reservationAdmissionLabel('paid_online'), 'Paid');
+  const membershipVisit = { ...checkin, ...member };
+  assert.equal(reservationAdmissionStatus(reservation, [membershipVisit], 'production'), 'membership');
+  const mixed = reservationAdmissionStatus({ ...reservation, child_ids: ['child', 'sibling'] }, [membershipVisit, { ...checkin, id: 's', person_id: 'sibling' }], 'production');
+  assert.equal(mixed, 'paid_or_membership');
+  assert.equal(reservationAdmissionLabel(mixed), 'Paid / Membership');
 });

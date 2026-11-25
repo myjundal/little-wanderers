@@ -532,11 +532,11 @@ test('pending receipt is retried and an older read cannot restore the unpaid sta
 });
 
 
-test('prepaid visitors display paid in advance and only an explicit checkout reveals recorded stay times', async () => {
+test('prepaid visitors display Paid and only an explicit checkout reveals recorded stay times', async () => {
   const h = uiHarness({ prepaid: true }); await choose(h);
   h.button('Select everyone remaining').props.onClick(); await h.flush();
   await h.button('Check in 2').props.onClick(); await h.flush();
-  assert.ok(h.text().includes('Paid in advance'));
+  assert.ok(h.text().includes('Paid'));
   assert.equal(h.button('Pay $16.00'), undefined);
   assert.ok(!h.text().includes(' · In 10:00 AM'));
   await h.button('Done').props.onClick(); await h.flush();

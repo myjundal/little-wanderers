@@ -1,17 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
-import { admissionIsPaid, admissionIsIncluded, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
+import { admissionIsPaid, admissionIsIncluded, admissionIsMembership, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
 
 type Slot = { starts_at: string };
 type Reservation = { id: string; household_id: string; child_ids?: string[]; payment_status?: string; payment_choice?: string; payment_environment?: string | null; slot: Slot | Slot[] | null };
-type Checkin = { id: string; person_id: string; household_id: string | null; checked_in_at: string; payment_status: string; price_cents: number; square_environment: string | null };
+type Checkin = { id: string; person_id: string; household_id: string | null; checked_in_at: string; payment_status: string; price_cents: number; membership_applied?: boolean; square_environment: string | null };
 const slotFor = (row: Reservation) => Array.isArray(row.slot) ? row.slot[0] : row.slot;
 const dayOf = (value: string) => getPartyDateKey(new Date(value));
 
 /** A reservation's original counter choice is not evidence of an unpaid visit. */
 export function reservationAdmissionStatus(row: Reservation, checkins: Checkin[], environment: string): ReservationAdmissionStatus | undefined {
   if (row.payment_status === 'paid') return row.payment_environment === environment ? (row.payment_choice === 'counter' ? 'paid_counter' : 'paid_online') : 'review';
-  if (row.payment_status === 'covered') return 'included';
+  if (row.payment_status === 'covered') return row.payment_choice === 'membership' ? 'membership' : 'included';
   if (row.payment_status === 'review') return 'review';
   const slot = slotFor(row);
   if (slot && row.child_ids?.length) {
@@ -20,9 +20,10 @@ export function reservationAdmissionStatus(row: Reservation, checkins: Checkin[]
     if (payments.some(rows => rows.length > 1 || rows.some(visit=>visit.payment_status==='review'))) return 'review';
     if (payments.some(rows => rows.some(visit=>visit.payment_status==='pending'))) return 'pending';
     if (payments.every(rows => rows.length === 1 && (admissionIsPaid(rows[0].payment_status) || admissionIsIncluded(rows[0].payment_status)))) {
-      if (payments.every(rows => admissionIsIncluded(rows[0].payment_status))) return 'included';
+      const membership = payments.some(rows => admissionIsMembership(rows[0]));
+      if (payments.every(rows => admissionIsIncluded(rows[0].payment_status))) return membership ? 'membership' : 'included';
       if (payments.every(rows => admissionIsPaid(rows[0].payment_status))) return 'paid_counter';
-      return 'paid_or_included';
+      return membership ? 'paid_or_membership' : 'paid_or_included';
     }
   }
   return row.payment_status === 'due' ? (row.payment_choice === 'now' ? 'pending' : 'due') : undefined;
@@ -39,7 +40,7 @@ export async function getReservationAdmissionStatuses(admin: SupabaseClient, row
     for (let offset = 0; offset < children.length; offset += 150) {
       let cursor = '';
       for (;;) {
-        let query = admin.from('checkins').select('id,person_id,household_id,checked_in_at,payment_status,price_cents,square_environment')
+        let query = admin.from('checkins').select('id,person_id,household_id,checked_in_at,payment_status,price_cents,membership_applied,square_environment')
           .in('person_id', children.slice(offset, offset + 150)).gte('checked_in_at', toPartyDateTimeIso(first, 0)).lt('checked_in_at', toPartyDateTimeIso(next, 0)).order('id').limit(500);
         if (cursor) query = query.gt('id', cursor);
         const { data, error } = await query;

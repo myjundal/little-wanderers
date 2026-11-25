@@ -6,6 +6,9 @@ export type AdmissionVisit = {
   name: string;
   price_cents: number;
   payment_status: string;
+  membership_applied?: boolean;
+  founding_membership_applied?: boolean;
+  infant_sibling_free?: boolean;
   checked_in_at?: string | null;
   checked_out_at?: string | null;
   checked_out?: boolean;
