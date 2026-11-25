@@ -10,7 +10,7 @@ import { squareEnvironment } from '@/lib/square-client';
 export const dynamic = 'force-dynamic';
 const familySelect = 'id,name,email,phone';
 const personSelect = 'id,household_id,first_name,last_name,role,birthdate';
-const reservationSelect = 'id,household_id,child_count,adult_count,child_ids,payment_status,payment_choice,payment_environment,amount_cents,slot:open_play_reservation_slots!inner(label,starts_at,ends_at)';
+const reservationSelect = 'id,household_id,child_count,adult_count,child_ids,payment_status,payment_choice,payment_environment,amount_cents,square_order_id,square_payment_link_id,payment_url,slot:open_play_reservation_slots!inner(label,starts_at,ends_at)';
 
 export async function GET(req: Request) {
   const c = await requireStaffContext();

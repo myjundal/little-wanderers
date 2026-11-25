@@ -1,6 +1,6 @@
 -- Minimal isolated fixture for the Square schema already installed in Production.
 create role anon; create role authenticated; create role service_role;
-create table founding_memberships(household_id uuid,environment text,status text,child_ids uuid[],square_card_id text,start_date date,paid_through date,created_at timestamptz default now());
+create table founding_memberships(household_id uuid,environment text,status text,child_ids uuid[],square_card_id text,square_subscription_id text,start_date date,paid_through date,created_at timestamptz default now());
 create table households(id uuid primary key,name text);
 create table people(id uuid primary key,household_id uuid,first_name text,last_name text);
 create table checkins(id uuid primary key,person_id uuid,price_cents integer,payment_status text,membership_applied boolean default false,checked_in_at timestamptz default now(),square_order_id text,square_environment text);
