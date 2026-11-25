@@ -34,6 +34,13 @@ function reservationHarness() {
   }, { React, Intl, Date: class extends Date { constructor(...args) { if (args.length) super(...args); else super('2026-11-16T18:00:00Z'); } } }).default;
   return { state, render() { index=0; return Component({ previewData: data, publicBooking: true }); } };
 }
+test('booking shows the published party notice on its window and selected summary without internal notes', () => {
+  const h = reservationHarness();
+  h.state[0].slots = [{ ...early }, { ...late, notes: 'PRIVATE\nPublic notice: A birthday party is scheduled from 10 AM to 1 PM on November 29.\nPRIVATE' }];
+  const html = renderToStaticMarkup(h.render());
+  assert.equal((html.match(/birthday party is scheduled from 10 AM to 1 PM/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /PRIVATE/);
+});
 test('4–5 PM selection requires explicit 6 PM closing acknowledgment and resets it when the window changes', async () => {
   const h=reservationHarness();let tree=h.render();
   assert.match(renderToStaticMarkup(tree), /ARRIVAL WINDOW/);

@@ -31,6 +31,12 @@ export function isLastOpenPlayArrival(slot: { starts_at: string; ends_at: string
 }
 export const LAST_OPEN_PLAY_ARRIVAL_NOTICE = 'Arriving 4–5 PM? We close at 6 PM. You will have 1–2 hours to play, depending on when you arrive. Please confirm this works for your visit.';
 
+// Only explicitly published lines belong in the booking calendar.
+export function getOpenPlayBookingNotice(notes?: string | null) {
+  return notes?.split(/\r?\n/).filter(line => line.startsWith('Public notice:'))
+    .map(line => line.slice('Public notice:'.length).trim()).filter(Boolean).join(' ') || null;
+}
+
 export const OPEN_PLAY_SLOT_SELECT = 'id,label,starts_at,ends_at,capacity_children,capacity_total,status,notes,is_soft_opening,created_at';
 export const OPEN_PLAY_RESERVATION_SELECT = 'id,slot_id,household_id,created_by_user_id,contact_email,child_count,adult_count,notes,status,cancelled_at,status_updated_at,created_at,child_ids,payment_choice,payment_status,amount_cents,square_order_id,square_payment_link_id,payment_url,payment_environment';
 
