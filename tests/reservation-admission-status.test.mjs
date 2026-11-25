@@ -65,3 +65,19 @@ test('membership coverage stays distinct from receipts, included adults, free in
   assert.equal(mixed, 'paid_or_membership');
   assert.equal(reservationAdmissionLabel(mixed), 'Paid / Membership');
 });
+
+test('current membership replaces a stale counter due label before arrival without altering the booking', async () => {
+ const {reservationHasMembership}=modules.load('src/lib/reservation-admission-status.ts');
+ const enrollment={household_id:'family',environment:'production',status:'active',child_ids:['child'],square_card_id:'card',square_subscription_id:'sub',start_date:'2026-11-01',paid_through:null,created_at:'2026-10-25T12:00:00Z'};
+ assert.equal(reservationHasMembership(reservation,[enrollment],'production'),true);
+ for(const patch of [{square_order_id:'order'},{square_payment_link_id:'link'},{payment_url:'https://square.example/checkout'},{payment_choice:'now'},{payment_status:'paid'},{child_ids:['child','other']},{slot:{starts_at:'2026-10-24T15:00:00Z'}}])assert.equal(reservationHasMembership({...reservation,...patch},[enrollment],'production'),false);
+ assert.equal(reservationHasMembership(reservation,[{...enrollment,environment:'sandbox'}],'production'),false);
+ const calls=[];
+ const admin={from(table){calls.push(table);const q={select(){return q;},in(){return q;},eq(){return q;},gte(){return q;},lt(){return q;},order(){return q;},limit(){return q;},then(resolve){resolve({data:table==='founding_memberships'?[enrollment]:[],error:null});}};return q;}};
+ const original=JSON.stringify(reservation);
+ const statuses=await getReservationAdmissionStatuses(admin,[reservation],'production');
+ assert.equal(statuses.get(reservation.id),'membership');assert.equal(JSON.stringify(reservation),original);
+ assert.deepEqual(calls,['checkins','founding_memberships']);
+ const broken={from(table){const q={select(){return q;},in(){return q;},eq(){return q;},gte(){return q;},lt(){return q;},order(){return q;},limit(){return q;},then(resolve){resolve({data:[],error:table==='founding_memberships'?{message:'unavailable'}:null});}};return q;}};
+ await assert.rejects(getReservationAdmissionStatuses(broken,[reservation],'production'),/Unable to verify reservation membership/);
+});

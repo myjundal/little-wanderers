@@ -1,12 +1,25 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { admissionIsPaid, admissionIsIncluded, admissionIsMembership, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
+import { membershipCoversAdmission } from '@/lib/membership-admission-coverage';
+import type { AdmissionEnrollment } from '@/lib/founding-admission-coverage';
 
 type Slot = { starts_at: string };
-type Reservation = { id: string; household_id: string; child_ids?: string[]; payment_status?: string; payment_choice?: string; payment_environment?: string | null; slot: Slot | Slot[] | null };
+type Reservation = { id: string; household_id: string; child_ids?: string[]; payment_status?: string; payment_choice?: string; payment_environment?: string | null; square_order_id?: string | null; square_payment_link_id?: string | null; payment_url?: string | null; slot: Slot | Slot[] | null };
 type Checkin = { id: string; person_id: string; household_id: string | null; checked_in_at: string; payment_status: string; price_cents: number; membership_applied?: boolean; square_environment: string | null };
 const slotFor = (row: Reservation) => Array.isArray(row.slot) ? row.slot[0] : row.slot;
 const dayOf = (value: string) => getPartyDateKey(new Date(value));
+
+export function reservationHasMembership(row: Reservation, enrollments: AdmissionEnrollment[], environment: string) {
+  const slot = slotFor(row);
+  if (!slot || !row.child_ids?.length || row.payment_status !== 'due' || row.payment_choice !== 'counter'
+    || row.square_order_id || row.square_payment_link_id || row.payment_url) return false;
+  const day = dayOf(slot.starts_at);
+  return row.child_ids.every(id => enrollments.some(e => e.household_id === row.household_id && e.environment === environment
+    && e.child_ids.includes(id) && day >= dayOf(e.created_at)
+    && (!['pending', 'activating', 'scheduled'].includes(e.status) || Boolean(e.square_card_id))
+    && membershipCoversAdmission(e, day)));
+}
 
 /** A reservation's original counter choice is not evidence of an unpaid visit. */
 export function reservationAdmissionStatus(row: Reservation, checkins: Checkin[], environment: string): ReservationAdmissionStatus | undefined {
@@ -60,5 +73,19 @@ export async function getReservationAdmissionStatuses(admin: SupabaseClient, row
     recorded = visits.map(visit=>visit.payment_status==='due' && (lookupFailed || frozen.has(visit.id))
       ? {...visit,payment_status:lookupFailed?'review':'pending'} : visit);
   }
-  return new Map(rows.map(row => [row.id, reservationAdmissionStatus(row, recorded, environment)]));
+  const statuses = new Map(rows.map(row => [row.id, reservationAdmissionStatus(row, recorded, environment)]));
+  // A booking made before membership activation can still retain its original
+  // counter choice. Show current coverage without rewriting its payment history.
+  const candidates = rows.filter(row => statuses.get(row.id) === 'due' && row.payment_choice === 'counter'
+    && row.child_ids?.length && !row.square_order_id && !row.square_payment_link_id && !row.payment_url);
+  const families = [...new Set(candidates.map(row => row.household_id))];
+  const enrollments: AdmissionEnrollment[] = [];
+  for (let offset = 0; offset < families.length; offset += 100) {
+    const result = await admin.from('founding_memberships').select('household_id,environment,status,child_ids,square_card_id,square_subscription_id,start_date,paid_through,created_at')
+      .in('household_id', families.slice(offset, offset + 100)).eq('environment', environment).limit(501);
+    if (result.error || (result.data?.length ?? 0) > 500) throw new Error('Unable to verify reservation membership coverage.');
+    enrollments.push(...(result.data ?? []) as AdmissionEnrollment[]);
+  }
+  for (const row of candidates) if (reservationHasMembership(row, enrollments, environment)) statuses.set(row.id, 'membership');
+  return statuses;
 }
