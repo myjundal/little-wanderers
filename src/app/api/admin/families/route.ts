@@ -2,6 +2,7 @@ import { requireStaffContext } from '@/lib/authz';
 import { US_CITIES_BY_STATE, type UsStateCode } from '@/lib/us-cities';
 import { getWaiverStatus, WAIVER_STATUS_SELECT, type WaiverRow } from '@/lib/waivers';
 import { getStaffFamilySearchAliases } from '@/lib/staff-family-search';
+import { readFamilyDirectoryRows } from '@/lib/family-directory';
 
 type HouseholdRow = {
   id: string;
@@ -11,7 +12,7 @@ type HouseholdRow = {
   city: string | null;
   state: string | null;
 };
-type PersonRow = { id: string; household_id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null };
+type PersonRow = { id: string; household_id: string; first_name: string | null; last_name: string | null; role: 'adult' | 'child' | null; created_at?: string };
 
 function normalizeCityName(input: string) {
   return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
@@ -34,41 +35,48 @@ export async function GET(req: Request) {
   try { aliases = await getStaffFamilySearchAliases(admin); }
   catch { return Response.json({ ok: false, error: 'Unable to load family directory links.' }, { status: 503 }); }
 
-  const { count: total, error: countError } = await admin.from('households').select('*', { count: 'exact', head: true });
-  if (countError) return Response.json({ ok: false, error: countError.message }, { status: 500 });
+  type MemberRow = { household_id: string; user_id: string | null };
+  type MembershipRow = { household_id: string | null; person_id: string | null; renews_at: string | null };
+  type FamilyWaiverRow = WaiverRow & { household_id: string };
+  type RoleRow = { id: string; role: string };
+  type ExtraRoleRow = { user_id: string; role: string };
+  let households: (HouseholdRow & { created_at: string })[], people: PersonRow[], members: MemberRow[],
+    memberships: MembershipRow[], waivers: FamilyWaiverRow[], roles: RoleRow[], extraRoles: ExtraRoleRow[];
+  try {
+    [households, people, members, memberships, waivers, roles, extraRoles] = await Promise.all([
+      readFamilyDirectoryRows<HouseholdRow & { created_at: string }>(admin, 'households', 'id,name,phone,email,city,state,created_at'),
+      readFamilyDirectoryRows<PersonRow>(admin, 'people', 'id,household_id,first_name,last_name,role,created_at'),
+      readFamilyDirectoryRows<MemberRow>(admin, 'household_members', 'household_id,user_id'),
+      readFamilyDirectoryRows<MembershipRow>(admin, 'memberships', 'household_id,person_id,renews_at'),
+      readFamilyDirectoryRows<FamilyWaiverRow>(admin, 'waivers', `household_id,${WAIVER_STATUS_SELECT}`),
+      readFamilyDirectoryRows<RoleRow>(admin, 'roles', 'id,role'),
+      readFamilyDirectoryRows<ExtraRoleRow>(admin, 'user_roles', 'user_id,role', 'user_id'),
+    ]);
+  } catch { return Response.json({ ok: false, error: 'Unable to load family directory. Please try again.' }, { status: 503 }); }
+  people.sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id));
 
-  async function countFamilies(table: 'household_members' | 'people') {
-    const ids = new Set<string>();
-    for (let offset = 0; ; offset += 500) {
-      let request = admin.from(table).select('household_id').order('id').range(offset, offset + 499);
-      request = table === 'household_members' ? request.not('user_id', 'is', null) : request.eq('role', 'child');
-      const { data, error } = await request;
-      if (error) throw error;
-      for (const row of data ?? []) if (row.household_id) ids.add(row.household_id);
-      if ((data?.length ?? 0) < 500) return ids.size;
-    }
+  const canonicalId = (id: string) => aliases.get(id) ?? id;
+  const householdIds = new Set(households.map(row => row.id));
+  if ([...aliases].some(([source, target]) => !householdIds.has(source) || !householdIds.has(target))) {
+    return Response.json({ ok: false, error: 'Family directory links require review.' }, { status: 503 });
   }
-  let linkedFamilies: number, familiesWithChildren: number;
-  try { [linkedFamilies, familiesWithChildren] = await Promise.all([countFamilies('household_members'), countFamilies('people')]); }
-  catch { return Response.json({ ok: false, error: 'Unable to count family accounts.' }, { status: 500 }); }
-
-  const [{ data: households }, { data: people }, { data: memberships }, { data: waivers }] = await Promise.all([
-    admin.from('households').select('id,name,phone,email,city,state').order('created_at', { ascending: false }).limit(400),
-    admin.from('people').select('id,household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
-    admin.from('memberships').select('household_id,person_id,renews_at').limit(2000),
-    admin.from('waivers').select(`household_id,${WAIVER_STATUS_SELECT}`).order('signed_at', { ascending: false }).limit(2000),
+  const internalRoles = new Set(['owner', 'admin', 'staff', 'instructor']);
+  const internalUsers = new Set([
+    ...roles.filter(row => internalRoles.has(row.role)).map(row => row.id),
+    ...extraRoles.filter(row => internalRoles.has(row.role)).map(row => row.user_id),
   ]);
-
-  // A recent duplicate must not push its older canonical family outside the directory window.
-  const missingCanonicalIds = [...new Set(aliases.values())].filter(id => !(households ?? []).some(row => row.id === id));
-  if (missingCanonicalIds.length) {
-    const canonical = await admin.from('households').select('id,name,phone,email,city,state').in('id', missingCanonicalIds);
-    if (canonical.error || !households) return Response.json({ ok: false, error: 'Unable to load linked families.' }, { status: 503 });
-    households.push(...(canonical.data ?? []));
-  }
+  const internalFamilies = new Set(members.filter(row => row.user_id && internalUsers.has(row.user_id)).map(row => canonicalId(row.household_id)));
+  const customerHouseholds = households.filter(row => !aliases.has(row.id) && !internalFamilies.has(row.id))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
+  const customerIds = new Set(customerHouseholds.map(row => row.id));
+  const linkedIds = new Set(members.filter(row => row.user_id).map(row => canonicalId(row.household_id)).filter(id => customerIds.has(id)));
+  const childrenIds = new Set(people.filter(row => row.role === 'child').map(row => canonicalId(row.household_id)).filter(id => customerIds.has(id)));
+  const total = customerIds.size;
+  const linkedFamilies = linkedIds.size;
+  const familiesWithChildren = childrenIds.size;
 
   const peopleByHousehold = new Map<string, PersonRow[]>();
-  ((people ?? []) as PersonRow[]).forEach((p) => {
+  people.forEach((p) => {
     const arr = peopleByHousehold.get(p.household_id) ?? [];
     arr.push(p);
     peopleByHousehold.set(p.household_id, arr);
@@ -76,15 +84,15 @@ export async function GET(req: Request) {
 
   const now = new Date().toISOString();
   const membershipByHousehold = new Map<string, boolean>();
-  (memberships ?? []).forEach((m) => {
-    const householdId = m.household_id || (people ?? []).find(p => p.id === m.person_id)?.household_id;
+  memberships.forEach((m) => {
+    const householdId = m.household_id || people.find(person => person.id === m.person_id)?.household_id;
     if (!householdId) return;
     const active = !m.renews_at || m.renews_at > now;
-    if (active) membershipByHousehold.set(householdId, true);
+    if (active) membershipByHousehold.set(canonicalId(householdId), true);
   });
 
   const waiversByHousehold = new Map<string, WaiverRow[]>();
-  (waivers ?? []).forEach((w) => {
+  waivers.forEach((w) => {
     if (!w.household_id) return;
     const arr = waiversByHousehold.get(w.household_id) ?? [];
     arr.push(w);
@@ -93,8 +101,7 @@ export async function GET(req: Request) {
 
   const normalized = query.toLowerCase();
 
-  const items = ((households ?? []) as HouseholdRow[])
-    .filter(household => !aliases.has(household.id))
+  const matches = customerHouseholds
     .map((household) => {
       const familyPeople = peopleByHousehold.get(household.id) ?? [];
       const adults = familyPeople.filter((p) => p.role !== 'child');
@@ -124,15 +131,16 @@ export async function GET(req: Request) {
         item.city,
         item.state,
         ...item.children_names,
-        ...(households ?? []).filter(row => aliases.get(row.id) === item.household_id)
+        ...households.filter(row => aliases.get(row.id) === item.household_id)
           .flatMap(row => [row.name, row.email, row.phone, ...(peopleByHousehold.get(row.id) ?? []).map(person => `${person.first_name ?? ''} ${person.last_name ?? ''}`)]),
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return haystack.includes(normalized);
-    })
-    .slice(0, 100);
+    });
+  const items = matches.slice(0, 100);
 
-  return Response.json({ ok: true, items, total, linked_families: linkedFamilies, families_with_children: familiesWithChildren });
+  return Response.json({ ok: true, items, total, linked_families: linkedFamilies, guest_families: total - linkedFamilies,
+    families_with_children: familiesWithChildren, matching_families: matches.length, duplicate_records_grouped: aliases.size });
 }

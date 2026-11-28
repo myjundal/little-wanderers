@@ -27,23 +27,36 @@ function waiverLabel(status: string) {
 
 export default function StaffFamiliesPage() {
   const { role } = useOperatorAccess();
-  const [counts, setCounts] = useState<{ linked: number; children: number } | null>(null);
+  const [counts, setCounts] = useState<{ linked: number; guests: number; children: number } | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<FamilyItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [matching, setMatching] = useState(0);
 
   useEffect(() => {
+    const controller = new AbortController();
     const run = async () => {
       setLoading(true);
-      const res = await fetch(`/api/admin/families?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
-      const json = await res.json();
-      setItems(json.items ?? []);
-      setTotal(json.total ?? null);
-      setCounts(json.ok ? { linked: json.linked_families, children: json.families_with_children } : null);
-      setLoading(false);
+      setError('');
+      try {
+        const res = await fetch(`/api/admin/families?q=${encodeURIComponent(query)}`, { cache: 'no-store', signal: controller.signal });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Unable to load families. Please try again.');
+        if (controller.signal.aborted) return;
+        setItems(json.items);
+        setTotal(json.total);
+        setCounts({ linked: json.linked_families, guests: json.guest_families, children: json.families_with_children });
+        setMatching(json.matching_families);
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        setItems([]); setTotal(null); setCounts(null); setMatching(0);
+        setError(cause instanceof Error ? cause.message : 'Unable to load families. Please try again.');
+      } finally { if (!controller.signal.aborted) setLoading(false); }
     };
     void run();
+    return () => controller.abort();
   }, [query]);
 
   return (
@@ -52,7 +65,8 @@ export default function StaffFamiliesPage() {
         <div>
           <p style={{ margin: 0, color: '#7a63a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Owner/Staff tools</p>
           <h1 style={{ margin: '8px 0 4px', color: '#4f3f82' }}>Family Management</h1>
-          <p>Family records: {total ?? '—'} · Linked to a login: {counts?.linked ?? '—'} · With child profiles: {counts?.children ?? '—'}</p><p style={{ color: '#6d6480', fontSize: 13 }}>Records include automatically created and manually registered families; this is not a count of completed family profiles.</p>
+          <p>Customer families: {total ?? '—'} · With a login: {counts?.linked ?? '—'} · Guest / manual: {counts?.guests ?? '—'} · With child profiles: {counts?.children ?? '—'}</p>
+          <p style={{ color: '#6d6480', fontSize: 13 }}>Confirmed duplicates count as one family. Staff, owner and instructor families are excluded. Having a login does not mean the family profile is complete.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <StaffToolNav active="families" includeMembershipManagement={role === 'owner' || role === 'admin'} />
@@ -69,8 +83,9 @@ export default function StaffFamiliesPage() {
         style={{ marginTop: 14, width: '100%', border: '1px solid #d9c8f7', borderRadius: 12, padding: '11px 12px' }}
       />
 
+      {!loading && !error && <p>Showing {items.length} of {matching} {query.trim() ? 'matching ' : ''}families.{matching > items.length && ' Search by name, phone or email to find a family.'}</p>}
       <section style={{ marginTop: 16, display: 'grid', gap: 12 }}>
-        {loading ? <p>Loading families…</p> : items.length === 0 ? <p>No families found.</p> : items.map((item) => (
+        {error ? <p role="alert">{error}</p> : loading ? <p>Loading families…</p> : items.length === 0 ? <p>No families found.</p> : items.map((item) => (
           <article key={item.household_id} style={{ border: '1px solid #eadfff', borderRadius: 18, padding: 14, background: '#fff' }}>
             <h3 style={{ margin: 0, color: '#4f3f82' }}>{item.guardian_name}</h3>
             <p style={{ margin: '6px 0', color: '#6d6480' }}>Phone: {item.phone ?? '-'} · Email: {item.email ?? '-'}</p>
