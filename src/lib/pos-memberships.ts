@@ -90,25 +90,34 @@ export function posAdmissionTerms(receipts: PosMembershipReceipt[]): AdmissionEn
 }
 
 async function updateEntitlement(admin: SupabaseClient, receipt: PosMembershipReceipt) {
-  const id = posMembershipId(receipt.environment, `family:${receipt.household_id}`);
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const previous = checked(await admin.from('memberships').select('*').eq('id', id).maybeSingle());
-    const receipts = await readPosMembershipReceipts(admin, receipt.environment, [receipt.household_id]);
-    const live = receipts.filter(r => r.payment_status === 'paid' && r.end_date > easternDate());
-    const end = live.map(r => r.end_date).sort().at(-1);
-    const patch = { household_id: receipt.household_id, square_customer_id: receipt.customer_id, square_environment: receipt.environment,
-      square_status: end ? 'ACTIVE' : 'CANCELED', payment_review_required: false,
-      renews_at: end ? toPartyDateTimeIso(end, 0) : new Date().toISOString(), covered_person_ids: [...new Set(live.flatMap(r => r.child_ids))] };
-    if (!previous) {
-      const inserted = await admin.from('memberships').insert({ id, ...patch });
-      if (inserted.error && inserted.error.code !== '23505') throw new Error('Unable to register paid membership.');
-      if (!inserted.error) return id;
-    } else {
-      const saved = checked(await admin.from('memberships').update(patch).eq('id', id).eq('updated_at', previous.updated_at).select('id').maybeSingle());
-      if (saved) return id;
+  const known = await readPosMembershipReceipts(admin, receipt.environment, [receipt.household_id]);
+  const children = [...new Set(known.flatMap(r => r.child_ids))];
+  const membershipIds: string[] = [];
+  // Individual entitlements also enforce the purchased roster inside the installed
+  // check-in SQL; adding a new child never expands an earlier paid purchase.
+  for (const child of children) {
+    const id = posMembershipId(receipt.environment, `child:${receipt.household_id}:${child}`);
+    membershipIds.push(id);
+    let saved = false;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const previous = checked(await admin.from('memberships').select('*').eq('id', id).maybeSingle());
+      const receipts = await readPosMembershipReceipts(admin, receipt.environment, [receipt.household_id]);
+      const live = receipts.filter(r => r.payment_status === 'paid' && r.child_ids.includes(child) && r.end_date > easternDate());
+      const end = live.map(r => r.end_date).sort().at(-1);
+      const patch = { household_id: null, person_id: child, square_customer_id: receipt.customer_id, square_environment: receipt.environment,
+        renews_at: end ? toPartyDateTimeIso(end, 0) : new Date().toISOString() };
+      if (!previous) {
+        const inserted = await admin.from('memberships').insert({ id, ...patch });
+        if (inserted.error && inserted.error.code !== '23505') throw new Error('Unable to register paid membership.');
+        if (!inserted.error) { saved = true; break; }
+      } else {
+        const updated = checked(await admin.from('memberships').update(patch).eq('id', id).eq('updated_at', previous.updated_at).select('id').maybeSingle());
+        if (updated) { saved = true; break; }
+      }
     }
+    if (!saved) throw new Error('Membership changed during synchronization. Retry.');
   }
-  throw new Error('Membership changed during synchronization. Retry.');
+  return membershipIds[0];
 }
 
 async function coverVisits(admin: SupabaseClient, receipt: PosMembershipReceipt) {

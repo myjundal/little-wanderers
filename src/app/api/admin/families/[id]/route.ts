@@ -34,7 +34,10 @@ export async function GET(_: Request, { params: pendingParams }: Params) {
   const personNameById = new Map(peopleRows.map((p) => [p.id, `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()]));
   const now = new Date().toISOString();
 
-  const activeMembership = (memberships ?? []).some((m) => !m.renews_at || m.renews_at > now);
+  const childIds = peopleRows.filter(p => p.role === 'child').map(p => p.id);
+  const individual = childIds.length ? await admin.from('memberships').select('id,renews_at,created_at').in('person_id', childIds) : { data: [], error: null };
+  if (individual.error) return Response.json({ ok: false, error: 'Unable to load membership status.' }, { status: 503 });
+  const activeMembership = [...(memberships ?? []), ...(individual.data ?? [])].some((m) => !m.renews_at || m.renews_at > now);
   const waiverStatus = getWaiverStatus(waivers ?? [], new Date(), peopleRows.filter(person => person.role === 'child').map(person => person.id));
 
   const normalizedRegs = (classRegs ?? []).map((reg) => ({

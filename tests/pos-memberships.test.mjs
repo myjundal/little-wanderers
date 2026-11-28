@@ -19,7 +19,7 @@ test('only fully settled, itemized one-month memberships qualify; matching amoun
 async function fixture(){
  const pg=new PGlite();await pg.exec(`create table staff_family_search_aliases(alias_household_id uuid,canonical_household_id uuid); create table square_customers(household_id uuid,square_customer_id text,environment text); create table people(id uuid primary key,household_id uuid,role text,birthdate text);
  create table membership_events(id uuid primary key,household_id uuid,action text,notes text,created_by_user_id uuid,created_by_role text);
- create table memberships(id uuid primary key,household_id uuid,square_customer_id text,square_environment text,square_status text,payment_review_required boolean,renews_at timestamptz,covered_person_ids jsonb,updated_at timestamptz default now());
+ create table memberships(id uuid primary key,household_id uuid,person_id uuid,square_customer_id text,square_environment text,square_status text,payment_review_required boolean,renews_at timestamptz,covered_person_ids jsonb,updated_at timestamptz default now());
  create table checkins(id uuid primary key,person_id uuid,payment_status text,price_cents integer,notes text,checked_in_at timestamptz,square_environment text,square_order_id text,membership_applied boolean default false);
  insert into square_customers values('${ids.household}','customer','legacy');insert into people values('${ids.person}','${ids.household}','child','2024-11-23');
  insert into checkins values('60000000-0000-4000-8000-000000000001','${ids.person}','due',1600,null,'2026-11-27T14:20:00Z','sandbox',null,false),('60000000-0000-4000-8000-000000000002','${ids.person}','paid',1600,null,'2026-11-28T14:20:00Z','sandbox','old-order',false);`);
@@ -86,5 +86,15 @@ test('a paid in-person month prevents starting a second saved-card subscription'
  const m=loadSquareModules({mocks:{'@/lib/complimentary-membership':{readComplimentaryMembership:async()=>null}},fetch:async()=>{throw Error('No provider billing requests are allowed');}});
  const version=m.load('src/lib/founding-membership.ts').FOUNDING_TERMS_VERSION;
  await assert.rejects(m.load('src/lib/founding-square.ts').activateFounding(f.admin,{id:ids.other,household_id:ids.household,environment:'sandbox',status:'pending',square_card_id:'saved-card',square_customer_id:'customer',terms_version:version},today,{ownerAuthorized:true}),/already paid in person/);
+ }finally{await f.pg.close();}
+});
+
+test('the database check-in predicate cannot cover a child added after the purchased month was registered',async()=>{
+ const f=await fixture();try{
+ await f.modules.load('src/lib/pos-memberships.ts').syncPosMembership(f.admin,'order');
+ await f.pg.exec(`insert into people values('${ids.otherPerson}','${ids.household}','child','2023-01-01')`);
+ const eligible=async child=>(await f.pg.query('select exists(select 1 from memberships where (household_id=$1 or person_id=$2) and renews_at>now()) covered',[ids.household,child])).rows[0].covered;
+ assert.equal(await eligible(ids.person),true);assert.equal(await eligible(ids.otherPerson),false);
+ const rows=(await f.pg.query('select household_id,person_id from memberships')).rows;assert.equal(rows[0].household_id,null);assert.equal(rows[0].person_id,ids.person);
  }finally{await f.pg.close();}
 });
