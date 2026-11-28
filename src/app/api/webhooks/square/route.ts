@@ -1,6 +1,8 @@
+import { isPosMembershipOrder, syncPosMembership } from '@/lib/pos-memberships';
 // ./src/app/api/webhooks/square/route.ts
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 import { reconcilePartyCheckout, partyCheckoutFromBooking } from '@/lib/party-deposit';
 import { NextRequest } from 'next/server';
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
         const { order } = await squareRequest<{ order: SquareOrder }>(`/v2/orders/${encodeURIComponent(posPayment.order_id)}`);
         if (order.id !== posPayment.order_id) throw new Error('Payment order mismatch');
         await notifyGiftCardOrder(supa, order);
+        if (isPosMembershipOrder(order)) { await syncPosMembership(supa, order.id); return new Response('Membership payment verified', { status: 200 }); }
         reference = order.line_items?.find(item => item.note?.startsWith('LW admission '))?.note ?? '';
       }
       const match = /^LW admission ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(reference);
@@ -89,7 +92,14 @@ export async function POST(req: NextRequest) {
           .eq('id', match[1]).eq('environment', squareEnvironment()).maybeSingle();
         if (error) throw error;
         if (sale) {
-          await verifyAdmissionPos(supa, sale as PosSale, posPayment.order_id);
+          try { await verifyAdmissionPos(supa, sale as PosSale, posPayment.order_id); }
+          catch (error) {
+            // Staff can replace the launched admission item with a membership in Square.
+            // The provider-verified catalog receipt then covers entry instead.
+            const membership = await syncPosMembership(supa, posPayment.order_id);
+            if (membership.status === 'not_membership') throw error;
+            return new Response('Membership payment verified', { status: 200 });
+          }
           return new Response('Admission payment verified', { status: 200 });
         }
       }

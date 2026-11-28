@@ -64,6 +64,12 @@ test('directory read failures never return partial customer counts', async () =>
     assert.equal(result.status, 503); assert.equal(result.ok, false); assert.equal(result.total, undefined);
   }
 });
+test('person-linked memberships from POS remain recognized on the representative family', async () => {
+  const data = fixture();
+  data.memberships.push({ id: 'membership', household_id: null, person_id: 'p000', renews_at: null });
+  const result = await get(directoryAdmin(data), 'family0@example.test');
+  assert.equal(result.items.length, 1); assert.equal(result.items[0].membership_status, 'active');
+});
 test('invalid duplicate links fail closed and unauthorized callers cannot read families', async () => {
   const data = fixture(); data.staff_family_search_aliases.push({ alias_household_id: 'missing', canonical_household_id: 'f000' });
   assert.equal((await get(directoryAdmin(data))).status, 503);

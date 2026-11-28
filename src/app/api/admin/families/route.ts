@@ -36,7 +36,7 @@ export async function GET(req: Request) {
   catch { return Response.json({ ok: false, error: 'Unable to load family directory links.' }, { status: 503 }); }
 
   type MemberRow = { household_id: string; user_id: string | null };
-  type MembershipRow = { household_id: string | null; renews_at: string | null };
+  type MembershipRow = { household_id: string | null; person_id: string | null; renews_at: string | null };
   type FamilyWaiverRow = WaiverRow & { household_id: string };
   type RoleRow = { id: string; role: string };
   type ExtraRoleRow = { user_id: string; role: string };
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
       readFamilyDirectoryRows<HouseholdRow & { created_at: string }>(admin, 'households', 'id,name,phone,email,city,state,created_at'),
       readFamilyDirectoryRows<PersonRow>(admin, 'people', 'id,household_id,first_name,last_name,role,created_at'),
       readFamilyDirectoryRows<MemberRow>(admin, 'household_members', 'household_id,user_id'),
-      readFamilyDirectoryRows<MembershipRow>(admin, 'memberships', 'household_id,renews_at'),
+      readFamilyDirectoryRows<MembershipRow>(admin, 'memberships', 'household_id,person_id,renews_at'),
       readFamilyDirectoryRows<FamilyWaiverRow>(admin, 'waivers', `household_id,${WAIVER_STATUS_SELECT}`),
       readFamilyDirectoryRows<RoleRow>(admin, 'roles', 'id,role'),
       readFamilyDirectoryRows<ExtraRoleRow>(admin, 'user_roles', 'user_id,role', 'user_id'),
@@ -85,9 +85,10 @@ export async function GET(req: Request) {
   const now = new Date().toISOString();
   const membershipByHousehold = new Map<string, boolean>();
   memberships.forEach((m) => {
-    if (!m.household_id) return;
+    const householdId = m.household_id || people.find(person => person.id === m.person_id)?.household_id;
+    if (!householdId) return;
     const active = !m.renews_at || m.renews_at > now;
-    if (active) membershipByHousehold.set(canonicalId(m.household_id), true);
+    if (active) membershipByHousehold.set(canonicalId(householdId), true);
   });
 
   const waiversByHousehold = new Map<string, WaiverRow[]>();

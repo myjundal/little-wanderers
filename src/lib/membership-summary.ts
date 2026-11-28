@@ -19,7 +19,7 @@ export function summarizeMemberships(enrollments: Enrollment[], general: General
     if (!['pending', 'activating', 'scheduled', 'active'].includes(row.status) || complimentaryFamilies.has(row.household_id)) continue;
     families.set(row.household_id, { tier: row.pricing_tier, children: new Set(row.child_ids) });
   }
-  const currentGeneral = general.filter(row => !isComplimentaryMembership(row, environment) && (!row.renews_at || new Date(row.renews_at) > now));
+  const currentGeneral = general.filter(row => !isComplimentaryMembership(row, environment) && row.payment_review_required !== true && (!row.renews_at || new Date(row.renews_at) > now));
   const people = new Map(children.map(person => [person.id, person]));
   for (const row of currentGeneral) {
     if (row.square_environment !== environment) continue;
@@ -29,7 +29,7 @@ export function summarizeMemberships(enrollments: Enrollment[], general: General
     const enrollment = latest.get(householdId);
     if (enrollment && ['canceling', 'canceled'].includes(enrollment.status) && (!row.created_at || Date.parse(row.created_at) <= Date.parse(enrollment.canceled_at || enrollment.updated_at || enrollment.created_at))) continue;
     const coveredChildren = row.household_id
-      ? children.filter(p => p.household_id === householdId && (!p.role || p.role === 'child')).map(p => p.id)
+      ? children.filter(p => p.household_id === householdId && (!p.role || p.role === 'child') && (!row.covered_person_ids?.length || row.covered_person_ids.includes(p.id))).map(p => p.id)
       : person && (!person.role || person.role === 'child') ? [person.id] : [];
     const family = families.get(householdId);
     if (family) {
@@ -58,7 +58,7 @@ export async function loadMembershipSummary(admin: SupabaseClient, environment: 
     if (result.error) throw new Error('Unable to count general memberships.');
     general.push(...result.data); if (result.data.length < 500) break;
   }
-  const householdIds = [...new Set(general.filter(row => !isComplimentaryMembership(row, environment) && row.household_id && row.square_environment === environment && (!row.renews_at || new Date(row.renews_at) > now)).map(row => row.household_id!))];
+  const householdIds = [...new Set(general.filter(row => !isComplimentaryMembership(row, environment) && row.household_id && row.square_environment === environment && row.payment_review_required !== true && (!row.renews_at || new Date(row.renews_at) > now)).map(row => row.household_id!))];
   for (let index = 0; index < householdIds.length; index += 100) {
     for (let offset = 0; ; offset += 500) {
       const result = await admin.from('people').select('id,household_id,role').eq('role', 'child').in('household_id', householdIds.slice(index, index + 100)).order('id').range(offset, offset + 499);
@@ -66,7 +66,7 @@ export async function loadMembershipSummary(admin: SupabaseClient, environment: 
       children.push(...result.data); if (result.data.length < 500) break;
     }
   }
-  const personIds = [...new Set(general.filter(row => row.person_id && row.square_environment === environment && (!row.renews_at || new Date(row.renews_at) > now)).map(row => row.person_id!))];
+  const personIds = [...new Set(general.filter(row => row.person_id && row.square_environment === environment && row.payment_review_required !== true && (!row.renews_at || new Date(row.renews_at) > now)).map(row => row.person_id!))];
   for (let index = 0; index < personIds.length; index += 100) {
     const result = await admin.from('people').select('id,household_id,role').in('id', personIds.slice(index, index + 100));
     if (result.error) throw new Error('Unable to count individual memberships.');

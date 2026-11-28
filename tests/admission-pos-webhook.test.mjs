@@ -8,6 +8,7 @@ function fixture({ signed = true, pending = false, fail = false } = {}) {
     maybeSingle: async () => ({ data: { id: sale, status: 'open', environment: 'sandbox' } }) }; return q; } };
   const modules = loadSquareModules({ mocks: {
     'next/server': {}, '@supabase/supabase-js': { createClient: () => admin },
+    '@/lib/pos-memberships': {isPosMembershipOrder:()=>false,syncPosMembership:async()=>({status:'not_membership'})},
     '@/lib/square-webhook': { verifySquareWebhook: () => signed },
     '@/lib/soft-opening-payments': {}, '@/lib/class-series-payments': {}, '@/lib/households': {}, '@/lib/founding-square': {},
     '@vercel/functions': {}, '@/lib/membership-notifications': {},

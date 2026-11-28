@@ -12,9 +12,10 @@ test('only verified nonexpiring entitlements without a billing connection are co
 });
 async function setup(t){
  const db=new PGlite();t.after(()=>db.close());
- await db.exec(`create table memberships(id uuid,household_id uuid,person_id uuid,renews_at timestamptz,square_environment text,square_subscription_id text,square_customer_id text,payment_review_required boolean,covered_person_ids jsonb);
+ await db.exec(`create table membership_events(id uuid primary key,household_id uuid,action text,notes text);
+ create table memberships(id uuid,household_id uuid,person_id uuid,renews_at timestamptz,square_environment text,square_subscription_id text,square_customer_id text,payment_review_required boolean,covered_person_ids jsonb);
  create table people(id uuid,household_id uuid,first_name text,last_name text,birthdate date,role text,created_at timestamptz);
- create table founding_memberships(household_id uuid,child_ids jsonb,status text,start_date date,paid_through date,environment text);`);
+ create table founding_memberships(square_card_id text,square_subscription_id text,household_id uuid,child_ids jsonb,status text,start_date date,paid_through date,environment text);`);
  await db.query('insert into memberships values($1,$2,null,null,$3,null,null,false,$4)',[gift.id,gift.household_id,'production',JSON.stringify(gift.covered_person_ids)]);
  await db.query("insert into people values($1,$2,'Child','Family','2023-01-01','child',now()),($3,$2,'Parent','Family',null,'adult',now())",[ids.person,ids.household,ids.user]);
  await db.exec('alter table people add column notes text');
