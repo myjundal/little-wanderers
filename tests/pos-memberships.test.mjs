@@ -79,3 +79,12 @@ test('receipt recovery requires the owner and never invokes subscription activat
  assert.equal(response.status,allowed?200:403);assert.equal(synchronized,allowed?1:0);
  }
 });
+
+test('a paid in-person month prevents starting a second saved-card subscription',async()=>{
+ const f=await fixture();try{
+ const library=f.modules.load('src/lib/pos-memberships.ts');await library.syncPosMembership(f.admin,'order');const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+ const m=loadSquareModules({mocks:{'@/lib/complimentary-membership':{readComplimentaryMembership:async()=>null}},fetch:async()=>{throw Error('No provider billing requests are allowed');}});
+ const version=m.load('src/lib/founding-membership.ts').FOUNDING_TERMS_VERSION;
+ await assert.rejects(m.load('src/lib/founding-square.ts').activateFounding(f.admin,{id:ids.other,household_id:ids.household,environment:'sandbox',status:'pending',square_card_id:'saved-card',square_customer_id:'customer',terms_version:version},today,{ownerAuthorized:true}),/already paid in person/);
+ }finally{await f.pg.close();}
+});

@@ -26,7 +26,7 @@ export async function GET(req: Request) {
       return Response.json({ ok: true, review: { enrollment_id: row.data.id, ...details, ...card, subscription, activation_blocked: activationBlocked }, billing_enabled: ownerFoundingBillingEnabled(context.user), charges_executed: false }, { headers });
     } catch (error) { return Response.json({ ok: false, error: error instanceof Error && !error.message.startsWith('Square request') ? error.message : 'Unable to verify the saved card and existing subscriptions. No billing has been started.' }, { status: 503, headers }); }
   }
-  const result = await context.admin.from('founding_memberships').select('id,status,pricing_tier,base_cents,sibling_cents,amount_cents,start_date,card_last4,created_at,household:households(name,email,phone)').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
+  const result = await context.admin.from('founding_memberships').select('id,household_id,status,pricing_tier,base_cents,sibling_cents,amount_cents,start_date,card_last4,created_at,household:households(name,email,phone)').eq('environment', squareEnvironment()).order('created_at', { ascending: false });
   if (result.error) return Response.json({ ok: false, error: 'Unable to load founding memberships.' }, { status: 503, headers });
   const settings = await context.admin.from('founding_membership_settings').select('phase,card_enrollment_enabled').eq('environment', squareEnvironment()).single();
   if (settings.error) return Response.json({ ok: false, error: 'Unable to load enrollment phase.' }, { status: 503, headers });
