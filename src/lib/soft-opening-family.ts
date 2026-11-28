@@ -1,3 +1,4 @@
+import { readPosMembershipReceipts, posAdmissionTerms } from '@/lib/pos-memberships';
 import { readComplimentaryMembership } from '@/lib/complimentary-membership';
 import { isUuid } from '@/lib/open-play-reservations';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -5,11 +6,12 @@ import { getPrimaryGuardianProfile, ensureGuardianProfile } from '@/lib/family-p
 import { isEstimatedOpenPlayBirthdate, parseOpenPlayBirthdate } from '@/lib/open-play-birthdate';
 import { squareEnvironment } from '@/lib/square-client';
 export async function readSoftOpeningFamily(db: SupabaseClient, householdId: string) {
-    const [guardian, children, founding, complimentary] = await Promise.all([
+    const [guardian, children, founding, complimentary, paid] = await Promise.all([
         getPrimaryGuardianProfile(db, householdId),
         db.from('people').select('id,first_name,last_name,birthdate,notes').eq('household_id', householdId).eq('role', 'child').order('created_at'),
         db.from('founding_memberships').select('child_ids,status,start_date,paid_through,square_card_id,square_subscription_id').eq('household_id', householdId).eq('environment', squareEnvironment()).in('status', ['pending', 'activating', 'scheduled', 'active', 'canceling', 'canceled']),
         readComplimentaryMembership(db, householdId),
+        readPosMembershipReceipts(db, squareEnvironment(), [householdId]),
     ]);
     if (children.error || founding.error)
         throw new Error('Unable to load family details.');
@@ -21,7 +23,7 @@ export async function readSoftOpeningFamily(db: SupabaseClient, householdId: str
     const memberships = (founding.data ?? []).map(({ square_card_id, square_subscription_id, ...term }) => ({
         ...term, active_subscription: term.status === 'active' && Boolean(square_card_id && square_subscription_id),
     }));
-    return { guardian, children: roster, memberships: [...memberships, ...(complimentary ? [{ child_ids: roster.map(child => child.id), status: 'complimentary', start_date: null, paid_through: null }] : [])] };
+    return { guardian, children: roster, memberships: [...memberships, ...posAdmissionTerms(paid).map(({ child_ids, status, start_date, paid_through }) => ({ child_ids, status, start_date, paid_through })), ...(complimentary ? [{ child_ids: roster.map(child => child.id), status: 'complimentary', start_date: null, paid_through: null }] : [])] };
 }
 export type SoftOpeningPersonInput = {
     id?: string;

@@ -41,3 +41,5 @@ create table square_customers(household_id uuid, square_customer_id text unique)
 
 create table open_play_reservations(payment_choice text, square_order_id text, square_payment_link_id text, payment_url text, amount_cents integer, created_at timestamptz, id uuid,household_id uuid,child_ids uuid[],payment_status text,payment_environment text,status text,slot_id uuid);
 create table open_play_reservation_slots(id uuid,starts_at timestamptz);
+
+create table membership_events(id uuid primary key,household_id uuid,action text,notes text);

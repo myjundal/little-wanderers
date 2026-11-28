@@ -1,3 +1,4 @@
+import { readPosMembershipReceipts } from '@/lib/pos-memberships';
 import { foundingBillingDetails, freezeFoundingSquareStart, verifyFoundingBillingCard } from '@/lib/founding-billing-activation';
 import { COMPLIMENTARY_MEMBERSHIP_MESSAGE, readComplimentaryMembership } from '@/lib/complimentary-membership';
 import { createHash } from 'node:crypto';
@@ -79,6 +80,8 @@ export async function activateFounding(admin: SupabaseClient, enrollment: Foundi
   if (['scheduled', 'active'].includes(enrollment.status)) return enrollment;
   if (!['pending', 'activating'].includes(enrollment.status)) throw new Error('Only reserved memberships can be started.');
   if (await readComplimentaryMembership(admin, enrollment.household_id)) throw new Error(COMPLIMENTARY_MEMBERSHIP_MESSAGE);
+  const inPerson = await readPosMembershipReceipts(admin, config.environment, [enrollment.household_id]);
+  if (inPerson.some(r => r.payment_status === 'paid' && r.start_date <= easternDate() && r.end_date > easternDate())) throw new Error('This month is already paid in person. Review recurring billing after the paid membership period ends.');
   if (options.ownerUserId) {
     const details = await foundingBillingDetails(admin, enrollment);
     if (details.error || details.start_date !== startDate) throw new Error(details.error || 'Review the activation date again.');

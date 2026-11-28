@@ -41,7 +41,7 @@ test('reservation clients get derived active membership eligibility without prov
   '@/lib/family-profile':{getPrimaryGuardianProfile:async()=>({first_name:'Parent'})},
   '@/lib/complimentary-membership':{readComplimentaryMembership:async()=>null},
  }}).load('src/lib/soft-opening-family.ts');
- const db={from(table){const q={select(){return q;},eq(){return q;},in(){return q;},order(){return q;},then(resolve){resolve({data:table==='founding_memberships'?[enrollment]:[{id:'child',first_name:'Sam',last_name:'Family',birthdate:'2024-01-15',notes:null}],error:null});}};return q;}};
+ const db={from(table){const q={select(){return q;},eq(){return q;},in(){return q;},order(){return q;},limit(){return q;},then(resolve){resolve({data:table==='membership_events'?[]:table==='founding_memberships'?[enrollment]:[{id:'child',first_name:'Sam',last_name:'Family',birthdate:'2024-01-15',notes:null}],error:null});}};return q;}};
  const family=await readSoftOpeningFamily(db,'family');
  assert.equal(family.memberships[0].active_subscription,true);
  assert.ok(!JSON.stringify(family).includes('private-card'));assert.ok(!JSON.stringify(family).includes('private-subscription'));

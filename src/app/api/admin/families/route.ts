@@ -55,7 +55,7 @@ export async function GET(req: Request) {
   const [{ data: households }, { data: people }, { data: memberships }, { data: waivers }] = await Promise.all([
     admin.from('households').select('id,name,phone,email,city,state').order('created_at', { ascending: false }).limit(400),
     admin.from('people').select('id,household_id,first_name,last_name,role').order('created_at', { ascending: true }).limit(2000),
-    admin.from('memberships').select('household_id,renews_at').limit(2000),
+    admin.from('memberships').select('household_id,person_id,renews_at').limit(2000),
     admin.from('waivers').select(`household_id,${WAIVER_STATUS_SELECT}`).order('signed_at', { ascending: false }).limit(2000),
   ]);
 
@@ -77,9 +77,10 @@ export async function GET(req: Request) {
   const now = new Date().toISOString();
   const membershipByHousehold = new Map<string, boolean>();
   (memberships ?? []).forEach((m) => {
-    if (!m.household_id) return;
+    const householdId = m.household_id || (people ?? []).find(p => p.id === m.person_id)?.household_id;
+    if (!householdId) return;
     const active = !m.renews_at || m.renews_at > now;
-    if (active) membershipByHousehold.set(m.household_id, true);
+    if (active) membershipByHousehold.set(householdId, true);
   });
 
   const waiversByHousehold = new Map<string, WaiverRow[]>();

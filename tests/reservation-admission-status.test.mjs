@@ -77,7 +77,7 @@ test('current membership replaces a stale counter due label before arrival witho
  const original=JSON.stringify(reservation);
  const statuses=await getReservationAdmissionStatuses(admin,[reservation],'production');
  assert.equal(statuses.get(reservation.id),'membership');assert.equal(JSON.stringify(reservation),original);
- assert.deepEqual(calls,['checkins','founding_memberships']);
+ assert.deepEqual(calls,['checkins','founding_memberships','membership_events']);
  const broken={from(table){const q={select(){return q;},in(){return q;},eq(){return q;},gte(){return q;},lt(){return q;},order(){return q;},limit(){return q;},then(resolve){resolve({data:[],error:table==='founding_memberships'?{message:'unavailable'}:null});}};return q;}};
  await assert.rejects(getReservationAdmissionStatuses(broken,[reservation],'production'),/Unable to verify reservation membership/);
 });
