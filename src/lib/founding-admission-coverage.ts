@@ -1,3 +1,4 @@
+import { readPosMembershipReceipts, posAdmissionTerms } from '@/lib/pos-memberships';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPartyDateKey } from '@/lib/party-config';
 import { membershipCoversAdmission } from '@/lib/membership-admission-coverage';
@@ -32,5 +33,6 @@ export async function applyFoundingAdmissionCoverage<T extends Visit>(admin: Sup
   const result = await admin.from('founding_memberships').select('household_id,environment,status,child_ids,square_card_id,square_subscription_id,start_date,paid_through,created_at')
     .in('household_id', familyIds).eq('environment', environment).in('status', ['pending', 'activating', 'scheduled', 'active', 'canceling', 'canceled']);
   if (result.error) throw new Error('Unable to verify membership coverage. Refresh before collecting admission.');
-  return projectFoundingAdmission(visits, people, (result.data ?? []) as AdmissionEnrollment[], environment, frozen);
+  const paid = posAdmissionTerms(await readPosMembershipReceipts(admin, environment, familyIds));
+  return projectFoundingAdmission(visits, people, [...(result.data ?? []) as AdmissionEnrollment[], ...paid], environment, frozen);
 }

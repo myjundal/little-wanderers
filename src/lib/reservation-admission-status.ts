@@ -1,3 +1,4 @@
+import { readPosMembershipReceipts, posAdmissionTerms } from '@/lib/pos-memberships';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPartyDateKey, toPartyDateTimeIso } from '@/lib/party-config';
 import { admissionIsPaid, admissionIsIncluded, admissionIsMembership, type ReservationAdmissionStatus } from '@/lib/admission-payment-status';
@@ -86,6 +87,7 @@ export async function getReservationAdmissionStatuses(admin: SupabaseClient, row
     if (result.error || (result.data?.length ?? 0) > 500) throw new Error('Unable to verify reservation membership coverage.');
     enrollments.push(...(result.data ?? []) as AdmissionEnrollment[]);
   }
+  enrollments.push(...posAdmissionTerms(await readPosMembershipReceipts(admin, environment, families)));
   for (const row of candidates) if (reservationHasMembership(row, enrollments, environment)) statuses.set(row.id, 'membership');
   return statuses;
 }

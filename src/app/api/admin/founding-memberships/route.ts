@@ -1,3 +1,4 @@
+import { readPosMembershipReceipts, syncPosMembership } from '@/lib/pos-memberships';
 import { requireOwnerContext } from '@/lib/authz';
 import { activateFounding, foundingCardConfig, foundingSubscriptionReview } from '@/lib/founding-square';
 import { foundingBillingDetails, ownerFoundingBillingEnabled, verifyFoundingBillingCard } from '@/lib/founding-billing-activation';
@@ -38,7 +39,14 @@ export async function GET(req: Request) {
       locationVerified = location.location?.id === config.locationId && location.location.status === 'ACTIVE';
     }
   } catch { if (req && new URL(req.url).searchParams.get('verifySquare') === '1') locationVerified = false; }
-  return Response.json({ ok: true, items: result.data, phase: settings.data.phase, billing_enabled: ownerFoundingBillingEnabled(context.user),
+  let receipts: Awaited<ReturnType<typeof readPosMembershipReceipts>>;
+  try { receipts = await readPosMembershipReceipts(context.admin, squareEnvironment()); }
+  catch { return Response.json({ ok: false, error: 'Unable to load paid membership receipts. Please refresh.' }, { status: 503, headers }); }
+  const familyIds = [...new Set(receipts.map(r => r.household_id))];
+  const families = familyIds.length ? await context.admin.from('households').select('id,name,email,phone').in('id', familyIds) : { data: [], error: null };
+  if (families.error) return Response.json({ ok: false, error: 'Unable to load paid memberships.' }, { status: 503, headers });
+  const posItems = receipts.map(r => ({ id: r.order_id, household_id: r.household_id, amount_cents: r.amount_cents, child_count: r.child_ids.length, start_date: r.start_date, end_date: r.end_date, payment_status: r.payment_status, household: families.data?.find(f => f.id === r.household_id) }));
+  return Response.json({ ok: true, items: result.data, pos_items: posItems, phase: settings.data.phase, billing_enabled: ownerFoundingBillingEnabled(context.user),
     integration: { environment: squareEnvironment(), card_configured: cardConfigured, square_location_verified: locationVerified, owner_email_configured: Boolean(process.env.RESEND_API_KEY) },
   }, { headers });
 }
@@ -58,7 +66,13 @@ export async function POST(req: Request) {
   if (!context.ok) return context.response;
   const origin = req.headers?.get('origin');
   if (origin && origin !== new URL(req.url).origin) return Response.json({ ok: false, error: 'forbidden' }, { status: 403, headers });
-  const input = z.object({ id: z.string().uuid(), startDate: z.string(), expectedAmountCents: z.number().int().positive(), confirmation: z.literal('START MONTHLY BILLING'), firstVisitConfirmed: z.literal(true) }).safeParse(await req.json().catch(() => null));
+  const body = await req.json().catch(() => null);
+  if (body?.mode === 'sync_pos') {
+    if (typeof body.order_id !== 'string' || !/^[\w:-]{1,200}$/.test(body.order_id)) return Response.json({ ok: false, error: 'Enter a Square order ID.' }, { status: 400, headers });
+    try { return Response.json({ ok: true, result: await syncPosMembership(context.admin, body.order_id, context.user.id) }, { headers }); }
+    catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'Unable to synchronize membership.' }, { status: 409, headers }); }
+  }
+  const input = z.object({ id: z.string().uuid(), startDate: z.string(), expectedAmountCents: z.number().int().positive(), confirmation: z.literal('START MONTHLY BILLING'), firstVisitConfirmed: z.literal(true) }).safeParse(body);
   if (!input.success) return Response.json({ ok: false, error: 'Review the monthly amount and confirm this family’s first membership visit before activation.' }, { status: 400, headers });
   if (!ownerFoundingBillingEnabled(context.user)) return Response.json({ ok: false, error: 'Billing activation is not enabled for this owner account.' }, { status: 403, headers });
   try {

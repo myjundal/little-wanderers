@@ -75,7 +75,7 @@ export async function GET(req: Request) {
       household_name: (households ?? []).find(family => family.id === person?.household_id)?.name ?? 'Visiting family',
       name: [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Visitor' };
   });
-  return Response.json({ ok: true, date: today, enabled: !historical && paymentFlowEnabled('admission_pos'), visits, settled_count:[...settled.values()].filter(status=>status==='paid').length, pending_sales:(openSales??[]).filter(sale=>sale.created_by_user_id===c.user.id) }, { headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ok: true, date: today, enabled: !historical && paymentFlowEnabled('admission_pos'), visits, settled_count:[...settled.values()].filter(status=>status==='paid').length, pending_sales:(openSales??[]).filter(sale=>sale.created_by_user_id===c.user.id && sale.checkin_ids?.some((id: string)=>priced.some(v=>v.id===id && ['due','pending','review'].includes(v.payment_status)))) }, { headers: { 'cache-control': 'no-store' } });
 }
 
 export async function POST(req: Request) {
